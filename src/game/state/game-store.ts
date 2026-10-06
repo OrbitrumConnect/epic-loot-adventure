@@ -1,0 +1,387 @@
+import { create } from 'zustand';
+import type { PlayerState, CreatureState, ResourceNode, DeathBag, UIState } from '../types';
+import { ITEMS } from '../data/items';
+import { CREATURES } from '../data/creatures';
+import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
+import { resolveAttack, getDistance } from '../systems/combatSystem';
+import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
+import { canCraft, craft } from '../systems/craftSystem';
+
+type GameState = {
+  player: PlayerState;
+  creatures: CreatureState[];
+  resources: ResourceNode[];
+  deathBags: DeathBag[];
+  ui: UIState;
+  attackTick: number;
+};
+
+type GameActions = {
+  attack: (targetId: string) => void;
+  collect: (nodeId: string) => void;
+  collectNearest: () => void;
+  useHotbarSlot: (index: number) => void;
+  craftItem: (recipeId: string) => void;
+  rest: () => void;
+  setMode: (mode: UIState['mode']) => void;
+  setPanel: (panel: string | null) => void;
+  toggleSidebar: () => void;
+  toggleChat: () => void;
+  setMessage: (msg: string) => void;
+  setPanelMessage: (msg: string) => void;
+  updatePosition: (x: number, z: number) => void;
+  startRaid: () => void;
+  exitToWorld: () => void;
+  openLootBag: (bagId: string) => void;
+  takeLootItem: (bagId: string, slotIndex: number) => void;
+  getWeight: () => number;
+  getUsedSlots: () => number;
+  getItemCount: (itemId: string) => number;
+};
+
+function createInitialPlayer(): PlayerState {
+  const inventory = createInventory([
+    { itemId: 'iron_sword', quantity: 1 },
+    { itemId: 'axe', quantity: 1 },
+    { itemId: 'pickaxe', quantity: 1 },
+    { itemId: 'health_potion', quantity: 5 },
+    { itemId: 'trap', quantity: 3 },
+    { itemId: 'cooked_meat', quantity: 8 },
+    { itemId: 'torch', quantity: 1 },
+    { itemId: 'ancestral_strike', quantity: 1 },
+    { itemId: 'wood', quantity: 12 },
+    { itemId: 'stone', quantity: 8 },
+  ]);
+
+  return {
+    id: 'player_1',
+    name: 'Kael',
+    classId: 'warrior',
+    level: 1,
+    hp: 100,
+    maxHp: 100,
+    mana: 80,
+    maxMana: 100,
+    stamina: 100,
+    maxStamina: 100,
+    gold: 250,
+    position: { x: 0, z: 1 },
+    inventory,
+    attackCooldown: 0.8,
+    lastAttackAt: 0,
+  };
+}
+
+function createInitialCreatures(): CreatureState[] {
+  return [
+    {
+      id: 'wolf_1',
+      speciesId: 'wolf',
+      name: 'Lobo do Vale',
+      hp: 80,
+      maxHp: 80,
+      attackPower: 8,
+      armor: 2,
+      attackCooldown: 1.5,
+      lastAttackAt: 0,
+      position: { x: -3, z: 5 },
+      behavior: 'patrol',
+      lootTable: [],
+      respawnAt: null,
+    },
+    {
+      id: 'wolf_2',
+      speciesId: 'wolf',
+      name: 'Lobo do Vale',
+      hp: 80,
+      maxHp: 80,
+      attackPower: 8,
+      armor: 2,
+      attackCooldown: 1.5,
+      lastAttackAt: 0,
+      position: { x: 5, z: 1 },
+      behavior: 'patrol',
+      lootTable: [],
+      respawnAt: null,
+    },
+  ];
+}
+
+function createInitialResources(): ResourceNode[] {
+  return [
+    createResourceNode('arcane_essence', { x: -3, z: -2 }, 5),
+    createResourceNode('wood', { x: 2, z: 3 }, 10),
+    createResourceNode('wood', { x: -8, z: -5 }, 8),
+    createResourceNode('stone', { x: 6, z: -4 }, 6),
+    createResourceNode('iron_ore', { x: 9, z: -9 }, 4),
+  ];
+}
+
+export const useGameStore = create<GameState & GameActions>((set, get) => ({
+  player: createInitialPlayer(),
+  creatures: createInitialCreatures(),
+  resources: createInitialResources(),
+  deathBags: [],
+  attackTick: 0,
+  ui: {
+    mode: 'world',
+    panel: null,
+    selectedHotbar: 0,
+    message: 'Você entrou no Vale dos Ancestrais.',
+    panelMessage: '',
+    chatOpen: false,
+    sidebarCollapsed: false,
+  },
+
+  getWeight: () => getWeight(get().player.inventory),
+  getUsedSlots: () => getUsedSlots(get().player.inventory),
+  getItemCount: (itemId: string) => getItemCount(get().player.inventory, itemId),
+
+  attack: (targetId: string) => {
+    const state = get();
+    const creature = state.creatures.find(c => c.id === targetId);
+    if (!creature || creature.behavior === 'dead') return;
+
+    const now = Date.now() / 1000;
+    if (now - state.player.lastAttackAt < state.player.attackCooldown) return;
+
+    const dist = getDistance(state.player.position, creature.position);
+    if (dist > 3) {
+      set(s => ({ ui: { ...s.ui, message: `${creature.name} está longe demais.` } }));
+      return;
+    }
+
+    const equippedWeapon = state.player.inventory.equipment.primary;
+    const weaponPower = equippedWeapon ? (ITEMS[equippedWeapon]?.attackPower ?? 0) : 0;
+    const totalPower = 10 + weaponPower;
+
+    const result = resolveAttack(totalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
+
+    const updatedCreatures = state.creatures.map(c => {
+      if (c.id !== targetId) return c;
+      if (result.targetDied) {
+        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + 30_000 };
+      }
+      return { ...c, hp: result.targetHp, behavior: 'chase' as const };
+    });
+
+    let updatedPlayer = { ...state.player, lastAttackAt: now };
+    let updatedBags = state.deathBags;
+    let msg = result.message;
+
+    if (result.targetDied) {
+      const def = CREATURES[creature.speciesId];
+      if (def) {
+        const loot = rollCreatureLoot(def);
+        if (loot.length > 0) {
+          const bag = createDeathBag(creature.id, creature.name, creature.position, loot);
+          updatedBags = [...state.deathBags, bag];
+          msg += ` Loot no chão!`;
+        }
+      }
+      updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
+    }
+
+    const creatureRetaliates = !result.targetDied;
+    if (creatureRetaliates) {
+      const dmgToPlayer = Math.max(1, creature.attackPower - 2);
+      updatedPlayer = {
+        ...updatedPlayer,
+        hp: Math.max(0, updatedPlayer.hp - dmgToPlayer),
+      };
+      msg += ` Você recebeu ${dmgToPlayer} de dano.`;
+
+      if (updatedPlayer.hp <= 0) {
+        const droppable = getDroppableItems(updatedPlayer.inventory);
+        if (droppable.length > 0) {
+          const bag = createDeathBag(updatedPlayer.id, updatedPlayer.name, updatedPlayer.position, droppable);
+          updatedBags = [...updatedBags, bag];
+        }
+        updatedPlayer = {
+          ...updatedPlayer,
+          hp: updatedPlayer.maxHp,
+          position: { x: 0, z: 1 },
+        };
+        msg = `Você morreu! Seus itens dropáveis ficaram no chão.`;
+      }
+    }
+
+    set({
+      player: updatedPlayer,
+      creatures: updatedCreatures,
+      deathBags: updatedBags,
+      attackTick: state.attackTick + 1,
+      ui: { ...state.ui, message: msg },
+    });
+  },
+
+  collect: (nodeId: string) => {
+    const state = get();
+    const nodeIdx = state.resources.findIndex(r => r.id === nodeId);
+    if (nodeIdx < 0) return;
+
+    const node = state.resources[nodeIdx]!;
+    if (node.depleted) {
+      set(s => ({ ui: { ...s.ui, message: 'Este recurso está esgotado.' } }));
+      return;
+    }
+
+    const dist = getDistance(state.player.position, node.position);
+    if (dist > 4) {
+      set(s => ({ ui: { ...s.ui, message: 'Muito longe para coletar.' } }));
+      return;
+    }
+
+    if (!canAddItem(state.player.inventory, node.resourceId, 1)) {
+      set(s => ({ ui: { ...s.ui, message: 'Mochila cheia. Retorne à base.' } }));
+      return;
+    }
+
+    const { node: updatedNode, harvested } = harvestNode(node, 2);
+    const updatedInv = addItem(state.player.inventory, node.resourceId, harvested);
+    const itemName = ITEMS[node.resourceId]?.name ?? node.resourceId;
+
+    const resources = [...state.resources];
+    resources[nodeIdx] = updatedNode;
+
+    set({
+      player: { ...state.player, inventory: updatedInv },
+      resources,
+      ui: { ...state.ui, message: `+${harvested} ${itemName} coletado.` },
+    });
+  },
+
+  collectNearest: () => {
+    const state = get();
+    let nearest: ResourceNode | null = null;
+    let bestDist = Infinity;
+    for (const node of state.resources) {
+      if (node.depleted) continue;
+      const d = getDistance(state.player.position, node.position);
+      if (d < bestDist) { bestDist = d; nearest = node; }
+    }
+    if (nearest && bestDist <= 4) {
+      get().collect(nearest.id);
+    } else {
+      set(s => ({ ui: { ...s.ui, message: 'Nenhum recurso próximo.' } }));
+    }
+  },
+
+  useHotbarSlot: (index: number) => {
+    const state = get();
+    const invSlotIdx = state.player.inventory.hotbar.slots[index];
+    if (invSlotIdx == null) return;
+
+    const slot = state.player.inventory.slots[invSlotIdx];
+    if (!slot?.itemId) return;
+
+    const item = ITEMS[slot.itemId];
+    if (!item) return;
+
+    set(s => ({ ui: { ...s.ui, selectedHotbar: index } }));
+
+    if (item.usable && item.healAmount && item.healAmount > 0) {
+      if (slot.quantity <= 0) {
+        set(s => ({ ui: { ...s.ui, message: `Sem ${item.name}.` } }));
+        return;
+      }
+      const newInv = removeItem(state.player.inventory, slot.itemId!, 1);
+      const newHp = Math.min(state.player.maxHp, state.player.hp + item.healAmount);
+      set({
+        player: { ...state.player, hp: newHp, inventory: newInv },
+        ui: { ...state.ui, selectedHotbar: index, message: `${item.name} utilizada. +${item.healAmount} de vida.` },
+      });
+      return;
+    }
+
+    if (item.equippable) {
+      set(s => ({
+        player: {
+          ...s.player,
+          inventory: {
+            ...s.player.inventory,
+            equipment: { ...s.player.inventory.equipment, primary: item.id },
+          },
+        },
+        ui: { ...s.ui, selectedHotbar: index, message: `${item.name} equipado.` },
+      }));
+      return;
+    }
+
+    set(s => ({ ui: { ...s.ui, selectedHotbar: index, message: `${item.name} selecionado.` } }));
+  },
+
+  craftItem: (recipeId: string) => {
+    const state = get();
+    if (!canCraft(state.player.inventory, recipeId)) {
+      set(s => ({ ui: { ...s.ui, panelMessage: 'Materiais insuficientes.' } }));
+      return;
+    }
+    const result = craft(state.player.inventory, recipeId);
+    if (!result) return;
+
+    const itemName = ITEMS[result.recipe.result.itemId]?.name ?? recipeId;
+    set({
+      player: { ...state.player, inventory: result.inventory },
+      ui: { ...state.ui, panelMessage: `${itemName} forjado com sucesso!` },
+    });
+  },
+
+  rest: () => {
+    set(s => ({
+      player: { ...s.player, hp: s.player.maxHp, mana: s.player.maxMana, stamina: s.player.maxStamina },
+      ui: { ...s.ui, panelMessage: 'Descansou na base. Vida, mana e vigor restaurados.' },
+    }));
+  },
+
+  setMode: (mode) => set(s => ({ ui: { ...s.ui, mode } })),
+  setPanel: (panel) => set(s => ({ ui: { ...s.ui, panel, panelMessage: '' } })),
+  toggleSidebar: () => set(s => ({ ui: { ...s.ui, sidebarCollapsed: !s.ui.sidebarCollapsed } })),
+  toggleChat: () => set(s => ({ ui: { ...s.ui, chatOpen: !s.ui.chatOpen } })),
+  setMessage: (msg) => set(s => ({ ui: { ...s.ui, message: msg } })),
+  setPanelMessage: (msg) => set(s => ({ ui: { ...s.ui, panelMessage: msg } })),
+  updatePosition: (x, z) => set(s => ({ player: { ...s.player, position: { x, z } } })),
+  startRaid: () => set(s => ({
+    ui: { ...s.ui, mode: 'raid', panel: null, message: 'Operação local iniciada. A Fortaleza Esquecida aguarda.' },
+  })),
+  exitToWorld: () => set(s => ({
+    ui: { ...s.ui, mode: 'world', panel: null, message: 'Uma nova expedição começou.' },
+  })),
+
+  openLootBag: (bagId: string) => {
+    set(s => ({ ui: { ...s.ui, panel: 'loot-bag', panelMessage: '' } }));
+  },
+
+  takeLootItem: (bagId: string, slotIndex: number) => {
+    const state = get();
+    const bagIdx = state.deathBags.findIndex(b => b.id === bagId);
+    if (bagIdx < 0) return;
+    const bag = state.deathBags[bagIdx]!;
+    const slot = bag.items[slotIndex];
+    if (!slot?.itemId) return;
+
+    if (!canAddItem(state.player.inventory, slot.itemId, slot.quantity)) {
+      set(s => ({ ui: { ...s.ui, panelMessage: 'Mochila cheia.' } }));
+      return;
+    }
+
+    const newInv = addItem(state.player.inventory, slot.itemId, slot.quantity);
+    const itemName = ITEMS[slot.itemId]?.name ?? slot.itemId;
+    const updatedItems = [...bag.items];
+    updatedItems[slotIndex] = { itemId: null, quantity: 0 };
+    const bags = [...state.deathBags];
+    const allEmpty = updatedItems.every(i => !i.itemId);
+
+    if (allEmpty) {
+      bags.splice(bagIdx, 1);
+    } else {
+      bags[bagIdx] = { ...bag, items: updatedItems };
+    }
+
+    set({
+      player: { ...state.player, inventory: newInv },
+      deathBags: bags,
+      ui: { ...state.ui, panelMessage: `+${slot.quantity} ${itemName}`, panel: allEmpty ? null : state.ui.panel },
+    });
+  },
+}));
