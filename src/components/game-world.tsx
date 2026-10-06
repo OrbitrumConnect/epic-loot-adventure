@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrthographicCamera } from '@react-three/drei';
-import { useEffect, useMemo, useRef } from 'react';
+import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 export type WorldProps = {
@@ -8,7 +8,9 @@ export type WorldProps = {
   attack: number;
   onCollect: () => void;
   onPosition: (x: number, z: number) => void;
+  onAttack?: () => void;
   paused: boolean;
+  cameraMode?: 'iso' | 'third';
 };
 
 const names = [
@@ -48,6 +50,8 @@ function terrainHeight(x: number, z: number): number {
     Math.sin((x + z) * 0.04) * 0.2
   );
 }
+
+const MAP_HALF = 45;
 
 function Tree({ x, z, size = 1, seed, c }: { x: number; z: number; size?: number; seed: number; c: Palette }) {
   const y = terrainHeight(x, z);
@@ -189,26 +193,37 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
 }
 
 function Character({
-  c, attack, movement, onPosition, paused,
+  c, attack, movement, onPosition, paused, playerRef,
 }: {
   c: Palette;
   attack: number;
   movement: React.RefObject<THREE.Vector3>;
   onPosition: WorldProps['onPosition'];
   paused: boolean;
+  playerRef: React.RefObject<THREE.Group | null>;
 }) {
   const body = useRef<THREE.Group>(null);
   const sword = useRef<THREE.Group>(null);
+  const leftLeg = useRef<THREE.Mesh>(null);
+  const rightLeg = useRef<THREE.Mesh>(null);
+  const leftArm = useRef<THREE.Mesh>(null);
   const keys = useRef(new Set<string>());
   const pulse = useRef(0);
   const tick = useRef(0);
   const velocity = useRef(new THREE.Vector2(0, 0));
+  const jumpVelocity = useRef(0);
+  const isGrounded = useRef(true);
+  const walkCycle = useRef(0);
+
+  useEffect(() => {
+    if (body.current && playerRef) (playerRef as any).current = body.current;
+  });
 
   useEffect(() => { pulse.current = 0.35; }, [attack]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
         e.preventDefault();
         keys.current.add(e.code);
       }
@@ -225,7 +240,7 @@ function Character({
     };
   }, []);
 
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     if (!body.current || paused) return;
     const dt = Math.min(delta, 0.05);
     const k = keys.current;
@@ -264,52 +279,94 @@ function Character({
       if (Math.abs(velocity.current.y) < 0.01) velocity.current.y = 0;
     }
 
-    const moving = velocity.current.length() > 0.05;
+    const moving = velocity.current.length() > 0.1;
+
+    body.current.position.x = THREE.MathUtils.clamp(
+      body.current.position.x + velocity.current.x * dt, -MAP_HALF, MAP_HALF,
+    );
+    body.current.position.z = THREE.MathUtils.clamp(
+      body.current.position.z + velocity.current.y * dt, -MAP_HALF, MAP_HALF,
+    );
 
     if (moving) {
-      body.current.position.x = THREE.MathUtils.clamp(
-        body.current.position.x + velocity.current.x * dt, -18, 18,
-      );
-      body.current.position.z = THREE.MathUtils.clamp(
-        body.current.position.z + velocity.current.y * dt, -18, 18,
-      );
       body.current.rotation.y = Math.atan2(velocity.current.x, velocity.current.y);
-
-      const ty = terrainHeight(body.current.position.x, body.current.position.z);
-      body.current.position.y = ty + Math.sin(state.clock.elapsedTime * 13) * 0.05;
-    } else {
-      const ty = terrainHeight(body.current.position.x, body.current.position.z);
-      body.current.position.y = ty + Math.sin(state.clock.elapsedTime * 2) * 0.015;
     }
 
+    // Jump
+    if (k.has('Space') && isGrounded.current) {
+      jumpVelocity.current = 5;
+      isGrounded.current = false;
+      k.delete('Space');
+    }
+
+    const groundY = terrainHeight(body.current.position.x, body.current.position.z);
+
+    if (!isGrounded.current) {
+      jumpVelocity.current -= 15 * dt;
+      body.current.position.y += jumpVelocity.current * dt;
+      if (body.current.position.y <= groundY) {
+        body.current.position.y = groundY;
+        isGrounded.current = true;
+        jumpVelocity.current = 0;
+      }
+    } else {
+      body.current.position.y = groundY;
+    }
+
+    // Walk animation
+    if (moving && isGrounded.current) {
+      walkCycle.current += dt * 12;
+      const swing = Math.sin(walkCycle.current) * 0.6;
+      if (leftLeg.current) leftLeg.current.rotation.x = swing;
+      if (rightLeg.current) rightLeg.current.rotation.x = -swing;
+      if (leftArm.current) leftArm.current.rotation.x = -swing * 0.5;
+    } else {
+      walkCycle.current = 0;
+      if (leftLeg.current) leftLeg.current.rotation.x = 0;
+      if (rightLeg.current) rightLeg.current.rotation.x = 0;
+      if (leftArm.current) leftArm.current.rotation.x = 0;
+    }
+
+    // Attack animation
     if (sword.current) {
       pulse.current = Math.max(0, pulse.current - dt);
       sword.current.rotation.x = pulse.current > 0 ? Math.sin(pulse.current * 17) * 1.8 : 0;
     }
 
     tick.current += dt;
-    if (tick.current > 0.35) {
+    if (tick.current > 0.25) {
       onPosition(body.current.position.x, body.current.position.z);
       tick.current = 0;
     }
   });
 
+  const noRaycast = useCallback((raycaster: any, intersects: any[]) => {}, []);
+
   return (
-    <group ref={body} position={[0, 0, 1]}>
+    <group ref={body} position={[0, 0, 1]} raycast={noRaycast}>
+      {/* Selection ring */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
         <ringGeometry args={[0.53, 0.57, 32]} />
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
-      {[-0.17, 0.17].map(x => (
-        <mesh key={x} position={[x, 0.3, 0]} castShadow>
-          <boxGeometry args={[0.24, 0.6, 0.26]} />
-          <meshStandardMaterial color={c.dark} />
-        </mesh>
-      ))}
+
+      {/* Legs - animated */}
+      <mesh ref={leftLeg} position={[-0.14, 0.3, 0]} castShadow>
+        <boxGeometry args={[0.2, 0.6, 0.22]} />
+        <meshStandardMaterial color={c.dark} />
+      </mesh>
+      <mesh ref={rightLeg} position={[0.14, 0.3, 0]} castShadow>
+        <boxGeometry args={[0.2, 0.6, 0.22]} />
+        <meshStandardMaterial color={c.dark} />
+      </mesh>
+
+      {/* Body */}
       <mesh position={[0, 0.9, 0]} castShadow>
         <boxGeometry args={[0.62, 0.67, 0.36]} />
         <meshStandardMaterial color={c.armor} />
       </mesh>
+
+      {/* Head */}
       <mesh position={[0, 1.48, 0]} castShadow>
         <boxGeometry args={[0.42, 0.43, 0.4]} />
         <meshStandardMaterial color={c.metal} />
@@ -318,14 +375,26 @@ function Character({
         <boxGeometry args={[0.29, 0.1, 0.03]} />
         <meshStandardMaterial color={c.dark} />
       </mesh>
+
+      {/* Cloak */}
       <mesh position={[0, 0.91, -0.25]} rotation={[0.15, 0, 0]} castShadow>
         <boxGeometry args={[0.7, 0.93, 0.09]} />
         <meshStandardMaterial color={c.cloak} />
       </mesh>
+
+      {/* Left arm - animated */}
+      <mesh ref={leftArm} position={[-0.48, 0.92, 0.08]} rotation={[0, 0, -0.15]} castShadow>
+        <cylinderGeometry args={[0.12, 0.1, 0.6, 6]} />
+        <meshStandardMaterial color={c.armor} />
+      </mesh>
+
+      {/* Shield on left arm */}
       <mesh position={[-0.48, 0.92, 0.08]} rotation={[0, 0, -0.15]} castShadow>
         <cylinderGeometry args={[0.34, 0.34, 0.1, 6]} />
         <meshStandardMaterial color={c.trunk} />
       </mesh>
+
+      {/* Right arm + Sword */}
       <group ref={sword} position={[0.45, 1, 0.15]}>
         <mesh position={[0, 0, 0.55]} rotation={[Math.PI / 2, 0, 0]} castShadow>
           <boxGeometry args={[0.08, 1.1, 0.07]} />
@@ -398,8 +467,8 @@ function GrassPatches({ c, count }: { c: Palette; count: number }) {
   const positions = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
-        x: (rand(i + 1400) - 0.5) * 56,
-        z: (rand(i + 1900) - 0.5) * 52,
+        x: (rand(i + 1400) - 0.5) * MAP_HALF * 2,
+        z: (rand(i + 1900) - 0.5) * MAP_HALF * 2,
         rot: rand(i) * 6,
       })),
     [count],
@@ -408,18 +477,16 @@ function GrassPatches({ c, count }: { c: Palette; count: number }) {
     <>
       {positions.map((p, i) => {
         const y = terrainHeight(p.x, p.z);
-        return (
-          <mesh key={i} geometry={geo} material={mat} position={[p.x, y + 0.1, p.z]} rotation={[0, p.rot, 0]} />
-        );
+        return <mesh key={i} geometry={geo} material={mat} position={[p.x, y + 0.1, p.z]} rotation={[0, p.rot, 0]} />;
       })}
     </>
   );
 }
 
-function TerrainMesh({ c }: { c: Palette }) {
+function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => void) | undefined; paused?: boolean | undefined }) {
   const geo = useMemo(() => {
-    const size = 180;
-    const segments = 64;
+    const size = MAP_HALF * 2 + 40;
+    const segments = 80;
     const g = new THREE.PlaneGeometry(size, size, segments, segments);
     const pos = g.attributes['position'] as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
@@ -432,29 +499,85 @@ function TerrainMesh({ c }: { c: Palette }) {
   }, []);
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow geometry={geo}>
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      receiveShadow
+      geometry={geo}
+      onPointerDown={e => {
+        e.stopPropagation();
+        if (paused) return;
+        if (e.button === 0 && onAttack) onAttack();
+      }}
+    >
       <meshStandardMaterial color={c.ground} />
     </mesh>
   );
 }
 
-function WorldScene(props: WorldProps & { c: Palette }) {
-  const { c } = props;
+function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third' }) {
+  const { c, cameraMode } = props;
   const target = useRef(new THREE.Vector3(0, 0, 1));
   const { camera, size } = useThree();
+  const camTarget = useRef(new THREE.Vector3(24, 29, 25));
+  const camLookAt = useRef(new THREE.Vector3(0, 0, 1));
+  const smoothRotY = useRef(0);
+  const playerRef = useRef<THREE.Group | null>(null);
 
   useEffect(() => {
-    camera.lookAt(0, 0, 0);
-    if (camera instanceof THREE.OrthographicCamera)
+    if (camera instanceof THREE.OrthographicCamera) {
       camera.zoom = Math.max(12, Math.min(33, size.width / 32));
-    camera.updateProjectionMatrix();
+      camera.updateProjectionMatrix();
+    }
   }, [camera, size.width]);
+
+  useFrame(() => {
+    const p = playerRef.current;
+    if (!p) return;
+
+    const px = p.position.x;
+    const py = p.position.y;
+    const pz = p.position.z;
+    const pRotY = p.rotation.y;
+
+    if (cameraMode === 'iso') {
+      const isoOffset = new THREE.Vector3(24, 29, 24);
+      const wantPos = new THREE.Vector3(px + isoOffset.x, isoOffset.y, pz + isoOffset.z);
+      camTarget.current.lerp(wantPos, 0.06);
+      camera.position.copy(camTarget.current);
+      camLookAt.current.lerp(new THREE.Vector3(px, py, pz), 0.06);
+      camera.lookAt(camLookAt.current);
+    } else {
+      let angleDiff = pRotY - smoothRotY.current;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      smoothRotY.current += angleDiff * 0.04;
+
+      const rot = smoothRotY.current;
+      const dist = 5;
+      const height = 2.8;
+      const shoulderOffset = 0.7;
+      const behindX = px - Math.sin(rot) * dist + Math.cos(rot) * shoulderOffset;
+      const behindZ = pz - Math.cos(rot) * dist - Math.sin(rot) * shoulderOffset;
+      const wantPos = new THREE.Vector3(behindX, py + height, behindZ);
+      camTarget.current.lerp(wantPos, 0.05);
+      camera.position.copy(camTarget.current);
+      const lookAhead = 4;
+      const lookX = px + Math.sin(rot) * lookAhead;
+      const lookZ = pz + Math.cos(rot) * lookAhead;
+      camLookAt.current.lerp(new THREE.Vector3(lookX, py + 1.2, lookZ), 0.05);
+      camera.lookAt(camLookAt.current);
+    }
+
+    if (camera instanceof THREE.OrthographicCamera || camera instanceof THREE.PerspectiveCamera) {
+      camera.updateProjectionMatrix();
+    }
+  });
 
   const trees = useMemo(
     () =>
-      Array.from({ length: 140 }, (_, i) => ({
-        x: (rand(i + 1) - 0.5) * 62,
-        z: (rand(i + 301) - 0.5) * 56,
+      Array.from({ length: 180 }, (_, i) => ({
+        x: (rand(i + 1) - 0.5) * MAP_HALF * 2,
+        z: (rand(i + 301) - 0.5) * MAP_HALF * 2,
         size: 0.65 + rand(i + 701) * 0.7,
         seed: i,
       }))
@@ -465,16 +588,16 @@ function WorldScene(props: WorldProps & { c: Palette }) {
 
   const path = useMemo(() => {
     const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-22, 0.025, 15),
-      new THREE.Vector3(-12, 0.025, 9),
+      new THREE.Vector3(-30, 0.025, 20),
+      new THREE.Vector3(-18, 0.025, 12),
       new THREE.Vector3(-7, 0.025, 6),
       new THREE.Vector3(0, 0.025, 1),
       new THREE.Vector3(4, 0.025, -3),
       new THREE.Vector3(7, 0.025, -8),
-      new THREE.Vector3(12, 0.025, -12),
-      new THREE.Vector3(20, 0.025, -17),
+      new THREE.Vector3(16, 0.025, -14),
+      new THREE.Vector3(28, 0.025, -22),
     ]);
-    const pts = curve.getPoints(90);
+    const pts = curve.getPoints(100);
     const v: number[] = [];
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1];
@@ -498,9 +621,9 @@ function WorldScene(props: WorldProps & { c: Palette }) {
 
   const rocks = useMemo(
     () =>
-      Array.from({ length: 80 }, (_, i) => ({
-        x: (rand(i + 911) - 0.5) * 54,
-        z: (rand(i + 1200) - 0.5) * 50,
+      Array.from({ length: 100 }, (_, i) => ({
+        x: (rand(i + 911) - 0.5) * MAP_HALF * 1.8,
+        z: (rand(i + 1200) - 0.5) * MAP_HALF * 1.8,
         size: 0.25 + rand(i + 90) * 0.9,
       })),
     [],
@@ -509,7 +632,7 @@ function WorldScene(props: WorldProps & { c: Palette }) {
   return (
     <>
       <color attach="background" args={[c.ground]} />
-      <fog attach="fog" args={[c.ground, 42, 90]} />
+      <fog attach="fog" args={[c.ground, 50, 100]} />
       <ambientLight intensity={1.5} color={c.light} />
       <directionalLight
         position={[-12, 25, 8]}
@@ -517,47 +640,32 @@ function WorldScene(props: WorldProps & { c: Palette }) {
         color={c.light}
         castShadow
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-28}
-        shadow-camera-right={28}
-        shadow-camera-top={28}
-        shadow-camera-bottom={-28}
+        shadow-camera-left={-35}
+        shadow-camera-right={35}
+        shadow-camera-top={35}
+        shadow-camera-bottom={-35}
         shadow-bias={-0.001}
       />
 
-      <TerrainMesh c={c} />
-
-      <mesh
-        receiveShadow
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0.001, 0]}
-        onPointerDown={e => {
-          e.stopPropagation();
-          if (!props.paused) target.current.set(e.point.x, 0, e.point.z);
-        }}
-      >
-        <planeGeometry args={[180, 180]} />
-        <meshStandardMaterial color={c.ground} transparent opacity={0} />
-      </mesh>
+      <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
 
       <mesh geometry={path} receiveShadow>
         <meshStandardMaterial color={c.path} side={THREE.DoubleSide} />
       </mesh>
 
+      {/* River */}
       <mesh position={[-10, 0.05, -2]} rotation={[-Math.PI / 2, 0, 0.35]}>
-        <planeGeometry args={[5, 80]} />
+        <planeGeometry args={[5, 100]} />
         <meshStandardMaterial color={c.water} roughness={0.3} transparent opacity={0.85} />
       </mesh>
-      {Array.from({ length: 22 }, (_, i) => (
-        <mesh
-          key={`water${i}`}
-          position={[-10 + (rand(i + 50) - 0.5) * 3, 0.07, (rand(i + 80) - 0.5) * 50]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
+      {Array.from({ length: 25 }, (_, i) => (
+        <mesh key={`water${i}`} position={[-10 + (rand(i + 50) - 0.5) * 3, 0.07, (rand(i + 80) - 0.5) * 60]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[0.4 + rand(i) * 1.2, 0.05]} />
           <meshBasicMaterial color={c['water-light']} transparent opacity={0.35} />
         </mesh>
       ))}
 
+      {/* Bridge */}
       <group position={[-9, terrainHeight(-9, 7) + 0.19, 7]} rotation={[0, -0.35, 0]}>
         {Array.from({ length: 16 }, (_, i) => (
           <mesh key={i} position={[(i - 8) * 0.35, 0, 0]} receiveShadow castShadow>
@@ -567,22 +675,17 @@ function WorldScene(props: WorldProps & { c: Palette }) {
         ))}
       </group>
 
-      {trees.map((p, i) => (
-        <Tree key={i} {...p} c={c} />
-      ))}
-      {rocks.map((p, i) => (
-        <Rock key={i} {...p} c={c} />
-      ))}
-      <GrassPatches c={c} count={280} />
+      {trees.map((p, i) => <Tree key={i} {...p} c={c} />)}
+      {rocks.map((p, i) => <Rock key={i} {...p} c={c} />)}
+      <GrassPatches c={c} count={350} />
 
       <Ruins c={c} />
       <Campfire c={c} position={[-1, 0, 4]} />
       <Campfire c={c} position={[10, 0, -6]} />
+      <Campfire c={c} position={[-15, 0, -12]} />
 
-      <group
-        position={[-3, terrainHeight(-3, -2), -2]}
-        onClick={e => { e.stopPropagation(); props.onCollect(); }}
-      >
+      {/* Crystal resource */}
+      <group position={[-3, terrainHeight(-3, -2), -2]} onClick={e => { e.stopPropagation(); props.onCollect(); }}>
         <Rock x={0} z={0} size={1.25} c={c} />
         {[-0.4, 0, 0.4].map((x, i) => (
           <mesh key={x} position={[x, 0.9 + i * 0.1, 0.1]} rotation={[0, 0, x]} castShadow>
@@ -592,10 +695,8 @@ function WorldScene(props: WorldProps & { c: Palette }) {
         ))}
       </group>
 
-      <group
-        position={[2, terrainHeight(2, 3) + 0.2, 3]}
-        onClick={e => { e.stopPropagation(); props.onCollect(); }}
-      >
+      {/* Chest */}
+      <group position={[2, terrainHeight(2, 3) + 0.2, 3]} onClick={e => { e.stopPropagation(); props.onCollect(); }}>
         <mesh castShadow>
           <boxGeometry args={[0.65, 0.4, 0.42]} />
           <meshStandardMaterial color={c.trunk} />
@@ -606,9 +707,7 @@ function WorldScene(props: WorldProps & { c: Palette }) {
         </mesh>
       </group>
 
-      <Wolf c={c} position={[-3, 0, 5]} />
-      <Wolf c={c} position={[5, 0, 1]} />
-
+      {/* Crystal tower */}
       <group position={[4, terrainHeight(4, 5), 5]}>
         <mesh position={[0, 1, 0]}>
           <cylinderGeometry args={[0.3, 0.5, 2, 6]} />
@@ -620,17 +719,27 @@ function WorldScene(props: WorldProps & { c: Palette }) {
         </mesh>
       </group>
 
-      <Character c={c} attack={props.attack} movement={target} onPosition={props.onPosition} paused={props.paused} />
+      <Wolf c={c} position={[-3, 0, 5]} />
+      <Wolf c={c} position={[5, 0, 1]} />
+      <Wolf c={c} position={[-12, 0, -8]} />
+
+      <Character c={c} attack={props.attack} movement={target} onPosition={props.onPosition} paused={props.paused} playerRef={playerRef} />
     </>
   );
 }
 
 export default function GameWorld(props: WorldProps) {
   const c = useMemo(palette, []);
+  const cameraMode = props.cameraMode ?? 'iso';
+
   return (
-    <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true }}>
-      <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={140} />
-      <WorldScene {...props} c={c} />
+    <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true }} onContextMenu={e => e.preventDefault()}>
+      {cameraMode === 'iso' ? (
+        <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={200} />
+      ) : (
+        <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={300} />
+      )}
+      <WorldScene {...props} c={c} cameraMode={cameraMode} />
     </Canvas>
   );
 }

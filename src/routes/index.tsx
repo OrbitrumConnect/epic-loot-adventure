@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import {
-  Axe, Backpack, Castle, Check, ChevronRight, Circle, Coins, Compass,
+  Axe, Backpack, Camera, Castle, Check, ChevronRight, Circle, Coins, Compass,
   Crosshair, Flame, FlaskConical, Gem, Hammer, Heart, Home, Leaf, Map,
   Menu, MessageSquare, Mountain, Package, PanelLeftClose, Pickaxe, Settings,
   Shield, ShieldCheck, Skull, Sparkles, Swords, Target, Tent, TreePine,
@@ -73,6 +73,8 @@ function MiniMap({ large = false, position = [0, 1] }: { large?: boolean; positi
 
 function Index() {
   const [ready, setReady] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'iso' | 'third'>('iso');
+  const toggleCamera = useCallback(() => setCameraMode(m => (m === 'iso' ? 'third' : 'iso')), []);
   useEffect(() => setReady(true), []);
 
   const player = useGameStore(s => s.player);
@@ -125,13 +127,14 @@ function Index() {
       if (e.target instanceof HTMLInputElement) return;
       if (/^[1-8]$/.test(e.key)) useHotbarSlot(Number(e.key) - 1);
       if (e.code === 'KeyE') collectNearest();
-      if (e.code === 'Space') { e.preventDefault(); hitNearest(); }
+      if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
+      if (e.code === 'KeyV') toggleCamera();
       if (e.code === 'KeyI') setPanel(ui.panel === 'inventory' ? null : 'inventory');
       if (e.code === 'Escape') setPanel(null);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, hitNearest, useHotbarSlot, setPanel, ui.panel]);
+  }, [collectNearest, hitNearest, useHotbarSlot, setPanel, toggleCamera, ui.panel]);
 
   function open(id: string) {
     setPanelMessage('');
@@ -214,7 +217,7 @@ function Index() {
         <section className="world-viewport" aria-label="Mundo de TRIBOS">
           {ready && (
             <Suspense fallback={<div className="world-loading">Entrando no vale…</div>}>
-              <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel)} />
+              <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel)} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
           <div className="zone-heading">
@@ -245,7 +248,8 @@ function Index() {
             </div>
             <div className="world-actions">
               <Button variant="ghost" className="world-action" aria-label="Coletar recursos" title="Coletar recursos · E" onClick={collectNearest}><Package /></Button>
-              <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Espaço" data-primary="true" onClick={hitNearest}><Swords /></Button>
+              <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
+              <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
               <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
             </div>
           </div>
@@ -340,7 +344,7 @@ function Index() {
                 {panel === 'settings' && (
                   <>
                     <div className="home-building"><Wind /><div><strong>Áudio ambiente</strong><small>Desativado nesta versão</small></div></div>
-                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD · Clique para mover · E coletar · Espaço atacar</small></div></div>
+                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · V câmera · E coletar · I inventário</small></div></div>
                     <div className="panel-stats"><span>TRIBOS v0.2 · Protótipo local · Sem multiplayer conectado</span></div>
                   </>
                 )}
