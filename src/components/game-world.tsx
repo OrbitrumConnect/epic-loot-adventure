@@ -88,8 +88,8 @@ function Wolf({c,position}:{c:Palette;position:[number,number,number]}){
   </group>;
 }
 function WorldScene(props: WorldProps & {c:Palette}) {
-  const {c}=props; const target=useRef(new THREE.Vector3(0,0,1)); const {camera}=useThree();
-  useEffect(()=>{camera.lookAt(0,0,0);camera.updateProjectionMatrix();},[camera]);
+  const {c}=props; const target=useRef(new THREE.Vector3(0,0,1)); const {camera,size}=useThree();
+  useEffect(()=>{camera.lookAt(0,0,0);if(camera instanceof THREE.OrthographicCamera)camera.zoom=Math.max(12,Math.min(33,size.width/32));camera.updateProjectionMatrix();},[camera,size.width]);
   const trees=useMemo(()=>Array.from({length:105},(_,i)=>({x:(rand(i+1)-.5)*54,z:(rand(i+301)-.5)*48,size:.7+rand(i+701)*.65,seed:i})).filter(p=>Math.abs(p.x)>4.5||Math.abs(p.z)>10).filter(p=>!(p.x>2&&p.x<12&&p.z< -3&&p.z> -13)),[]);
   const path=useMemo(()=>{const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(-18,.025,12),new THREE.Vector3(-7,.025,6),new THREE.Vector3(0,.025,1),new THREE.Vector3(4,.025,-3),new THREE.Vector3(7,.025,-8),new THREE.Vector3(16,.025,-14)]);const pts=curve.getPoints(70);const v:number[]=[];for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1];if(!a||!b)continue;const d=b.clone().sub(a).normalize(),p=new THREE.Vector3(-d.z,0,d.x).multiplyScalar(.95);const q=[a.clone().add(p),a.clone().sub(p),b.clone().add(p),b.clone().add(p),a.clone().sub(p),b.clone().sub(p)];q.forEach(n=>v.push(n.x,n.y,n.z));}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.computeVertexNormals();return g;},[]);
   return <>
