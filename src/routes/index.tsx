@@ -15,6 +15,7 @@ import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { RECIPES } from '@/game/data/recipes';
 
 const GameWorld = lazy(() => import('@/components/game-world'));
+const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
   head: () => ({
@@ -38,6 +39,7 @@ const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>
 const navigation = [
   { id: 'world', name: 'Explorar', icon: Compass },
   { id: 'home', name: 'Home · Base', icon: Home },
+  { id: 'city', name: 'Cidade', icon: Castle },
   { id: 'map', name: 'Mapa', icon: Map },
   { id: 'raid', name: 'Raids', icon: Swords },
   { id: 'loot', name: 'Loot', icon: Package },
@@ -122,23 +124,27 @@ function Index() {
     else useGameStore.getState().setMessage('Nenhum inimigo próximo.');
   }, [attack]);
 
+  const inCity = ui.mode === 'city';
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
       if (/^[1-8]$/.test(e.key)) useHotbarSlot(Number(e.key) - 1);
-      if (e.code === 'KeyE') collectNearest();
+      if (e.code === 'KeyE' && !inCity) collectNearest();
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
-      if (e.code === 'KeyV') toggleCamera();
+      if (e.code === 'KeyV' && !inCity) toggleCamera();
+      if (e.code === 'KeyB') { setPanel(null); setMode(inCity ? 'world' : 'city'); }
       if (e.code === 'KeyI') setPanel(ui.panel === 'inventory' ? null : 'inventory');
       if (e.code === 'Escape') setPanel(null);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, hitNearest, useHotbarSlot, setPanel, toggleCamera, ui.panel]);
+  }, [collectNearest, hitNearest, useHotbarSlot, setPanel, setMode, toggleCamera, ui.panel, inCity]);
 
   function open(id: string) {
     setPanelMessage('');
     if (id === 'world') { setPanel(null); setMode('world'); }
+    else if (id === 'city') { setPanel(null); setMode('city'); }
     else setPanel(id);
   }
 
@@ -215,11 +221,17 @@ function Index() {
         </header>
 
         <section className="world-viewport" aria-label="Mundo de TRIBOS">
-          {ready && (
+          {ready && inCity && (
+            <Suspense fallback={<div className="world-loading">Abrindo a cidade…</div>}>
+              <CityView />
+            </Suspense>
+          )}
+          {ready && !inCity && (
             <Suspense fallback={<div className="world-loading">Entrando no vale…</div>}>
               <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel)} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
+          {!inCity && (<>
           <div className="zone-heading">
             <small><i className="status-dot" />{ui.mode === 'raid' ? 'Zona de conflito' : 'Território livre'}</small>
             <h1>{ui.mode === 'raid' ? 'Fortaleza Esquecida' : 'Vale dos Ancestrais'}</h1>
@@ -253,6 +265,7 @@ function Index() {
               <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
             </div>
           </div>
+          </>)}
 
           {panel && (
             <div className="modal-backdrop">
@@ -344,7 +357,7 @@ function Index() {
                 {panel === 'settings' && (
                   <>
                     <div className="home-building"><Wind /><div><strong>Áudio ambiente</strong><small>Desativado nesta versão</small></div></div>
-                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · V câmera · E coletar · I inventário</small></div></div>
+                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · V câmera · E coletar · I inventário · B cidade</small></div></div>
                     <div className="panel-stats"><span>TRIBOS v0.2 · Protótipo local · Sem multiplayer conectado</span></div>
                   </>
                 )}

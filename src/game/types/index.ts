@@ -4,3 +4,8 @@ export type { PlayerState, Position } from './player';
 export type { CreatureState, CreatureDefinition, CreatureBehavior } from './creature';
 export type { CombatEntity, AttackResult } from './combat';
 export type { ResourceNode, DeathBag, GameMode, UIState } from './world';
+export type {
+  BaseResourceId, BaseResources, BuildingId, BaseUnitKind, EraDefinition, BuildingDefinition,
+  ConstructionJob, QueueItem, PlacedBuilding, ResearchEffectKind, BaseUnitDefinition,
+  ExpeditionDefinition, Expedition, BaseState, BaseResult,
+} from './base';

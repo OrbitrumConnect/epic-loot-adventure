@@ -1,11 +1,16 @@
 import { create } from 'zustand';
-import type { PlayerState, CreatureState, ResourceNode, DeathBag, UIState } from '../types';
+import type { PlayerState, CreatureState, ResourceNode, DeathBag, UIState, BaseState, BaseResult, BuildingId } from '../types';
 import { ITEMS } from '../data/items';
 import { CREATURES } from '../data/creatures';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
 import { resolveAttack, getDistance } from '../systems/combatSystem';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
 import { canCraft, craft } from '../systems/craftSystem';
+import {
+  createInitialBase, tickBase as resolveBase, placeBuilding as placeBaseBuilding, startUpgrade,
+  enqueueUnit as enqueueBaseUnit, cancelQueueItem as cancelBaseQueueItem,
+  sendExpedition as sendBaseExpedition, depositFromInventory, collectTools,
+} from '../systems/baseSystem';
 
 type GameState = {
   player: PlayerState;
@@ -14,6 +19,7 @@ type GameState = {
   deathBags: DeathBag[];
   ui: UIState;
   attackTick: number;
+  base: BaseState;
 };
 
 type GameActions = {
@@ -37,6 +43,13 @@ type GameActions = {
   getWeight: () => number;
   getUsedSlots: () => number;
   getItemCount: (itemId: string) => number;
+  tickBase: () => void;
+  placeBuilding: (defId: BuildingId, plotIndex: number) => void;
+  upgradeBuilding: (instanceId: string) => void;
+  enqueueUnit: (instanceId: string, unitId: string) => void;
+  cancelQueueItem: (instanceId: string, itemId: string) => void;
+  sendExpedition: (expeditionId: string, scouts: number) => void;
+  depositToBase: () => void;
 };
 
 function createInitialPlayer(): PlayerState {
@@ -123,6 +136,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   resources: createInitialResources(),
   deathBags: [],
   attackTick: 0,
+  base: createInitialBase(Date.now()),
   ui: {
     mode: 'world',
     panel: null,
@@ -384,4 +398,67 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       ui: { ...state.ui, panelMessage: `+${slot.quantity} ${itemName}`, panel: allEmpty ? null : state.ui.panel },
     });
   },
+
+  tickBase: () => {
+    const state = get();
+    const ticked = resolveBase(state.base, Date.now());
+    const delivery = collectTools(ticked, state.player.inventory);
+    if (delivery.moved.length === 0) {
+      set({ base: delivery.state });
+      return;
+    }
+    const names = delivery.moved.map(m => `${m.quantity}x ${ITEMS[m.itemId]?.name ?? m.itemId}`).join(', ');
+    set({
+      base: delivery.state,
+      player: { ...state.player, inventory: delivery.inventory },
+      ui: { ...state.ui, message: `Forja entregou: ${names}.` },
+    });
+  },
+
+  placeBuilding: (defId, plotIndex) => {
+    const result = placeBaseBuilding(get().base, defId, plotIndex, Date.now());
+    applyBaseResult(set, result);
+  },
+
+  upgradeBuilding: (instanceId) => {
+    const result = startUpgrade(get().base, instanceId, Date.now());
+    applyBaseResult(set, result);
+  },
+
+  enqueueUnit: (instanceId, unitId) => {
+    const result = enqueueBaseUnit(get().base, instanceId, unitId, Date.now());
+    applyBaseResult(set, result);
+  },
+
+  cancelQueueItem: (instanceId, itemId) => {
+    const result = cancelBaseQueueItem(get().base, instanceId, itemId, Date.now());
+    applyBaseResult(set, result);
+  },
+
+  sendExpedition: (expeditionId, scouts) => {
+    const result = sendBaseExpedition(get().base, expeditionId, scouts, Date.now());
+    applyBaseResult(set, result);
+  },
+
+  depositToBase: () => {
+    const state = get();
+    const ticked = resolveBase(state.base, Date.now());
+    const result = depositFromInventory(ticked, state.player.inventory);
+    const total = result.moved.wood + result.moved.stone + result.moved.essence;
+    const message = total > 0
+      ? `Depositado: ${result.moved.wood} madeira, ${result.moved.stone} pedra, ${result.moved.essence} essência.`
+      : 'Nada para depositar ou armazém cheio.';
+    set({
+      base: result.state,
+      player: { ...state.player, inventory: result.inventory },
+      ui: { ...state.ui, message },
+    });
+  },
 }));
+
+function applyBaseResult(
+  set: (fn: (s: GameState) => Partial<GameState>) => void,
+  result: BaseResult,
+) {
+  set(s => ({ base: result.state, ui: { ...s.ui, message: result.message } }));
+}

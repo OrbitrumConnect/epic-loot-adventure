@@ -21,7 +21,7 @@ export type DeathBag = {
   expiresAt: number;
 };
 
-export type GameMode = 'world' | 'home' | 'raid';
+export type GameMode = 'world' | 'home' | 'raid' | 'city';
 
 export type UIState = {
   mode: GameMode;
