@@ -572,7 +572,7 @@ function Wolf({ c, creatureId, playerRef }: { c: Palette; creatureId: string; pl
             if (hp <= 0) {
               return {
                 player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 },
-                ui: { ...s.ui, message: `${creature.name} te matou! Respawn em 15s.` },
+                ui: { ...s.ui, message: `${creature.name} te matou!` },
               };
             }
             return {

@@ -76,6 +76,7 @@ function MiniMap({ large = false, position = [0, 1] }: { large?: boolean; positi
 function Index() {
   const [ready, setReady] = useState(false);
   const [cameraMode, setCameraMode] = useState<'iso' | 'third'>('iso');
+  const [deathCountdown, setDeathCountdown] = useState(0);
   const toggleCamera = useCallback(() => setCameraMode(m => (m === 'iso' ? 'third' : 'iso')), []);
   useEffect(() => setReady(true), []);
 
@@ -96,6 +97,17 @@ function Index() {
   const startRaid = useGameStore(s => s.startRaid);
   const exitToWorld = useGameStore(s => s.exitToWorld);
   const setPanelMessage = useGameStore(s => s.setPanelMessage);
+
+  useEffect(() => {
+    if (!player.dead) { setDeathCountdown(0); return; }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((player.respawnAt - Date.now()) / 1000));
+      setDeathCountdown(remaining);
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [player.dead, player.respawnAt]);
 
   const weight = getWeight(player.inventory);
   const usedSlots = getUsedSlots(player.inventory);
@@ -230,6 +242,23 @@ function Index() {
             <Suspense fallback={<div className="world-loading">Entrando no vale…</div>}>
               <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel)} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
+          )}
+          {player.dead && !inCity && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 50,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'radial-gradient(ellipse at center, rgba(80,0,0,0.7) 0%, rgba(0,0,0,0.85) 100%)',
+              color: '#fff', pointerEvents: 'none',
+            }}>
+              <Skull style={{ width: 64, height: 64, color: '#ef4444', marginBottom: 16 }} />
+              <h2 style={{ fontSize: 32, fontWeight: 700, margin: 0, color: '#ef4444', textShadow: '0 0 20px rgba(239,68,68,0.5)' }}>Você morreu!</h2>
+              <p style={{ fontSize: 18, marginTop: 12, opacity: 0.9 }}>
+                {deathCountdown > 0
+                  ? <>Renascendo em <strong style={{ fontSize: 28, color: '#fbbf24' }}>{deathCountdown}s</strong></>
+                  : 'Renascendo...'}
+              </p>
+              <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>Você reaparecerá na sua base</p>
+            </div>
           )}
           {!inCity && (<>
           <div className="zone-heading">

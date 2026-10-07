@@ -223,7 +223,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       msg += ` Você recebeu ${dmgToPlayer} de dano.`;
 
       if (updatedPlayer.hp <= 0) {
-        const droppable = getDroppableItems(updatedPlayer.inventory);
+        const droppable = getDroppableItems(updatedPlayer.inventory)
+          .filter(() => Math.random() < 0.1);
         if (droppable.length > 0) {
           const bag = createDeathBag(updatedPlayer.id, updatedPlayer.name, updatedPlayer.position, droppable);
           updatedBags = [...updatedBags, bag];
@@ -234,7 +235,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           dead: true,
           respawnAt: Date.now() + 15_000,
         };
-        msg = `Você morreu! Respawn em 15s. Itens dropáveis ficaram no chão.`;
+        msg = droppable.length > 0
+          ? `Alguns itens caíram no chão.`
+          : `Você não perdeu itens.`;
       }
     }
 
