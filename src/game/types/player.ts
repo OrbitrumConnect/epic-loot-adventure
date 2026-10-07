@@ -18,4 +18,6 @@ export type PlayerState = {
   inventory: InventoryState;
   attackCooldown: number;
   lastAttackAt: number;
+  dead: boolean;
+  respawnAt: number;
 };

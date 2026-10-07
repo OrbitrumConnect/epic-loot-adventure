@@ -82,6 +82,8 @@ function createInitialPlayer(): PlayerState {
     inventory,
     attackCooldown: 0.8,
     lastAttackAt: 0,
+    dead: false,
+    respawnAt: 0,
   };
 }
 
@@ -113,6 +115,21 @@ function createInitialCreatures(): CreatureState[] {
       attackCooldown: 1.5,
       lastAttackAt: 0,
       position: { x: 5, z: 1 },
+      behavior: 'patrol',
+      lootTable: [],
+      respawnAt: null,
+    },
+    {
+      id: 'wolf_3',
+      speciesId: 'wolf',
+      name: 'Lobo do Vale',
+      hp: 80,
+      maxHp: 80,
+      attackPower: 8,
+      armor: 2,
+      attackCooldown: 1.5,
+      lastAttackAt: 0,
+      position: { x: -12, z: -8 },
       behavior: 'patrol',
       lootTable: [],
       respawnAt: null,
@@ -160,7 +177,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (now - state.player.lastAttackAt < state.player.attackCooldown) return;
 
     const dist = getDistance(state.player.position, creature.position);
-    if (dist > 3) {
+    if (dist > 4) {
       set(s => ({ ui: { ...s.ui, message: `${creature.name} está longe demais.` } }));
       return;
     }
@@ -174,7 +191,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const updatedCreatures = state.creatures.map(c => {
       if (c.id !== targetId) return c;
       if (result.targetDied) {
-        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + 30_000 };
+        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + (180_000 + Math.random() * 120_000) };
       }
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
@@ -213,10 +230,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         }
         updatedPlayer = {
           ...updatedPlayer,
-          hp: updatedPlayer.maxHp,
-          position: { x: 0, z: 1 },
+          hp: 0,
+          dead: true,
+          respawnAt: Date.now() + 15_000,
         };
-        msg = `Você morreu! Seus itens dropáveis ficaram no chão.`;
+        msg = `Você morreu! Respawn em 15s. Itens dropáveis ficaram no chão.`;
       }
     }
 

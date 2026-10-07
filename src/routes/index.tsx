@@ -120,7 +120,7 @@ function Index() {
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d < bestDist) { bestDist = d; nearest = c.id; }
     }
-    if (nearest && bestDist <= 3) attack(nearest);
+    if (nearest && bestDist <= 4) attack(nearest);
     else useGameStore.getState().setMessage('Nenhum inimigo próximo.');
   }, [attack]);
 
