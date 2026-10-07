@@ -11,7 +11,12 @@
 - [**3 Camadas**](tribos-3-camadas.md) — TRIBOS = 3 jogos em 1: Mapa Aberto (survival/farm), Raid (MOBA/arena), Base (builder/Clash). Loop: Base→Mapa→Raid→Base.
 - [Equipe](tribos-equipe.md) — Pedro (criador/design) + Caio (dev, entrou 06/10). Handoff no diário 06/10.
 
+- [Cidade / Base (visão de cima)](tribos-cidade.md) — Camada 3. Cidade isométrica em sprites, 8 construções × 20 níveis, filas de construção e produção, expedições. Assets em `art/city/`. Sessão 4 (Caio).
+- **Fluxo git:** Caio trabalha no fork `caiolea0/epic-loot-adventure` e manda PR pro `OrbitrumConnect`. Sem force push.
+
 ## Feedback
+
+- **Diário e memória sempre (Caio, 06/10)** — atualizar diário do dia e este índice a cada etapa: o que foi feito, conclusões, achados. Só adicionar.
 
 - [Não apagar conteúdo](feedback-nao-apagar-conteudo.md) — quando Pedro pede pra editar algo, SÓ adicionar o que pediu; nunca reescrever/apagar o resto sem perguntar antes.
 - [Começar pela memória](feedback-comecar-pela-memoria.md) — tudo já está mapeado (diário/checklist). NÃO re-explorar codebase nem usar subagents pra redescobrir. Ler memória primeiro. Economiza token.
