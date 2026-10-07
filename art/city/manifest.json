@@ -1,0 +1,809 @@
+{
+  "model": "gpt-5.6-luna",
+  "effort": "medium",
+  "size": "1024x1024",
+  "total_sheets": 40,
+  "total_sprites": 160,
+  "sheets": [
+    {
+      "id": "tribe_hall_s1",
+      "building": "tribe_hall",
+      "era": "pele",
+      "levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sheet": "art/city/sheets/tribe_hall_s1.png",
+      "ref": null,
+      "sprites": [
+        "public/assets/city/buildings/tribe_hall/lvl-01.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-02.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-03.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-04.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: the tribal chieftain great hall, the heart of the settlement, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 1 (a single small hide tent beside a tiny campfire), top-right level 2 (a larger hide tent with wooden poles and a small skull totem), bottom-left level 3 (a wide hide pavilion with two totems and a stone fire ring), bottom-right level 4 (a big hide-and-bone chieftain tent with antler crown and banners). Main materials of this era: animal hides, raw branches, rope, bones. Every level must be visibly larger and more elaborate than the previous one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "tribe_hall_s2",
+      "building": "tribe_hall",
+      "era": "madeira",
+      "levels": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "sheet": "art/city/sheets/tribe_hall_s2.png",
+      "ref": "art/city/sheets/tribe_hall_s1.png",
+      "sprites": [
+        "public/assets/city/buildings/tribe_hall/lvl-05.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-06.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-07.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-08.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: the tribal chieftain great hall, the heart of the settlement, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 5 (a round log hut with thatched cone roof and one banner), top-right level 6 (a larger round longhouse with thatched roof and carved door posts), bottom-left level 7 (a two-tier thatched longhouse with a wooden porch and totem pair), bottom-right level 8 (a grand timber hall with layered thatch roofs and a ring of palisade stakes). Main materials of this era: hewn logs, thatch, wooden palisade stakes. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "tribe_hall_s3",
+      "building": "tribe_hall",
+      "era": "pedra",
+      "levels": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "sheet": "art/city/sheets/tribe_hall_s3.png",
+      "ref": "art/city/sheets/tribe_hall_s2.png",
+      "sprites": [
+        "public/assets/city/buildings/tribe_hall/lvl-09.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-10.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-11.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-12.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: the tribal chieftain great hall, the heart of the settlement, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 9 (a timber hall raised on a dry-stone foundation with stone steps), top-right level 10 (a stone-walled hall with heavy timber roof and a stone fire altar in front), bottom-left level 11 (a broad stone hall with two side wings and carved stone totems), bottom-right level 12 (a tall stone great hall with a central smoke tower and stone stairway). Main materials of this era: dry-stone walls, stone foundations, heavy timber beams. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "tribe_hall_s4",
+      "building": "tribe_hall",
+      "era": "bronze",
+      "levels": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "sheet": "art/city/sheets/tribe_hall_s4.png",
+      "ref": "art/city/sheets/tribe_hall_s3.png",
+      "sprites": [
+        "public/assets/city/buildings/tribe_hall/lvl-13.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-14.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-15.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-16.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: the tribal chieftain great hall, the heart of the settlement, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 13 (a cut-stone hall with clay tile roof and bronze door ornaments), top-right level 14 (a larger tiled hall with bronze roof crests and bronze braziers at the entrance), bottom-left level 15 (a two-storey tiled palace hall with bronze-capped pillars and a balcony), bottom-right level 16 (a grand bronze-crowned palace hall with twin towers and a wide ceremonial stair). Main materials of this era: cut stone blocks, bronze fittings and bronze ornaments, clay roof tiles. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "tribe_hall_s5",
+      "building": "tribe_hall",
+      "era": "ferro",
+      "levels": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "sheet": "art/city/sheets/tribe_hall_s5.png",
+      "ref": "art/city/sheets/tribe_hall_s4.png",
+      "sprites": [
+        "public/assets/city/buildings/tribe_hall/lvl-17.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-18.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-19.webp",
+        "public/assets/city/buildings/tribe_hall/lvl-20.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: the tribal chieftain great hall, the heart of the settlement, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 17 (a fortified stone citadel hall with iron-banded gates and tall banners), top-right level 18 (a larger citadel with iron-spiked battlements and two guard turrets), bottom-left level 19 (a towering citadel keep with iron crown spires and blue crystal lanterns), bottom-right level 20 (a monumental chieftain citadel with a huge glowing blue crystal above the gate, iron spires and many banners). Main materials of this era: massive fortified stonework, dark iron bands and iron spikes, tall banners, glowing arcane blue crystals. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "lumber_camp_s1",
+      "building": "lumber_camp",
+      "era": "pele",
+      "levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sheet": "art/city/sheets/lumber_camp_s1.png",
+      "ref": null,
+      "sprites": [
+        "public/assets/city/buildings/lumber_camp/lvl-01.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-02.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-03.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-04.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a lumber camp where the tribe cuts and stores wood, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 1 (a tree stump with a stone axe stuck in it and a few branches), top-right level 2 (a small pile of logs beside a hide lean-to shelter), bottom-left level 3 (a hide shelter with a log pile and a chopping block), bottom-right level 4 (a hide-roofed work camp with two log piles and a drying rack). Main materials of this era: animal hides, raw branches, rope, bones. Every level must be visibly larger and more elaborate than the previous one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "lumber_camp_s2",
+      "building": "lumber_camp",
+      "era": "madeira",
+      "levels": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "sheet": "art/city/sheets/lumber_camp_s2.png",
+      "ref": "art/city/sheets/lumber_camp_s1.png",
+      "sprites": [
+        "public/assets/city/buildings/lumber_camp/lvl-05.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-06.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-07.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-08.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a lumber camp where the tribe cuts and stores wood, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 5 (a small log cabin with a stacked log pile), top-right level 6 (a log cabin with a sawhorse and a neat firewood wall), bottom-left level 7 (a larger thatched woodcutter lodge with a log sled), bottom-right level 8 (a timber lodge with a covered log store and a hand saw frame). Main materials of this era: hewn logs, thatch, wooden palisade stakes. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "lumber_camp_s3",
+      "building": "lumber_camp",
+      "era": "pedra",
+      "levels": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "sheet": "art/city/sheets/lumber_camp_s3.png",
+      "ref": "art/city/sheets/lumber_camp_s2.png",
+      "sprites": [
+        "public/assets/city/buildings/lumber_camp/lvl-09.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-10.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-11.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-12.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a lumber camp where the tribe cuts and stores wood, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 9 (a stone-based sawmill shed with a large two-man saw frame), top-right level 10 (a stone and timber sawmill with a covered plank stack), bottom-left level 11 (a bigger sawmill with a wooden crane lifting a log), bottom-right level 12 (a sawmill with a water wheel and a log chute). Main materials of this era: dry-stone walls, stone foundations, heavy timber beams. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "lumber_camp_s4",
+      "building": "lumber_camp",
+      "era": "bronze",
+      "levels": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "sheet": "art/city/sheets/lumber_camp_s4.png",
+      "ref": "art/city/sheets/lumber_camp_s3.png",
+      "sprites": [
+        "public/assets/city/buildings/lumber_camp/lvl-13.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-14.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-15.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-16.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a lumber camp where the tribe cuts and stores wood, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 13 (a tiled-roof sawmill with bronze saw blades and stacked planks), top-right level 14 (a larger tiled lumber mill with two saw frames and a bronze-bound crane), bottom-left level 15 (a lumber mill with a big water wheel, bronze gears and a plank warehouse), bottom-right level 16 (a grand lumber works with twin water wheels and a tall timber crane). Main materials of this era: cut stone blocks, bronze fittings and bronze ornaments, clay roof tiles. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "lumber_camp_s5",
+      "building": "lumber_camp",
+      "era": "ferro",
+      "levels": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "sheet": "art/city/sheets/lumber_camp_s5.png",
+      "ref": "art/city/sheets/lumber_camp_s4.png",
+      "sprites": [
+        "public/assets/city/buildings/lumber_camp/lvl-17.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-18.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-19.webp",
+        "public/assets/city/buildings/lumber_camp/lvl-20.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a lumber camp where the tribe cuts and stores wood, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 17 (a fortified lumber works with iron circular saw and iron-banded log store), top-right level 18 (a larger iron-geared lumber works with a conveyor ramp of logs), bottom-left level 19 (a massive lumber works with iron cranes and crystal-lit workshops), bottom-right level 20 (a monumental lumber works with giant iron saw, twin cranes, glowing blue crystal and banners). Main materials of this era: massive fortified stonework, dark iron bands and iron spikes, tall banners, glowing arcane blue crystals. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "quarry_s1",
+      "building": "quarry",
+      "era": "pele",
+      "levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sheet": "art/city/sheets/quarry_s1.png",
+      "ref": null,
+      "sprites": [
+        "public/assets/city/buildings/quarry/lvl-01.webp",
+        "public/assets/city/buildings/quarry/lvl-02.webp",
+        "public/assets/city/buildings/quarry/lvl-03.webp",
+        "public/assets/city/buildings/quarry/lvl-04.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a stone quarry where the tribe extracts rock, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 1 (a small rock outcrop with a bone pick and a few loose stones), top-right level 2 (a rock outcrop with a pile of stones and a hide carrying sling), bottom-left level 3 (a shallow dig pit with a hide shelter and stone piles), bottom-right level 4 (a wider dig pit with a branch ladder and a hide work tent). Main materials of this era: animal hides, raw branches, rope, bones. Every level must be visibly larger and more elaborate than the previous one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "quarry_s2",
+      "building": "quarry",
+      "era": "madeira",
+      "levels": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "sheet": "art/city/sheets/quarry_s2.png",
+      "ref": "art/city/sheets/quarry_s1.png",
+      "sprites": [
+        "public/assets/city/buildings/quarry/lvl-05.webp",
+        "public/assets/city/buildings/quarry/lvl-06.webp",
+        "public/assets/city/buildings/quarry/lvl-07.webp",
+        "public/assets/city/buildings/quarry/lvl-08.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a stone quarry where the tribe extracts rock, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 5 (a quarry pit with a log ramp and a wooden sled of stones), top-right level 6 (a quarry pit with a small log shed and a wooden lever hoist), bottom-left level 7 (a deeper quarry with wooden scaffolding and a stone cart), bottom-right level 8 (a quarry with a timber scaffold tower and a thatched tool shed). Main materials of this era: hewn logs, thatch, wooden palisade stakes. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "quarry_s3",
+      "building": "quarry",
+      "era": "pedra",
+      "levels": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "sheet": "art/city/sheets/quarry_s3.png",
+      "ref": "art/city/sheets/quarry_s2.png",
+      "sprites": [
+        "public/assets/city/buildings/quarry/lvl-09.webp",
+        "public/assets/city/buildings/quarry/lvl-10.webp",
+        "public/assets/city/buildings/quarry/lvl-11.webp",
+        "public/assets/city/buildings/quarry/lvl-12.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a stone quarry where the tribe extracts rock, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 9 (a terraced quarry with a dry-stone hut and stacked cut blocks), top-right level 10 (a terraced quarry with a stone ramp and a timber crane), bottom-left level 11 (a large terraced quarry with two cranes and neat block stacks), bottom-right level 12 (a deep stepped quarry with a stone mason workshop and a stone bridge). Main materials of this era: dry-stone walls, stone foundations, heavy timber beams. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "quarry_s4",
+      "building": "quarry",
+      "era": "bronze",
+      "levels": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "sheet": "art/city/sheets/quarry_s4.png",
+      "ref": "art/city/sheets/quarry_s3.png",
+      "sprites": [
+        "public/assets/city/buildings/quarry/lvl-13.webp",
+        "public/assets/city/buildings/quarry/lvl-14.webp",
+        "public/assets/city/buildings/quarry/lvl-15.webp",
+        "public/assets/city/buildings/quarry/lvl-16.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a stone quarry where the tribe extracts rock, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 13 (a stepped quarry with a tiled mason house and bronze chisels rack), top-right level 14 (a larger quarry with a bronze-bound crane and a tiled block warehouse), bottom-left level 15 (a great quarry with bronze pulley towers and a paved loading yard), bottom-right level 16 (a grand quarry with twin bronze cranes and a carved stone gateway). Main materials of this era: cut stone blocks, bronze fittings and bronze ornaments, clay roof tiles. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "quarry_s5",
+      "building": "quarry",
+      "era": "ferro",
+      "levels": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "sheet": "art/city/sheets/quarry_s5.png",
+      "ref": "art/city/sheets/quarry_s4.png",
+      "sprites": [
+        "public/assets/city/buildings/quarry/lvl-17.webp",
+        "public/assets/city/buildings/quarry/lvl-18.webp",
+        "public/assets/city/buildings/quarry/lvl-19.webp",
+        "public/assets/city/buildings/quarry/lvl-20.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a stone quarry where the tribe extracts rock, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 17 (a fortified quarry with iron crane and iron-railed ore cart track), top-right level 18 (a larger quarry with iron drill tower and reinforced stone walls), bottom-left level 19 (a massive quarry with iron machinery and exposed blue crystal veins), bottom-right level 20 (a monumental quarry with giant iron crane, glowing blue crystal vein, banners and stone watch post). Main materials of this era: massive fortified stonework, dark iron bands and iron spikes, tall banners, glowing arcane blue crystals. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "hunting_lodge_s1",
+      "building": "hunting_lodge",
+      "era": "pele",
+      "levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sheet": "art/city/sheets/hunting_lodge_s1.png",
+      "ref": null,
+      "sprites": [
+        "public/assets/city/buildings/hunting_lodge/lvl-01.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-02.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-03.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-04.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a hunting lodge that provides food for the tribe, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 1 (a small drying rack with two fish beside a tiny campfire), top-right level 2 (a hide lean-to with a meat drying rack and a spear), bottom-left level 3 (a hide tent with two drying racks and a pelt stretched on a frame), bottom-right level 4 (a larger hunter tent with antlers, pelts and a smoking pit). Main materials of this era: animal hides, raw branches, rope, bones. Every level must be visibly larger and more elaborate than the previous one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "hunting_lodge_s2",
+      "building": "hunting_lodge",
+      "era": "madeira",
+      "levels": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "sheet": "art/city/sheets/hunting_lodge_s2.png",
+      "ref": "art/city/sheets/hunting_lodge_s1.png",
+      "sprites": [
+        "public/assets/city/buildings/hunting_lodge/lvl-05.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-06.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-07.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-08.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a hunting lodge that provides food for the tribe, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 5 (a small log hut with a meat drying rack outside), top-right level 6 (a log hunting hut with a thatched smokehouse beside it), bottom-left level 7 (a larger thatched lodge with pelt frames and a bow rack), bottom-right level 8 (a timber hunting lodge with a smokehouse and a small fenced pen). Main materials of this era: hewn logs, thatch, wooden palisade stakes. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "hunting_lodge_s3",
+      "building": "hunting_lodge",
+      "era": "pedra",
+      "levels": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "sheet": "art/city/sheets/hunting_lodge_s3.png",
+      "ref": "art/city/sheets/hunting_lodge_s2.png",
+      "sprites": [
+        "public/assets/city/buildings/hunting_lodge/lvl-09.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-10.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-11.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-12.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a hunting lodge that provides food for the tribe, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 9 (a stone-based lodge with a stone smokehouse chimney), top-right level 10 (a stone and timber lodge with a fenced pen and a small vegetable patch), bottom-left level 11 (a larger lodge with a stone butchery table and two crop rows), bottom-right level 12 (a big stone lodge with a tall smokehouse and a fenced crop field). Main materials of this era: dry-stone walls, stone foundations, heavy timber beams. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "hunting_lodge_s4",
+      "building": "hunting_lodge",
+      "era": "bronze",
+      "levels": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "sheet": "art/city/sheets/hunting_lodge_s4.png",
+      "ref": "art/city/sheets/hunting_lodge_s3.png",
+      "sprites": [
+        "public/assets/city/buildings/hunting_lodge/lvl-13.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-14.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-15.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-16.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a hunting lodge that provides food for the tribe, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 13 (a tiled-roof lodge with bronze hooks rack and a granary jar row), top-right level 14 (a larger tiled lodge with a round granary and tidy crop fields), bottom-left level 15 (a hunting hall with bronze trophy crests, two granaries and an orchard tree), bottom-right level 16 (a grand hunting hall with a bronze-roofed granary tower and wide fields). Main materials of this era: cut stone blocks, bronze fittings and bronze ornaments, clay roof tiles. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "hunting_lodge_s5",
+      "building": "hunting_lodge",
+      "era": "ferro",
+      "levels": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "sheet": "art/city/sheets/hunting_lodge_s5.png",
+      "ref": "art/city/sheets/hunting_lodge_s4.png",
+      "sprites": [
+        "public/assets/city/buildings/hunting_lodge/lvl-17.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-18.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-19.webp",
+        "public/assets/city/buildings/hunting_lodge/lvl-20.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a hunting lodge that provides food for the tribe, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 17 (a fortified hunting hall with iron-banded doors and a stone granary), top-right level 18 (a larger hall with iron weathervane, two stone granaries and trophy banners), bottom-left level 19 (a massive provision hall with an iron-crowned granary tower and crystal lanterns), bottom-right level 20 (a monumental provision hall with a glowing blue crystal beacon, iron crests, granary towers and banners). Main materials of this era: massive fortified stonework, dark iron bands and iron spikes, tall banners, glowing arcane blue crystals. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "war_camp_s1",
+      "building": "war_camp",
+      "era": "pele",
+      "levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sheet": "art/city/sheets/war_camp_s1.png",
+      "ref": null,
+      "sprites": [
+        "public/assets/city/buildings/war_camp/lvl-01.webp",
+        "public/assets/city/buildings/war_camp/lvl-02.webp",
+        "public/assets/city/buildings/war_camp/lvl-03.webp",
+        "public/assets/city/buildings/war_camp/lvl-04.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a warrior training camp where the tribe trains troops, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 1 (a single straw training dummy and a spear stuck in the ground), top-right level 2 (a hide tent with a training dummy and a small weapon rack), bottom-left level 3 (two hide tents with a weapon rack and a sparring circle of stones), bottom-right level 4 (a hide war tent with a skull banner, dummies and a spear rack). Main materials of this era: animal hides, raw branches, rope, bones. Every level must be visibly larger and more elaborate than the previous one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "war_camp_s2",
+      "building": "war_camp",
+      "era": "madeira",
+      "levels": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "sheet": "art/city/sheets/war_camp_s2.png",
+      "ref": "art/city/sheets/war_camp_s1.png",
+      "sprites": [
+        "public/assets/city/buildings/war_camp/lvl-05.webp",
+        "public/assets/city/buildings/war_camp/lvl-06.webp",
+        "public/assets/city/buildings/war_camp/lvl-07.webp",
+        "public/assets/city/buildings/war_camp/lvl-08.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a warrior training camp where the tribe trains troops, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 5 (a log barracks hut with a weapon rack), top-right level 6 (a log barracks with a thatched roof and a fenced sparring yard), bottom-left level 7 (a larger barracks with a wooden watch platform and shield rack), bottom-right level 8 (a timber barracks with a palisade yard and two training dummies). Main materials of this era: hewn logs, thatch, wooden palisade stakes. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "war_camp_s3",
+      "building": "war_camp",
+      "era": "pedra",
+      "levels": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "sheet": "art/city/sheets/war_camp_s3.png",
+      "ref": "art/city/sheets/war_camp_s2.png",
+      "sprites": [
+        "public/assets/city/buildings/war_camp/lvl-09.webp",
+        "public/assets/city/buildings/war_camp/lvl-10.webp",
+        "public/assets/city/buildings/war_camp/lvl-11.webp",
+        "public/assets/city/buildings/war_camp/lvl-12.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a warrior training camp where the tribe trains troops, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 9 (a stone-based barracks with an archery target and a stone yard), top-right level 10 (a stone barracks with a small watchtower and a shield wall rack), bottom-left level 11 (a larger stone barracks with two wings and a training yard), bottom-right level 12 (a strong stone barracks with a tall watchtower and a war drum). Main materials of this era: dry-stone walls, stone foundations, heavy timber beams. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "war_camp_s4",
+      "building": "war_camp",
+      "era": "bronze",
+      "levels": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "sheet": "art/city/sheets/war_camp_s4.png",
+      "ref": "art/city/sheets/war_camp_s3.png",
+      "sprites": [
+        "public/assets/city/buildings/war_camp/lvl-13.webp",
+        "public/assets/city/buildings/war_camp/lvl-14.webp",
+        "public/assets/city/buildings/war_camp/lvl-15.webp",
+        "public/assets/city/buildings/war_camp/lvl-16.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a warrior training camp where the tribe trains troops, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 13 (a tiled-roof barracks with bronze shields on the wall and a bronze war drum), top-right level 14 (a larger barracks with bronze-tipped palisade and an armory wing), bottom-left level 15 (a war hall with bronze-capped towers and a paved parade yard), bottom-right level 16 (a grand war hall with twin bronze-crowned towers and war banners). Main materials of this era: cut stone blocks, bronze fittings and bronze ornaments, clay roof tiles. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "war_camp_s5",
+      "building": "war_camp",
+      "era": "ferro",
+      "levels": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "sheet": "art/city/sheets/war_camp_s5.png",
+      "ref": "art/city/sheets/war_camp_s4.png",
+      "sprites": [
+        "public/assets/city/buildings/war_camp/lvl-17.webp",
+        "public/assets/city/buildings/war_camp/lvl-18.webp",
+        "public/assets/city/buildings/war_camp/lvl-19.webp",
+        "public/assets/city/buildings/war_camp/lvl-20.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a warrior training camp where the tribe trains troops, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 17 (a fortified war keep with iron gates and iron weapon racks), top-right level 18 (a larger war keep with iron-spiked walls and two guard towers), bottom-left level 19 (a massive war fortress with iron battlements and crystal-lit braziers), bottom-right level 20 (a monumental war fortress with iron spires, a glowing blue crystal war horn and many banners). Main materials of this era: massive fortified stonework, dark iron bands and iron spikes, tall banners, glowing arcane blue crystals. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "scout_tent_s1",
+      "building": "scout_tent",
+      "era": "pele",
+      "levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sheet": "art/city/sheets/scout_tent_s1.png",
+      "ref": null,
+      "sprites": [
+        "public/assets/city/buildings/scout_tent/lvl-01.webp",
+        "public/assets/city/buildings/scout_tent/lvl-02.webp",
+        "public/assets/city/buildings/scout_tent/lvl-03.webp",
+        "public/assets/city/buildings/scout_tent/lvl-04.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a scout outpost from which the tribe sends explorers to map the world, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 1 (a small hide bedroll beside a tall marker pole with a feather), top-right level 2 (a small hide tent with a marker pole and a footprint-carved stone), bottom-left level 3 (a hide tent with a lookout pole ladder and a rolled hide map), bottom-right level 4 (a larger scout tent with a branch lookout perch and trail flags). Main materials of this era: animal hides, raw branches, rope, bones. Every level must be visibly larger and more elaborate than the previous one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "scout_tent_s2",
+      "building": "scout_tent",
+      "era": "madeira",
+      "levels": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "sheet": "art/city/sheets/scout_tent_s2.png",
+      "ref": "art/city/sheets/scout_tent_s1.png",
+      "sprites": [
+        "public/assets/city/buildings/scout_tent/lvl-05.webp",
+        "public/assets/city/buildings/scout_tent/lvl-06.webp",
+        "public/assets/city/buildings/scout_tent/lvl-07.webp",
+        "public/assets/city/buildings/scout_tent/lvl-08.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a scout outpost from which the tribe sends explorers to map the world, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 5 (a small log hut with a wooden lookout platform), top-right level 6 (a log scout hut with a taller lookout tower and a signal horn), bottom-left level 7 (a thatched scout lodge with a lookout tower and a hitching post), bottom-right level 8 (a timber scout lodge with a tall watch tower and a signal fire basket). Main materials of this era: hewn logs, thatch, wooden palisade stakes. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "scout_tent_s3",
+      "building": "scout_tent",
+      "era": "pedra",
+      "levels": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "sheet": "art/city/sheets/scout_tent_s3.png",
+      "ref": "art/city/sheets/scout_tent_s2.png",
+      "sprites": [
+        "public/assets/city/buildings/scout_tent/lvl-09.webp",
+        "public/assets/city/buildings/scout_tent/lvl-10.webp",
+        "public/assets/city/buildings/scout_tent/lvl-11.webp",
+        "public/assets/city/buildings/scout_tent/lvl-12.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a scout outpost from which the tribe sends explorers to map the world, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 9 (a stone-based outpost with a timber watch tower), top-right level 10 (a stone outpost with a stone watch tower and a map table), bottom-left level 11 (a larger stone outpost with a tall tower and a stable shed), bottom-right level 12 (a strong stone outpost with a beacon tower and a walled yard). Main materials of this era: dry-stone walls, stone foundations, heavy timber beams. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "scout_tent_s4",
+      "building": "scout_tent",
+      "era": "bronze",
+      "levels": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "sheet": "art/city/sheets/scout_tent_s4.png",
+      "ref": "art/city/sheets/scout_tent_s3.png",
+      "sprites": [
+        "public/assets/city/buildings/scout_tent/lvl-13.webp",
+        "public/assets/city/buildings/scout_tent/lvl-14.webp",
+        "public/assets/city/buildings/scout_tent/lvl-15.webp",
+        "public/assets/city/buildings/scout_tent/lvl-16.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a scout outpost from which the tribe sends explorers to map the world, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 13 (a tiled-roof outpost with a bronze signal mirror on the tower), top-right level 14 (a larger outpost with bronze-capped tower and a cartographer wing), bottom-left level 15 (an explorer hall with a tall bronze-crowned beacon tower and stables), bottom-right level 16 (a grand explorer hall with twin towers, bronze spyglass and flags). Main materials of this era: cut stone blocks, bronze fittings and bronze ornaments, clay roof tiles. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "scout_tent_s5",
+      "building": "scout_tent",
+      "era": "ferro",
+      "levels": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "sheet": "art/city/sheets/scout_tent_s5.png",
+      "ref": "art/city/sheets/scout_tent_s4.png",
+      "sprites": [
+        "public/assets/city/buildings/scout_tent/lvl-17.webp",
+        "public/assets/city/buildings/scout_tent/lvl-18.webp",
+        "public/assets/city/buildings/scout_tent/lvl-19.webp",
+        "public/assets/city/buildings/scout_tent/lvl-20.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a scout outpost from which the tribe sends explorers to map the world, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 17 (a fortified explorer keep with an iron-banded tower and iron beacon cage), top-right level 18 (a larger keep with a very tall iron-topped tower and a walled stable yard), bottom-left level 19 (a massive explorer keep with an iron observatory dome and crystal lanterns), bottom-right level 20 (a monumental explorer keep with a towering beacon holding a glowing blue crystal, iron dome and banners). Main materials of this era: massive fortified stonework, dark iron bands and iron spikes, tall banners, glowing arcane blue crystals. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "forge_s1",
+      "building": "forge",
+      "era": "pele",
+      "levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sheet": "art/city/sheets/forge_s1.png",
+      "ref": null,
+      "sprites": [
+        "public/assets/city/buildings/forge/lvl-01.webp",
+        "public/assets/city/buildings/forge/lvl-02.webp",
+        "public/assets/city/buildings/forge/lvl-03.webp",
+        "public/assets/city/buildings/forge/lvl-04.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a forge and workshop where the tribe crafts tools and weapons, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 1 (a flat work stone with a bone hammer and a small fire pit), top-right level 2 (a fire pit with a stone anvil and a hide windbreak), bottom-left level 3 (a hide-roofed work shelter with a stone anvil and a tool rack), bottom-right level 4 (a larger hide workshop with a clay fire bowl and hanging tools). Main materials of this era: animal hides, raw branches, rope, bones. Every level must be visibly larger and more elaborate than the previous one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "forge_s2",
+      "building": "forge",
+      "era": "madeira",
+      "levels": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "sheet": "art/city/sheets/forge_s2.png",
+      "ref": "art/city/sheets/forge_s1.png",
+      "sprites": [
+        "public/assets/city/buildings/forge/lvl-05.webp",
+        "public/assets/city/buildings/forge/lvl-06.webp",
+        "public/assets/city/buildings/forge/lvl-07.webp",
+        "public/assets/city/buildings/forge/lvl-08.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a forge and workshop where the tribe crafts tools and weapons, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 5 (a small log workshop with a stone hearth and a tool rack), top-right level 6 (a log workshop with a thatched roof, a hearth and hand bellows), bottom-left level 7 (a larger timber workshop with a clay furnace and a quenching trough), bottom-right level 8 (a timber forge with a tall clay chimney and a covered workbench). Main materials of this era: hewn logs, thatch, wooden palisade stakes. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "forge_s3",
+      "building": "forge",
+      "era": "pedra",
+      "levels": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "sheet": "art/city/sheets/forge_s3.png",
+      "ref": "art/city/sheets/forge_s2.png",
+      "sprites": [
+        "public/assets/city/buildings/forge/lvl-09.webp",
+        "public/assets/city/buildings/forge/lvl-10.webp",
+        "public/assets/city/buildings/forge/lvl-11.webp",
+        "public/assets/city/buildings/forge/lvl-12.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a forge and workshop where the tribe crafts tools and weapons, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 9 (a stone forge with a stone chimney and a heavy stone anvil), top-right level 10 (a stone forge with a bigger furnace, bellows and an ore bin), bottom-left level 11 (a larger stone forge with two chimneys and a tool wall), bottom-right level 12 (a strong stone smithy with a tall smoking chimney and a water wheel hammer). Main materials of this era: dry-stone walls, stone foundations, heavy timber beams. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "forge_s4",
+      "building": "forge",
+      "era": "bronze",
+      "levels": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "sheet": "art/city/sheets/forge_s4.png",
+      "ref": "art/city/sheets/forge_s3.png",
+      "sprites": [
+        "public/assets/city/buildings/forge/lvl-13.webp",
+        "public/assets/city/buildings/forge/lvl-14.webp",
+        "public/assets/city/buildings/forge/lvl-15.webp",
+        "public/assets/city/buildings/forge/lvl-16.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a forge and workshop where the tribe crafts tools and weapons, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 13 (a tiled-roof smithy with a bronze anvil and bronze crucibles), top-right level 14 (a larger smithy with a bronze-bound furnace and a casting yard), bottom-left level 15 (a foundry with twin bronze-capped chimneys and molds stacked outside), bottom-right level 16 (a grand foundry with a big bronze furnace dome and an armory wing). Main materials of this era: cut stone blocks, bronze fittings and bronze ornaments, clay roof tiles. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "forge_s5",
+      "building": "forge",
+      "era": "ferro",
+      "levels": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "sheet": "art/city/sheets/forge_s5.png",
+      "ref": "art/city/sheets/forge_s4.png",
+      "sprites": [
+        "public/assets/city/buildings/forge/lvl-17.webp",
+        "public/assets/city/buildings/forge/lvl-18.webp",
+        "public/assets/city/buildings/forge/lvl-19.webp",
+        "public/assets/city/buildings/forge/lvl-20.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a forge and workshop where the tribe crafts tools and weapons, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 17 (a fortified ironworks with an iron anvil, iron chimney bands and glowing furnace mouth), top-right level 18 (a larger ironworks with a blast furnace tower and iron gantry), bottom-left level 19 (a massive ironworks with twin blast furnaces and crystal-heated forges glowing blue), bottom-right level 20 (a monumental ironworks with a giant blast furnace, glowing blue crystal core, iron spires and banners). Main materials of this era: massive fortified stonework, dark iron bands and iron spikes, tall banners, glowing arcane blue crystals. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "shaman_circle_s1",
+      "building": "shaman_circle",
+      "era": "pele",
+      "levels": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "sheet": "art/city/sheets/shaman_circle_s1.png",
+      "ref": null,
+      "sprites": [
+        "public/assets/city/buildings/shaman_circle/lvl-01.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-02.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-03.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-04.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a shaman circle where the tribe studies the ancestors and researches new knowledge, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 1 (three small standing stones around a tiny ritual fire), top-right level 2 (a ring of small standing stones with a skull on a stick), bottom-left level 3 (a stone ring with a hide shaman tent and hanging charms), bottom-right level 4 (a larger stone ring with a bone totem and a painted hide tent). Main materials of this era: animal hides, raw branches, rope, bones. Every level must be visibly larger and more elaborate than the previous one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "shaman_circle_s2",
+      "building": "shaman_circle",
+      "era": "madeira",
+      "levels": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "sheet": "art/city/sheets/shaman_circle_s2.png",
+      "ref": "art/city/sheets/shaman_circle_s1.png",
+      "sprites": [
+        "public/assets/city/buildings/shaman_circle/lvl-05.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-06.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-07.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-08.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a shaman circle where the tribe studies the ancestors and researches new knowledge, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 5 (a stone ring with a small log hut and a carved wooden totem), top-right level 6 (a log shaman hut with thatched roof and a totem pole circle), bottom-left level 7 (a larger thatched lodge with tall carved totems and herb racks), bottom-right level 8 (a timber lodge with a ring of totems and a ritual platform). Main materials of this era: hewn logs, thatch, wooden palisade stakes. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "shaman_circle_s3",
+      "building": "shaman_circle",
+      "era": "pedra",
+      "levels": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "sheet": "art/city/sheets/shaman_circle_s3.png",
+      "ref": "art/city/sheets/shaman_circle_s2.png",
+      "sprites": [
+        "public/assets/city/buildings/shaman_circle/lvl-09.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-10.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-11.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-12.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a shaman circle where the tribe studies the ancestors and researches new knowledge, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 9 (a ring of tall standing stones with a dry-stone shrine), top-right level 10 (a stone shrine with carved monoliths and a stone altar), bottom-left level 11 (a larger stone shrine with a small domed chamber and rune stones), bottom-right level 12 (a strong stone temple with a monolith ring and a stairway altar). Main materials of this era: dry-stone walls, stone foundations, heavy timber beams. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "shaman_circle_s4",
+      "building": "shaman_circle",
+      "era": "bronze",
+      "levels": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "sheet": "art/city/sheets/shaman_circle_s4.png",
+      "ref": "art/city/sheets/shaman_circle_s3.png",
+      "sprites": [
+        "public/assets/city/buildings/shaman_circle/lvl-13.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-14.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-15.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-16.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a shaman circle where the tribe studies the ancestors and researches new knowledge, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 13 (a tiled temple with bronze bowls of fire and bronze rune discs), top-right level 14 (a larger temple with a bronze-capped obelisk and a scroll house wing), bottom-left level 15 (a hall of elders with bronze astrolabe, obelisks and a paved ritual ring), bottom-right level 16 (a grand hall of elders with a bronze dome and a tall bronze-tipped obelisk). Main materials of this era: cut stone blocks, bronze fittings and bronze ornaments, clay roof tiles. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    },
+    {
+      "id": "shaman_circle_s5",
+      "building": "shaman_circle",
+      "era": "ferro",
+      "levels": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "sheet": "art/city/sheets/shaman_circle_s5.png",
+      "ref": "art/city/sheets/shaman_circle_s4.png",
+      "sprites": [
+        "public/assets/city/buildings/shaman_circle/lvl-17.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-18.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-19.webp",
+        "public/assets/city/buildings/shaman_circle/lvl-20.webp"
+      ],
+      "prompt": "Game asset sprite sheet, 1024x1024, a 2x2 grid of four isometric buildings, each centered in its own equal quadrant with clear empty margin, no overlap between quadrants. Subject: a shaman circle where the tribe studies the ancestors and researches new knowledge, for a primal tribal survival strategy game, shown at four consecutive upgrade levels in reading order: top-left level 17 (a fortified arcane sanctum with iron-bound doors and small blue crystals on pedestals), top-right level 18 (a larger sanctum with an iron-ribbed dome and floating blue crystal shards), bottom-left level 19 (a massive sanctum with a crystal spire and a ring of glowing rune monoliths), bottom-right level 20 (a monumental arcane sanctum with a huge glowing blue crystal floating above the dome, iron spires, rune monoliths and banners). Main materials of this era: massive fortified stonework, dark iron bands and iron spikes, tall banners, glowing arcane blue crystals. Every level must be visibly larger and more elaborate than the previous one. The attached image shows the previous four levels of this same building: keep the same art style, palette, camera angle and scale, and make these four levels a clear continuation, each visibly bigger and richer than the last attached one. Style: stylized low-poly 3D render, soft rounded shapes, strong readable silhouettes, warm earthy palette with rust-red tribal banners, hand-painted textures, isometric three-quarter top-down view from the exact same camera angle in every quadrant, light from top-left, each building sitting on its own small round patch of dirt and grass. Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no people, no animals. Generate exactly ONE image."
+    }
+  ]
+}
