@@ -1,7 +1,11 @@
 import { create } from 'zustand';
-import type { PlayerState, CreatureState, ResourceNode, DeathBag, UIState, BaseState, BaseResult, BuildingId } from '../types';
+import type {
+  PlayerState, CreatureState, ResourceNode, DeathBag, UIState, BaseState, BaseResult, BuildingId,
+  CampState, ObjectiveQueueState, ObjectiveKind, AutoMode, AutoSnapshot, Position,
+} from '../types';
 import { ITEMS } from '../data/items';
 import { CREATURES } from '../data/creatures';
+import { CAMPS } from '../data/camps';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
 import { resolveAttack, getDistance } from '../systems/combatSystem';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
@@ -11,6 +15,16 @@ import {
   enqueueUnit as enqueueBaseUnit, cancelQueueItem as cancelBaseQueueItem,
   sendExpedition as sendBaseExpedition, depositFromInventory, collectTools,
 } from '../systems/baseSystem';
+import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
+import {
+  addObjective as addQueueObjective, clearObjectives as clearQueueObjectives, createQueue,
+  findHealHotbarIndex, hasPendingObjective, removeObjective as removeQueueObjective,
+  reorderObjective as reorderQueueObjective, setMode as setQueueMode, setRepeat as setQueueRepeat,
+  tickObjectives,
+} from '../systems/objectiveSystem';
+
+/** Para onde o piloto automático recua e para onde aponta um `travel` sem alvo. */
+export const HOME_POSITION: Position = { x: 0, z: 0 };
 
 type GameState = {
   player: PlayerState;
@@ -20,6 +34,10 @@ type GameState = {
   ui: UIState;
   attackTick: number;
   base: BaseState;
+  camps: CampState[];
+  objectives: ObjectiveQueueState;
+  /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
+  targetId: string | null;
 };
 
 type GameActions = {
@@ -50,6 +68,15 @@ type GameActions = {
   cancelQueueItem: (instanceId: string, itemId: string) => void;
   sendExpedition: (expeditionId: string, scouts: number) => void;
   depositToBase: () => void;
+  addObjective: (kind: ObjectiveKind, targetId: string | null) => void;
+  removeObjective: (objectiveId: string) => void;
+  clearObjectives: () => void;
+  reorderObjective: (objectiveId: string, direction: -1 | 1) => void;
+  setAutoMode: (mode: AutoMode) => void;
+  toggleRepeat: () => void;
+  setTarget: (creatureId: string | null) => void;
+  tickWorld: () => void;
+  buildAutoSnapshot: () => AutoSnapshot;
 };
 
 function createInitialPlayer(): PlayerState {
@@ -147,13 +174,18 @@ function createInitialResources(): ResourceNode[] {
   ];
 }
 
+const INITIAL_CAMP_WORLD = createCamps(Date.now());
+
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
   player: createInitialPlayer(),
-  creatures: createInitialCreatures(),
+  creatures: [...createInitialCreatures(), ...INITIAL_CAMP_WORLD.creatures],
   resources: createInitialResources(),
   deathBags: [],
   attackTick: 0,
   base: createInitialBase(Date.now()),
+  camps: INITIAL_CAMP_WORLD.camps,
+  objectives: createQueue(),
+  targetId: null,
   ui: {
     mode: 'world',
     panel: null,
@@ -475,7 +507,203 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       ui: { ...state.ui, message },
     });
   },
+
+  // -------------------------------------------------------------------------
+  // Fila de objetivos e piloto automático
+  // -------------------------------------------------------------------------
+
+  addObjective: (kind, targetId) => {
+    const state = get();
+    const resolved = resolveObjectiveTarget(state, kind, targetId);
+    if (!resolved) {
+      set(s => ({ ui: { ...s.ui, message: 'Alvo inválido para a fila.' } }));
+      return;
+    }
+    if (hasPendingObjective(state.objectives, kind, targetId)) {
+      set(s => ({ ui: { ...s.ui, message: `${resolved.label} já está na fila.` } }));
+      return;
+    }
+    const objectives = addQueueObjective(
+      state.objectives,
+      { kind, targetId, position: resolved.position, label: resolved.label },
+      Date.now(),
+    );
+    set({ objectives, ui: { ...state.ui, message: `${resolved.label}: entrou na fila.` } });
+  },
+
+  removeObjective: (objectiveId) => {
+    set(s => ({ objectives: removeQueueObjective(s.objectives, objectiveId) }));
+  },
+
+  clearObjectives: () => {
+    set(s => ({
+      objectives: clearQueueObjectives(s.objectives),
+      ui: { ...s.ui, message: 'Fila de objetivos esvaziada.' },
+    }));
+  },
+
+  reorderObjective: (objectiveId, direction) => {
+    set(s => ({ objectives: reorderQueueObjective(s.objectives, objectiveId, direction) }));
+  },
+
+  setAutoMode: (mode) => {
+    set(s => ({
+      objectives: setQueueMode(s.objectives, mode),
+      ui: {
+        ...s.ui,
+        message: mode === 'idle' ? 'Piloto automático ligado.' : 'Controle manual retomado.',
+      },
+    }));
+  },
+
+  toggleRepeat: () => {
+    set(s => {
+      const repeat = !s.objectives.repeat;
+      return {
+        objectives: setQueueRepeat(s.objectives, repeat),
+        ui: { ...s.ui, message: repeat ? 'Fila em repetição.' : 'Repetição desligada.' },
+      };
+    });
+  },
+
+  setTarget: (creatureId) => set({ targetId: creatureId }),
+
+  tickWorld: () => {
+    const state = get();
+    const now = Date.now();
+
+    const discovery = discoverCamps(state.camps, state.player.position);
+    const ticked = tickCamps(discovery.camps, state.creatures, now);
+
+    let player = state.player;
+    const messages: string[] = [];
+
+    for (const camp of discovery.newlyDiscovered) {
+      messages.push(`Você avistou o ${camp.name}.`);
+    }
+
+    // Recompensa: sai apenas de `newlyCleared`, que nunca repete o mesmo acampamento.
+    for (const camp of ticked.newlyCleared) {
+      const def = CAMPS[camp.defId];
+      if (!def) continue;
+      let inventory = player.inventory;
+      const taken: string[] = [];
+      for (const entry of def.reward.items) {
+        if (!canAddItem(inventory, entry.itemId, entry.quantity)) continue;
+        inventory = addItem(inventory, entry.itemId, entry.quantity);
+        taken.push(`${entry.quantity}x ${ITEMS[entry.itemId]?.name ?? entry.itemId}`);
+      }
+      player = { ...player, gold: player.gold + def.reward.gold, inventory };
+      messages.push(
+        taken.length > 0
+          ? `${camp.name} limpo! +${def.reward.gold} ouro, ${taken.join(', ')}.`
+          : `${camp.name} limpo! +${def.reward.gold} ouro (mochila cheia).`,
+      );
+    }
+
+    for (const camp of ticked.respawned) {
+      messages.push(`${camp.name} foi reocupado.`);
+    }
+
+    const objectiveResult = tickObjectives(
+      state.objectives,
+      {
+        playerPosition: player.position,
+        creatures: ticked.creatures,
+        camps: ticked.camps,
+        resources: state.resources,
+      },
+      now,
+    );
+    for (const done of objectiveResult.completed) messages.push(`Objetivo concluído: ${done.label}.`);
+    for (const lost of objectiveResult.failed) {
+      messages.push(`Objetivo cancelado: ${lost.label} — ${lost.failedReason ?? 'alvo perdido'}.`);
+    }
+
+    const nothingChanged = player === state.player
+      && ticked.camps === state.camps
+      && ticked.creatures === state.creatures
+      && objectiveResult.queue === state.objectives
+      && messages.length === 0;
+    if (nothingChanged) return;
+
+    set({
+      player,
+      camps: ticked.camps,
+      creatures: ticked.creatures,
+      objectives: objectiveResult.queue,
+      ui: messages.length > 0
+        ? { ...state.ui, message: messages[messages.length - 1]! }
+        : state.ui,
+    });
+  },
+
+  buildAutoSnapshot: () => {
+    const state = get();
+    return {
+      playerPosition: state.player.position,
+      playerHp: state.player.hp,
+      playerMaxHp: state.player.maxHp,
+      playerDead: state.player.dead,
+      healSlot: findHealHotbarIndex(state.player.inventory),
+      creatures: state.creatures.map(c => ({
+        id: c.id,
+        position: c.position,
+        behavior: c.behavior,
+        hp: c.hp,
+      })),
+      camps: state.camps.map(c => ({
+        id: c.id,
+        position: c.position,
+        radius: CAMPS[c.defId]?.radius ?? 8,
+        creatureIds: c.creatureIds,
+        cleared: c.cleared,
+      })),
+      resources: state.resources.map(r => ({
+        id: r.id,
+        position: r.position,
+        depleted: r.depleted,
+      })),
+      objectives: state.objectives,
+      homePosition: HOME_POSITION,
+    };
+  },
 }));
+
+/** Posição e rótulo de um objetivo, derivados do alvo clicado. */
+function resolveObjectiveTarget(
+  state: GameState,
+  kind: ObjectiveKind,
+  targetId: string | null,
+): { position: Position; label: string } | null {
+  if (kind === 'clear_camp') {
+    const camp = state.camps.find(c => c.id === targetId);
+    return camp ? { position: camp.position, label: `Limpar ${camp.name}` } : null;
+  }
+
+  if (kind === 'hunt_creature') {
+    const creature = state.creatures.find(c => c.id === targetId);
+    return creature ? { position: creature.position, label: `Caçar ${creature.name}` } : null;
+  }
+
+  if (kind === 'gather_node') {
+    const node = state.resources.find(r => r.id === targetId);
+    if (!node) return null;
+    const name = ITEMS[node.resourceId]?.name ?? node.resourceId;
+    return { position: node.position, label: `Coletar ${name}` };
+  }
+
+  // travel: aceita um acampamento, um recurso ou nenhum alvo (volta para a base).
+  const camp = state.camps.find(c => c.id === targetId);
+  if (camp) return { position: camp.position, label: `Viajar até ${camp.name}` };
+  const node = state.resources.find(r => r.id === targetId);
+  if (node) {
+    const name = ITEMS[node.resourceId]?.name ?? node.resourceId;
+    return { position: node.position, label: `Viajar até ${name}` };
+  }
+  if (targetId != null) return null;
+  return { position: HOME_POSITION, label: 'Voltar para a base' };
+}
 
 function applyBaseResult(
   set: (fn: (s: GameState) => Partial<GameState>) => void,

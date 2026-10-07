@@ -12,6 +12,7 @@
 - [Equipe](tribos-equipe.md) — Pedro (criador/design) + Caio (dev, entrou 06/10). Handoff no diário 06/10.
 
 - [Cidade / Base (visão de cima)](tribos-cidade.md) — Camada 3. Cidade isométrica em sprites, 8 construções × 20 níveis, filas de construção e produção, expedições. Assets em `art/city/`. Sessão 4 (Caio).
+- [Acampamentos + Objetivos (idle/manual)](tribos-acampamentos-objetivos.md) — Acampamentos inimigos no mapa, fila de objetivos por clique, piloto automático. Sessão 5 (Caio, 07/10).
 - **Fluxo git:** Caio trabalha no fork `caiolea0/epic-loot-adventure` e manda PR pro `OrbitrumConnect`. Sem force push.
 
 ## Feedback

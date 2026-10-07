@@ -17,4 +17,79 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     ],
     icon: 'Skull',
   },
+
+  // ---------------------------------------------------------------------------
+  // Saqueadores: humanoides que ocupam os acampamentos inimigos do vale.
+  // Referência de poder do jogador nível 1 com Espada de Ferro: ~29-39 de dano
+  // por golpe a cada 0,8 s, 100 de vida, e sofre (ataque do inimigo - 2) por troca.
+  // ---------------------------------------------------------------------------
+
+  raider_scout: {
+    id: 'raider_scout',
+    name: 'Saqueador Batedor',
+    maxHp: 45,
+    attackPower: 7,
+    armor: 1,
+    attackCooldown: 1.2,
+    attackRange: 1.8,
+    aggroRange: 9,
+    lootTable: [
+      { itemId: 'cooked_meat', quantity: 1, chance: 0.5 },
+      { itemId: 'wood', quantity: 3, chance: 0.4 },
+      { itemId: 'health_potion', quantity: 1, chance: 0.2 },
+    ],
+    icon: 'Crosshair',
+  },
+
+  raider_warrior: {
+    id: 'raider_warrior',
+    name: 'Saqueador Guerreiro',
+    maxHp: 95,
+    attackPower: 12,
+    armor: 4,
+    attackCooldown: 1.6,
+    attackRange: 2.0,
+    aggroRange: 8,
+    lootTable: [
+      { itemId: 'stone', quantity: 4, chance: 0.5 },
+      { itemId: 'iron_ore', quantity: 2, chance: 0.35 },
+      { itemId: 'wolf_pelt', quantity: 1, chance: 0.3 },
+      { itemId: 'health_potion', quantity: 1, chance: 0.25 },
+    ],
+    icon: 'Swords',
+  },
+
+  raider_brute: {
+    id: 'raider_brute',
+    name: 'Saqueador Brutamontes',
+    maxHp: 180,
+    attackPower: 22,
+    armor: 8,
+    attackCooldown: 2.4,
+    attackRange: 2.2,
+    aggroRange: 7,
+    lootTable: [
+      { itemId: 'iron_ore', quantity: 3, chance: 0.5 },
+      { itemId: 'leather_armor', quantity: 1, chance: 0.15 },
+      { itemId: 'cooked_meat', quantity: 3, chance: 0.5 },
+    ],
+    icon: 'Shield',
+  },
+
+  raider_shaman: {
+    id: 'raider_shaman',
+    name: 'Saqueador Xamã',
+    maxHp: 60,
+    attackPower: 16,
+    armor: 2,
+    attackCooldown: 2.0,
+    attackRange: 7,
+    aggroRange: 11,
+    lootTable: [
+      { itemId: 'arcane_essence', quantity: 2, chance: 0.6 },
+      { itemId: 'health_potion', quantity: 2, chance: 0.35 },
+      { itemId: 'ancestral_strike', quantity: 1, chance: 0.05 },
+    ],
+    icon: 'Sparkles',
+  },
 };

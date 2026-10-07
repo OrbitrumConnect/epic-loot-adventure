@@ -1,8 +1,16 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
+import { CAMPS, CAMP_PLACEMENTS } from '@/game/data/camps';
+import { AutoPilot } from './world/auto-pilot';
+import { queueNearestNode } from './world/objective-bridge';
+import { Camps, Enemies } from './world/world-entities';
+import {
+  MAP_HALF, markPointerConsumed, palette, rand, terrainHeight, wasPointerConsumed,
+  type Palette,
+} from './world/world-kit';
 
 export type WorldProps = {
   mode: string;
@@ -13,46 +21,6 @@ export type WorldProps = {
   paused: boolean;
   cameraMode?: 'iso' | 'third';
 };
-
-const names = [
-  'ground', 'ground-light', 'grass', 'pine', 'leaf', 'leaf-light', 'trunk',
-  'path', 'rock', 'rock-light', 'water', 'water-light', 'armor', 'cloak',
-  'metal', 'crystal', 'gold', 'dark', 'light',
-] as const;
-
-type Palette = Record<(typeof names)[number], string>;
-
-function palette(): Palette {
-  const css = getComputedStyle(document.documentElement);
-  const canvas = document.createElement('canvas');
-  canvas.width = 1;
-  canvas.height = 1;
-  const ctx = canvas.getContext('2d');
-  return Object.fromEntries(
-    names.map(name => {
-      if (!ctx) return [name, css.getPropertyValue(`--world-${name}`).trim()];
-      ctx.fillStyle = css.getPropertyValue(`--world-${name}`).trim();
-      ctx.fillRect(0, 0, 1, 1);
-      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-      return [name, `rgb(${r},${g},${b})`];
-    }),
-  ) as Palette;
-}
-
-function rand(seed: number) {
-  const n = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
-  return n - Math.floor(n);
-}
-
-function terrainHeight(x: number, z: number): number {
-  return (
-    Math.sin(x * 0.08) * 0.15 +
-    Math.cos(z * 0.07) * 0.12 +
-    Math.sin((x + z) * 0.04) * 0.2
-  );
-}
-
-const MAP_HALF = 45;
 
 function Tree({ x, z, size = 1, seed, c }: { x: number; z: number; size?: number; seed: number; c: Palette }) {
   const y = terrainHeight(x, z);
@@ -487,220 +455,6 @@ function Character({
   );
 }
 
-function Wolf({ c, creatureId, playerRef }: { c: Palette; creatureId: string; playerRef: React.RefObject<THREE.Group | null> }) {
-  const ref = useRef<THREE.Group>(null);
-  const frontLeftLeg = useRef<THREE.Mesh>(null);
-  const frontRightLeg = useRef<THREE.Mesh>(null);
-  const backLeftLeg = useRef<THREE.Mesh>(null);
-  const backRightLeg = useRef<THREE.Mesh>(null);
-  const walkCycle = useRef(0);
-  const wanderAngle = useRef(Math.random() * Math.PI * 2);
-  const wanderTimer = useRef(0);
-  const attackCooldown = useRef(0);
-  const currentRotY = useRef(0);
-  const homePos = useRef<{ x: number; z: number } | null>(null);
-  const syncTimer = useRef(0);
-  const chaseTimer = useRef(0);
-
-  useFrame((_state, delta) => {
-    if (!ref.current) return;
-    const dt = Math.min(delta, 0.05);
-
-    const store = useGameStore.getState();
-    const creature = store.creatures.find(cr => cr.id === creatureId);
-    if (!creature) { ref.current.visible = false; return; }
-    if (creature.behavior === 'dead') {
-      ref.current.visible = false;
-      if (creature.respawnAt && Date.now() >= creature.respawnAt) {
-        const home = homePos.current ?? creature.position;
-        useGameStore.setState(s => ({
-          creatures: s.creatures.map(cr =>
-            cr.id === creatureId ? { ...cr, hp: cr.maxHp, behavior: 'patrol' as const, respawnAt: null, position: { ...home } } : cr,
-          ),
-        }));
-        ref.current.position.set(home.x, terrainHeight(home.x, home.z), home.z);
-      }
-      return;
-    }
-    ref.current.visible = true;
-
-    if (!homePos.current) homePos.current = { ...creature.position };
-
-    const player = playerRef.current;
-    if (!player) return;
-
-    const px = player.position.x;
-    const pz = player.position.z;
-    const wx = ref.current.position.x;
-    const wz = ref.current.position.z;
-    const distToPlayer = Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz));
-
-    const AGGRO_RANGE = 10;
-    const ATTACK_RANGE = 2.5;
-    const LEASH_RANGE = 25;
-    const WOLF_SPEED = 4.0;
-    const WANDER_SPEED = 1.0;
-
-    let moving = false;
-    let targetX = wx;
-    let targetZ = wz;
-
-    const distToHome = Math.sqrt(
-      (wx - homePos.current.x) * (wx - homePos.current.x) +
-      (wz - homePos.current.z) * (wz - homePos.current.z),
-    );
-
-    const CHASE_TIMEOUT = 12;
-
-    if (distToPlayer < AGGRO_RANGE && distToHome < LEASH_RANGE && chaseTimer.current < CHASE_TIMEOUT) {
-      chaseTimer.current += dt;
-      if (distToPlayer <= ATTACK_RANGE) chaseTimer.current = 0;
-      const angle = Math.atan2(px - wx, pz - wz);
-      if (distToPlayer > ATTACK_RANGE * 0.6) {
-        targetX = wx + Math.sin(angle) * WOLF_SPEED * dt;
-        targetZ = wz + Math.cos(angle) * WOLF_SPEED * dt;
-        moving = true;
-      }
-      if (distToPlayer <= ATTACK_RANGE) {
-        attackCooldown.current -= dt;
-        if (attackCooldown.current <= 0) {
-          attackCooldown.current = creature.attackCooldown;
-          const dmg = Math.max(1, creature.attackPower);
-          useGameStore.setState(s => {
-            if (s.player.dead) return {};
-            const hp = Math.max(0, s.player.hp - dmg);
-            if (hp <= 0) {
-              return {
-                player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 },
-                ui: { ...s.ui, message: `${creature.name} te matou!` },
-              };
-            }
-            return {
-              player: { ...s.player, hp },
-              ui: { ...s.ui, message: `${creature.name} mordeu! -${dmg} HP (${hp}/${s.player.maxHp})` },
-            };
-          });
-        }
-      }
-    } else {
-      chaseTimer.current = 0;
-      wanderTimer.current -= dt;
-      if (wanderTimer.current <= 0) {
-        wanderAngle.current = Math.random() * Math.PI * 2;
-        wanderTimer.current = 2 + Math.random() * 3;
-      }
-      const homeAngle = Math.atan2(homePos.current.x - wx, homePos.current.z - wz);
-      const blend = distToHome > 5 ? 0.8 : 0.2;
-      const moveAngle = wanderAngle.current * (1 - blend) + homeAngle * blend;
-      targetX = wx + Math.sin(moveAngle) * WANDER_SPEED * dt;
-      targetZ = wz + Math.cos(moveAngle) * WANDER_SPEED * dt;
-      moving = true;
-    }
-
-    ref.current.position.x = THREE.MathUtils.clamp(targetX, -MAP_HALF, MAP_HALF);
-    ref.current.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
-    ref.current.position.y = terrainHeight(ref.current.position.x, ref.current.position.z);
-
-    syncTimer.current += dt;
-    if (syncTimer.current > 0.2) {
-      syncTimer.current = 0;
-      useGameStore.setState(s => ({
-        creatures: s.creatures.map(cr =>
-          cr.id === creatureId ? { ...cr, position: { x: ref.current!.position.x, z: ref.current!.position.z } } : cr,
-        ),
-      }));
-    }
-
-    if (moving) {
-      const desiredRot = Math.atan2(targetX - wx, targetZ - wz);
-      let diff = desiredRot - currentRotY.current;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      currentRotY.current += diff * Math.min(8 * dt, 1);
-    }
-    ref.current.rotation.y = currentRotY.current;
-
-    if (moving) {
-      const speed = distToPlayer < AGGRO_RANGE ? 16 : 8;
-      walkCycle.current += dt * speed;
-      const swing = Math.sin(walkCycle.current) * 0.5;
-      if (frontLeftLeg.current) frontLeftLeg.current.rotation.x = swing;
-      if (frontRightLeg.current) frontRightLeg.current.rotation.x = -swing;
-      if (backLeftLeg.current) backLeftLeg.current.rotation.x = -swing;
-      if (backRightLeg.current) backRightLeg.current.rotation.x = swing;
-    } else {
-      walkCycle.current = 0;
-      if (frontLeftLeg.current) frontLeftLeg.current.rotation.x = 0;
-      if (frontRightLeg.current) frontRightLeg.current.rotation.x = 0;
-      if (backLeftLeg.current) backLeftLeg.current.rotation.x = 0;
-      if (backRightLeg.current) backRightLeg.current.rotation.x = 0;
-    }
-  });
-
-  const store = useGameStore.getState();
-  const creature = store.creatures.find(cr => cr.id === creatureId);
-  const startPos = creature ? creature.position : { x: 0, z: 0 };
-  const y = terrainHeight(startPos.x, startPos.z);
-
-  return (
-    <group ref={ref} position={[startPos.x, y, startPos.z]}>
-      {/* Body */}
-      <mesh position={[0, 0.5, 0]} castShadow>
-        <boxGeometry args={[0.4, 0.45, 0.9]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-      {/* Head */}
-      <mesh position={[0, 0.68, 0.48]} castShadow>
-        <boxGeometry args={[0.35, 0.36, 0.45]} />
-        <meshStandardMaterial color={c.rock} />
-      </mesh>
-      {/* Snout */}
-      <mesh position={[0, 0.62, 0.75]}>
-        <boxGeometry args={[0.2, 0.15, 0.2]} />
-        <meshStandardMaterial color={c['rock-light']} />
-      </mesh>
-      {/* Eyes */}
-      <mesh position={[-0.12, 0.78, 0.65]}>
-        <sphereGeometry args={[0.045, 4, 3]} />
-        <meshStandardMaterial color="#cc2200" emissive="#cc2200" emissiveIntensity={0.5} />
-      </mesh>
-      <mesh position={[0.12, 0.78, 0.65]}>
-        <sphereGeometry args={[0.045, 4, 3]} />
-        <meshStandardMaterial color="#cc2200" emissive="#cc2200" emissiveIntensity={0.5} />
-      </mesh>
-      {/* Ears */}
-      {[-0.12, 0.12].map(x => (
-        <mesh key={x} position={[x, 0.95, 0.4]}>
-          <coneGeometry args={[0.08, 0.22, 3]} />
-          <meshStandardMaterial color={c.dark} />
-        </mesh>
-      ))}
-      {/* Front legs */}
-      <mesh ref={frontLeftLeg} position={[-0.14, 0.22, 0.25]} castShadow>
-        <boxGeometry args={[0.1, 0.45, 0.12]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-      <mesh ref={frontRightLeg} position={[0.14, 0.22, 0.25]} castShadow>
-        <boxGeometry args={[0.1, 0.45, 0.12]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-      {/* Back legs */}
-      <mesh ref={backLeftLeg} position={[-0.14, 0.22, -0.3]} castShadow>
-        <boxGeometry args={[0.1, 0.45, 0.12]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-      <mesh ref={backRightLeg} position={[0.14, 0.22, -0.3]} castShadow>
-        <boxGeometry args={[0.1, 0.45, 0.12]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-      {/* Tail */}
-      <mesh position={[0, 0.6, -0.6]} rotation={[0.9, 0, 0]}>
-        <boxGeometry args={[0.1, 0.1, 0.5]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-    </group>
-  );
-}
 
 function GrassPatches({ c, count }: { c: Palette; count: number }) {
   const ref = useRef<THREE.InstancedMesh>(null);
@@ -766,17 +520,14 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
     return g;
   }, []);
 
+  // Sem handler de ponteiro aqui de propósito: o ataque por clique é tratado
+  // uma única vez pelo listener de `mousedown` em `WorldScene`. Antes os dois
+  // disparavam e um clique valia dois ataques.
+  void onAttack;
+  void paused;
+
   return (
-    <mesh
-      rotation={[-Math.PI / 2, 0, 0]}
-      receiveShadow
-      geometry={geo}
-      onPointerDown={e => {
-        e.stopPropagation();
-        if (paused) return;
-        if (e.button === 0 && onAttack) onAttack();
-      }}
-    >
+    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow geometry={geo}>
       <meshStandardMaterial color={c.ground} />
     </mesh>
   );
@@ -824,6 +575,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     };
 
     const onMouseDown = (e: MouseEvent) => {
+      // Clique já consumido por um inimigo / estrutura / recurso não ataca.
+      if (wasPointerConsumed()) return;
       if (e.button === 0 && !props.paused && props.onAttack) {
         if (pointerLocked.current || e.target === canvas) {
           props.onAttack();
@@ -904,6 +657,18 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     }
   });
 
+  /**
+   * Clique num recurso: normal coleta (como antes), Shift enfileira
+   * `gather_node`. Marca o clique como consumido para não virar ataque.
+   */
+  const resourceClick = useCallback((e: ThreeEvent<PointerEvent>, x: number, z: number) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    markPointerConsumed();
+    if (e.shiftKey) queueNearestNode(x, z);
+    else props.onCollect();
+  }, [props.onCollect]);
+
   const trees = useMemo(
     () =>
       Array.from({ length: 180 }, (_, i) => ({
@@ -913,7 +678,16 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
         seed: i,
       }))
         .filter(p => Math.abs(p.x) > 4.5 || Math.abs(p.z) > 10)
-        .filter(p => !(p.x > 2 && p.x < 12 && p.z < -3 && p.z > -13)),
+        .filter(p => !(p.x > 2 && p.x < 12 && p.z < -3 && p.z > -13))
+        // Acampamento é clareira: árvore dentro da tenda atrapalha a leitura
+        // da cena e o clique nas estruturas.
+        .filter(p => CAMP_PLACEMENTS.every(camp => {
+          const def = CAMPS[camp.defId];
+          if (!def) return true;
+          const dx = p.x - camp.position.x;
+          const dz = p.z - camp.position.z;
+          return Math.sqrt(dx * dx + dz * dz) > def.radius + 2;
+        })),
     [],
   );
 
@@ -1007,7 +781,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       <Campfire c={c} position={[-15, 0, -12]} />
 
       {/* Crystal resource */}
-      <group position={[-3, terrainHeight(-3, -2), -2]} onClick={e => { e.stopPropagation(); props.onCollect(); }}>
+      <group position={[-3, terrainHeight(-3, -2), -2]} onPointerDown={e => resourceClick(e, -3, -2)}>
         <Rock x={0} z={0} size={1.25} c={c} />
         {[-0.4, 0, 0.4].map((x, i) => (
           <mesh key={x} position={[x, 0.9 + i * 0.1, 0.1]} rotation={[0, 0, x]} castShadow>
@@ -1018,7 +792,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       </group>
 
       {/* Chest */}
-      <group position={[2, terrainHeight(2, 3) + 0.2, 3]} onClick={e => { e.stopPropagation(); props.onCollect(); }}>
+      <group position={[2, terrainHeight(2, 3) + 0.2, 3]} onPointerDown={e => resourceClick(e, 2, 3)}>
         <mesh castShadow>
           <boxGeometry args={[0.65, 0.4, 0.42]} />
           <meshStandardMaterial color={c.trunk} />
@@ -1041,9 +815,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
         </mesh>
       </group>
 
-      <Wolf c={c} creatureId="wolf_1" playerRef={playerRef} />
-      <Wolf c={c} creatureId="wolf_2" playerRef={playerRef} />
-      <Wolf c={c} creatureId="wolf_3" playerRef={playerRef} />
+      {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
+      <Camps c={c} />
+      <Enemies c={c} playerRef={playerRef} />
+
+      <AutoPilot playerRef={playerRef} movement={target} paused={props.paused} />
 
       <Character c={c} attack={props.attack} movement={target} onPosition={props.onPosition} paused={props.paused} playerRef={playerRef} cameraYawRef={cameraYaw} cameraMode={cameraMode} />
     </>

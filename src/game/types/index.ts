@@ -9,3 +9,9 @@ export type {
   ConstructionJob, QueueItem, PlacedBuilding, ResearchEffectKind, BaseUnitDefinition,
   ExpeditionDefinition, Expedition, BaseState, BaseResult,
 } from './base';
+export type {
+  CampTier, CampStructureKind, CampStructure, CampSpawn, CampDefinition, CampState,
+} from './camp';
+export type {
+  ObjectiveKind, ObjectiveStatus, Objective, AutoMode, ObjectiveQueueState, AutoIntent, AutoSnapshot,
+} from './objective';

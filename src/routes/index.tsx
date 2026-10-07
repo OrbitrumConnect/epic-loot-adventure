@@ -1,11 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import {
-  Axe, Backpack, Camera, Castle, Check, ChevronRight, Circle, Coins, Compass,
-  Crosshair, Flame, FlaskConical, Gem, Hammer, Heart, Home, Leaf, Map,
-  Menu, MessageSquare, Mountain, Package, PanelLeftClose, Pickaxe, Settings,
-  Shield, ShieldCheck, Skull, Sparkles, Swords, Target, Tent, TreePine,
-  Users, Utensils, Wind, X, Zap,
+  ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
+  Circle, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
+  Heart, Home, Leaf, ListChecks, Map, Menu, MessageSquare, Mountain, Package,
+  PanelLeftClose, Pickaxe, Repeat, Settings, Shield, ShieldCheck, Skull,
+  Sparkles, Swords, Target, Tent, Trash2, TreePine, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
@@ -13,6 +13,12 @@ import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { RECIPES } from '@/game/data/recipes';
+import type { CampState, ObjectiveKind, ObjectiveStatus } from '@/game/types';
+import {
+  clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
+  toggleRepeat, useCampsState, useObjectivesState, useTargetIdState,
+} from '@/components/world/objective-bridge';
+import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/world/pilot-status';
 
 const GameWorld = lazy(() => import('@/components/game-world'));
 const CityView = lazy(() => import('@/components/city-view'));
@@ -36,8 +42,31 @@ const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>
   TreePine, Mountain, Gem, Shield, Skull, Package,
 };
 
+const OBJECTIVE_ICON: Record<ObjectiveKind, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  clear_camp: Tent,
+  hunt_creature: Swords,
+  gather_node: Pickaxe,
+  travel: Compass,
+};
+
+const OBJECTIVE_STATUS: Record<ObjectiveStatus, string> = {
+  queued: 'Na fila',
+  active: 'Em curso',
+  done: 'Concluído',
+  failed: 'Falhou',
+  cancelled: 'Cancelado',
+};
+
+const CAMP_TIER_COLOR: Record<number, string> = {
+  1: 'var(--world-leaf-light)',
+  2: 'var(--world-gold)',
+  3: 'var(--world-cloak)',
+  4: 'var(--world-crystal)',
+};
+
 const navigation = [
   { id: 'world', name: 'Explorar', icon: Compass },
+  { id: 'objectives', name: 'Objetivos', icon: ListChecks },
   { id: 'home', name: 'Home · Base', icon: Home },
   { id: 'city', name: 'Cidade', icon: Castle },
   { id: 'map', name: 'Mapa', icon: Map },
@@ -46,7 +75,12 @@ const navigation = [
   { id: 'inventory', name: 'Inventário', icon: Backpack },
 ];
 
-function MiniMap({ large = false, position = [0, 1] }: { large?: boolean; position?: number[] }) {
+function MiniMap({ large = false, position = [0, 1], camps = [] }: {
+  large?: boolean;
+  position?: number[];
+  camps?: CampState[];
+}) {
+  const discovered = camps.filter(camp => camp.discovered);
   return (
     <svg viewBox="0 0 200 170" role="img" aria-label="Mapa do Vale dos Ancestrais">
       <rect width="200" height="170" fill="var(--world-ground)" />
@@ -60,6 +94,27 @@ function MiniMap({ large = false, position = [0, 1] }: { large?: boolean; positi
       <path d="M147 25v-6l8 3-8 3" fill="var(--world-cloak)" />
       <path d="M39 121l7-7 7 7v10H39z" fill="var(--world-gold)" />
       <circle cx="85" cy="71" r="3" fill="var(--world-crystal)" />
+      {discovered.map(camp => {
+        const cx = 100 + camp.position.x * 2;
+        const cy = 93 + camp.position.z * 2;
+        const color = CAMP_TIER_COLOR[camp.tier] ?? 'var(--world-gold)';
+        return (
+          <g key={camp.id}>
+            <title>{`${camp.name} · tier ${camp.tier}${camp.cleared ? ' · limpo' : ''}`}</title>
+            {camp.cleared ? (
+              <>
+                <circle cx={cx} cy={cy} r={large ? 5 : 4} fill="none" stroke={color} strokeWidth="1.2" opacity=".55" />
+                <path d={`M${cx - 2.4} ${cy - 2.4}l4.8 4.8M${cx + 2.4} ${cy - 2.4}l-4.8 4.8`} stroke={color} strokeWidth="1.2" opacity=".75" />
+              </>
+            ) : (
+              <>
+                <path d={`M${cx} ${cy - (large ? 5.5 : 4.5)}l${large ? 5 : 4} ${large ? 8 : 6.5}h${large ? -10 : -8}z`} fill={color} stroke="var(--world-dark)" strokeWidth=".6" />
+                <circle cx={cx} cy={cy} r={large ? 8 : 6.5} fill="none" stroke={color} strokeWidth=".6" opacity=".45" />
+              </>
+            )}
+          </g>
+        );
+      })}
       <circle cx={100 + (position[0] ?? 0) * 2} cy={93 + (position[1] ?? 0) * 2} r={large ? 4 : 3} fill="var(--world-light)" stroke="var(--world-gold)" strokeWidth="2" />
       <circle cx={100 + (position[0] ?? 0) * 2} cy={93 + (position[1] ?? 0) * 2} r="10" fill="none" stroke="var(--world-gold)" strokeWidth=".7" opacity=".6" />
       {large && (
@@ -83,6 +138,27 @@ function Index() {
   const player = useGameStore(s => s.player);
   const ui = useGameStore(s => s.ui);
   const attackTick = useGameStore(s => s.attackTick);
+
+  const objectives = useObjectivesState();
+  const camps = useCampsState();
+  const targetId = useTargetIdState();
+  const idleMode = objectives.mode === 'idle';
+
+  // O piloto escreve o estado fora do React (laço de quadro). Polling leve.
+  const [pilot, setPilot] = useState<PilotStatus>(() => ({ ...readPilotStatus() }));
+  useEffect(() => {
+    const id = setInterval(() => {
+      const next = readPilotStatus();
+      setPilot(prev => (prev.label === next.label && prev.detail === next.detail && prev.kind === next.kind
+        ? prev
+        : { ...next }));
+    }, 250);
+    return () => clearInterval(id);
+  }, []);
+
+  const activeObjective = objectives.items.find(o => o.status === 'active')
+    ?? objectives.items.find(o => o.status === 'queued')
+    ?? null;
 
   const attack = useGameStore(s => s.attack);
   const collectNearest = useGameStore(s => s.collectNearest);
@@ -121,15 +197,27 @@ function Index() {
   const position = [player.position.x, player.position.z];
 
   const hitNearest = useCallback(() => {
-    const creatures = useGameStore.getState().creatures;
-    const p = useGameStore.getState().player.position;
+    const state = useGameStore.getState();
+    const creatures = state.creatures;
+    const p = state.player.position;
+    const dist = (c: { position: { x: number; z: number } }) => {
+      const dx = c.position.x - p.x;
+      const dz = c.position.z - p.z;
+      return Math.sqrt(dx * dx + dz * dz);
+    };
+
+    // Alvo selecionado tem prioridade sobre o mais próximo.
+    const selectedId = (state as unknown as { targetId?: string | null }).targetId ?? null;
+    if (selectedId) {
+      const selected = creatures.find(c => c.id === selectedId && c.behavior !== 'dead');
+      if (selected && dist(selected) <= 4) { attack(selected.id); return; }
+    }
+
     let nearest: string | null = null;
     let bestDist = Infinity;
     for (const c of creatures) {
       if (c.behavior === 'dead') continue;
-      const dx = c.position.x - p.x;
-      const dz = c.position.z - p.z;
-      const d = Math.sqrt(dx * dx + dz * dz);
+      const d = dist(c);
       if (d < bestDist) { bestDist = d; nearest = c.id; }
     }
     if (nearest && bestDist <= 4) attack(nearest);
@@ -145,6 +233,7 @@ function Index() {
       if (e.code === 'KeyE' && !inCity) collectNearest();
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'KeyV' && !inCity) toggleCamera();
+      if (e.code === 'KeyG' && !inCity) toggleAutoMode();
       if (e.code === 'KeyB') { setPanel(null); setMode(inCity ? 'world' : 'city'); }
       if (e.code === 'KeyI') setPanel(ui.panel === 'inventory' ? null : 'inventory');
       if (e.code === 'Escape') setPanel(null);
@@ -170,7 +259,7 @@ function Index() {
   });
 
   const panel = ui.panel;
-  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
+  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
 
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
@@ -268,7 +357,7 @@ function Index() {
           </div>
 
           <div className="world-right">
-            <div className="minimap"><MiniMap position={position} /><span className="minimap-north">N</span></div>
+            <div className="minimap"><MiniMap position={position} camps={camps} /><span className="minimap-north">N</span></div>
             <div className="map-coordinate">
               <span>{Math.round((position[0] ?? 0) + 124)}, {Math.round((position[1] ?? 0) + 86)}</span>
               <span>Dia 1 · 08:42</span>
@@ -280,6 +369,27 @@ function Index() {
               <div className="quest-step">{essenceCount >= 2 ? <Check /> : <Circle />}Essências Arcanas <strong>{Math.min(essenceCount, 2)}/2</strong></div>
               <div className="quest-step">{hasCraftedSword ? <Check /> : <Circle />}Forjar equipamento <strong>{hasCraftedSword ? 1 : 0}/1</strong></div>
             </div>
+          </div>
+
+          {/* Faixa compacta: deixa o modo idle legível sem abrir painel */}
+          <div className="pilot-strip" data-idle={idleMode}>
+            <span className="pilot-mode">
+              {idleMode ? <Bot /> : <Hand />}
+              {idleMode ? 'IDLE' : 'MANUAL'}
+            </span>
+            <span className="pilot-objective">
+              {activeObjective
+                ? <>{(() => { const Icon = OBJECTIVE_ICON[activeObjective.kind]; return <Icon />; })()}{activeObjective.label}</>
+                : <>{<ListChecks />}Fila vazia</>}
+            </span>
+            <span className="pilot-doing">
+              {idleMode ? (INTENT_LABEL[pilot.kind] ?? pilot.label) : 'Controle manual'}
+              {idleMode && pilot.detail ? <em> · {pilot.detail}</em> : null}
+            </span>
+            <Button variant="ghost" size="sm" className="pilot-toggle" title="Alternar piloto automático · G"
+              onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>
+              {idleMode ? 'Assumir' : 'Piloto'}
+            </Button>
           </div>
 
           <div className="world-bottom">
@@ -339,9 +449,72 @@ function Index() {
                   </>
                 )}
 
+                {panel === 'objectives' && (
+                  <>
+                    <div className="obj-toggles">
+                      <Button variant={idleMode ? 'default' : 'outline'} size="sm"
+                        onClick={() => setAutoMode('idle')} title="Piloto automático executa a fila · G">
+                        <Bot />IDLE
+                      </Button>
+                      <Button variant={idleMode ? 'outline' : 'default'} size="sm"
+                        onClick={() => setAutoMode('manual')} title="Você dirige · G">
+                        <Hand />MANUAL
+                      </Button>
+                      <Button variant="outline" size="sm" data-on={objectives.repeat}
+                        className="obj-repeat" onClick={toggleRepeat}
+                        title="Recomeçar a fila do topo ao terminar">
+                        <Repeat />{objectives.repeat ? 'Repetindo' : 'Sem repetir'}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={clearObjectives}
+                        disabled={objectives.items.length === 0} title="Limpar fila">
+                        <Trash2 />limpar fila
+                      </Button>
+                    </div>
+
+                    <div className="obj-list">
+                      {objectives.items.length === 0 && (
+                        <p className="obj-empty">
+                          Fila vazia. No mundo: clique num acampamento para enfileirar uma limpeza,
+                          Shift+clique num inimigo para caçar, Shift+clique num recurso para coletar.
+                        </p>
+                      )}
+                      {objectives.items.map((obj, i) => {
+                        const Icon = OBJECTIVE_ICON[obj.kind] ?? Target;
+                        return (
+                          <div className="obj-row" key={obj.id} data-status={obj.status}>
+                            <span className="obj-index">{String(i + 1).padStart(2, '0')}</span>
+                            <Icon />
+                            <div className="obj-text">
+                              <strong>{obj.label}</strong>
+                              <small>{OBJECTIVE_STATUS[obj.status]}</small>
+                            </div>
+                            <div className="obj-actions">
+                              <Button variant="ghost" size="icon" title="Subir na fila" aria-label="Subir na fila"
+                                disabled={i === 0} onClick={() => reorderObjective(obj.id, -1)}><ArrowUp /></Button>
+                              <Button variant="ghost" size="icon" title="Descer na fila" aria-label="Descer na fila"
+                                disabled={i === objectives.items.length - 1} onClick={() => reorderObjective(obj.id, 1)}><ArrowDown /></Button>
+                              <Button variant="ghost" size="icon" title="Remover" aria-label="Remover"
+                                onClick={() => removeObjective(obj.id)}><X /></Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="panel-stats">
+                      <span>{objectives.items.length} objetivo(s) na fila</span>
+                      <span>Piloto: {idleMode ? (INTENT_LABEL[pilot.kind] ?? pilot.label) : 'manual'}</span>
+                      <span>{targetId ? `Alvo: ${useGameStore.getState().creatures.find(cr => cr.id === targetId)?.name ?? targetId}` : 'Sem alvo'}</span>
+                    </div>
+                    <div className="panel-actions">
+                      <Button onClick={() => setPanel(null)}><Compass />Voltar ao vale</Button>
+                    </div>
+                  </>
+                )}
+
                 {panel === 'map' && (
                   <>
-                    <div className="map-large"><MiniMap large position={position} /></div>
+                    <div className="map-large"><MiniMap large position={position} camps={camps} /></div>
                     <div className="map-legend"><span><Home />Sua base</span><span><Gem />Mina arcana</span><span><Castle />Fortaleza</span></div>
                     <div className="panel-actions"><Button onClick={() => setPanel(null)}><Compass />Continuar expedição</Button></div>
                   </>
@@ -386,7 +559,7 @@ function Index() {
                 {panel === 'settings' && (
                   <>
                     <div className="home-building"><Wind /><div><strong>Áudio ambiente</strong><small>Desativado nesta versão</small></div></div>
-                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · V câmera · E coletar · I inventário · B cidade</small></div></div>
+                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · Clique no inimigo seleciona · Shift+clique enfileira · V câmera · E coletar · I inventário · B cidade · G piloto automático (idle/manual)</small></div></div>
                     <div className="panel-stats"><span>TRIBOS v0.2 · Protótipo local · Sem multiplayer conectado</span></div>
                   </>
                 )}
