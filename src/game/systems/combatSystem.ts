@@ -24,6 +24,18 @@ export function calculateDamage(attackPower: number, targetArmor: number): numbe
   return Math.max(1, Math.round(baseDmg - reduction));
 }
 
+/** Fração do ataque a partir da qual o golpe conta como crítico (faixa 1,10-1,15 do sorteio 0,85-1,15). */
+export const CRITICAL_ROLL = 1.1;
+
+/**
+ * Golpe crítico: o dano bruto (antes da armadura) caiu na faixa alta do sorteio
+ * de `calculateDamage`. Pura: deduz do dano já aplicado, sem outro sorteio.
+ */
+export function isCriticalDamage(attackPower: number, targetArmor: number, damage: number): boolean {
+  if (attackPower <= 0) return false;
+  return (damage + targetArmor * 0.5) / attackPower >= CRITICAL_ROLL;
+}
+
 export function resolveAttack(
   attackPower: number,
   targetHp: number,

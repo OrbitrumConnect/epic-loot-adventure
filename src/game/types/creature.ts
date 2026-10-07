@@ -30,4 +30,6 @@ export type CreatureDefinition = {
   aggroRange: number;
   lootTable: { itemId: string; quantity: number; chance: number }[];
   icon: string;
+  /** Pacífica foge do jogador; hostil ataca. O mundo 3D lê esta flag. */
+  peaceful: boolean;
 };

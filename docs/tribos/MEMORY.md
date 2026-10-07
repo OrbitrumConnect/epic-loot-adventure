@@ -12,7 +12,11 @@
 - [Equipe](tribos-equipe.md) — Pedro (criador/design) + Caio (dev, entrou 06/10). Handoff no diário 06/10.
 
 - [Cidade / Base (visão de cima)](tribos-cidade.md) — Camada 3. Cidade isométrica em sprites, 8 construções × 20 níveis, filas de construção e produção, expedições. Assets em `art/city/`. Sessão 4 (Caio).
+- [Acampamentos + Objetivos (idle/manual)](tribos-acampamentos-objetivos.md) — Acampamentos inimigos no mapa, fila de objetivos por clique, piloto automático. Sessão 5 (Caio, 07/10).
+- [Progressão, coleta e combate visual](tribos-progressao-combate.md) — Níveis e XP por criatura, 276 nós de colheita com ferramenta, 28 sprites de item, arma na mão, transparência por oclusão, dano/sangue/barras na tela. Sessões 6-7 (Caio, 07/10).
 - **Fluxo git:** Caio trabalha no fork `caiolea0/epic-loot-adventure` e manda PR pro `OrbitrumConnect`. Sem force push.
+- **Pipelines de arte:** `art/city/` (160 sprites de construção, 20 níveis × 8) e `art/items/` (28 sprites de item). Ambos regeneráveis: Codex com `gpt-5.6-luna` esforço médio, sheets 2×2, recorte por script. Sheets brutas fora do git.
+- **Subagentes do projeto** (em `~/.claude/agents/`, fora do repo): `tribos-game-systems`, `tribos-world-3d`, `tribos-hud` — todos `claude-sonnet-5-5`, esforço médio, cada um com as regras duras do seu escopo.
 
 ## Feedback
 
@@ -21,11 +25,23 @@
 - [Não apagar conteúdo](feedback-nao-apagar-conteudo.md) — quando Pedro pede pra editar algo, SÓ adicionar o que pediu; nunca reescrever/apagar o resto sem perguntar antes.
 - [Começar pela memória](feedback-comecar-pela-memoria.md) — tudo já está mapeado (diário/checklist). NÃO re-explorar codebase nem usar subagents pra redescobrir. Ler memória primeiro. Economiza token.
 
-## Diários TRIBOS (`diarios-tribos/`)
+## Diários TRIBOS (`diarios/`)
+
+> Correção: a pasta é `docs/tribos/diarios/`. Os links `diarios-tribos/` abaixo estão quebrados desde o começo.
+
+- [2026-10-07](diarios/2026-10-07.md) — Sessões 5-7. PR #1 (cidade) mergeado. Acampamentos + objetivos idle/manual, progressão e coleta, mapa real, sprites de item, troca de arma, transparência, retorno visual do combate. 136 testes. PR #2 aberto.
+- [2026-10-06](diarios/2026-10-06.md) — Sessões 1-4. Blocos 1 e 2 (refatoração, movimento, câmera) e a visão de cidade com 160 sprites.
+
+### Links antigos (mantidos como estavam)
 
 - [2026-10-06](diarios-tribos/2026-10-06.md) — Sessões 1-3. Bloco 1 COMPLETO (refatoração: types+data+systems+store). Bloco 2 ~60% (terreno, walk, jump, câmera iso/third, attack fix). 17 arquivos criados, 0 erros TS.
 
 ## Orbitrum Connect — projeto ativo (repo: orbitrumexpopro / OrbitrumProConnect)
+
+> Nota (Caio, 07/10): este bloco é de **outro projeto**. Nenhum dos arquivos abaixo existe neste
+> repositório — os links estão todos quebrados aqui. Mantido como estava, mas quem chega procurando
+> TRIBOS deve parar na seção de cima. Os dois arquivos de feedback citados mais acima
+> (`feedback-nao-apagar-conteudo.md`, `feedback-comecar-pela-memoria.md`) também não existem aqui.
 
 - [**🚀 HANDOFF — LEIA ANTES DE TUDO**](diarios/2026-10-06.md) — topo do diário 06/10: ordem de leitura, regras duras, estado atual, próximo a atacar, economia de token. Ponto de partida de qualquer instância nova.
 - [**DOCUMENTO MESTRE SELADO**](orbitrum-documento-mestre.md) — LER PRIMEIRO. Constituição do Produto (02/10/2026): 113 seções, 35 princípios. Fonte definitiva.

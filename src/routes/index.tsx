@@ -1,18 +1,30 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Axe, Backpack, Camera, Castle, Check, ChevronRight, Circle, Coins, Compass,
-  Crosshair, Flame, FlaskConical, Gem, Hammer, Heart, Home, Leaf, Map,
-  Menu, MessageSquare, Mountain, Package, PanelLeftClose, Pickaxe, Settings,
-  Shield, ShieldCheck, Skull, Sparkles, Swords, Target, Tent, TreePine,
-  Users, Utensils, Wind, X, Zap,
+  ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
+  Circle, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
+  Heart, Home, Leaf, ListChecks, Map, Menu, MessageSquare, Mountain, Package,
+  PanelLeftClose, Pickaxe, Repeat, Settings, Shield, ShieldCheck, Skull,
+  Sparkles, Swords, Target, Tent, Trash2, TreePine, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
+import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
+import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
+import { ToolCrafting } from '@/components/hud/tool-crafting';
+import { ItemSprite, ICON_MAP } from '@/components/hud/item-sprite';
+import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
+import { HuntBanner } from '@/components/hud/hunt-banner';
 import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { RECIPES } from '@/game/data/recipes';
+import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
+import {
+  clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
+  toggleRepeat, useObjectivesState, useTargetIdState,
+} from '@/components/world/objective-bridge';
+import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/world/pilot-status';
 
 const GameWorld = lazy(() => import('@/components/game-world'));
 const CityView = lazy(() => import('@/components/city-view'));
@@ -31,13 +43,25 @@ export const Route = createFileRoute('/')({
   component: Index,
 });
 
-const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
-  Swords, Axe, Pickaxe, FlaskConical, Crosshair, Utensils, Flame, Sparkles,
-  TreePine, Mountain, Gem, Shield, Skull, Package,
+const OBJECTIVE_ICON: Record<ObjectiveKind, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  clear_camp: Tent,
+  hunt_creature: Swords,
+  gather_node: Pickaxe,
+  hunt_area: Crosshair,
+  travel: Compass,
+};
+
+const OBJECTIVE_STATUS: Record<ObjectiveStatus, string> = {
+  queued: 'Na fila',
+  active: 'Em curso',
+  done: 'Concluído',
+  failed: 'Falhou',
+  cancelled: 'Cancelado',
 };
 
 const navigation = [
   { id: 'world', name: 'Explorar', icon: Compass },
+  { id: 'objectives', name: 'Objetivos', icon: ListChecks },
   { id: 'home', name: 'Home · Base', icon: Home },
   { id: 'city', name: 'Cidade', icon: Castle },
   { id: 'map', name: 'Mapa', icon: Map },
@@ -46,33 +70,6 @@ const navigation = [
   { id: 'inventory', name: 'Inventário', icon: Backpack },
 ];
 
-function MiniMap({ large = false, position = [0, 1] }: { large?: boolean; position?: number[] }) {
-  return (
-    <svg viewBox="0 0 200 170" role="img" aria-label="Mapa do Vale dos Ancestrais">
-      <rect width="200" height="170" fill="var(--world-ground)" />
-      <path d="M0 20L60 5 90 42 153 22 200 55V0H0ZM0 120L35 100 68 130 95 160 154 141 200 168V170H0Z" fill="var(--world-pine)" />
-      <path d="M38 -10 Q100 44 62 83 T49 180" fill="none" stroke="var(--world-water)" strokeWidth="18" />
-      <path d="M-10 149 Q80 121 99 84 T164 27" fill="none" stroke="var(--world-path)" strokeWidth="4" />
-      {Array.from({ length: 25 }, (_, i) => (
-        <path key={i} d={`M${(i * 43) % 190} ${(i * 29) % 160}l-4 8h8z`} fill="var(--world-leaf)" />
-      ))}
-      <rect x="139" y="31" width="17" height="14" fill="var(--world-rock)" stroke="var(--world-rock-light)" strokeWidth="1.5" />
-      <path d="M147 25v-6l8 3-8 3" fill="var(--world-cloak)" />
-      <path d="M39 121l7-7 7 7v10H39z" fill="var(--world-gold)" />
-      <circle cx="85" cy="71" r="3" fill="var(--world-crystal)" />
-      <circle cx={100 + (position[0] ?? 0) * 2} cy={93 + (position[1] ?? 0) * 2} r={large ? 4 : 3} fill="var(--world-light)" stroke="var(--world-gold)" strokeWidth="2" />
-      <circle cx={100 + (position[0] ?? 0) * 2} cy={93 + (position[1] ?? 0) * 2} r="10" fill="none" stroke="var(--world-gold)" strokeWidth=".7" opacity=".6" />
-      {large && (
-        <>
-          <text x="123" y="62" fill="var(--world-ink)" fontSize="6" fontFamily="Manrope">Fortaleza esquecida</text>
-          <text x="22" y="144" fill="var(--world-ink)" fontSize="6" fontFamily="Manrope">Base da tribo</text>
-          <text x="65" y="60" fill="var(--world-ink)" fontSize="6" fontFamily="Manrope">Mina arcana</text>
-        </>
-      )}
-    </svg>
-  );
-}
-
 function Index() {
   const [ready, setReady] = useState(false);
   const [cameraMode, setCameraMode] = useState<'iso' | 'third'>('iso');
@@ -80,9 +77,49 @@ function Index() {
   const toggleCamera = useCallback(() => setCameraMode(m => (m === 'iso' ? 'third' : 'iso')), []);
   useEffect(() => setReady(true), []);
 
+  // Level-up: destaque breve quando o nível sobe (sem sistema novo de mensagens).
+  const [levelUpFlash, setLevelUpFlash] = useState(false);
+  const prevLevel = useRef<number | null>(null);
+
   const player = useGameStore(s => s.player);
   const ui = useGameStore(s => s.ui);
   const attackTick = useGameStore(s => s.attackTick);
+
+  const objectives = useObjectivesState();
+  const targetId = useTargetIdState();
+  const idleMode = objectives.mode === 'idle';
+
+  // O piloto escreve o estado fora do React (laço de quadro). Polling leve.
+  const [pilot, setPilot] = useState<PilotStatus>(() => ({ ...readPilotStatus() }));
+  useEffect(() => {
+    const id = setInterval(() => {
+      const next = readPilotStatus();
+      setPilot(prev => (prev.label === next.label && prev.detail === next.detail && prev.kind === next.kind
+        ? prev
+        : { ...next }));
+    }, 250);
+    return () => clearInterval(id);
+  }, []);
+
+  const activeObjective = objectives.items.find(o => o.status === 'active')
+    ?? objectives.items.find(o => o.status === 'queued')
+    ?? null;
+
+  useEffect(() => {
+    if (prevLevel.current !== null && player.level > prevLevel.current) {
+      setLevelUpFlash(true);
+      const id = setTimeout(() => setLevelUpFlash(false), 3500);
+      prevLevel.current = player.level;
+      return () => clearTimeout(id);
+    }
+    prevLevel.current = player.level;
+    return undefined;
+  }, [player.level]);
+
+  const autoPotion = useGameStore(s => s.autoPotion);
+  const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
+  const drinkPotion = useGameStore(s => s.drinkPotion);
+  const xpPct = player.xpToNext > 0 ? Math.min(100, Math.round((player.xp / player.xpToNext) * 100)) : 0;
 
   const attack = useGameStore(s => s.attack);
   const collectNearest = useGameStore(s => s.collectNearest);
@@ -121,15 +158,27 @@ function Index() {
   const position = [player.position.x, player.position.z];
 
   const hitNearest = useCallback(() => {
-    const creatures = useGameStore.getState().creatures;
-    const p = useGameStore.getState().player.position;
+    const state = useGameStore.getState();
+    const creatures = state.creatures;
+    const p = state.player.position;
+    const dist = (c: { position: { x: number; z: number } }) => {
+      const dx = c.position.x - p.x;
+      const dz = c.position.z - p.z;
+      return Math.sqrt(dx * dx + dz * dz);
+    };
+
+    // Alvo selecionado tem prioridade sobre o mais próximo.
+    const selectedId = (state as unknown as { targetId?: string | null }).targetId ?? null;
+    if (selectedId) {
+      const selected = creatures.find(c => c.id === selectedId && c.behavior !== 'dead');
+      if (selected && dist(selected) <= 4) { attack(selected.id); return; }
+    }
+
     let nearest: string | null = null;
     let bestDist = Infinity;
     for (const c of creatures) {
       if (c.behavior === 'dead') continue;
-      const dx = c.position.x - p.x;
-      const dz = c.position.z - p.z;
-      const d = Math.sqrt(dx * dx + dz * dz);
+      const d = dist(c);
       if (d < bestDist) { bestDist = d; nearest = c.id; }
     }
     if (nearest && bestDist <= 4) attack(nearest);
@@ -145,6 +194,7 @@ function Index() {
       if (e.code === 'KeyE' && !inCity) collectNearest();
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'KeyV' && !inCity) toggleCamera();
+      if (e.code === 'KeyG' && !inCity) toggleAutoMode();
       if (e.code === 'KeyB') { setPanel(null); setMode(inCity ? 'world' : 'city'); }
       if (e.code === 'KeyI') setPanel(ui.panel === 'inventory' ? null : 'inventory');
       if (e.code === 'Escape') setPanel(null);
@@ -170,7 +220,7 @@ function Index() {
   });
 
   const panel = ui.panel;
-  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
+  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
 
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
@@ -212,8 +262,15 @@ function Index() {
           <div className="player-profile">
             <div className="portrait"><ShieldCheck strokeWidth={1.2} /></div>
             <div>
-              <div className="player-name">{player.name} <span className="text-primary">· {String(player.level).padStart(2, '0')}</span></div>
+              <div className="player-name" data-levelup={levelUpFlash}>
+                {player.name} <span className="text-primary">· {String(player.level).padStart(2, '0')}</span>
+                {levelUpFlash && <span className="levelup-chip" role="status">NÍVEL {player.level}!</span>}
+              </div>
               <div className="player-class">Guerreiro · Era do Ferro</div>
+              <div className="xp-bar" data-levelup={levelUpFlash} title={`Experiência: ${player.xp} de ${player.xpToNext} (total ${player.totalXp})`}>
+                <progress value={player.xp} max={Math.max(1, player.xpToNext)} aria-label="Experiência" />
+                <span>XP {player.xp} / {player.xpToNext} <em>{xpPct}%</em></span>
+              </div>
             </div>
           </div>
           <div className="vitals">
@@ -268,7 +325,7 @@ function Index() {
           </div>
 
           <div className="world-right">
-            <div className="minimap"><MiniMap position={position} /><span className="minimap-north">N</span></div>
+            <div className="minimap"><WorldMap size="mini" /><span className="minimap-north">N</span></div>
             <div className="map-coordinate">
               <span>{Math.round((position[0] ?? 0) + 124)}, {Math.round((position[1] ?? 0) + 86)}</span>
               <span>Dia 1 · 08:42</span>
@@ -276,11 +333,36 @@ function Index() {
             <div className="quest">
               <div className="quest-caption"><Target />SUA EXPEDIÇÃO</div>
               <h2>O primeiro passo</h2>
-              <div className="quest-step">{woodCount >= 10 ? <Check /> : <Circle />}Coletar madeira <strong>{Math.min(woodCount, 10)}/10</strong></div>
-              <div className="quest-step">{essenceCount >= 2 ? <Check /> : <Circle />}Essências Arcanas <strong>{Math.min(essenceCount, 2)}/2</strong></div>
-              <div className="quest-step">{hasCraftedSword ? <Check /> : <Circle />}Forjar equipamento <strong>{hasCraftedSword ? 1 : 0}/1</strong></div>
+              <div className="quest-step">{woodCount >= 10 ? <Check /> : <Circle />}<ItemSprite itemId="wood" size={16} />Coletar madeira <strong>{Math.min(woodCount, 10)}/10</strong></div>
+              <div className="quest-step">{essenceCount >= 2 ? <Check /> : <Circle />}<ItemSprite itemId="arcane_essence" size={16} />Essências Arcanas <strong>{Math.min(essenceCount, 2)}/2</strong></div>
+              <div className="quest-step">{hasCraftedSword ? <Check /> : <Circle />}<ItemSprite itemId="iron_sword" size={16} />Forjar equipamento <strong>{hasCraftedSword ? 1 : 0}/1</strong></div>
             </div>
           </div>
+
+          {/* Faixa compacta: deixa o modo idle legível sem abrir painel */}
+          <div className="pilot-strip" data-idle={idleMode}>
+            <span className="pilot-mode">
+              {idleMode ? <Bot /> : <Hand />}
+              {idleMode ? 'IDLE' : 'MANUAL'}
+            </span>
+            <span className="pilot-objective">
+              {activeObjective
+                ? <>{(() => { const Icon = OBJECTIVE_ICON[activeObjective.kind]; return <Icon />; })()}{activeObjective.label}</>
+                : <>{<ListChecks />}Fila vazia</>}
+            </span>
+            <span className="pilot-doing">
+              {idleMode ? (INTENT_LABEL[pilot.kind] ?? pilot.label) : 'Controle manual'}
+              {idleMode && pilot.detail ? <em> · {pilot.detail}</em> : null}
+            </span>
+            <Button variant="ghost" size="sm" className="pilot-toggle" title="Alternar piloto automático · G"
+              onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>
+              {idleMode ? 'Assumir' : 'Piloto'}
+            </Button>
+          </div>
+
+          <HuntBanner />
+          <LevelUpBanner />
+          <RewardFeed />
 
           <div className="world-bottom">
             <div className="world-message">
@@ -318,11 +400,12 @@ function Index() {
                         );
                         const item = ITEMS[slot.itemId];
                         if (!item) return null;
-                        const Icon = ICON_MAP[item.icon] ?? Package;
                         return (
                           <div className="inventory-item" key={i} draggable
+                            title={`${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
+                            aria-label={`${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
                             onDragStart={e => e.dataTransfer.setData('text/plain', String(i))}>
-                            <Icon /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura' : item.category}</small>
+                            <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura' : item.category}</small>
                             <em>{slot.quantity > 1 ? slot.quantity : ''}</em>
                           </div>
                         );
@@ -339,10 +422,73 @@ function Index() {
                   </>
                 )}
 
+                {panel === 'objectives' && (
+                  <>
+                    <div className="obj-toggles">
+                      <Button variant={idleMode ? 'default' : 'outline'} size="sm"
+                        onClick={() => setAutoMode('idle')} title="Piloto automático executa a fila · G">
+                        <Bot />IDLE
+                      </Button>
+                      <Button variant={idleMode ? 'outline' : 'default'} size="sm"
+                        onClick={() => setAutoMode('manual')} title="Você dirige · G">
+                        <Hand />MANUAL
+                      </Button>
+                      <Button variant="outline" size="sm" data-on={objectives.repeat}
+                        className="obj-repeat" onClick={toggleRepeat}
+                        title="Recomeçar a fila do topo ao terminar">
+                        <Repeat />{objectives.repeat ? 'Repetindo' : 'Sem repetir'}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={clearObjectives}
+                        disabled={objectives.items.length === 0} title="Limpar fila">
+                        <Trash2 />limpar fila
+                      </Button>
+                    </div>
+
+                    <div className="obj-list">
+                      {objectives.items.length === 0 && (
+                        <p className="obj-empty">
+                          Fila vazia. No mundo: clique num acampamento para enfileirar uma limpeza,
+                          Shift+clique num inimigo para caçar, Shift+clique num recurso para coletar.
+                        </p>
+                      )}
+                      {objectives.items.map((obj, i) => {
+                        const Icon = OBJECTIVE_ICON[obj.kind] ?? Target;
+                        return (
+                          <div className="obj-row" key={obj.id} data-status={obj.status}>
+                            <span className="obj-index">{String(i + 1).padStart(2, '0')}</span>
+                            <Icon />
+                            <div className="obj-text">
+                              <strong>{obj.label}</strong>
+                              <small>{OBJECTIVE_STATUS[obj.status]}</small>
+                            </div>
+                            <div className="obj-actions">
+                              <Button variant="ghost" size="icon" title="Subir na fila" aria-label="Subir na fila"
+                                disabled={i === 0} onClick={() => reorderObjective(obj.id, -1)}><ArrowUp /></Button>
+                              <Button variant="ghost" size="icon" title="Descer na fila" aria-label="Descer na fila"
+                                disabled={i === objectives.items.length - 1} onClick={() => reorderObjective(obj.id, 1)}><ArrowDown /></Button>
+                              <Button variant="ghost" size="icon" title="Remover" aria-label="Remover"
+                                onClick={() => removeObjective(obj.id)}><X /></Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="panel-stats">
+                      <span>{objectives.items.length} objetivo(s) na fila</span>
+                      <span>Piloto: {idleMode ? (INTENT_LABEL[pilot.kind] ?? pilot.label) : 'manual'}</span>
+                      <span>{targetId ? `Alvo: ${useGameStore.getState().creatures.find(cr => cr.id === targetId)?.name ?? targetId}` : 'Sem alvo'}</span>
+                    </div>
+                    <div className="panel-actions">
+                      <Button onClick={() => setPanel(null)}><Compass />Voltar ao vale</Button>
+                    </div>
+                  </>
+                )}
+
                 {panel === 'map' && (
                   <>
-                    <div className="map-large"><MiniMap large position={position} /></div>
-                    <div className="map-legend"><span><Home />Sua base</span><span><Gem />Mina arcana</span><span><Castle />Fortaleza</span></div>
+                    <div className="map-large"><WorldMap size="large" /></div>
+                    <WorldMapLegend />
                     <div className="panel-actions"><Button onClick={() => setPanel(null)}><Compass />Continuar expedição</Button></div>
                   </>
                 )}
@@ -362,13 +508,18 @@ function Index() {
                       <div className="home-building"><Shield /><div><strong>Defesas</strong><small>Muralha de madeira</small></div></div>
                     </div>
                     <div className="home-building">
-                      <Package /><div><strong>Armazém</strong><small>{woodCount} madeira · {stoneCount} pedra · {essenceCount} essências</small></div>
+                      <Package /><div><strong>Armazém</strong><small className="item-inline">
+                        <span title="Madeira"><ItemSprite itemId="wood" size={16} />{woodCount} madeira</span>
+                        <span title="Pedra"><ItemSprite itemId="stone" size={16} />{stoneCount} pedra</span>
+                        <span title="Essência Arcana"><ItemSprite itemId="arcane_essence" size={16} />{essenceCount} essências</span>
+                      </small></div>
                       <Button variant="outline" size="sm" onClick={rest}>Descansar</Button>
                     </div>
                     <div className="home-building">
-                      <Hammer /><div><strong>Forge</strong><small>Espada de ferro · 10 madeira + 8 pedra</small></div>
+                      <ItemSprite itemId="iron_sword" size={34} /><div><strong>Forge</strong><small>Espada de ferro · 10 madeira + 8 pedra</small></div>
                       <Button variant="outline" size="sm" disabled={!canCraft(player.inventory, 'iron_sword')} onClick={() => craftItem('iron_sword')}>Forjar</Button>
                     </div>
+                    <ToolCrafting />
                     <div className="panel-actions">
                       <Button onClick={exitToWorld}><Compass />Sair para o mundo<ChevronRight /></Button>
                     </div>
@@ -386,7 +537,7 @@ function Index() {
                 {panel === 'settings' && (
                   <>
                     <div className="home-building"><Wind /><div><strong>Áudio ambiente</strong><small>Desativado nesta versão</small></div></div>
-                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · V câmera · E coletar · I inventário · B cidade</small></div></div>
+                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · Clique no inimigo seleciona · Shift+clique enfileira · V câmera · E coletar · I inventário · B cidade · G piloto automático (idle/manual)</small></div></div>
                     <div className="panel-stats"><span>TRIBOS v0.2 · Protótipo local · Sem multiplayer conectado</span></div>
                   </>
                 )}
@@ -401,29 +552,46 @@ function Index() {
           <div className="loot-summary">
             <div className="footer-label"><Package />LOOT DA EXPEDIÇÃO</div>
             <div className="loot-resources">
-              <span title="Madeira"><TreePine />{woodCount}</span>
-              <span title="Pedra"><Mountain />{stoneCount}</span>
-              <span title="Essência Arcana"><Gem />{essenceCount}</span>
+              <span title="Madeira"><ItemSprite itemId="wood" size={22} />{woodCount}</span>
+              <span title="Pedra"><ItemSprite itemId="stone" size={22} />{stoneCount}</span>
+              <span title="Essência Arcana"><ItemSprite itemId="arcane_essence" size={22} />{essenceCount}</span>
             </div>
           </div>
           <div>
+            <div className="hotbar-row">
             <div className="hotbar" aria-label="Hotbar de 8 slots">
-              {hotbarItems.map((item, i) => {
-                const Icon = item ? (ICON_MAP[item.icon] ?? Package) : Package;
-                return (
-                  <Button variant="ghost" key={i} className="hotbar-slot"
-                    title={`${i + 1} · ${item?.name ?? 'Vazio'}`}
-                    aria-label={`${i + 1} · ${item?.name ?? 'Vazio'}`}
-                    data-active={ui.selectedHotbar === i}
-                    onClick={() => useHotbarSlot(i)}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < 24) useHotbarSlot(n); }}>
-                    <span className="slot-key">{i + 1}</span>
-                    <Icon strokeWidth={1.3} />
-                    <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>
-                  </Button>
-                );
-              })}
+                {hotbarItems.map((item, i) => {
+                  return (
+                    <Button variant="ghost" key={i} className="hotbar-slot"
+                      title={`${i + 1} · ${item?.name ?? 'Vazio'}`}
+                      aria-label={`${i + 1} · ${item?.name ?? 'Vazio'}`}
+                      data-active={ui.selectedHotbar === i}
+                      onClick={() => useHotbarSlot(i)}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < 24) useHotbarSlot(n); }}>
+                      <span className="slot-key">{i + 1}</span>
+                      {item ? <ItemSprite itemId={item.id} size={40} className="hotbar-sprite" /> : <Package strokeWidth={1.3} aria-hidden="true" />}
+                      <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+              <div className="potion-ctl" data-on={autoPotion}>
+                <Button variant="ghost" className="potion-toggle" data-on={autoPotion} aria-pressed={autoPotion}
+                  title={autoPotion ? 'Poção automática LIGADA: bebe sozinho quando a vida cai' : 'Poção automática DESLIGADA'}
+                  aria-label={autoPotion ? 'Desligar poção automática' : 'Ligar poção automática'}
+                  onClick={toggleAutoPotion}>
+                  <FlaskConical strokeWidth={1.4} />
+                  <span>{autoPotion ? 'AUTO ON' : 'AUTO OFF'}</span>
+                </Button>
+                <span className="potion-count" title={DEV_INFINITE_POTIONS ? 'Poções ilimitadas (modo de desenvolvimento)' : `${potionCount} poções`}>
+                  × {DEV_INFINITE_POTIONS ? '∞' : potionCount}
+                </span>
+                <Button variant="ghost" className="potion-drink" title="Beber poção agora" aria-label="Beber poção agora"
+                  disabled={!DEV_INFINITE_POTIONS && potionCount <= 0} onClick={drinkPotion}>
+                  Beber agora
+                </Button>
+              </div>
             </div>
             <div className="hotbar-note">{hotbarItems[ui.selectedHotbar]?.name ?? 'Vazio'} <span className="text-primary">·</span> Guerreiro</div>
           </div>
