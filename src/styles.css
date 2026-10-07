@@ -434,3 +434,51 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .obj-actions button { width: 26px; height: 26px; color: var(--muted-foreground); }
 .obj-actions svg { width: 13px; height: 13px; }
 @media (max-width: 1100px) { .pilot-strip { max-width: calc(100% - 52px); flex-wrap: wrap; } }
+
+/* --- Mapa real, XP, poção automática e fabricação de ferramentas (HUD) --- */
+.world-map { position: absolute; inset: 0; }
+.world-map canvas { display: block; }
+.world-map canvas[data-interactive=true] { cursor: crosshair; }
+.map-large { position: relative; height: 320px; }
+.world-map-status { position: absolute; left: 8px; top: 8px; width: 132px; padding: 5px 9px; border-radius: 4px; background: var(--overlay); border: 1px solid var(--border); color: var(--world-ink); font-size: 10px; line-height: 1.5; pointer-events: none; }
+.world-map-status strong { color: var(--primary); font-weight: 500; }
+.world-map-legend { flex-wrap: wrap; gap: 6px 14px; }
+.wm-key { display: inline-block; width: 9px; height: 9px; flex-shrink: 0; }
+.wm-key-player { background: var(--world-light); border: 1.5px solid var(--world-gold); clip-path: polygon(100% 50%, 0 100%, 25% 50%, 0 0); }
+.wm-key-base { background: var(--world-gold); }
+.wm-key-ruins { background: var(--world-rock-light); }
+.wm-key-camp { background: var(--world-cloak); clip-path: polygon(50% 0, 100% 90%, 0 90%); }
+.wm-key-clear { border: 1.5px solid var(--muted-foreground); border-radius: 50%; }
+.wm-key-unknown { border: 1px dashed var(--muted-foreground); border-radius: 50%; }
+.wm-key-hostile { background: var(--world-cloak); border-radius: 50%; }
+.wm-key-peace { border: 1.5px solid var(--world-armor); border-radius: 50%; }
+.wm-key-node { background: var(--world-leaf-light); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.xp-bar { margin-top: 5px; width: 150px; }
+.xp-bar progress { display: block; width: 100%; height: 4px; border: none; border-radius: 2px; overflow: hidden; background: var(--secondary); }
+.xp-bar progress::-webkit-progress-value { background: var(--primary); transition: width .4s; }
+.xp-bar progress::-moz-progress-bar { background: var(--primary); }
+.xp-bar span { display: flex; justify-content: space-between; margin-top: 3px; font-size: 8px; color: var(--muted-foreground); }
+.xp-bar em { font-style: normal; color: var(--primary); }
+.xp-bar[data-levelup=true] progress { box-shadow: 0 0 8px var(--primary); }
+.player-name[data-levelup=true] { animation: level-up-glow 1s ease-in-out 3; }
+.levelup-chip { margin-left: 8px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--primary); background: color-mix(in oklch,var(--primary) 18%,transparent); color: var(--primary); font-family: var(--font-sans); font-size: 9px; font-weight: 700; letter-spacing: 1px; }
+@keyframes level-up-glow { 0%,100% { text-shadow: none; } 50% { text-shadow: 0 0 12px var(--primary); } }
+.hotbar-row { display: flex; align-items: stretch; gap: 14px; }
+.potion-ctl { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 0 0 14px; border-left: 1px solid var(--border); }
+.potion-toggle { height: 29px; padding: 0 9px; gap: 6px; font-size: 9px; letter-spacing: 1px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted-foreground); background: var(--card); }
+.potion-toggle svg { width: 14px; height: 14px; }
+.potion-toggle[data-on=true] { border-color: var(--health); color: var(--health); background: color-mix(in oklch,var(--health) 12%,var(--card)); }
+.potion-count { font-size: 10px; text-align: center; color: var(--foreground); }
+.potion-drink { height: 22px; padding: 0 8px; font-size: 9px; border: 1px solid color-mix(in oklch,var(--primary) 35%,transparent); border-radius: 4px; color: var(--primary); }
+.tool-craft { border-top: 1px solid var(--border); padding-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.tool-craft-empty { font-size: 10px; color: var(--muted-foreground); }
+.tool-craft-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); }
+.tool-craft-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tool-craft-body strong { font-size: 11px; font-weight: 500; }
+.tool-craft-mats { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10px; color: var(--muted-foreground); }
+.tool-craft-mats span[data-missing=true] { color: var(--destructive); }
+.tool-craft-reason { font-style: normal; font-size: 9px; color: var(--destructive); }
+@media (max-width: 1200px) { .potion-ctl { padding-left: 8px; } .hotbar-row { gap: 8px; } }
+@media (max-width: 700px) { .xp-bar { width: 80px; } .hotbar-row { gap: 4px; } .potion-ctl { padding-left: 4px; } .potion-drink { display: none; } }
+/* A linha da grade precisa poder encolher, senão o conteúdo (canvas) empurra o rodapé para fora da tela. */
+.game-shell { grid-template-rows: minmax(0,1fr); }

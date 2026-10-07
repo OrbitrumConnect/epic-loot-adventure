@@ -1,6 +1,6 @@
 import type { Position } from './player';
 
-export type ObjectiveKind = 'clear_camp' | 'hunt_creature' | 'gather_node' | 'travel';
+export type ObjectiveKind = 'clear_camp' | 'hunt_creature' | 'gather_node' | 'travel' | 'hunt_area';
 
 export type ObjectiveStatus = 'queued' | 'active' | 'done' | 'failed' | 'cancelled';
 
@@ -12,6 +12,8 @@ export type Objective = {
   /** Para onde o jogador precisa ir. Para alvos móveis é só o ponto inicial. */
   position: Position;
   label: string;
+  /** `hunt_area`: raio em metros em torno de `position`. */
+  radius?: number;
   status: ObjectiveStatus;
   createdAt: number;
   startedAt: number | null;
@@ -55,4 +57,8 @@ export type AutoSnapshot = {
   resources: { id: string; position: Position; depleted: boolean }[];
   objectives: ObjectiveQueueState;
   homePosition: Position;
+  /** Cura automática ligada. Ausente = ligada. */
+  autoPotion?: boolean;
+  /** Nós de colheita do mundo novo (legado fica em `resources`). */
+  harvestNodes?: { id: string; kind: string; position: Position; depleted: boolean }[];
 };

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
+import { HarvestNodes } from './world/harvest-nodes';
 import { queueNearestNode } from './world/objective-bridge';
 import { Camps, Enemies } from './world/world-entities';
 import {
@@ -576,7 +577,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
     const onMouseDown = (e: MouseEvent) => {
       // Clique já consumido por um inimigo / estrutura / recurso não ataca.
-      if (wasPointerConsumed()) return;
+      if (wasPointerConsumed(e)) return;
       if (e.button === 0 && !props.paused && props.onAttack) {
         if (pointerLocked.current || e.target === canvas) {
           props.onAttack();
@@ -664,7 +665,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
   const resourceClick = useCallback((e: ThreeEvent<PointerEvent>, x: number, z: number) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    markPointerConsumed();
+    markPointerConsumed(e.nativeEvent);
     if (e.shiftKey) queueNearestNode(x, z);
     else props.onCollect();
   }, [props.onCollect]);
@@ -816,6 +817,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       </group>
 
       {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
+      <HarvestNodes c={c} />
       <Camps c={c} />
       <Enemies c={c} playerRef={playerRef} />
 

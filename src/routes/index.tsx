@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
   Circle, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
@@ -9,14 +9,17 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
+import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
+import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
+import { ToolCrafting } from '@/components/hud/tool-crafting';
 import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { RECIPES } from '@/game/data/recipes';
-import type { CampState, ObjectiveKind, ObjectiveStatus } from '@/game/types';
+import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
 import {
   clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
-  toggleRepeat, useCampsState, useObjectivesState, useTargetIdState,
+  toggleRepeat, useObjectivesState, useTargetIdState,
 } from '@/components/world/objective-bridge';
 import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/world/pilot-status';
 
@@ -46,6 +49,7 @@ const OBJECTIVE_ICON: Record<ObjectiveKind, React.ComponentType<React.SVGProps<S
   clear_camp: Tent,
   hunt_creature: Swords,
   gather_node: Pickaxe,
+  hunt_area: Crosshair,
   travel: Compass,
 };
 
@@ -55,13 +59,6 @@ const OBJECTIVE_STATUS: Record<ObjectiveStatus, string> = {
   done: 'Concluído',
   failed: 'Falhou',
   cancelled: 'Cancelado',
-};
-
-const CAMP_TIER_COLOR: Record<number, string> = {
-  1: 'var(--world-leaf-light)',
-  2: 'var(--world-gold)',
-  3: 'var(--world-cloak)',
-  4: 'var(--world-crystal)',
 };
 
 const navigation = [
@@ -75,59 +72,6 @@ const navigation = [
   { id: 'inventory', name: 'Inventário', icon: Backpack },
 ];
 
-function MiniMap({ large = false, position = [0, 1], camps = [] }: {
-  large?: boolean;
-  position?: number[];
-  camps?: CampState[];
-}) {
-  const discovered = camps.filter(camp => camp.discovered);
-  return (
-    <svg viewBox="0 0 200 170" role="img" aria-label="Mapa do Vale dos Ancestrais">
-      <rect width="200" height="170" fill="var(--world-ground)" />
-      <path d="M0 20L60 5 90 42 153 22 200 55V0H0ZM0 120L35 100 68 130 95 160 154 141 200 168V170H0Z" fill="var(--world-pine)" />
-      <path d="M38 -10 Q100 44 62 83 T49 180" fill="none" stroke="var(--world-water)" strokeWidth="18" />
-      <path d="M-10 149 Q80 121 99 84 T164 27" fill="none" stroke="var(--world-path)" strokeWidth="4" />
-      {Array.from({ length: 25 }, (_, i) => (
-        <path key={i} d={`M${(i * 43) % 190} ${(i * 29) % 160}l-4 8h8z`} fill="var(--world-leaf)" />
-      ))}
-      <rect x="139" y="31" width="17" height="14" fill="var(--world-rock)" stroke="var(--world-rock-light)" strokeWidth="1.5" />
-      <path d="M147 25v-6l8 3-8 3" fill="var(--world-cloak)" />
-      <path d="M39 121l7-7 7 7v10H39z" fill="var(--world-gold)" />
-      <circle cx="85" cy="71" r="3" fill="var(--world-crystal)" />
-      {discovered.map(camp => {
-        const cx = 100 + camp.position.x * 2;
-        const cy = 93 + camp.position.z * 2;
-        const color = CAMP_TIER_COLOR[camp.tier] ?? 'var(--world-gold)';
-        return (
-          <g key={camp.id}>
-            <title>{`${camp.name} · tier ${camp.tier}${camp.cleared ? ' · limpo' : ''}`}</title>
-            {camp.cleared ? (
-              <>
-                <circle cx={cx} cy={cy} r={large ? 5 : 4} fill="none" stroke={color} strokeWidth="1.2" opacity=".55" />
-                <path d={`M${cx - 2.4} ${cy - 2.4}l4.8 4.8M${cx + 2.4} ${cy - 2.4}l-4.8 4.8`} stroke={color} strokeWidth="1.2" opacity=".75" />
-              </>
-            ) : (
-              <>
-                <path d={`M${cx} ${cy - (large ? 5.5 : 4.5)}l${large ? 5 : 4} ${large ? 8 : 6.5}h${large ? -10 : -8}z`} fill={color} stroke="var(--world-dark)" strokeWidth=".6" />
-                <circle cx={cx} cy={cy} r={large ? 8 : 6.5} fill="none" stroke={color} strokeWidth=".6" opacity=".45" />
-              </>
-            )}
-          </g>
-        );
-      })}
-      <circle cx={100 + (position[0] ?? 0) * 2} cy={93 + (position[1] ?? 0) * 2} r={large ? 4 : 3} fill="var(--world-light)" stroke="var(--world-gold)" strokeWidth="2" />
-      <circle cx={100 + (position[0] ?? 0) * 2} cy={93 + (position[1] ?? 0) * 2} r="10" fill="none" stroke="var(--world-gold)" strokeWidth=".7" opacity=".6" />
-      {large && (
-        <>
-          <text x="123" y="62" fill="var(--world-ink)" fontSize="6" fontFamily="Manrope">Fortaleza esquecida</text>
-          <text x="22" y="144" fill="var(--world-ink)" fontSize="6" fontFamily="Manrope">Base da tribo</text>
-          <text x="65" y="60" fill="var(--world-ink)" fontSize="6" fontFamily="Manrope">Mina arcana</text>
-        </>
-      )}
-    </svg>
-  );
-}
-
 function Index() {
   const [ready, setReady] = useState(false);
   const [cameraMode, setCameraMode] = useState<'iso' | 'third'>('iso');
@@ -135,12 +79,15 @@ function Index() {
   const toggleCamera = useCallback(() => setCameraMode(m => (m === 'iso' ? 'third' : 'iso')), []);
   useEffect(() => setReady(true), []);
 
+  // Level-up: destaque breve quando o nível sobe (sem sistema novo de mensagens).
+  const [levelUpFlash, setLevelUpFlash] = useState(false);
+  const prevLevel = useRef<number | null>(null);
+
   const player = useGameStore(s => s.player);
   const ui = useGameStore(s => s.ui);
   const attackTick = useGameStore(s => s.attackTick);
 
   const objectives = useObjectivesState();
-  const camps = useCampsState();
   const targetId = useTargetIdState();
   const idleMode = objectives.mode === 'idle';
 
@@ -159,6 +106,22 @@ function Index() {
   const activeObjective = objectives.items.find(o => o.status === 'active')
     ?? objectives.items.find(o => o.status === 'queued')
     ?? null;
+
+  useEffect(() => {
+    if (prevLevel.current !== null && player.level > prevLevel.current) {
+      setLevelUpFlash(true);
+      const id = setTimeout(() => setLevelUpFlash(false), 3500);
+      prevLevel.current = player.level;
+      return () => clearTimeout(id);
+    }
+    prevLevel.current = player.level;
+    return undefined;
+  }, [player.level]);
+
+  const autoPotion = useGameStore(s => s.autoPotion);
+  const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
+  const drinkPotion = useGameStore(s => s.drinkPotion);
+  const xpPct = player.xpToNext > 0 ? Math.min(100, Math.round((player.xp / player.xpToNext) * 100)) : 0;
 
   const attack = useGameStore(s => s.attack);
   const collectNearest = useGameStore(s => s.collectNearest);
@@ -301,8 +264,15 @@ function Index() {
           <div className="player-profile">
             <div className="portrait"><ShieldCheck strokeWidth={1.2} /></div>
             <div>
-              <div className="player-name">{player.name} <span className="text-primary">· {String(player.level).padStart(2, '0')}</span></div>
+              <div className="player-name" data-levelup={levelUpFlash}>
+                {player.name} <span className="text-primary">· {String(player.level).padStart(2, '0')}</span>
+                {levelUpFlash && <span className="levelup-chip" role="status">NÍVEL {player.level}!</span>}
+              </div>
               <div className="player-class">Guerreiro · Era do Ferro</div>
+              <div className="xp-bar" data-levelup={levelUpFlash} title={`Experiência: ${player.xp} de ${player.xpToNext} (total ${player.totalXp})`}>
+                <progress value={player.xp} max={Math.max(1, player.xpToNext)} aria-label="Experiência" />
+                <span>XP {player.xp} / {player.xpToNext} <em>{xpPct}%</em></span>
+              </div>
             </div>
           </div>
           <div className="vitals">
@@ -357,7 +327,7 @@ function Index() {
           </div>
 
           <div className="world-right">
-            <div className="minimap"><MiniMap position={position} camps={camps} /><span className="minimap-north">N</span></div>
+            <div className="minimap"><WorldMap size="mini" /><span className="minimap-north">N</span></div>
             <div className="map-coordinate">
               <span>{Math.round((position[0] ?? 0) + 124)}, {Math.round((position[1] ?? 0) + 86)}</span>
               <span>Dia 1 · 08:42</span>
@@ -514,8 +484,8 @@ function Index() {
 
                 {panel === 'map' && (
                   <>
-                    <div className="map-large"><MiniMap large position={position} camps={camps} /></div>
-                    <div className="map-legend"><span><Home />Sua base</span><span><Gem />Mina arcana</span><span><Castle />Fortaleza</span></div>
+                    <div className="map-large"><WorldMap size="large" /></div>
+                    <WorldMapLegend />
                     <div className="panel-actions"><Button onClick={() => setPanel(null)}><Compass />Continuar expedição</Button></div>
                   </>
                 )}
@@ -542,6 +512,7 @@ function Index() {
                       <Hammer /><div><strong>Forge</strong><small>Espada de ferro · 10 madeira + 8 pedra</small></div>
                       <Button variant="outline" size="sm" disabled={!canCraft(player.inventory, 'iron_sword')} onClick={() => craftItem('iron_sword')}>Forjar</Button>
                     </div>
+                    <ToolCrafting />
                     <div className="panel-actions">
                       <Button onClick={exitToWorld}><Compass />Sair para o mundo<ChevronRight /></Button>
                     </div>
@@ -580,23 +551,41 @@ function Index() {
             </div>
           </div>
           <div>
+            <div className="hotbar-row">
             <div className="hotbar" aria-label="Hotbar de 8 slots">
-              {hotbarItems.map((item, i) => {
-                const Icon = item ? (ICON_MAP[item.icon] ?? Package) : Package;
-                return (
-                  <Button variant="ghost" key={i} className="hotbar-slot"
-                    title={`${i + 1} · ${item?.name ?? 'Vazio'}`}
-                    aria-label={`${i + 1} · ${item?.name ?? 'Vazio'}`}
-                    data-active={ui.selectedHotbar === i}
-                    onClick={() => useHotbarSlot(i)}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < 24) useHotbarSlot(n); }}>
-                    <span className="slot-key">{i + 1}</span>
-                    <Icon strokeWidth={1.3} />
-                    <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>
-                  </Button>
-                );
-              })}
+                {hotbarItems.map((item, i) => {
+                  const Icon = item ? (ICON_MAP[item.icon] ?? Package) : Package;
+                  return (
+                    <Button variant="ghost" key={i} className="hotbar-slot"
+                      title={`${i + 1} · ${item?.name ?? 'Vazio'}`}
+                      aria-label={`${i + 1} · ${item?.name ?? 'Vazio'}`}
+                      data-active={ui.selectedHotbar === i}
+                      onClick={() => useHotbarSlot(i)}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < 24) useHotbarSlot(n); }}>
+                      <span className="slot-key">{i + 1}</span>
+                      <Icon strokeWidth={1.3} />
+                      <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+              <div className="potion-ctl" data-on={autoPotion}>
+                <Button variant="ghost" className="potion-toggle" data-on={autoPotion} aria-pressed={autoPotion}
+                  title={autoPotion ? 'Poção automática LIGADA: bebe sozinho quando a vida cai' : 'Poção automática DESLIGADA'}
+                  aria-label={autoPotion ? 'Desligar poção automática' : 'Ligar poção automática'}
+                  onClick={toggleAutoPotion}>
+                  <FlaskConical strokeWidth={1.4} />
+                  <span>{autoPotion ? 'AUTO ON' : 'AUTO OFF'}</span>
+                </Button>
+                <span className="potion-count" title={DEV_INFINITE_POTIONS ? 'Poções ilimitadas (modo de desenvolvimento)' : `${potionCount} poções`}>
+                  × {DEV_INFINITE_POTIONS ? '∞' : potionCount}
+                </span>
+                <Button variant="ghost" className="potion-drink" title="Beber poção agora" aria-label="Beber poção agora"
+                  disabled={!DEV_INFINITE_POTIONS && potionCount <= 0} onClick={drinkPotion}>
+                  Beber agora
+                </Button>
+              </div>
             </div>
             <div className="hotbar-note">{hotbarItems[ui.selectedHotbar]?.name ?? 'Vazio'} <span className="text-primary">·</span> Guerreiro</div>
           </div>

@@ -68,12 +68,21 @@ export function mixColor(from: string, to: string, amount: number): string {
  * clique nunca vale duas ações.
  * ------------------------------------------------------------------ */
 let consumedAt = 0;
+/** `timeStamp` do evento nativo que consumiu o clique (relógio do navegador). */
+let consumedStamp = -Infinity;
 
-export function markPointerConsumed() {
+/**
+ * `native` (opcional) é o evento nativo do clique. Com ele a checagem compara
+ * os carimbos de tempo do navegador, que não sofrem atraso se a thread
+ * principal estiver ocupada entre o `pointerdown` e o `mousedown`.
+ */
+export function markPointerConsumed(native?: { timeStamp: number }) {
   consumedAt = performance.now();
+  consumedStamp = native ? native.timeStamp : -Infinity;
 }
 
-export function wasPointerConsumed(): boolean {
+export function wasPointerConsumed(native?: { timeStamp: number }): boolean {
+  if (native && Math.abs(native.timeStamp - consumedStamp) < 60) return true;
   return performance.now() - consumedAt < 80;
 }
 

@@ -28,7 +28,7 @@ export function useEnemyClick(creatureId: string, name: string) {
   return useCallback((e: ThreeEvent<PointerEvent>) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    markPointerConsumed();
+    markPointerConsumed(e.nativeEvent);
     if (e.shiftKey) {
       addObjective('hunt_creature', creatureId);
       return;
@@ -104,6 +104,12 @@ export type HostileTuning = {
   walkSpeedIdle: number;
   /** Verbo do golpe na mensagem do mundo. */
   hitVerb: string;
+  /**
+   * Espécie pacífica: nunca persegue nem ataca. Ao notar o jogador a menos de
+   * `aggroRange` (`provokeRange` depois de ferida) ela foge a `speed`.
+   * Ausente = hostil (lobo e saqueadores não definem, números intactos).
+   */
+  peaceful?: boolean;
 };
 
 export const WOLF_TUNING: HostileTuning = {
@@ -155,6 +161,7 @@ export function useHostileAI(opts: HostileOptions) {
   const currentRotY = useRef(0);
   const homePos = useRef<{ x: number; z: number } | null>(null);
   const chaseTimer = useRef(0);
+  const fleeing = useRef(false);
   const swing = useRef(0);
   const anim = useRef<HostileAnim>({
     moving: false, walkCycle: 0, distToPlayer: Infinity, swing: 0, chasing: false,
@@ -210,7 +217,30 @@ export function useHostileAI(opts: HostileOptions) {
     const aggroRange = provoked ? Math.max(tuning.aggroRange, tuning.provokeRange) : tuning.aggroRange;
 
     let chasing = false;
-    if (distToPlayer < aggroRange && distToHome < tuning.leashRange && chaseTimer.current < tuning.chaseTimeout) {
+    let flee = false;
+    if (tuning.peaceful) {
+      // Histerese: começa a fugir dentro de `aggroRange` e só para 30% além,
+      // para o bicho não tremer na borda do raio.
+      const stopAt = aggroRange * 1.3;
+      fleeing.current = distToPlayer < (fleeing.current ? stopAt : aggroRange);
+      flee = fleeing.current;
+    }
+    if (flee) {
+      chaseTimer.current = 0;
+      // Corre para longe do jogador; perto da borda do mapa desliza em direção
+      // ao centro para não ficar encurralado contra o limite.
+      let ax = wx - px;
+      let az = wz - pz;
+      const len = Math.sqrt(ax * ax + az * az) || 1;
+      ax /= len; az /= len;
+      const edge = MAP_HALF - 4;
+      if (Math.abs(wx) > edge) ax -= Math.sign(wx) * 1.2;
+      if (Math.abs(wz) > edge) az -= Math.sign(wz) * 1.2;
+      const l2 = Math.sqrt(ax * ax + az * az) || 1;
+      targetX = wx + (ax / l2) * tuning.speed * dt;
+      targetZ = wz + (az / l2) * tuning.speed * dt;
+      moving = true;
+    } else if (!tuning.peaceful && distToPlayer < aggroRange && distToHome < tuning.leashRange && chaseTimer.current < tuning.chaseTimeout) {
       chasing = true;
       chaseTimer.current += dt;
       if (distToPlayer <= tuning.attackRange) chaseTimer.current = 0;
@@ -261,9 +291,11 @@ export function useHostileAI(opts: HostileOptions) {
     g.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
     g.position.y = terrainHeight(g.position.x, g.position.z);
 
-    const behavior: CreatureBehavior = chasing
-      ? (distToPlayer <= tuning.attackRange ? 'attack' : 'chase')
-      : 'patrol';
+    const behavior: CreatureBehavior = flee
+      ? 'flee'
+      : chasing
+        ? (distToPlayer <= tuning.attackRange ? 'attack' : 'chase')
+        : 'patrol';
     queuePosition(creatureId, g.position.x, g.position.z, behavior);
 
     if (moving) {

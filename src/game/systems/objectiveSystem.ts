@@ -19,6 +19,8 @@ export const ATTACK_RANGE = 3.2;
 export const GATHER_RANGE = 3.2;
 /** Raio de chegada de um objetivo `travel`. */
 export const ARRIVAL_RADIUS = 2.5;
+/** Raio padrão de uma área de caça. */
+export const HUNT_AREA_RADIUS = 14;
 
 /** O que `tickObjectives` precisa ler. `AutoSnapshot` satisfaz este formato. */
 export type ObjectiveWorld = {
@@ -61,7 +63,7 @@ export function hasPendingObjective(
 
 export function addObjective(
   queue: ObjectiveQueueState,
-  input: { kind: ObjectiveKind; targetId: string | null; position: Position; label: string },
+  input: { kind: ObjectiveKind; targetId: string | null; position: Position; label: string; radius?: number },
   now: number,
 ): ObjectiveQueueState {
   if (hasPendingObjective(queue, input.kind, input.targetId)) return queue;
@@ -73,6 +75,7 @@ export function addObjective(
     targetId: input.targetId,
     position: { ...input.position },
     label: input.label,
+    ...(input.radius != null ? { radius: input.radius } : {}),
     status: 'queued',
     createdAt: now,
     startedAt: null,
@@ -147,6 +150,9 @@ function judge(objective: Objective, world: ObjectiveWorld): Verdict {
     if (!node) return { status: 'failed', reason: 'Recurso não existe mais.' };
     return node.depleted ? { status: 'done' } : RUNNING;
   }
+
+  // Área de caça nunca termina sozinha: só some se o jogador cancelar.
+  if (objective.kind === 'hunt_area') return RUNNING;
 
   const arrived = getDistance(world.playerPosition, objective.position) <= ARRIVAL_RADIUS;
   return arrived ? { status: 'done' } : RUNNING;
@@ -284,8 +290,8 @@ function engage(
 /**
  * Prioridade do piloto automático, nesta ordem:
  *   1. jogador morto               -> `idle`
- *   2. vida < RETREAT_HP_RATIO e há cura na hotbar -> `heal`
- *   3. vida < RETREAT_HP_RATIO sem cura            -> `retreat` para `homePosition`
+ *   2. vida < RETREAT_HP_RATIO, há cura na hotbar e `autoPotion` ligado -> `heal`
+ *   3. vida < RETREAT_HP_RATIO sem cura (ou com `autoPotion` desligado) -> `retreat` para `homePosition`
  *   4. inimigo já perseguindo dentro de SELF_DEFENSE_RADIUS -> `attack` (defesa
  *      própria vem ANTES da fila: não dá para executar objetivo levando pancada)
  *   5. objetivo ativo: `move` até entrar no alcance, então `attack`/`gather`
@@ -301,9 +307,14 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
 
   // 2 e 3
   const lowHp = snapshot.playerHp <= snapshot.playerMaxHp * RETREAT_HP_RATIO;
+  const autoPotion = snapshot.autoPotion ?? true;
   if (lowHp) {
-    if (snapshot.healSlot != null) return { kind: 'heal', hotbarIndex: snapshot.healSlot };
-    return { kind: 'retreat', to: { ...snapshot.homePosition }, reason: 'Vida baixa e sem cura: recuando.' };
+    if (autoPotion && snapshot.healSlot != null) return { kind: 'heal', hotbarIndex: snapshot.healSlot };
+    return {
+      kind: 'retreat',
+      to: { ...snapshot.homePosition },
+      reason: autoPotion ? 'Vida baixa e sem cura: recuando.' : 'Vida baixa e poção automática desligada: recuando.',
+    };
   }
 
   // 4
@@ -338,6 +349,27 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
       return { kind: 'idle', reason: 'Alvo indisponível.' };
     }
     return engage(snapshot, creature, active.label);
+  }
+
+  if (active.kind === 'hunt_area') {
+    const radius = active.radius ?? HUNT_AREA_RADIUS;
+    let target: AutoSnapshot['creatures'][number] | null = null;
+    let bestDist = Infinity;
+    for (const creature of snapshot.creatures) {
+      if (!isCreatureAlive(creature)) continue;
+      if (getDistance(active.position, creature.position) > radius) continue;
+      const dist = getDistance(snapshot.playerPosition, creature.position);
+      if (dist < bestDist) {
+        bestDist = dist;
+        target = creature;
+      }
+    }
+    if (target) return engage(snapshot, target, active.label);
+    // Sem nada vivo na área: volta ao centro e espera a fauna renascer.
+    if (getDistance(snapshot.playerPosition, active.position) > ARRIVAL_RADIUS) {
+      return { kind: 'move', to: { ...active.position }, reason: active.label };
+    }
+    return { kind: 'idle', reason: `${active.label}: aguardando criaturas.` };
   }
 
   if (active.kind === 'gather_node') {

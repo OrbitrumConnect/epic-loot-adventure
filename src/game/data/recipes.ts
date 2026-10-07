@@ -57,4 +57,46 @@ export const RECIPES: Record<string, Recipe> = {
     station: 'none',
     craftTime: 1,
   },
+
+  // Ferramentas de colheita: feitas no campo, sem bancada.
+  axe: {
+    id: 'axe',
+    result: { itemId: 'axe', quantity: 1 },
+    materials: [
+      { itemId: 'wood', quantity: 5 },
+      { itemId: 'stone', quantity: 3 },
+    ],
+    station: 'none',
+    craftTime: 3,
+  },
+  pickaxe: {
+    id: 'pickaxe',
+    result: { itemId: 'pickaxe', quantity: 1 },
+    materials: [
+      { itemId: 'wood', quantity: 4 },
+      { itemId: 'stone', quantity: 6 },
+    ],
+    station: 'none',
+    craftTime: 3,
+  },
+  iron_axe: {
+    id: 'iron_axe',
+    result: { itemId: 'iron_axe', quantity: 1 },
+    materials: [
+      { itemId: 'wood', quantity: 4 },
+      { itemId: 'iron_ore', quantity: 4 },
+    ],
+    station: 'none',
+    craftTime: 4,
+  },
+  iron_pickaxe: {
+    id: 'iron_pickaxe',
+    result: { itemId: 'iron_pickaxe', quantity: 1 },
+    materials: [
+      { itemId: 'wood', quantity: 4 },
+      { itemId: 'iron_ore', quantity: 5 },
+    ],
+    station: 'none',
+    craftTime: 4,
+  },
 };

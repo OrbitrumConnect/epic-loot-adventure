@@ -292,7 +292,7 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
   const queueClear = useCallback((e: ThreeEvent<PointerEvent>) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    markPointerConsumed();
+    markPointerConsumed(e.nativeEvent);
     addObjective('clear_camp', camp.id);
   }, [camp.id]);
 

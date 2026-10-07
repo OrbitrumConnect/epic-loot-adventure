@@ -11,6 +11,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
+import { Beast } from './beast';
 import { Camp } from './camp';
 import { flushPositions } from './hostile-ai';
 import { getCamps } from './objective-bridge';
@@ -58,8 +59,20 @@ export function Enemies({ c, playerRef }: { c: Palette; playerRef: React.RefObje
             start={cr.start}
             playerRef={playerRef}
           />
-        ) : (
+        ) : cr.speciesId === 'wolf' ? (
           <Wolf key={cr.id} c={c} creatureId={cr.id} name={cr.name} start={cr.start} playerRef={playerRef} />
+        ) : (
+          // Fauna nova (cervo, javali, urso, lobo alfa...) e qualquer espécie
+          // desconhecida: `Beast` tem fallback em vez de sumir.
+          <Beast
+            key={cr.id}
+            c={c}
+            creatureId={cr.id}
+            speciesId={cr.speciesId}
+            name={cr.name}
+            start={cr.start}
+            playerRef={playerRef}
+          />
         ),
       )}
     </>

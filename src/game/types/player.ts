@@ -7,6 +7,12 @@ export type PlayerState = {
   name: string;
   classId: string;
   level: number;
+  /** XP dentro do nível atual (0 até `xpToNext`). */
+  xp: number;
+  /** XP necessário para sair do nível atual. */
+  xpToNext: number;
+  /** Total histórico de XP. */
+  totalXp: number;
   hp: number;
   maxHp: number;
   mana: number;

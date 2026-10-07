@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import type {
   PlayerState, CreatureState, ResourceNode, DeathBag, UIState, BaseState, BaseResult, BuildingId,
-  CampState, ObjectiveQueueState, ObjectiveKind, AutoMode, AutoSnapshot, Position,
+  CampState, ObjectiveQueueState, ObjectiveKind, AutoMode, AutoSnapshot, Position, HarvestNodeState,
 } from '../types';
 import { ITEMS } from '../data/items';
 import { CREATURES } from '../data/creatures';
-import { CAMPS } from '../data/camps';
+import { CAMPS, WORLD_HALF } from '../data/camps';
+import { HARVEST_NODES } from '../data/harvest-nodes';
+import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
 import { resolveAttack, getDistance } from '../systems/combatSystem';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
@@ -22,6 +24,11 @@ import {
   reorderObjective as reorderQueueObjective, setMode as setQueueMode, setRepeat as setQueueRepeat,
   tickObjectives,
 } from '../systems/objectiveSystem';
+import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
+import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
+import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
+import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
+import { createWildCreatures } from '../systems/wildlifeSystem';
 
 /** Para onde o piloto automático recua e para onde aponta um `travel` sem alvo. */
 export const HOME_POSITION: Position = { x: 0, z: 0 };
@@ -38,6 +45,10 @@ type GameState = {
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
   targetId: string | null;
+  /** Nós de colheita do mundo novo (o array `resources` acima é legado). */
+  harvestNodes: HarvestNodeState[];
+  /** Bebe poção sozinho com vida baixa (piloto e luta manual). */
+  autoPotion: boolean;
 };
 
 type GameActions = {
@@ -75,6 +86,10 @@ type GameActions = {
   setAutoMode: (mode: AutoMode) => void;
   toggleRepeat: () => void;
   setTarget: (creatureId: string | null) => void;
+  harvestAt: (nodeId: string) => void;
+  toggleAutoPotion: () => void;
+  addHuntArea: (x: number, z: number) => void;
+  drinkPotion: () => void;
   tickWorld: () => void;
   buildAutoSnapshot: () => AutoSnapshot;
 };
@@ -98,6 +113,9 @@ function createInitialPlayer(): PlayerState {
     name: 'Kael',
     classId: 'warrior',
     level: 1,
+    xp: 0,
+    xpToNext: xpForLevel(1),
+    totalXp: 0,
     hp: 100,
     maxHp: 100,
     mana: 80,
@@ -178,7 +196,7 @@ const INITIAL_CAMP_WORLD = createCamps(Date.now());
 
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
   player: createInitialPlayer(),
-  creatures: [...createInitialCreatures(), ...INITIAL_CAMP_WORLD.creatures],
+  creatures: [...createInitialCreatures(), ...createWildCreatures(), ...INITIAL_CAMP_WORLD.creatures],
   resources: createInitialResources(),
   deathBags: [],
   attackTick: 0,
@@ -186,6 +204,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
   targetId: null,
+  harvestNodes: createHarvestNodes(),
+  autoPotion: true,
   ui: {
     mode: 'world',
     panel: null,
@@ -216,7 +236,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     const equippedWeapon = state.player.inventory.equipment.primary;
     const weaponPower = equippedWeapon ? (ITEMS[equippedWeapon]?.attackPower ?? 0) : 0;
-    const totalPower = 10 + weaponPower;
+    const totalPower = playerBaseAttack(state.player.level) + weaponPower;
 
     const result = resolveAttack(totalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
 
@@ -243,6 +263,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         }
       }
       updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
+      const xpGain = creatureXp(def ?? creature);
+      const granted = grantXp(updatedPlayer, xpGain);
+      updatedPlayer = granted.player;
+      msg = granted.message ?? `${msg} +${xpGain} XP.`;
     }
 
     const creatureRetaliates = !result.targetDied;
@@ -352,7 +376,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         set(s => ({ ui: { ...s.ui, message: `Sem ${item.name}.` } }));
         return;
       }
-      const newInv = removeItem(state.player.inventory, slot.itemId!, 1);
+      // DEV_INFINITE_POTIONS: em dev a cura não gasta o item.
+      const newInv = DEV_INFINITE_POTIONS
+        ? state.player.inventory
+        : removeItem(state.player.inventory, slot.itemId!, 1);
       const newHp = Math.min(state.player.maxHp, state.player.hp + item.healAmount);
       set({
         player: { ...state.player, hp: newHp, inventory: newInv },
@@ -568,9 +595,88 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   setTarget: (creatureId) => set({ targetId: creatureId }),
 
+  toggleAutoPotion: () => {
+    set(s => ({
+      autoPotion: !s.autoPotion,
+      ui: { ...s.ui, message: s.autoPotion ? 'Poção automática desligada.' : 'Poção automática ligada.' },
+    }));
+  },
+
+  drinkPotion: () => {
+    const state = get();
+    if (state.player.dead) return;
+    const result = drinkBestPotion(
+      state.player.inventory, state.player.hp, state.player.maxHp, DEV_INFINITE_POTIONS,
+    );
+    if (!result.ok) {
+      set(s => ({ ui: { ...s.ui, message: result.message } }));
+      return;
+    }
+    set({
+      player: { ...state.player, hp: result.hp, inventory: result.inventory },
+      ui: { ...state.ui, message: result.message },
+    });
+  },
+
+  addHuntArea: (x, z) => {
+    const state = get();
+    const cx = Math.round(Math.max(-WORLD_HALF, Math.min(WORLD_HALF, x)));
+    const cz = Math.round(Math.max(-WORLD_HALF, Math.min(WORLD_HALF, z)));
+    const targetId = `area_${cx}_${cz}`;
+    const label = `Caçar na região ${describeRegion(cx, cz)} (${cx}, ${cz})`;
+    if (hasPendingObjective(state.objectives, 'hunt_area', targetId)) {
+      set(s => ({ ui: { ...s.ui, message: 'Essa área de caça já está na fila.' } }));
+      return;
+    }
+    const objectives = addQueueObjective(
+      state.objectives,
+      { kind: 'hunt_area', targetId, position: { x: cx, z: cz }, label, radius: HUNT_AREA_RADIUS },
+      Date.now(),
+    );
+    set({ objectives, ui: { ...state.ui, message: `${label}: entrou na fila.` } });
+  },
+
+  harvestAt: (nodeId) => {
+    const state = get();
+    if (state.player.dead) return;
+    const index = state.harvestNodes.findIndex(n => n.id === nodeId);
+    if (index < 0) return;
+    const node = state.harvestNodes[index]!;
+    const def = HARVEST_NODES[node.kind];
+
+    // +0,5 m de folga: o jogador anda entre o clique e a colheita.
+    if (getDistance(state.player.position, node.position) > def.range + 0.5) {
+      set(s => ({ ui: { ...s.ui, message: `${def.name}: muito longe para colher.` } }));
+      return;
+    }
+
+    const result = harvestWorldNode(
+      node, state.player.inventory.equipment.primary, state.player.inventory, Date.now(),
+    );
+    if (!result.ok) {
+      set(s => ({ ui: { ...s.ui, message: result.message } }));
+      return;
+    }
+
+    const harvestNodes = [...state.harvestNodes];
+    harvestNodes[index] = result.node;
+    const granted = grantXp({ ...state.player, inventory: result.inventory }, result.xp);
+    set({
+      player: granted.player,
+      harvestNodes,
+      ui: { ...state.ui, message: granted.message ?? `${result.message} +${result.xp} XP.` },
+    });
+  },
+
   tickWorld: () => {
     const state = get();
     const now = Date.now();
+
+    // Cura automática também no jogo manual: a regra é pura (`shouldAutoDrink`),
+    // quem a aciona é este tick, que roda nos dois modos.
+    if (shouldAutoDrink(state.player, state.autoPotion)) {
+      get().drinkPotion();
+    }
 
     const discovery = discoverCamps(state.camps, state.player.position);
     const ticked = tickCamps(discovery.camps, state.creatures, now);
@@ -611,7 +717,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         playerPosition: player.position,
         creatures: ticked.creatures,
         camps: ticked.camps,
-        resources: state.resources,
+        resources: [...state.resources, ...state.harvestNodes],
       },
       now,
     );
@@ -620,7 +726,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       messages.push(`Objetivo cancelado: ${lost.label} — ${lost.failedReason ?? 'alvo perdido'}.`);
     }
 
+    const harvestNodes = tickHarvestNodes(state.harvestNodes, now);
+
     const nothingChanged = player === state.player
+      && harvestNodes === state.harvestNodes
       && ticked.camps === state.camps
       && ticked.creatures === state.creatures
       && objectiveResult.queue === state.objectives
@@ -631,6 +740,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       player,
       camps: ticked.camps,
       creatures: ticked.creatures,
+      harvestNodes,
       objectives: objectiveResult.queue,
       ui: messages.length > 0
         ? { ...state.ui, message: messages[messages.length - 1]! }
@@ -645,7 +755,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       playerHp: state.player.hp,
       playerMaxHp: state.player.maxHp,
       playerDead: state.player.dead,
-      healSlot: findHealHotbarIndex(state.player.inventory),
+      // Com poção infinita (dev) e sem cura na hotbar, usa o slot 0 só como sinal:
+      // quem executa o `heal` deve chamar `drinkPotion()`, que ignora o índice.
+      healSlot: findHealHotbarIndex(state.player.inventory) ?? (DEV_INFINITE_POTIONS ? 0 : null),
+      autoPotion: state.autoPotion,
+      harvestNodes: state.harvestNodes.map(n => ({
+        id: n.id,
+        kind: n.kind,
+        position: n.position,
+        depleted: n.depleted,
+      })),
       creatures: state.creatures.map(c => ({
         id: c.id,
         position: c.position,
@@ -659,11 +778,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         creatureIds: c.creatureIds,
         cleared: c.cleared,
       })),
-      resources: state.resources.map(r => ({
-        id: r.id,
-        position: r.position,
-        depleted: r.depleted,
-      })),
+      // O piloto recebe os dois: nós de colheita novos e os recursos legados.
+      resources: [
+        ...state.harvestNodes.map(n => ({ id: n.id, position: n.position, depleted: n.depleted })),
+        ...state.resources.map(r => ({ id: r.id, position: r.position, depleted: r.depleted })),
+      ],
       objectives: state.objectives,
       homePosition: HOME_POSITION,
     };
@@ -681,12 +800,20 @@ function resolveObjectiveTarget(
     return camp ? { position: camp.position, label: `Limpar ${camp.name}` } : null;
   }
 
+  if (kind === 'hunt_area') return null; // criada por `addHuntArea`
+
   if (kind === 'hunt_creature') {
     const creature = state.creatures.find(c => c.id === targetId);
     return creature ? { position: creature.position, label: `Caçar ${creature.name}` } : null;
   }
 
   if (kind === 'gather_node') {
+    // Nó de colheita do mundo novo tem prioridade; `resources` é o legado.
+    const harvest = state.harvestNodes.find(n => n.id === targetId);
+    if (harvest) {
+      const def = HARVEST_NODES[harvest.kind];
+      return { position: harvest.position, label: `Coletar ${def?.name ?? harvest.kind}` };
+    }
     const node = state.resources.find(r => r.id === targetId);
     if (!node) return null;
     const name = ITEMS[node.resourceId]?.name ?? node.resourceId;
@@ -696,6 +823,11 @@ function resolveObjectiveTarget(
   // travel: aceita um acampamento, um recurso ou nenhum alvo (volta para a base).
   const camp = state.camps.find(c => c.id === targetId);
   if (camp) return { position: camp.position, label: `Viajar até ${camp.name}` };
+  const harvestTarget = state.harvestNodes.find(n => n.id === targetId);
+  if (harvestTarget) {
+    const def = HARVEST_NODES[harvestTarget.kind];
+    return { position: harvestTarget.position, label: `Viajar até ${def?.name ?? harvestTarget.kind}` };
+  }
   const node = state.resources.find(r => r.id === targetId);
   if (node) {
     const name = ITEMS[node.resourceId]?.name ?? node.resourceId;
@@ -710,4 +842,16 @@ function applyBaseResult(
   result: BaseResult,
 ) {
   set(s => ({ base: result.state, ui: { ...s.ui, message: result.message } }));
+}
+
+/** Nome da região do mapa. Convenção: -z é norte, +x é leste. */
+export function describeRegion(x: number, z: number): string {
+  if (Math.hypot(x, z) < 12) return 'da Base';
+  const ns = Math.abs(z) > 12 ? (z < 0 ? 'Norte' : 'Sul') : '';
+  const lo = Math.abs(x) > 12 ? (x > 0 ? 'Leste' : 'Oeste') : '';
+  if (ns && lo) {
+    if (ns === 'Norte') return lo === 'Leste' ? 'Nordeste' : 'Noroeste';
+    return lo === 'Leste' ? 'Sudeste' : 'Sudoeste';
+  }
+  return ns || lo || 'Central';
 }

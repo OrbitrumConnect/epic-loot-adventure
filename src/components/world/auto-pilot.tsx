@@ -16,6 +16,8 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import type { Position } from '@/game/types';
+import { HARVEST_NODES } from '@/game/data/harvest-nodes';
+import { harvestNodeById } from './harvest-nodes';
 import { creatureById } from './hostile-ai';
 import { buildAutoSnapshot, decideIntent, getObjectives, setAutoMode, tickWorld } from './objective-bridge';
 import { setPilotStatus } from './pilot-status';
@@ -155,26 +157,36 @@ export function AutoPilot({
         break;
       }
       case 'gather': {
-        if (distTo(intent.to) <= GATHER_REACH) {
+        // Nó colhível novo (tree/pebble/rock/veios/crystal): anda até o alcance
+        // da definição e golpeia com `harvestAt`. Qualquer outro recurso segue
+        // o caminho antigo (`collectNearest`).
+        const node = harvestNodeById(intent.nodeId);
+        const reach = node ? Math.max(1, (HARVEST_NODES[node.kind]?.range ?? GATHER_REACH) - 0.3) : GATHER_REACH;
+        const dest = node ? node.position : intent.to;
+        if (distTo(dest) <= reach) {
           hold();
           if (now - lastGather.current > 800) {
             lastGather.current = now;
-            store.collectNearest();
+            if (node) store.harvestAt(node.id);
+            else store.collectNearest();
           }
-          setPilotStatus('gather', 'Coletando recurso', '');
+          setPilotStatus('gather', node ? `Colhendo ${HARVEST_NODES[node.kind]?.name ?? 'recurso'}` : 'Coletando recurso', '');
         } else {
-          goTo(intent.to);
+          goTo(dest);
           setPilotStatus('move', 'Indo até o recurso', '');
         }
         break;
       }
       case 'heal': {
+        // `drinkPotion` e não `useHotbarSlot(índice)`: com a poção infinita de
+        // desenvolvimento o índice vem como 0, que é a espada. A store escolhe
+        // a melhor cura do inventário sozinha.
         hold();
         if (now - lastHeal.current > 1500) {
           lastHeal.current = now;
-          store.useHotbarSlot(intent.hotbarIndex);
+          store.drinkPotion();
         }
-        setPilotStatus('heal', 'Usando cura', `slot ${intent.hotbarIndex + 1}`);
+        setPilotStatus('heal', 'Bebendo poção', '');
         break;
       }
       default:
