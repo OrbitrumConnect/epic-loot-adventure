@@ -482,3 +482,60 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 @media (max-width: 700px) { .xp-bar { width: 80px; } .hotbar-row { gap: 4px; } .potion-ctl { padding-left: 4px; } .potion-drink { display: none; } }
 /* A linha da grade precisa poder encolher, senão o conteúdo (canvas) empurra o rodapé para fora da tela. */
 .game-shell { grid-template-rows: minmax(0,1fr); }
+
+/* ===== Sprites de item, recompensas, alvo de caça e nível (HUD) ===== */
+.item-sprite { display: inline-block; flex-shrink: 0; object-fit: contain; vertical-align: middle; filter: drop-shadow(0 2px 2px oklch(0.10 0.01 155 / 55%)); }
+.item-sprite-fallback { color: var(--primary); filter: none; }
+.inventory-item .item-sprite { display: block; width: 44px; height: 44px; margin-bottom: 8px; }
+.hotbar-slot .hotbar-sprite { width: 40px; height: 40px; margin-top: 3px; transition: transform .15s; }
+.hotbar-slot:hover .hotbar-sprite { transform: translateY(-2px) scale(1.06); }
+.hotbar-slot[data-active=true] .hotbar-sprite { filter: drop-shadow(0 0 6px var(--primary)); }
+.loot-resources .item-sprite { width: 22px; height: 22px; }
+.quest-step .item-sprite { width: 16px; height: 16px; }
+.item-inline { display: inline-flex; flex-wrap: wrap; gap: 3px 12px; align-items: center; }
+.item-inline > span { display: inline-flex; align-items: center; gap: 4px; }
+.home-building > .item-sprite { width: 34px; height: 34px; }
+.tool-craft-sprite { width: 40px; height: 40px; }
+.tool-craft-mats span { display: inline-flex; align-items: center; gap: 4px; }
+.city-resource > .item-sprite { width: 28px; height: 28px; }
+.city-cost .item-sprite { width: 16px; height: 16px; }
+
+.reward-feed { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 5px; pointer-events: none; }
+.reward-card { display: flex; align-items: center; gap: 8px; min-width: 150px; padding: 4px 14px 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: color-mix(in oklch,var(--world-dark) 88%,transparent); color: var(--world-ink); font-size: 12px; box-shadow: var(--panel-shadow); animation: reward-rise linear both; }
+.reward-card strong { font-weight: 600; text-shadow: var(--world-text-shadow); }
+.reward-icon { display: grid; place-items: center; width: 32px; height: 32px; }
+.reward-icon svg { width: 18px; height: 18px; }
+.reward-card[data-kind=xp] { border-color: var(--mana); }
+.reward-card[data-kind=xp] .reward-icon { color: var(--mana); }
+.reward-card[data-kind=loot], .reward-card[data-kind=harvest] { border-color: color-mix(in oklch,var(--primary) 55%,var(--border)); }
+.reward-card[data-kind=death] { border-color: var(--world-cloak); }
+.reward-card[data-kind=death] .reward-icon { color: var(--world-cloak); }
+.reward-card[data-kind=levelup] { border-color: var(--primary); color: var(--primary); }
+.reward-card[data-kind=levelup] .reward-icon { color: var(--primary); }
+@keyframes reward-rise { 0% { opacity: 0; transform: translateY(10px) scale(.92); } 8% { opacity: 1; transform: translateY(0) scale(1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-26px) scale(1); } }
+
+.hunt-banner { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 10px; min-width: 240px; padding: 6px 12px 6px 7px; border: 1px solid var(--border); border-left: 3px solid var(--world-cloak); border-radius: 6px; background: color-mix(in oklch,var(--world-dark) 88%,transparent); color: var(--world-ink); box-shadow: var(--panel-shadow); pointer-events: none; }
+.hunt-banner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hunt-banner-body small { display: flex; align-items: center; gap: 5px; font-size: 8px; letter-spacing: 1.5px; opacity: .75; }
+.hunt-banner-body small svg { width: 10px; height: 10px; color: var(--primary); }
+.hunt-banner-body strong { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hunt-hp { height: 5px; border-radius: 3px; background: var(--secondary); overflow: hidden; }
+.hunt-hp i { display: block; height: 100%; background: var(--world-cloak); transition: width .25s; }
+.hunt-hp-text { font-size: 10px; color: var(--muted-foreground); }
+.species-portrait { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; background: var(--chip, var(--world-rock)); color: var(--world-dark); font-family: var(--font-display); font-size: 13px; font-weight: 700; box-shadow: inset 0 0 0 2px color-mix(in oklch,var(--world-dark) 40%,transparent); }
+.species-portrait[data-shape=hex] { clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); }
+.species-portrait[data-shape=round] { border-radius: 50%; }
+.species-portrait svg { width: 18px; height: 18px; }
+
+.levelup-banner { position: absolute; top: 28%; left: 50%; transform: translateX(-50%); z-index: 7; text-align: center; padding: 14px 34px 16px; border: 1px solid var(--primary); border-radius: 8px; background: color-mix(in oklch,var(--world-dark) 90%,transparent); color: var(--world-ink); box-shadow: 0 0 36px color-mix(in oklch,var(--primary) 45%,transparent); pointer-events: none; animation: levelup-pop linear both; }
+.levelup-banner small { display: block; font-size: 9px; letter-spacing: 3px; color: var(--primary); }
+.levelup-banner h2 { margin: 4px 0 8px; font-family: var(--font-display); font-size: 34px; font-weight: 500; color: var(--primary); text-shadow: 0 0 18px var(--primary); }
+.levelup-banner p { display: flex; gap: 14px; justify-content: center; font-size: 11px; }
+.levelup-banner p span { color: var(--health); }
+@keyframes levelup-pop { 0% { opacity: 0; transform: translateX(-50%) scale(.7); } 8% { opacity: 1; transform: translateX(-50%) scale(1.08); } 14% { transform: translateX(-50%) scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(1); } }
+
+.xp-bar[data-levelup=true] progress { animation: xp-flash .5s ease-out 4; }
+.xp-bar[data-levelup=true] span em { animation: xp-flash-text .5s ease-out 4; }
+@keyframes xp-flash { 0%,100% { filter: none; transform: scaleY(1); } 40% { filter: brightness(2.2) saturate(1.4); transform: scaleY(2.2); } }
+@keyframes xp-flash-text { 40% { text-shadow: 0 0 10px var(--primary); } }
+.wm-key-target { border: 1.5px solid var(--primary); border-radius: 50%; }

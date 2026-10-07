@@ -99,4 +99,50 @@ export const RECIPES: Record<string, Recipe> = {
     station: 'none',
     craftTime: 4,
   },
+
+  // Receitas de caça: consomem os materiais que a fauna e os saqueadores largam.
+  sinew_traps: {
+    id: 'sinew_traps',
+    result: { itemId: 'trap', quantity: 4 },
+    materials: [
+      { itemId: 'sinew', quantity: 2 },
+      { itemId: 'wood', quantity: 4 },
+    ],
+    station: 'none',
+    craftTime: 2,
+  },
+  hunter_bow: {
+    id: 'hunter_bow',
+    result: { itemId: 'hunter_bow', quantity: 1 },
+    materials: [
+      { itemId: 'bone', quantity: 3 },
+      { itemId: 'sinew', quantity: 4 },
+      { itemId: 'wood', quantity: 6 },
+    ],
+    station: 'none',
+    craftTime: 4,
+  },
+  bone_armor: {
+    id: 'bone_armor',
+    result: { itemId: 'bone_armor', quantity: 1 },
+    materials: [
+      { itemId: 'bone', quantity: 6 },
+      { itemId: 'sinew', quantity: 4 },
+      { itemId: 'bear_pelt', quantity: 1 },
+    ],
+    station: 'forge',
+    craftTime: 6,
+  },
+  // Fecha o laço da caça: os bichos selvagens dropam carne crua, que sem isto
+  // não serviria para nada — e o jogador teria saído perdendo cura ao caçar.
+  cooked_meat: {
+    id: 'cooked_meat',
+    result: { itemId: 'cooked_meat', quantity: 2 },
+    materials: [
+      { itemId: 'raw_meat', quantity: 2 },
+      { itemId: 'wood', quantity: 1 },
+    ],
+    station: 'none',
+    craftTime: 2,
+  },
 };

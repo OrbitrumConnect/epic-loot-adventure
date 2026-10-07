@@ -33,3 +33,4 @@ dist-ssr
 
 # Sprite sheets brutas geradas por IA (regeneráveis via art/city/generate.py)
 art/city/sheets/
+art/items/sheets/

@@ -22,6 +22,7 @@ import { ITEMS } from '@/game/data/items';
 import { useGameStore } from '@/game/state/game-store';
 import type { HarvestNodeKind, HarvestNodeState } from '@/game/types';
 import { addObjective } from './objective-bridge';
+import { makeInstanceFadeMaterial, registerInstancedFade, type FadeSphere } from './occlusion';
 import {
   labelTexture, markPointerConsumed, mixColor, rand, terrainHeight, type Palette,
 } from './world-kit';
@@ -100,6 +101,8 @@ type KindAssets = {
   /** Altura do rótulo flutuante. */
   labelY: number;
   castShadow: boolean;
+  /** Esferas (espaço local da instância) que podem esconder o jogador. */
+  fade: FadeSphere[];
 };
 
 function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>; deadMat: THREE.Material } {
@@ -114,6 +117,9 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
       flatShading: true,
       ...(emissive ? { emissive: new THREE.Color(emissive), emissiveIntensity: intensity } : {}),
     });
+
+  // Só o material VIVO apaga por instância (o esgotado fica baixo, no chão).
+  const fadeMat = <T extends THREE.Material>(m: T): T => makeInstanceFadeMaterial(m);
 
   // Rubble compartilhado de rochas esgotadas (3 pedrinhas baixas e escuras).
   const rubbleParts = (): Part[] => [
@@ -138,9 +144,10 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
       { g: box(0.3, 0.08, 0.14), color: c.trunk, pos: [0.55, 0.05, 0.1], rot: [0, 0.6, 0] },
       { g: box(0.22, 0.07, 0.1), color: c.trunk, pos: [-0.5, 0.04, -0.2], rot: [0, -0.4, 0] },
     ]),
-    liveMat: mat(),
+    liveMat: fadeMat(mat()),
     labelY: 4.9,
     castShadow: true,
+    fade: [[0, 3.7, 0, 1.5], [0, 1.4, 0, 0.5]],
   };
 
   const pebble: KindAssets = {
@@ -151,9 +158,10 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
       { g: dodeca(0.1), color: c['rock-light'], pos: [0.05, 0.05, -0.28] },
     ]),
     dead: bake([{ g: new THREE.CircleGeometry(0.28, 7), color: c['ground-light'], pos: [0, 0.02, 0], rot: [-Math.PI / 2, 0, 0] }]),
-    liveMat: mat(),
+    liveMat: fadeMat(mat()),
     labelY: 0.9,
     castShadow: false,
+    fade: [[0, 0.1, 0, 0.4]],
   };
 
   const rock: KindAssets = {
@@ -163,9 +171,10 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
       { g: dodeca(0.4), color: rockDark, pos: [-0.65, 0.25, -0.3] },
     ]),
     dead: bake(rubbleParts()),
-    liveMat: mat(),
+    liveMat: fadeMat(mat()),
     labelY: 2.1,
     castShadow: true,
+    fade: [[0, 0.6, 0, 1.1]],
   };
 
   const iron: KindAssets = {
@@ -179,9 +188,10 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
       { g: box(0.14, 0.22, 0.14), color: '#7a8591', pos: [0.75, 0.45, -0.1], rot: [0.1, 0.8, 0.3] },
     ]),
     dead: bake([...rubbleParts(), { g: box(0.1, 0.07, 0.1), color: '#3a424c', pos: [0.05, 0.19, 0.02], rot: [0.3, 0.5, 0.1] }]),
-    liveMat: mat(),
+    liveMat: fadeMat(mat()),
     labelY: 2.1,
     castShadow: true,
+    fade: [[0, 0.6, 0, 1.0]],
   };
 
   const goldFleck = mixColor(c.gold, '#fff2b0', 0.3);
@@ -199,9 +209,10 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
     ]),
     dead: bake([...rubbleParts(), { g: dodeca(0.08), color: c.gold, pos: [0.05, 0.19, 0.02], rot: [0.3, 0.5, 0.1] }]),
     // Brilho leve: o ouro "cintila" sem estourar a rocha ao redor.
-    liveMat: mat(c.gold, 0.18),
+    liveMat: fadeMat(mat(c.gold, 0.18)),
     labelY: 2.1,
     castShadow: true,
+    fade: [[0, 0.6, 0, 1.0]],
   };
 
   const crystal: KindAssets = {
@@ -216,9 +227,10 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
       { g: cone(0.1, 0.22, 5), color: mixColor(c.crystal, c.dark, 0.5), pos: [0.15, 0.3, 0.05], rot: [0, 0, 0.4] },
       { g: cone(0.08, 0.16, 5), color: mixColor(c.crystal, c.dark, 0.5), pos: [-0.2, 0.26, -0.1], rot: [0.3, 0, -0.3] },
     ]),
-    liveMat: mat(c.crystal, 0.22),
+    liveMat: fadeMat(mat(c.crystal, 0.22)),
     labelY: 2.4,
     castShadow: true,
+    fade: [[0, 0.8, 0, 1.0]],
   };
 
   return {
@@ -290,6 +302,13 @@ function KindInstances({
     live.boundingSphere = null;
     dead.boundingSphere = null;
   }, [mine, cap, kind]);
+
+  // Fade por instância do lote vivo: recria o atributo se o mesh foi remontado.
+  useLayoutEffect(() => {
+    const live = liveRef.current;
+    if (!live) return;
+    return registerInstancedFade(live, assets.fade);
+  }, [cap, assets]);
 
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
     if (e.button !== 0 || e.instanceId === undefined) return;

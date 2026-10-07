@@ -1,0 +1,69 @@
+{
+  "style": "Style: stylized low-poly 3D game item render, soft rounded shapes, strong readable silhouette, hand-painted textures, warm earthy tribal palette with rust-red accents, lit from the top-left with a soft rim light, shown at a slight three-quarter angle, filling most of its quadrant.",
+  "background": "Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background, no text, no numbers, no labels, no borders, no grid lines, no hands, no people.",
+  "sheets": [
+    {
+      "id": "tools",
+      "items": [
+        { "id": "axe", "prompt": "a simple tribal hatchet: a chipped grey stone head lashed with leather cord to a short wooden handle" },
+        { "id": "pickaxe", "prompt": "a crude tribal pickaxe: a pointed stone head bound with cord to a wooden handle" },
+        { "id": "iron_axe", "prompt": "a heavy iron war-axe: a broad dark iron blade with a bronze band, on a leather-wrapped haft" },
+        { "id": "iron_pickaxe", "prompt": "a sturdy iron pickaxe: a double-pointed dark iron head with bronze fittings, on a leather-wrapped haft" }
+      ]
+    },
+    {
+      "id": "weapons",
+      "items": [
+        { "id": "iron_sword", "prompt": "an iron short sword: a straight polished blade, bronze crossguard, leather-wrapped grip and a round pommel" },
+        { "id": "leather_armor", "prompt": "a leather chest armour: a sleeveless hide cuirass with stitched seams, bone toggles and a fur collar" },
+        { "id": "trap", "prompt": "a hunting snare trap: a ring of wooden jaws with bone teeth and a coiled cord, set open on the ground" },
+        { "id": "torch", "prompt": "a lit torch: a wooden stick wrapped in oiled cloth with a small warm flame at the top" }
+      ]
+    },
+    {
+      "id": "consumables",
+      "items": [
+        { "id": "health_potion", "prompt": "a health potion: a small round glass flask of glowing crimson liquid, with a cork stopper and a leather cord around the neck" },
+        { "id": "cooked_meat", "prompt": "a piece of cooked meat on the bone, browned and glistening, with a sprig of herb" },
+        { "id": "ancestral_strike", "prompt": "an ancestral skill rune: a flat carved bone talisman with a glowing blue engraved rune, hung on a leather thong" },
+        { "id": "arcane_essence", "prompt": "an arcane essence: a floating faceted blue crystal shard giving off a soft inner glow and tiny motes" }
+      ]
+    },
+    {
+      "id": "resources",
+      "items": [
+        { "id": "wood", "prompt": "a small bundle of cut wooden logs tied with cord, pale cut ends facing the viewer" },
+        { "id": "stone", "prompt": "a small pile of rough grey stones" },
+        { "id": "iron_ore", "prompt": "a chunk of raw iron ore: dark grey rock with dull metallic veins" },
+        { "id": "gold_ore", "prompt": "a chunk of raw gold ore: grey rock shot through with bright glinting gold veins" }
+      ]
+    },
+    {
+      "id": "spoils",
+      "items": [
+        { "id": "wolf_fang", "prompt": "a single curved ivory wolf fang, bound at the root with a leather cord" },
+        { "id": "wolf_pelt", "prompt": "a rolled grey wolf pelt tied with cord, fur texture visible" },
+        { "id": "boar_tusk", "prompt": "a pair of curved yellowed boar tusks crossed and tied together" },
+        { "id": "deer_hide", "prompt": "a folded tan deer hide with soft white-spotted fur, tied with cord" }
+      ]
+    },
+    {
+      "id": "spoils2",
+      "items": [
+        { "id": "bear_pelt", "prompt": "a thick dark brown bear pelt, rolled and tied, heavy shaggy fur" },
+        { "id": "bone", "prompt": "a clean pale bone, slightly curved, with a weathered surface" },
+        { "id": "sinew", "prompt": "a coil of dried animal sinew cord, pale and fibrous, wound into a loop" },
+        { "id": "raw_meat", "prompt": "a cut of raw red meat with marbled fat, fresh and glistening" }
+      ]
+    },
+    {
+      "id": "spoils3",
+      "items": [
+        { "id": "antler", "prompt": "a branched deer antler, pale bone colour, three tines" },
+        { "id": "bear_claw", "prompt": "three large dark curved bear claws tied together with a leather thong" },
+        { "id": "rabbit_foot", "prompt": "a small lucky rabbit's foot charm with soft white fur, on a thin cord" },
+        { "id": "raider_token", "prompt": "a raider war token: a crude bronze medallion stamped with a jagged tribal mark, on a red cord" }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   PlayerState, CreatureState, ResourceNode, DeathBag, UIState, BaseState, BaseResult, BuildingId,
   CampState, ObjectiveQueueState, ObjectiveKind, AutoMode, AutoSnapshot, Position, HarvestNodeState,
+  FeedbackEvent,
 } from '../types';
 import { ITEMS } from '../data/items';
 import { CREATURES } from '../data/creatures';
@@ -9,7 +10,7 @@ import { CAMPS, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
-import { resolveAttack, getDistance } from '../systems/combatSystem';
+import { resolveAttack, getDistance, isCriticalDamage } from '../systems/combatSystem';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
 import { canCraft, craft } from '../systems/craftSystem';
 import {
@@ -29,6 +30,11 @@ import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/pr
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
+import {
+  damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
+  pushEvents, xpEvent,
+} from '../systems/feedbackSystem';
+import type { FeedbackDraft } from '../systems/feedbackSystem';
 
 /** Para onde o piloto automático recua e para onde aponta um `travel` sem alvo. */
 export const HOME_POSITION: Position = { x: 0, z: 0 };
@@ -49,6 +55,8 @@ type GameState = {
   harvestNodes: HarvestNodeState[];
   /** Bebe poção sozinho com vida baixa (piloto e luta manual). */
   autoPotion: boolean;
+  /** Eventos efêmeros (dano, XP, loot) para o mundo 3D e o HUD. Somem pelo `ttl`. */
+  feedback: FeedbackEvent[];
 };
 
 type GameActions = {
@@ -91,6 +99,9 @@ type GameActions = {
   addHuntArea: (x: number, z: number) => void;
   drinkPotion: () => void;
   tickWorld: () => void;
+  /** O mundo 3D chama quando uma criatura acerta o jogador (ou outro dano que só ele vê). */
+  reportDamage: (targetId: string, amount: number, position: Position, onPlayer: boolean) => void;
+  pruneFeedback: () => void;
   buildAutoSnapshot: () => AutoSnapshot;
 };
 
@@ -206,6 +217,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   targetId: null,
   harvestNodes: createHarvestNodes(),
   autoPotion: true,
+  feedback: [],
   ui: {
     mode: 'world',
     panel: null,
@@ -251,11 +263,20 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let updatedPlayer = { ...state.player, lastAttackAt: now };
     let updatedBags = state.deathBags;
     let msg = result.message;
+    const stamp = Date.now();
+    const drafts: FeedbackDraft[] = [
+      damageEvent(creature.id, result.damage, creature.position, {
+        critical: isCriticalDamage(totalPower, creature.armor, result.damage),
+      }),
+    ];
 
     if (result.targetDied) {
       const def = CREATURES[creature.speciesId];
       if (def) {
         const loot = rollCreatureLoot(def);
+        for (const drop of loot) {
+          if (drop.itemId) drafts.push(lootEvent(drop.itemId, drop.quantity, creature.position));
+        }
         if (loot.length > 0) {
           const bag = createDeathBag(creature.id, creature.name, creature.position, loot);
           updatedBags = [...state.deathBags, bag];
@@ -267,6 +288,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const granted = grantXp(updatedPlayer, xpGain);
       updatedPlayer = granted.player;
       msg = granted.message ?? `${msg} +${xpGain} XP.`;
+      drafts.push(deathEvent(creature.id, creature.name, creature.position));
+      drafts.push(xpEvent(xpGain, state.player.position));
+      if (granted.result.levelsGained > 0) {
+        drafts.push(levelUpEvent(granted.result.newLevel, state.player.position));
+      }
     }
 
     const creatureRetaliates = !result.targetDied;
@@ -277,6 +303,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         hp: Math.max(0, updatedPlayer.hp - dmgToPlayer),
       };
       msg += ` Você recebeu ${dmgToPlayer} de dano.`;
+      drafts.push(damageEvent(updatedPlayer.id, dmgToPlayer, state.player.position, { onPlayer: true }));
 
       if (updatedPlayer.hp <= 0) {
         const droppable = getDroppableItems(updatedPlayer.inventory)
@@ -302,6 +329,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       creatures: updatedCreatures,
       deathBags: updatedBags,
       attackTick: state.attackTick + 1,
+      feedback: pushEvents(state.feedback, drafts, stamp),
       ui: { ...state.ui, message: msg },
     });
   },
@@ -383,6 +411,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const newHp = Math.min(state.player.maxHp, state.player.hp + item.healAmount);
       set({
         player: { ...state.player, hp: newHp, inventory: newInv },
+        feedback: newHp > state.player.hp
+          ? pushEvent(state.feedback, healEvent(state.player.id, newHp - state.player.hp, state.player.position), Date.now())
+          : state.feedback,
         ui: { ...state.ui, selectedHotbar: index, message: `${item.name} utilizada. +${item.healAmount} de vida.` },
       });
       return;
@@ -614,8 +645,24 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
     set({
       player: { ...state.player, hp: result.hp, inventory: result.inventory },
+      feedback: result.healed > 0
+        ? pushEvent(state.feedback, healEvent(state.player.id, result.healed, state.player.position), Date.now())
+        : state.feedback,
       ui: { ...state.ui, message: result.message },
     });
+  },
+
+  reportDamage: (targetId, amount, position, onPlayer) => {
+    if (amount <= 0) return;
+    set(s => ({
+      feedback: pushEvent(s.feedback, damageEvent(targetId, Math.round(amount), position, { onPlayer }), Date.now()),
+    }));
+  },
+
+  pruneFeedback: () => {
+    const state = get();
+    const pruned = pruneEvents(state.feedback, Date.now());
+    if (pruned !== state.feedback) set({ feedback: pruned });
   },
 
   addHuntArea: (x, z) => {
@@ -661,8 +708,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const harvestNodes = [...state.harvestNodes];
     harvestNodes[index] = result.node;
     const granted = grantXp({ ...state.player, inventory: result.inventory }, result.xp);
+    const stamp = Date.now();
+    const drafts: FeedbackDraft[] = [];
+    if (result.harvested > 0) {
+      drafts.push(harvestEvent(def.resourceId, result.harvested, node.position));
+    }
+    if (result.xp > 0) drafts.push(xpEvent(result.xp, state.player.position));
+    if (granted.result.levelsGained > 0) {
+      drafts.push(levelUpEvent(granted.result.newLevel, state.player.position));
+    }
     set({
       player: granted.player,
+      feedback: pushEvents(state.feedback, drafts, stamp),
       harvestNodes,
       ui: { ...state.ui, message: granted.message ?? `${result.message} +${result.xp} XP.` },
     });
@@ -728,7 +785,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     const harvestNodes = tickHarvestNodes(state.harvestNodes, now);
 
+    const feedback = pruneEvents(state.feedback, now);
+
     const nothingChanged = player === state.player
+      && feedback === state.feedback
       && harvestNodes === state.harvestNodes
       && ticked.camps === state.camps
       && ticked.creatures === state.creatures
@@ -736,16 +796,21 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       && messages.length === 0;
     if (nothingChanged) return;
 
-    set({
+    // `set` funcional de propósito: entre o `get()` do topo e esta escrita, um
+    // ataque ou um golpe de criatura pode ter empilhado eventos de feedback.
+    // Escrever o array derivado do snapshot antigo apagaria esses eventos — era
+    // por isso que os cards de loot e de XP piscavam e sumiam.
+    set(current => ({
       player,
       camps: ticked.camps,
       creatures: ticked.creatures,
       harvestNodes,
+      feedback: pruneEvents(current.feedback, now),
       objectives: objectiveResult.queue,
       ui: messages.length > 0
-        ? { ...state.ui, message: messages[messages.length - 1]! }
-        : state.ui,
-    });
+        ? { ...current.ui, message: messages[messages.length - 1]! }
+        : current.ui,
+    }));
   },
 
   buildAutoSnapshot: () => {

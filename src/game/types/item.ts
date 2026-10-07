@@ -23,4 +23,10 @@ export type Item = {
   armor?: number;
   healAmount?: number;
   icon: string;
+  /**
+   * Convenção: o sprite de todo item fica em `/assets/items/<id>.webp` (ver
+   * `itemSpriteUrl`). Este campo só existe para sobrescrever o caminho; o `icon`
+   * (nome de ícone do lucide) continua sendo o fallback.
+   */
+  sprite?: string;
 };

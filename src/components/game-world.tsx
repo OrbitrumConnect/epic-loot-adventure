@@ -7,6 +7,13 @@ import { CAMPS, CAMP_PLACEMENTS } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
 import { HarvestNodes } from './world/harvest-nodes';
 import { queueNearestNode } from './world/objective-bridge';
+import { CombatFeedback } from './world/combat-feedback';
+import { HeldItem } from './world/held-weapon';
+import { OcclusionFader } from './world/occlusion-fader';
+import {
+  makeInstanceFadeMaterial, registerInstancedFade, useFadeGroup, type FadeSphere,
+} from './world/occlusion';
+import { TargetRoute } from './world/target-route';
 import { Camps, Enemies } from './world/world-entities';
 import {
   MAP_HALF, markPointerConsumed, palette, rand, terrainHeight, wasPointerConsumed,
@@ -23,10 +30,14 @@ export type WorldProps = {
   cameraMode?: 'iso' | 'third';
 };
 
+const TREE_SPHERES: FadeSphere[] = [[0, 2.7, 0, 1.5], [0, 1.2, 0, 0.5]];
+
 function Tree({ x, z, size = 1, seed, c }: { x: number; z: number; size?: number; seed: number; c: Palette }) {
   const y = terrainHeight(x, z);
+  const ref = useRef<THREE.Group>(null);
+  useFadeGroup(ref, TREE_SPHERES);
   return (
-    <group position={[x, y, z]} scale={size}>
+    <group ref={ref} position={[x, y, z]} scale={size}>
       <mesh position={[0, 1.3, 0]} castShadow>
         <cylinderGeometry args={[0.12, 0.2, 2.6, 6]} />
         <meshStandardMaterial color={c.trunk} />
@@ -75,10 +86,16 @@ function Tree({ x, z, size = 1, seed, c }: { x: number; z: number; size?: number
   );
 }
 
-function Rock({ x, z, size = 1, c }: { x: number; z: number; size?: number; c: Palette }) {
+const ROCK_SPHERES: FadeSphere[] = [[0, 0, 0, 0.8]];
+
+/** `fade={false}`: o pai (ruína, cristal) registra o grupo inteiro. */
+function Rock({ x, z, size = 1, c, fade = true }: { x: number; z: number; size?: number; c: Palette; fade?: boolean }) {
   const y = terrainHeight(x, z);
+  const ref = useRef<THREE.Mesh>(null);
+  useFadeGroup(ref, fade ? ROCK_SPHERES : null);
   return (
     <mesh
+      ref={ref}
       position={[x, y + 0.35 * size, z]}
       scale={[size, 0.7 * size, 0.85 * size]}
       rotation={[0.15, x * 0.5, 0.1]}
@@ -91,10 +108,18 @@ function Rock({ x, z, size = 1, c }: { x: number; z: number; size?: number; c: P
   );
 }
 
+const RUIN_SPHERES: FadeSphere[] = [
+  [-3, 2, -2, 1.3], [-3, 4.3, -2, 1.3], [3, 2, -2, 1.3], [3, 4.3, -2, 1.3],
+  [-2, 1.4, -2.1, 1.5], [0, 1.4, -2.1, 1.5], [2, 1.4, -2.1, 1.5],
+  [-3, 1.3, 1, 1.4], [3, 1.3, 1, 1.4],
+];
+
 function Ruins({ c }: { c: Palette }) {
   const y = terrainHeight(7, -8);
+  const ref = useRef<THREE.Group>(null);
+  useFadeGroup(ref, RUIN_SPHERES);
   return (
-    <group position={[7, y, -8]} rotation={[0, -0.2, 0]}>
+    <group ref={ref} position={[7, y, -8]} rotation={[0, -0.2, 0]}>
       <mesh position={[0, 0.1, 0]} receiveShadow>
         <boxGeometry args={[7, 0.3, 5]} />
         <meshStandardMaterial color={c['rock-light']} />
@@ -133,10 +158,23 @@ function Ruins({ c }: { c: Palette }) {
         <boxGeometry args={[0.07, 1.6, 1]} />
         <meshStandardMaterial color={c.cloak} side={THREE.DoubleSide} />
       </mesh>
-      <Rock x={-3.5} z={3} size={0.9} c={c} />
-      <Rock x={2} z={3.5} size={0.6} c={c} />
+      <Rock x={-3.5} z={3} size={0.9} c={c} fade={false} />
+      <Rock x={2} z={3.5} size={0.6} c={c} fade={false} />
     </group>
   );
+}
+
+const CRYSTAL_SPHERES: FadeSphere[] = [[0, 0.5, 0, 1.1]];
+const CHEST_SPHERES: FadeSphere[] = [[0, 0, 0, 0.5]];
+const TOWER_SPHERES: FadeSphere[] = [[0, 1, 0, 0.8], [0, 2.3, 0, 0.6]];
+
+/** Grupo que apaga quando esconde o jogador (props de grupo repassadas). */
+function FadeGroup({
+  spheres, children, ...rest
+}: { spheres: FadeSphere[]; children: React.ReactNode } & React.ComponentProps<'group'>) {
+  const ref = useRef<THREE.Group>(null);
+  useFadeGroup(ref, spheres);
+  return <group ref={ref} {...rest}>{children}</group>;
 }
 
 function Campfire({ c, position: pos }: { c: Palette; position: [number, number, number] }) {
@@ -441,16 +479,9 @@ function Character({
         <meshStandardMaterial color={c.trunk} />
       </mesh>
 
-      {/* Right arm + Sword */}
+      {/* Mão direita: o balanço gira este grupo; o modelo dentro segue a hotbar */}
       <group ref={sword} position={[0.45, 1, 0.15]}>
-        <mesh position={[0, 0, 0.55]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-          <boxGeometry args={[0.08, 1.1, 0.07]} />
-          <meshStandardMaterial color={c.metal} />
-        </mesh>
-        <mesh position={[0, 0, 0.08]}>
-          <boxGeometry args={[0.34, 0.07, 0.07]} />
-          <meshStandardMaterial color={c.gold} />
-        </mesh>
+        <HeldItem c={c} />
       </group>
     </group>
   );
@@ -483,7 +514,10 @@ function GrassPatches({ c, count }: { c: Palette; count: number }) {
 function RockInstances({ c }: { c: Palette }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const geo = useMemo(() => new THREE.DodecahedronGeometry(0.8, 0), []);
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: c.rock, flatShading: true }), [c.rock]);
+  const mat = useMemo(
+    () => makeInstanceFadeMaterial(new THREE.MeshStandardMaterial({ color: c.rock, flatShading: true })),
+    [c.rock],
+  );
 
   useEffect(() => {
     if (!ref.current) return;
@@ -501,6 +535,7 @@ function RockInstances({ c }: { c: Palette }) {
       ref.current.setMatrixAt(i, dummy.matrix);
     }
     ref.current.instanceMatrix.needsUpdate = true;
+    return registerInstancedFade(ref.current, [[0, 0, 0, 0.8]]);
   }, []);
 
   return <instancedMesh ref={ref} args={[geo, mat, 100]} castShadow receiveShadow />;
@@ -782,18 +817,18 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       <Campfire c={c} position={[-15, 0, -12]} />
 
       {/* Crystal resource */}
-      <group position={[-3, terrainHeight(-3, -2), -2]} onPointerDown={e => resourceClick(e, -3, -2)}>
-        <Rock x={0} z={0} size={1.25} c={c} />
+      <FadeGroup spheres={CRYSTAL_SPHERES} position={[-3, terrainHeight(-3, -2), -2]} onPointerDown={e => resourceClick(e, -3, -2)}>
+        <Rock x={0} z={0} size={1.25} c={c} fade={false} />
         {[-0.4, 0, 0.4].map((x, i) => (
           <mesh key={x} position={[x, 0.9 + i * 0.1, 0.1]} rotation={[0, 0, x]} castShadow>
             <coneGeometry args={[0.18, 0.9, 5]} />
             <meshStandardMaterial color={c.crystal} emissive={c.crystal} emissiveIntensity={0.25} />
           </mesh>
         ))}
-      </group>
+      </FadeGroup>
 
       {/* Chest */}
-      <group position={[2, terrainHeight(2, 3) + 0.2, 3]} onPointerDown={e => resourceClick(e, 2, 3)}>
+      <FadeGroup spheres={CHEST_SPHERES} position={[2, terrainHeight(2, 3) + 0.2, 3]} onPointerDown={e => resourceClick(e, 2, 3)}>
         <mesh castShadow>
           <boxGeometry args={[0.65, 0.4, 0.42]} />
           <meshStandardMaterial color={c.trunk} />
@@ -802,10 +837,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
           <boxGeometry args={[0.09, 0.18, 0.025]} />
           <meshStandardMaterial color={c.gold} />
         </mesh>
-      </group>
+      </FadeGroup>
 
       {/* Crystal tower */}
-      <group position={[4, terrainHeight(4, 5), 5]}>
+      <FadeGroup spheres={TOWER_SPHERES} position={[4, terrainHeight(4, 5), 5]}>
         <mesh position={[0, 1, 0]}>
           <cylinderGeometry args={[0.3, 0.5, 2, 6]} />
           <meshStandardMaterial color={c.rock} />
@@ -814,12 +849,16 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
           <octahedronGeometry args={[0.4, 0]} />
           <meshStandardMaterial color={c.crystal} emissive={c.crystal} emissiveIntensity={0.4} />
         </mesh>
-      </group>
+      </FadeGroup>
 
       {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
       <HarvestNodes c={c} />
       <Camps c={c} />
       <Enemies c={c} playerRef={playerRef} />
+
+      <TargetRoute playerRef={playerRef} />
+      <CombatFeedback />
+      <OcclusionFader playerRef={playerRef} paused={props.paused} />
 
       <AutoPilot playerRef={playerRef} movement={target} paused={props.paused} />
 

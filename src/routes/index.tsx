@@ -12,6 +12,9 @@ import { useGameStore } from '@/game/state/game-store';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
 import { ToolCrafting } from '@/components/hud/tool-crafting';
+import { ItemSprite, ICON_MAP } from '@/components/hud/item-sprite';
+import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
+import { HuntBanner } from '@/components/hud/hunt-banner';
 import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
@@ -39,11 +42,6 @@ export const Route = createFileRoute('/')({
   }),
   component: Index,
 });
-
-const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
-  Swords, Axe, Pickaxe, FlaskConical, Crosshair, Utensils, Flame, Sparkles,
-  TreePine, Mountain, Gem, Shield, Skull, Package,
-};
 
 const OBJECTIVE_ICON: Record<ObjectiveKind, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   clear_camp: Tent,
@@ -335,9 +333,9 @@ function Index() {
             <div className="quest">
               <div className="quest-caption"><Target />SUA EXPEDIÇÃO</div>
               <h2>O primeiro passo</h2>
-              <div className="quest-step">{woodCount >= 10 ? <Check /> : <Circle />}Coletar madeira <strong>{Math.min(woodCount, 10)}/10</strong></div>
-              <div className="quest-step">{essenceCount >= 2 ? <Check /> : <Circle />}Essências Arcanas <strong>{Math.min(essenceCount, 2)}/2</strong></div>
-              <div className="quest-step">{hasCraftedSword ? <Check /> : <Circle />}Forjar equipamento <strong>{hasCraftedSword ? 1 : 0}/1</strong></div>
+              <div className="quest-step">{woodCount >= 10 ? <Check /> : <Circle />}<ItemSprite itemId="wood" size={16} />Coletar madeira <strong>{Math.min(woodCount, 10)}/10</strong></div>
+              <div className="quest-step">{essenceCount >= 2 ? <Check /> : <Circle />}<ItemSprite itemId="arcane_essence" size={16} />Essências Arcanas <strong>{Math.min(essenceCount, 2)}/2</strong></div>
+              <div className="quest-step">{hasCraftedSword ? <Check /> : <Circle />}<ItemSprite itemId="iron_sword" size={16} />Forjar equipamento <strong>{hasCraftedSword ? 1 : 0}/1</strong></div>
             </div>
           </div>
 
@@ -361,6 +359,10 @@ function Index() {
               {idleMode ? 'Assumir' : 'Piloto'}
             </Button>
           </div>
+
+          <HuntBanner />
+          <LevelUpBanner />
+          <RewardFeed />
 
           <div className="world-bottom">
             <div className="world-message">
@@ -398,11 +400,12 @@ function Index() {
                         );
                         const item = ITEMS[slot.itemId];
                         if (!item) return null;
-                        const Icon = ICON_MAP[item.icon] ?? Package;
                         return (
                           <div className="inventory-item" key={i} draggable
+                            title={`${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
+                            aria-label={`${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
                             onDragStart={e => e.dataTransfer.setData('text/plain', String(i))}>
-                            <Icon /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura' : item.category}</small>
+                            <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura' : item.category}</small>
                             <em>{slot.quantity > 1 ? slot.quantity : ''}</em>
                           </div>
                         );
@@ -505,11 +508,15 @@ function Index() {
                       <div className="home-building"><Shield /><div><strong>Defesas</strong><small>Muralha de madeira</small></div></div>
                     </div>
                     <div className="home-building">
-                      <Package /><div><strong>Armazém</strong><small>{woodCount} madeira · {stoneCount} pedra · {essenceCount} essências</small></div>
+                      <Package /><div><strong>Armazém</strong><small className="item-inline">
+                        <span title="Madeira"><ItemSprite itemId="wood" size={16} />{woodCount} madeira</span>
+                        <span title="Pedra"><ItemSprite itemId="stone" size={16} />{stoneCount} pedra</span>
+                        <span title="Essência Arcana"><ItemSprite itemId="arcane_essence" size={16} />{essenceCount} essências</span>
+                      </small></div>
                       <Button variant="outline" size="sm" onClick={rest}>Descansar</Button>
                     </div>
                     <div className="home-building">
-                      <Hammer /><div><strong>Forge</strong><small>Espada de ferro · 10 madeira + 8 pedra</small></div>
+                      <ItemSprite itemId="iron_sword" size={34} /><div><strong>Forge</strong><small>Espada de ferro · 10 madeira + 8 pedra</small></div>
                       <Button variant="outline" size="sm" disabled={!canCraft(player.inventory, 'iron_sword')} onClick={() => craftItem('iron_sword')}>Forjar</Button>
                     </div>
                     <ToolCrafting />
@@ -545,16 +552,15 @@ function Index() {
           <div className="loot-summary">
             <div className="footer-label"><Package />LOOT DA EXPEDIÇÃO</div>
             <div className="loot-resources">
-              <span title="Madeira"><TreePine />{woodCount}</span>
-              <span title="Pedra"><Mountain />{stoneCount}</span>
-              <span title="Essência Arcana"><Gem />{essenceCount}</span>
+              <span title="Madeira"><ItemSprite itemId="wood" size={22} />{woodCount}</span>
+              <span title="Pedra"><ItemSprite itemId="stone" size={22} />{stoneCount}</span>
+              <span title="Essência Arcana"><ItemSprite itemId="arcane_essence" size={22} />{essenceCount}</span>
             </div>
           </div>
           <div>
             <div className="hotbar-row">
             <div className="hotbar" aria-label="Hotbar de 8 slots">
                 {hotbarItems.map((item, i) => {
-                  const Icon = item ? (ICON_MAP[item.icon] ?? Package) : Package;
                   return (
                     <Button variant="ghost" key={i} className="hotbar-slot"
                       title={`${i + 1} · ${item?.name ?? 'Vazio'}`}
@@ -564,7 +570,7 @@ function Index() {
                       onDragOver={e => e.preventDefault()}
                       onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < 24) useHotbarSlot(n); }}>
                       <span className="slot-key">{i + 1}</span>
-                      <Icon strokeWidth={1.3} />
+                      {item ? <ItemSprite itemId={item.id} size={40} className="hotbar-sprite" /> : <Package strokeWidth={1.3} aria-hidden="true" />}
                       <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>
                     </Button>
                   );

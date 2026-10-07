@@ -19,3 +19,4 @@ export type {
 export type {
   ObjectiveKind, ObjectiveStatus, Objective, AutoMode, ObjectiveQueueState, AutoIntent, AutoSnapshot,
 } from './objective';
+export type { FeedbackKind, FeedbackEvent, HealthBarInfo } from './feedback';

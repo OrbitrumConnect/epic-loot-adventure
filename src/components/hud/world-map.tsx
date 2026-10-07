@@ -98,6 +98,23 @@ function readColors(el: HTMLElement): Colors {
   return out;
 }
 
+/** Para onde o personagem está indo caçar: alvo selecionado, ou objetivo ativo de caça/limpeza. */
+function resolveHuntTarget(st: ReturnType<typeof useGameStore.getState>): { x: number; z: number } | null {
+  const live = (id: string | null) => {
+    const c = id ? st.creatures.find(k => k.id === id) : undefined;
+    return c && isAlive(c) ? c.position : null;
+  };
+  const sel = live(st.targetId);
+  if (sel) return sel;
+  const obj = st.objectives.items.find(o => o.status === 'active');
+  if (obj?.kind === 'hunt_creature') return live(obj.targetId);
+  if (obj?.kind === 'clear_camp') {
+    const camp = (st.camps as CampState[]).find(k => k.id === obj.targetId);
+    if (camp && !camp.cleared) return camp.position;
+  }
+  return null;
+}
+
 export type WorldMapProps = { size: 'mini' | 'large' };
 
 export function WorldMap({ size }: WorldMapProps) {
@@ -287,6 +304,26 @@ export function WorldMap({ size }: WorldMapProps) {
       }
     }
 
+    // Rota até o alvo de caça: tracejado que anda + anel que pulsa. Mesmo laço de 5 Hz, sem timer novo.
+    const tgt = resolveHuntTarget(st);
+    if (tgt) {
+      const [tx, ty] = toView(f, tgt.x, tgt.z);
+      const [sx, sy] = toView(f, st.player.position.x, st.player.position.z);
+      ctx.save();
+      ctx.strokeStyle = C('--world-gold'); ctx.lineWidth = large ? 2 : 1.4;
+      ctx.setLineDash(large ? [7, 5] : [4, 3]);
+      ctx.lineDashOffset = -((now / 45) % 24);
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.setLineDash([]);
+      const pulse = (now % 1000) / 1000;
+      ctx.strokeStyle = C('--primary'); ctx.lineWidth = large ? 2 : 1.4;
+      ctx.beginPath(); ctx.arc(tx, ty, (large ? 7 : 4.5) + pulse * (large ? 8 : 5), 0, Math.PI * 2);
+      ctx.globalAlpha = 1 - pulse; ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(tx, ty, large ? 6 : 4, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+
     // Marca do último clique "caçar nesta região".
     const ping = pingRef.current;
     if (ping && now - ping.t < PING_MS) {
@@ -430,6 +467,7 @@ export function WorldMapLegend() {
       <span><i className="wm-key wm-key-hostile" />Hostil</span>
       <span><i className="wm-key wm-key-peace" />Pacífico</span>
       <span><i className="wm-key wm-key-node" />Recursos</span>
+      <span title="Rota tracejada e anel pulsante até o alvo de caça"><i className="wm-key wm-key-target" />Alvo de caça</span>
     </div>
   );
 }

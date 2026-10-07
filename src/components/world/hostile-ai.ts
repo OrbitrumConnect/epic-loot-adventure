@@ -13,11 +13,11 @@
  *    em vez de um `setState` por inimigo a cada 0.2s.
  */
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
-import { MAP_HALF, markPointerConsumed, terrainHeight } from './world-kit';
+import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight } from './world-kit';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 
 /**
@@ -37,6 +37,59 @@ export function useEnemyClick(creatureId: string, name: string) {
     useGameStore.getState().setMessage(`Alvo: ${name}.`);
   }, [creatureId, name]);
 }
+
+/* ------------------------------------------------------------------ *
+ * Âncoras vivas (lidas por marcador/rota de alvo, sem passar pela store)
+ * ------------------------------------------------------------------ */
+export type CreatureAnchor = { x: number; y: number; z: number; top: number; alive: boolean };
+/** Posição de mundo atual de cada criatura, atualizada a cada quadro. */
+export const creatureAnchors = new Map<string, CreatureAnchor>();
+
+let huntCacheArr: unknown = null;
+let huntCacheId: string | null = null;
+/** Criatura do objetivo `hunt_creature` ativo (o que o piloto está caçando). */
+export function activeHuntTargetId(): string | null {
+  const items = useGameStore.getState().objectives.items;
+  if (items !== huntCacheArr) {
+    huntCacheArr = items;
+    huntCacheId = null;
+    for (const o of items) {
+      if (o.status === 'active' && o.kind === 'hunt_creature' && o.targetId) { huntCacheId = o.targetId; break; }
+    }
+  }
+  return huntCacheId;
+}
+
+/** Alvo selecionado ou caçada ativa: o que o mundo destaca. */
+export function isHighlightedCreature(id: string): boolean {
+  return getTargetId() === id || activeHuntTargetId() === id;
+}
+
+/** Avisa a store (se ela já expõe `reportDamage`) para o eco visual do golpe. */
+export function reportDamageToStore(
+  targetId: string, amount: number, position: { x: number; z: number }, onPlayer: boolean,
+) {
+  const fn = (useGameStore.getState() as unknown as {
+    reportDamage?: (id: string, amount: number, pos: { x: number; z: number }, onPlayer: boolean) => void;
+  }).reportDamage;
+  if (typeof fn === 'function') fn(targetId, amount, position, onPlayer);
+}
+
+/** Escala do grupo do rótulo para a barra ter ~BAR_PIXELS de largura em tela. */
+export function labelScaleFor(camera: THREE.Camera, viewportHeight: number, dist: number, highlighted: boolean): number {
+  const ppu = pixelsPerUnit(camera, viewportHeight, dist);
+  return THREE.MathUtils.clamp(BAR_PIXELS / (0.94 * ppu), 0.8, 3.4) * (highlighted ? 1.15 : 1);
+}
+
+/** Barras de vida só dentro deste raio do jogador (ou ferido/alvo). */
+/**
+ * Alcance em metros para mostrar nome e barra de vida.
+ * Curto de propósito: com o valor antigo (38 m) meio mapa ficava coberto de
+ * barras. Ferido ou marcado como alvo continua aparecendo a qualquer distância.
+ */
+const LABEL_RANGE = 12;
+/** Largura-alvo da barra em pixels, para ser legível nas duas câmeras. */
+const BAR_PIXELS = 84;
 
 /* ------------------------------------------------------------------ *
  * Busca de criatura com cache por identidade do array
@@ -163,20 +216,31 @@ export function useHostileAI(opts: HostileOptions) {
   const chaseTimer = useRef(0);
   const fleeing = useRef(false);
   const swing = useRef(0);
+  const anchor = useRef<CreatureAnchor | null>(null);
+  const hlMesh = useRef<THREE.Object3D | null>(null);
+  const barTint = useRef<'none' | 'hostile' | 'peaceful'>('none');
   const anim = useRef<HostileAnim>({
     moving: false, walkCycle: 0, distToPlayer: Infinity, swing: 0, chasing: false,
   });
+
+  useEffect(() => () => { creatureAnchors.delete(creatureId); anchor.current = null; }, [creatureId]);
 
   useFrame((state, delta) => {
     const g = group.current;
     if (!g) return;
     const dt = Math.min(delta, 0.05);
 
+    if (!anchor.current) {
+      anchor.current = { x: 0, y: 0, z: 0, top: 1.5, alive: false };
+      creatureAnchors.set(creatureId, anchor.current);
+    }
+    const anc = anchor.current;
     const creature = creatureById(creatureId);
-    if (!creature) { g.visible = false; return; }
+    if (!creature) { g.visible = false; anc.alive = false; return; }
 
     if (creature.behavior === 'dead') {
       g.visible = false;
+      anc.alive = false;
       if (creature.respawnAt && Date.now() >= creature.respawnAt) {
         const home = homePos.current ?? creature.position;
         useGameStore.setState(s => ({
@@ -191,6 +255,7 @@ export function useHostileAI(opts: HostileOptions) {
       return;
     }
     g.visible = true;
+    anc.alive = true;
 
     if (!homePos.current) homePos.current = { ...creature.position };
 
@@ -256,6 +321,7 @@ export function useHostileAI(opts: HostileOptions) {
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
           const dmg = Math.max(1, creature.attackPower);
+          if (!useGameStore.getState().player.dead) reportDamageToStore("player", dmg, { x: px, z: pz }, true);
           useGameStore.setState(s => {
             if (s.player.dead) return {};
             const hp = Math.max(0, s.player.hp - dmg);
@@ -315,13 +381,22 @@ export function useHostileAI(opts: HostileOptions) {
 
     if (swing.current > 0) swing.current = Math.max(0, swing.current - dt);
 
-    // Rótulo + barra de vida: só aparecem quando ferido ou selecionado.
+    // Rótulo + barra de vida: toda criatura viva perto do jogador (ou ferida,
+    // ou destacada) mostra nome e barra; alvo/caçada ganha moldura dourada.
+    const highlighted = isHighlightedCreature(creatureId);
     const targeted = getTargetId() === creatureId;
     const hurt = creature.hp < creature.maxHp;
+    const showBar = distToPlayer < LABEL_RANGE || hurt || highlighted;
     const hpGroup = opts.hpGroup.current;
-    if (hpGroup) hpGroup.visible = hurt || targeted;
+    if (hpGroup) {
+      hpGroup.visible = showBar;
+      anc.top = hpGroup.position.y;
+    }
+    anc.x = g.position.x;
+    anc.y = g.position.y;
+    anc.z = g.position.z;
     const labelGroup = opts.label.current;
-    if (labelGroup && (hurt || targeted)) {
+    if (labelGroup && showBar) {
       // O grupo do inimigo gira em Y; o rótulo precisa ficar de frente para a
       // câmera em espaço de mundo, então desconta a rotação do pai.
       labelGroup.quaternion.copy(state.camera.quaternion);
@@ -329,18 +404,32 @@ export function useHostileAI(opts: HostileOptions) {
         labelGroup.parent.getWorldQuaternion(tmpQuat);
         labelGroup.quaternion.premultiply(tmpQuat.invert());
       }
+      // Tamanho constante em tela: a ortográfica (iso) e a perspectiva
+      // (terceira pessoa) mostram a barra com ~BAR_PIXELS de largura.
+      const dist = state.camera.position.distanceTo(g.position);
+      labelGroup.scale.setScalar(labelScaleFor(state.camera, state.size.height, dist, highlighted));
+      if (!hlMesh.current) hlMesh.current = labelGroup.getObjectByName('hl') ?? null;
+      if (hlMesh.current) hlMesh.current.visible = highlighted;
+      if (barTint.current === 'none') {
+        const fillMat = opts.hpFill.current?.material as THREE.MeshBasicMaterial | undefined;
+        if (fillMat) {
+          fillMat.color.set(tuning.peaceful ? '#7bb661' : '#c8412f');
+          barTint.current = tuning.peaceful ? 'peaceful' : 'hostile';
+        }
+      }
     }
     const fill = opts.hpFill.current;
-    if (fill && (hurt || targeted)) {
+    if (fill && showBar) {
       const ratio = Math.max(0, Math.min(1, creature.hp / Math.max(1, creature.maxHp)));
       fill.scale.x = Math.max(0.001, ratio);
       fill.position.x = -(1 - ratio) * 0.45;
     }
     const ring = opts.ring.current;
     if (ring) {
-      ring.visible = targeted;
-      if (targeted) ring.rotation.z = state.clock.elapsedTime * 0.8;
+      ring.visible = highlighted;
+      if (highlighted) ring.rotation.z = state.clock.elapsedTime * 0.8;
     }
+    void targeted;
 
     const a = anim.current;
     a.moving = moving;

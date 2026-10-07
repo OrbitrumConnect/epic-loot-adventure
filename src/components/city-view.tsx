@@ -22,11 +22,18 @@ import {
 } from '@/game/systems/baseSystem';
 import { getItemCount } from '@/game/systems/inventorySystem';
 
+import { ItemSprite } from '@/components/hud/item-sprite';
+
 type IconType = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
 const ICONS: Record<string, IconType> = {
   Axe, Castle, Compass, Crosshair, Flame, Gem, Hammer, Leaf, Mountain, Package, Pickaxe,
   Shield, Sparkles, Swords, Tent, TreePine, Utensils,
+};
+
+/** Item cujo sprite representa cada recurso da base. */
+const RESOURCE_ITEM: Record<BaseResourceId, string> = {
+  wood: 'wood', stone: 'stone', food: 'cooked_meat', essence: 'arcane_essence',
 };
 
 const RESOURCE_ICONS: Record<BaseResourceId, IconType> = {
@@ -130,10 +137,9 @@ function CostChips({ cost, resources }: { cost: BaseResources; resources: BaseRe
   return (
     <span className="city-cost">
       {ids.map(id => {
-        const Icon = RESOURCE_ICONS[id];
         return (
           <span key={id} title={BASE_RESOURCE_NAMES[id]} data-missing={resources[id] < cost[id]}>
-            <Icon />{formatAmount(cost[id])}
+            <ItemSprite itemId={RESOURCE_ITEM[id]} size={16} />{formatAmount(cost[id])}
           </span>
         );
       })}
@@ -366,7 +372,12 @@ function BuildingPanel({ base, building, now, onClose }: { base: BaseState; buil
         <section className="city-section">
           <h3>Depósito <span>Mapa → Base</span></h3>
           <p className="city-empty">
-            Na mochila: {carried.map(entry => `${entry.quantity} ${BASE_RESOURCE_NAMES[entry.resource].toLowerCase()}`).join(' · ')}
+            Na mochila:{' '}
+            {carried.map(entry => (
+              <span className="item-inline" key={entry.itemId} title={BASE_RESOURCE_NAMES[entry.resource]}>
+                <span><ItemSprite itemId={entry.itemId} size={16} />{entry.quantity} {BASE_RESOURCE_NAMES[entry.resource].toLowerCase()}</span>
+              </span>
+            ))}
           </p>
           <Button variant="outline" className="city-upgrade" disabled={carriedTotal === 0}
             title={carriedTotal === 0 ? 'Nada para depositar.' : 'Depositar recursos da mochila'} onClick={depositToBase}>
@@ -555,10 +566,9 @@ export default function CityView() {
 
       <div className="city-topbar">
         {BASE_RESOURCE_IDS.map(id => {
-          const Icon = RESOURCE_ICONS[id];
           return (
             <div className="city-resource" key={id} title={BASE_RESOURCE_NAMES[id]} data-full={base.resources[id] >= cap[id]}>
-              <Icon />
+              <ItemSprite itemId={RESOURCE_ITEM[id]} size={28} />
               <div>
                 <strong>{formatAmount(base.resources[id])}<small> / {formatAmount(cap[id])}</small></strong>
                 <span>{rates[id] > 0 ? `+${formatAmount(rates[id])}/min` : BASE_RESOURCE_NAMES[id]}</span>

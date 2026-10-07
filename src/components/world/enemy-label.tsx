@@ -26,6 +26,11 @@ export function EnemyLabel({
   return (
     <group ref={hpGroup} position={[0, height, 0]} visible={false}>
       <group ref={label}>
+        {/* Moldura de destaque (alvo selecionado ou caçada do piloto) */}
+        <mesh name="hl" visible={false} position={[0, 0, -0.003]} renderOrder={9} raycast={noRaycast}>
+          <planeGeometry args={[1.04, 0.2]} />
+          <meshBasicMaterial color={c.gold} transparent depthTest={false} depthWrite={false} />
+        </mesh>
         <mesh position={[0, 0.2, 0]} renderOrder={12} raycast={noRaycast}>
           <planeGeometry args={[0.2 * tex.aspect, 0.2]} />
           <meshBasicMaterial map={tex.texture} transparent depthTest={false} depthWrite={false} />
@@ -36,7 +41,7 @@ export function EnemyLabel({
         </mesh>
         <mesh ref={hpFill} position={[0, 0, 0.002]} renderOrder={11} raycast={noRaycast}>
           <planeGeometry args={[0.9, 0.1]} />
-          <meshBasicMaterial color="#c8412f" depthTest={false} depthWrite={false} />
+          <meshBasicMaterial color="#c8412f" transparent depthTest={false} depthWrite={false} />
         </mesh>
       </group>
     </group>

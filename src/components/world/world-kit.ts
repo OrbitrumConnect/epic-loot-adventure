@@ -124,3 +124,18 @@ export function labelTexture(text: string, color = '#ffe3b0') {
   labelCache.set(key, entry);
   return entry;
 }
+
+/* ------------------------------------------------------------------ *
+ * Tamanho em tela
+ * ------------------------------------------------------------------ */
+/**
+ * Pixels de tela por metro de mundo a `dist` da câmera. Ortográfica: o zoom
+ * (em pixels por unidade). Perspectiva: altura da viewport / altura visível.
+ * Usado para manter barras de vida e números legíveis nas duas câmeras.
+ */
+export function pixelsPerUnit(camera: THREE.Camera, viewportHeight: number, dist: number): number {
+  const ortho = camera as THREE.OrthographicCamera;
+  if (ortho.isOrthographicCamera) return ortho.zoom;
+  const fov = (camera as THREE.PerspectiveCamera).fov || 60;
+  return viewportHeight / (2 * Math.max(0.5, dist) * Math.tan(THREE.MathUtils.degToRad(fov) / 2));
+}

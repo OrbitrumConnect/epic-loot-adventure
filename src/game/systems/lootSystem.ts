@@ -34,10 +34,13 @@ export function harvestNode(node: ResourceNode, amount: number): { node: Resourc
   };
 }
 
-export function rollCreatureLoot(creature: CreatureDefinition): InventorySlot[] {
+export function rollCreatureLoot(
+  creature: Pick<CreatureDefinition, 'lootTable'>,
+  rng: () => number = Math.random,
+): InventorySlot[] {
   const loot: InventorySlot[] = [];
   for (const entry of creature.lootTable) {
-    if (Math.random() <= entry.chance) {
+    if (rng() <= entry.chance) {
       loot.push({ itemId: entry.itemId, quantity: entry.quantity });
     }
   }

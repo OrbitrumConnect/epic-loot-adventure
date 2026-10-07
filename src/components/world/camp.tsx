@@ -16,6 +16,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { CampState, CampStructure } from '@/game/types';
 import { addObjective, campDefinition } from './objective-bridge';
+import { useFadeGroup, type FadeSphere } from './occlusion';
 import { hashId, markPointerConsumed, mixColor, rand, terrainHeight, type Palette } from './world-kit';
 
 /* ------------------------------------------------------------------ *
@@ -273,6 +274,28 @@ function Structure({ s, kit, cleared, flameRef, bannerRef }: {
   }
 }
 
+/** Esferas que escondem o jogador, por tipo de estrutura (espaço local). */
+const FADE_SPHERES: Partial<Record<CampStructure['kind'], FadeSphere[]>> = {
+  tent: [[0, 0.7, 0, 1.3]],
+  watchtower: [[0, 1.8, 0, 1.6], [0, 3.4, 0, 1.3]],
+  palisade: [[0, 0.9, 0, 0.9]],
+  totem: [[0, 1.4, 0, 0.8], [0, 2.5, 0, 0.6]],
+  cage: [[0, 0.85, 0, 1.0]],
+};
+
+/**
+ * Grupo de uma estrutura: apaga quando esconde o jogador. Os materiais do kit
+ * são compartilhados entre acampamentos, então o registro os clona.
+ */
+function CampPiece({ spheres, children, ...rest }: {
+  spheres: FadeSphere[] | null;
+  children: React.ReactNode;
+} & React.ComponentProps<'group'>) {
+  const ref = useRef<THREE.Group>(null);
+  useFadeGroup(ref, spheres, true);
+  return <group ref={ref} {...rest}>{children}</group>;
+}
+
 /* ------------------------------------------------------------------ *
  * Acampamento
  * ------------------------------------------------------------------ */
@@ -330,15 +353,16 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
         const wx = cx + s.offset.x;
         const wz = cz + s.offset.z;
         return (
-          <group
-            key={`${s.kind}-${i}`}
+          <CampPiece
+            key={`${s.kind}-${i}-${camp.cleared ? 1 : 0}`}
+            spheres={FADE_SPHERES[s.kind] ?? null}
             position={[s.offset.x, terrainHeight(wx, wz), s.offset.z]}
             rotation={[0, s.rotation, 0]}
             scale={s.scale}
             onPointerDown={queueClear}
           >
             <Structure s={s} kit={kit} cleared={camp.cleared} flameRef={flame} bannerRef={banner} />
-          </group>
+          </CampPiece>
         );
       })}
     </group>
