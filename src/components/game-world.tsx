@@ -3,7 +3,7 @@ import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
-import { CAMPS, CAMP_PLACEMENTS } from '@/game/data/camps';
+import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
 import { HarvestNodes } from './world/harvest-nodes';
 import { queueNearestNode } from './world/objective-bridge';
@@ -16,9 +16,11 @@ import {
 import { TargetRoute } from './world/target-route';
 import { Camps, Enemies } from './world/world-entities';
 import {
-  MAP_HALF, markPointerConsumed, palette, rand, terrainHeight, wasPointerConsumed,
+  MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
+  markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
   type Palette,
 } from './world/world-kit';
+import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
 
 export type WorldProps = {
   mode: string;
@@ -29,6 +31,75 @@ export type WorldProps = {
   paused: boolean;
   cameraMode?: 'iso' | 'third';
 };
+
+// Ponte caminhável: mesmo centro/rotação/medidas do grupo renderizado lá
+// embaixo. Sobre o tabuado o chão do jogador vira o topo do deck; nas pontas
+// uma rampa curta sobe do terreno até o deck pra não ter degrau brusco.
+const BRIDGE = { cx: -2, cz: 2.5, cos: Math.cos(0.64), sin: Math.sin(0.64), halfLen: 3.75, halfWidth: 1.35, deckTop: 0.67, ramp: 1.4 };
+
+function bridgeSurfaceY(px: number, pz: number): number {
+  const dx = px - BRIDGE.cx;
+  const dz = pz - BRIDGE.cz;
+  const lx = dx * BRIDGE.cos - dz * BRIDGE.sin;
+  const lz = dx * BRIDGE.sin + dz * BRIDGE.cos;
+  if (Math.abs(lz) > BRIDGE.halfWidth) return -Infinity;
+  const a = Math.abs(lx);
+  if (a <= BRIDGE.halfLen) return BRIDGE.deckTop;
+  if (a <= BRIDGE.halfLen + BRIDGE.ramp) {
+    return BRIDGE.deckTop * (1 - (a - BRIDGE.halfLen) / BRIDGE.ramp);
+  }
+  return -Infinity;
+}
+
+// ------------------------------------------------------------------ *
+// Colisão seletiva
+//
+// Sólido onde o jogador INTERAGE: nós de colheita grandes (árvore, rocha,
+// veios, cristal — pedregulho não), estruturas de acampamento (tenda, torre,
+// paliçada, totem, jaula — fogueira não) e as ruínas. Cenário puro (árvore
+// decorativa, pedra decorativa, grama, ponte, rio) continua atravessável.
+// Nó esgotado perde o colisor (o toco/escombro não bloqueia).
+// ------------------------------------------------------------------ *
+type Collider = { x: number; z: number; r: number };
+
+const PLAYER_RADIUS = 0.5;
+
+/** Raio do colisor por tipo de nó de colheita; ausente = sem colisão. */
+const NODE_COLLIDER_R: Record<string, number> = {
+  tree: 0.55, rock: 0.8, iron_vein: 0.9, gold_vein: 0.9, crystal: 0.75,
+};
+
+/** Raio do colisor por estrutura de acampamento; ausente (bonfire) = sem colisão. */
+const STRUCT_COLLIDER_R: Record<string, number> = {
+  tent: 1.1, watchtower: 1.0, palisade: 0.45, totem: 0.5, cage: 1.0,
+};
+
+// Colisores fixos (acampamentos + ruínas): dados estáticos, calculados uma vez.
+const STATIC_COLLIDERS: Collider[] = (() => {
+  const list: Collider[] = [{ x: RUINS_POSITION.x, z: RUINS_POSITION.z, r: 2.2 }];
+  for (const placement of CAMP_PLACEMENTS) {
+    const def = CAMPS[placement.defId];
+    if (!def) continue;
+    for (const s of def.structures) {
+      const r = STRUCT_COLLIDER_R[s.kind];
+      if (r == null) continue;
+      list.push({ x: placement.position.x + s.offset.x, z: placement.position.z + s.offset.z, r: r * (s.scale ?? 1) });
+    }
+  }
+  return list;
+})();
+
+/** Empurra (x,z) para fora de um círculo sólido, gerando deslize natural. */
+function pushOut(x: number, z: number, ox: number, oz: number, r: number): [number, number] {
+  const dx = x - ox, dz = z - oz;
+  const d = Math.hypot(dx, dz);
+  const min = r + PLAYER_RADIUS;
+  if (d < min && d > 1e-4) {
+    const push = min - d;
+    return [x + (dx / d) * push, z + (dz / d) * push];
+  }
+  return [x, z];
+}
 
 const TREE_SPHERES: FadeSphere[] = [[0, 2.7, 0, 1.5], [0, 1.2, 0, 0.5]];
 
@@ -310,10 +381,15 @@ function Character({
       }
     }
 
-    const sprinting = k.has('ShiftLeft') || k.has('ShiftRight');
+    // Piloto / clique-pra-andar (sem WASD, seguindo um destino) corre no sprint.
+    const autoFollowing = !dx && !dz && (targetVx !== 0 || targetVz !== 0);
+    const sprinting = k.has('ShiftLeft') || k.has('ShiftRight') || autoFollowing;
     const ACCEL = 22;
     const DECEL = 28;
-    const MAX_SPEED = sprinting ? 6.5 : 4.5;
+    const px = body.current.position.x;
+    const pz = body.current.position.z;
+    const inLake = LAKE_CENTERS.some(l => (px - l.x) ** 2 + (pz - l.z) ** 2 < l.r * l.r);
+    const MAX_SPEED = (sprinting ? 6.5 : 4.5) * (inLake ? 0.4 : 1);
 
     if (targetVx !== 0 || targetVz !== 0) {
       const len = Math.sqrt(targetVx * targetVx + targetVz * targetVz);
@@ -331,12 +407,20 @@ function Character({
 
     const moving = velocity.current.length() > 0.1;
 
-    body.current.position.x = THREE.MathUtils.clamp(
-      body.current.position.x + velocity.current.x * dt, -MAP_HALF, MAP_HALF,
-    );
-    body.current.position.z = THREE.MathUtils.clamp(
-      body.current.position.z + velocity.current.y * dt, -MAP_HALF, MAP_HALF,
-    );
+    let nx = body.current.position.x + velocity.current.x * dt;
+    let nz = body.current.position.z + velocity.current.y * dt;
+
+    // Colisão seletiva: empurra pra fora de estruturas e nós sólidos (deslize).
+    for (const col of STATIC_COLLIDERS) [nx, nz] = pushOut(nx, nz, col.x, col.z, col.r);
+    for (const node of useGameStore.getState().harvestNodes) {
+      if (node.depleted) continue;
+      const r = NODE_COLLIDER_R[node.kind];
+      if (r == null) continue;
+      [nx, nz] = pushOut(nx, nz, node.position.x, node.position.z, r);
+    }
+
+    body.current.position.x = THREE.MathUtils.clamp(nx, -MAP_HALF, MAP_HALF);
+    body.current.position.z = THREE.MathUtils.clamp(nz, -MAP_HALF, MAP_HALF);
 
     if (moving) {
       targetRotY.current = Math.atan2(velocity.current.x, velocity.current.y);
@@ -354,7 +438,10 @@ function Character({
       k.delete('Space');
     }
 
-    const groundY = terrainHeight(body.current.position.x, body.current.position.z);
+    const groundY = Math.max(
+      terrainHeight(body.current.position.x, body.current.position.z),
+      bridgeSurfaceY(body.current.position.x, body.current.position.z),
+    );
 
     if (!isGrounded.current) {
       jumpVelocity.current -= 15 * dt;
@@ -541,16 +628,105 @@ function RockInstances({ c }: { c: Palette }) {
   return <instancedMesh ref={ref} args={[geo, mat, 100]} castShadow receiveShadow />;
 }
 
+/**
+ * Luz + névoa guiadas pelo ciclo dia/noite (30 min reais = 1 dia). Atualiza sol,
+ * ambiente, fundo e névoa a cada quadro a partir do relógio real; não mexe em
+ * regra de jogo nenhuma — é só iluminação.
+ */
+function DayNightLighting({ c }: { c: Palette }) {
+  const dir = useRef<THREE.DirectionalLight>(null);
+  const amb = useRef<THREE.AmbientLight>(null);
+  const { scene } = useThree();
+  const fog = useRef(new THREE.Fog(c.ground, 80, 180));
+  const bg = useRef(new THREE.Color(c.ground));
+
+  useEffect(() => {
+    scene.fog = fog.current;
+    scene.background = bg.current;
+  }, [scene]);
+
+  useFrame(() => {
+    const s = dayNight();
+    if (dir.current) {
+      dir.current.position.set(s.sunPos[0], s.sunPos[1], s.sunPos[2]);
+      dir.current.color.set(s.sunColor);
+      dir.current.intensity = s.sunIntensity;
+    }
+    if (amb.current) {
+      amb.current.color.set(s.ambientColor);
+      amb.current.intensity = s.ambientIntensity;
+    }
+    fog.current.color.set(s.fogColor);
+    fog.current.near = s.fogNear;
+    fog.current.far = s.fogFar;
+    bg.current.set(s.fogColor);
+  });
+
+  return (
+    <>
+      <ambientLight ref={amb} intensity={1.5} color={c.light} />
+      <directionalLight
+        ref={dir}
+        position={[-12, 25, 8]}
+        intensity={2.8}
+        color={c.light}
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+        shadow-camera-left={-60}
+        shadow-camera-right={60}
+        shadow-camera-top={60}
+        shadow-camera-bottom={-60}
+        shadow-bias={-0.001}
+      />
+    </>
+  );
+}
+
+// Pontos da estrada (coord. de mundo). Compartilhados entre o asfalto e as
+// luminárias, pra os postes ficarem exatamente na beira do caminho.
+const ROAD_POINTS: [number, number][] = [
+  [-60, 40], [-40, 28], [-18, 12], [-7, 6], [0, 1], [4, -3], [7, -8], [16, -14], [28, -22], [45, -38], [60, -55],
+];
+
+/** Poste de luz da estrada: apaga de dia, acende (tremeluzindo) ao anoitecer. */
+function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
+  const light = useRef<THREE.PointLight>(null);
+  const bulb = useRef<THREE.MeshStandardMaterial>(null);
+  useFrame(() => {
+    const nf = nightFactor();
+    const flick = 0.9 + Math.sin(performance.now() * 0.006 + x * 1.3) * 0.1;
+    if (light.current) light.current.intensity = nf * 5.5 * flick;
+    if (bulb.current) bulb.current.emissiveIntensity = nf * 2.4 * flick;
+  });
+  return (
+    <group position={[x, y, z]}>
+      <mesh position={[0, 1.3, 0]} castShadow>
+        <cylinderGeometry args={[0.07, 0.1, 2.6, 6]} />
+        <meshStandardMaterial color="#3a3a42" />
+      </mesh>
+      <mesh position={[0, 2.68, 0]}>
+        <boxGeometry args={[0.26, 0.32, 0.26]} />
+        <meshStandardMaterial ref={bulb} color="#ffd98a" emissive="#ffb040" emissiveIntensity={0} />
+      </mesh>
+      <pointLight ref={light} position={[0, 2.6, 0]} color="#ffcf87" intensity={0} distance={11} decay={1.6} />
+    </group>
+  );
+}
+
 function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => void) | undefined; paused?: boolean | undefined }) {
   const geo = useMemo(() => {
     const size = MAP_HALF * 2 + 40;
-    const segments = 80;
+    const segments = 200;
     const g = new THREE.PlaneGeometry(size, size, segments, segments);
     const pos = g.attributes['position'] as THREE.BufferAttribute;
+    // A malha é um PlaneGeometry girado -90° em X: o Y local do plano vira o
+    // -Z do mundo. O jogador, árvores e acampamentos amostram terrainHeight(x,
+    // z) em coordenadas de mundo, então aqui passamos -y para a altura casar
+    // exatamente com o chão que se pisa (senão afunda no relevo).
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const y = pos.getY(i);
-      pos.setZ(i, terrainHeight(x, y));
+      pos.setZ(i, terrainHeight(x, -y));
     }
     g.computeVertexNormals();
     return g;
@@ -578,6 +754,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
   const playerRef = useRef<THREE.Group | null>(null);
   const cameraYaw = useRef(0);
   const cameraPitch = useRef(-0.3);
+  const camDist = useRef(5);
+  const camDistTarget = useRef(5);
   const pointerLocked = useRef(false);
   const prevCameraMode = useRef(cameraMode);
 
@@ -604,6 +782,13 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       pointerLocked.current = document.pointerLockElement === canvas;
     };
 
+    // Zoom (scroll) na terceira pessoa: distância 3–8, suavizada no frame.
+    const onWheel = (e: WheelEvent) => {
+      if (cameraMode !== 'third') return;
+      e.preventDefault();
+      camDistTarget.current = THREE.MathUtils.clamp(camDistTarget.current + e.deltaY * 0.01, 3, 8);
+    };
+
     const onClick = () => {
       if (cameraMode === 'third' && !pointerLocked.current && !props.paused) {
         canvas.requestPointerLock();
@@ -624,12 +809,14 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('pointerlockchange', onLockChange);
     canvas.addEventListener('click', onClick);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
 
     return () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('pointerlockchange', onLockChange);
       canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('wheel', onWheel);
       if (pointerLocked.current) document.exitPointerLock();
     };
   }, [gl, cameraMode, props.paused]);
@@ -662,13 +849,32 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     } else {
       const yaw = cameraYaw.current;
       const pitch = cameraPitch.current;
-      const dist = 5;
+      camDist.current = THREE.MathUtils.lerp(camDist.current, camDistTarget.current, 0.1);
+      const dist = camDist.current;
       const shoulderOffset = 0.7;
 
       const camX = px - Math.sin(yaw) * Math.cos(pitch) * dist + Math.cos(yaw) * shoulderOffset;
       const camY = py + 2.8 - Math.sin(pitch) * dist;
       const camZ = pz - Math.cos(yaw) * Math.cos(pitch) * dist - Math.sin(yaw) * shoulderOffset;
-      const wantPos = new THREE.Vector3(camX, camY, camZ);
+      let wantPos = new THREE.Vector3(camX, camY, camZ);
+
+      // Colisão de câmera: marcha da cabeça até a posição desejada; se um morro
+      // bloqueia a linha, para no último ponto livre (aproxima). Libera → volta suave.
+      {
+        const hx = px, hy = py + 1.5, hz = pz;
+        const steps = 10;
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps;
+          const sx = hx + (camX - hx) * t;
+          const sy = hy + (camY - hy) * t;
+          const sz = hz + (camZ - hz) * t;
+          if (sy < terrainHeight(sx, sz) + 0.3) {
+            const safeT = (i - 1) / steps;
+            wantPos = new THREE.Vector3(hx + (camX - hx) * safeT, hy + (camY - hy) * safeT, hz + (camZ - hz) * safeT);
+            break;
+          }
+        }
+      }
 
       if (modeChanged) {
         camTarget.current.copy(wantPos);
@@ -686,6 +892,14 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       const lookY = py + 1.2 + Math.sin(pitch) * 2;
       camLookAt.current.lerp(new THREE.Vector3(lookX, lookY, lookZ), 0.12);
       camera.lookAt(camLookAt.current);
+    }
+
+    // Soco de impacto: tremor curto da câmera quando um golpe acerta.
+    const shake = impactShake();
+    if (shake > 0) {
+      camera.position.x += (Math.random() - 0.5) * shake * 0.3;
+      camera.position.y += (Math.random() - 0.5) * shake * 0.3;
+      camera.position.z += (Math.random() - 0.5) * shake * 0.3;
     }
 
     if (camera instanceof THREE.OrthographicCamera || camera instanceof THREE.PerspectiveCamera) {
@@ -707,7 +921,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
   const trees = useMemo(
     () =>
-      Array.from({ length: 180 }, (_, i) => ({
+      Array.from({ length: 400 }, (_, i) => ({
         x: (rand(i + 1) - 0.5) * MAP_HALF * 2,
         z: (rand(i + 301) - 0.5) * MAP_HALF * 2,
         size: 0.65 + rand(i + 701) * 0.7,
@@ -715,6 +929,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       }))
         .filter(p => Math.abs(p.x) > 4.5 || Math.abs(p.z) > 10)
         .filter(p => !(p.x > 2 && p.x < 12 && p.z < -3 && p.z > -13))
+        .filter(p => !LAKE_CENTERS.some(l => (p.x - l.x) ** 2 + (p.z - l.z) ** 2 < (l.r + 2) ** 2))
+        // Fora do leito do córrego: árvore não nasce dentro d'água.
+        .filter(p => riverDistance(p.x, p.z) > RIVER_HALF_WIDTH + 2)
         // Acampamento é clareira: árvore dentro da tenda atrapalha a leitura
         // da cena e o clique nas estruturas.
         .filter(p => CAMP_PLACEMENTS.every(camp => {
@@ -728,16 +945,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
   );
 
   const path = useMemo(() => {
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-30, 0.025, 20),
-      new THREE.Vector3(-18, 0.025, 12),
-      new THREE.Vector3(-7, 0.025, 6),
-      new THREE.Vector3(0, 0.025, 1),
-      new THREE.Vector3(4, 0.025, -3),
-      new THREE.Vector3(7, 0.025, -8),
-      new THREE.Vector3(16, 0.025, -14),
-      new THREE.Vector3(28, 0.025, -22),
-    ]);
+    const curve = new THREE.CatmullRomCurve3(ROAD_POINTS.map(([x, z]) => new THREE.Vector3(x, 0.025, z)));
     const pts = curve.getPoints(100);
     const v: number[] = [];
     for (let i = 0; i < pts.length - 1; i++) {
@@ -760,24 +968,61 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     return g;
   }, []);
 
+  // Luminárias ao longo da estrada, espaçadas ~14 m, deslocadas pra beira.
+  const lamps = useMemo(() => {
+    const curve = new THREE.CatmullRomCurve3(ROAD_POINTS.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+    const pts = curve.getPoints(120);
+    const out: { x: number; y: number; z: number }[] = [];
+    let acc = 14;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1]!, b = pts[i]!;
+      acc += b.distanceTo(a);
+      if (acc >= 14) {
+        acc = 0;
+        const d = b.clone().sub(a).normalize();
+        const lx = b.x + -d.z * 1.6;
+        const lz = b.z + d.x * 1.6;
+        out.push({ x: lx, y: terrainHeight(lx, lz), z: lz });
+      }
+    }
+    return out;
+  }, []);
+
+  // Rio: fita que segue RIVER_POINTS, ondulando na frente do nascedouro e
+  // desembocando no laginho. Cada vértice acompanha a altura do terreno (ou a
+  // superfície do lago, na foz), então a água nunca voa nem afunda.
+  const river = useMemo(() => {
+    const curve = new THREE.CatmullRomCurve3(RIVER_POINTS.map(p => new THREE.Vector3(p.x, 0, p.z)));
+    const pts = curve.getPoints(90);
+    const half = 2;
+    const yOf = (x: number, z: number) => {
+      const inLake = LAKE_CENTERS.some(l => (x - l.x) ** 2 + (z - l.z) ** 2 < l.r * l.r);
+      return inLake ? LAKE_WATER_Y + 0.03 : terrainHeight(x, z) + 0.07;
+    };
+    const v: number[] = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i]!, b = pts[i + 1]!;
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const px = (-dz / len) * half, pz = (dx / len) * half;
+      const corners = [
+        { x: a.x + px, z: a.z + pz }, { x: a.x - px, z: a.z - pz },
+        { x: b.x + px, z: b.z + pz }, { x: b.x - px, z: b.z - pz },
+      ].map(p => ({ ...p, y: yOf(p.x, p.z) }));
+      const [aL, aR, bL, bR] = corners as [typeof corners[0], typeof corners[0], typeof corners[0], typeof corners[0]];
+      v.push(aL.x, aL.y, aL.z, aR.x, aR.y, aR.z, bL.x, bL.y, bL.z);
+      v.push(bL.x, bL.y, bL.z, aR.x, aR.y, aR.z, bR.x, bR.y, bR.z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    g.computeVertexNormals();
+    return g;
+  }, []);
+
 
   return (
     <>
-      <color attach="background" args={[c.ground]} />
-      <fog attach="fog" args={[c.ground, 50, 100]} />
-      <ambientLight intensity={1.5} color={c.light} />
-      <directionalLight
-        position={[-12, 25, 8]}
-        intensity={2.8}
-        color={c.light}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-35}
-        shadow-camera-right={35}
-        shadow-camera-top={35}
-        shadow-camera-bottom={-35}
-        shadow-bias={-0.001}
-      />
+      <DayNightLighting c={c} />
 
       <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
 
@@ -785,31 +1030,65 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
         <meshStandardMaterial color={c.path} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* River */}
-      <mesh position={[-10, 0.05, -2]} rotation={[-Math.PI / 2, 0, 0.35]}>
-        <planeGeometry args={[5, 100]} />
-        <meshStandardMaterial color={c.water} roughness={0.3} transparent opacity={0.85} />
-      </mesh>
-      {Array.from({ length: 25 }, (_, i) => (
-        <mesh key={`water${i}`} position={[-10 + (rand(i + 50) - 0.5) * 3, 0.07, (rand(i + 80) - 0.5) * 60]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[0.4 + rand(i) * 1.2, 0.05]} />
-          <meshBasicMaterial color={c['water-light']} transparent opacity={0.35} />
+      {/* Luminárias da estrada — acendem ao anoitecer */}
+      {lamps.map((l, i) => <RoadLamp key={`lamp${i}`} {...l} />)}
+
+      {/* Lakes — local water discs sitting at the terrain edge height */}
+      {LAKE_CENTERS.map((lake, i) => (
+        <mesh key={`lake${i}`} position={[lake.x, lakeWaterY(lake), lake.z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[lake.r * 0.92, 32]} />
+          <meshStandardMaterial color={c.water} roughness={0.2} transparent opacity={0.75} depthWrite={false} />
         </mesh>
       ))}
 
-      {/* Bridge */}
-      <group position={[-9, terrainHeight(-9, 7) + 0.19, 7]} rotation={[0, -0.35, 0]}>
+      {/* River — fita ondulada que desemboca no laginho */}
+      <mesh geometry={river} receiveShadow>
+        <meshStandardMaterial color={c.water} roughness={0.25} transparent opacity={0.82} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* Bridge — tabuado elevado com vigas, pilares e guarda-corpo; leva a estrada por cima do córrego, na frente do nascedouro */}
+      <group position={[-2, 0, 2.5]} rotation={[0, 0.64, 0]}>
+        {/* Tabuado (anda ao longo do X local, atravessando a água) */}
         {Array.from({ length: 16 }, (_, i) => (
-          <mesh key={i} position={[(i - 8) * 0.35, 0, 0]} receiveShadow castShadow>
-            <boxGeometry args={[0.32, 0.18, 2.1]} />
+          <mesh key={`plank${i}`} position={[(i - 7.5) * 0.5, 0.6, 0]} receiveShadow castShadow>
+            <boxGeometry args={[0.46, 0.14, 2.8]} />
             <meshStandardMaterial color={i % 2 ? c.trunk : c.path} />
           </mesh>
+        ))}
+        {/* Vigas longitudinais sob o tabuado */}
+        {[-1.15, 1.15].map(z => (
+          <mesh key={`beam${z}`} position={[0, 0.45, z]} castShadow>
+            <boxGeometry args={[8, 0.18, 0.22]} />
+            <meshStandardMaterial color={c.trunk} />
+          </mesh>
+        ))}
+        {/* Pilares de sustentação, descem até o leito */}
+        {[-3.6, -1.2, 1.2, 3.6].flatMap(x => [-1.2, 1.2].map(z => (
+          <mesh key={`post${x}_${z}`} position={[x, -0.15, z]} castShadow>
+            <cylinderGeometry args={[0.12, 0.15, 1.6, 6]} />
+            <meshStandardMaterial color={c.trunk} />
+          </mesh>
+        )))}
+        {/* Guarda-corpo dos dois lados: corrimão + balaústres */}
+        {[-1.35, 1.35].map(z => (
+          <group key={`rail${z}`}>
+            <mesh position={[0, 1.18, z]} castShadow>
+              <boxGeometry args={[8, 0.1, 0.1]} />
+              <meshStandardMaterial color={c.trunk} />
+            </mesh>
+            {Array.from({ length: 9 }, (_, i) => (
+              <mesh key={`bal${i}`} position={[(i - 4) * 0.95, 0.88, z]} castShadow>
+                <boxGeometry args={[0.08, 0.6, 0.08]} />
+                <meshStandardMaterial color={c.trunk} />
+              </mesh>
+            ))}
+          </group>
         ))}
       </group>
 
       {trees.map((p, i) => <Tree key={i} {...p} c={c} />)}
       <RockInstances c={c} />
-      <GrassPatches c={c} count={350} />
+      <GrassPatches c={c} count={900} />
 
       <Ruins c={c} />
       <Campfire c={c} position={[-1, 0, 4]} />

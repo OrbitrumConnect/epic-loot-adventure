@@ -276,6 +276,21 @@ function nearestThreat(snapshot: AutoSnapshot): AutoSnapshot['creatures'][number
   return best;
 }
 
+/** Bicho vivo mais próximo dentro de `radius` (qualquer espécie) — caça ociosa. */
+function nearestCreatureWithin(snapshot: AutoSnapshot, radius: number): AutoSnapshot['creatures'][number] | null {
+  let best: AutoSnapshot['creatures'][number] | null = null;
+  let bestDist = Infinity;
+  for (const creature of snapshot.creatures) {
+    if (!isCreatureAlive(creature)) continue;
+    const dist = getDistance(snapshot.playerPosition, creature.position);
+    if (dist <= radius && dist < bestDist) {
+      bestDist = dist;
+      best = creature;
+    }
+  }
+  return best;
+}
+
 function engage(
   snapshot: AutoSnapshot,
   creature: { id: string; position: Position },
@@ -323,7 +338,15 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
 
   // 5
   const active = getActiveObjective(snapshot.objectives);
-  if (!active) return { kind: 'idle', reason: 'Nenhum objetivo ativo.' };
+  if (!active) {
+    // 6. Ocioso: caça o bicho vivo mais próximo dentro do raio configurado.
+    const huntRadius = snapshot.autoHuntRadius ?? 0;
+    if (huntRadius > 0) {
+      const prey = nearestCreatureWithin(snapshot, huntRadius);
+      if (prey) return engage(snapshot, prey, 'Caçando por perto');
+    }
+    return { kind: 'idle', reason: 'Nenhum objetivo ativo.' };
+  }
 
   if (active.kind === 'clear_camp') {
     const camp = snapshot.camps.find(c => c.id === active.targetId);

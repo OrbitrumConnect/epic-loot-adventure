@@ -40,12 +40,12 @@ export const HARVEST_TOOLS: Record<string, { tool: HarvestTool; yieldMultiplier:
 
 /** Quantos nós de cada tipo `createHarvestNodes` posiciona. */
 export const HARVEST_NODE_TARGETS: Record<HarvestNodeKind, number> = {
-  tree: 140,
-  pebble: 50,
-  rock: 40,
-  iron_vein: 22,
-  gold_vein: 10,
-  crystal: 14,
+  tree: 320,
+  pebble: 110,
+  rock: 90,
+  iron_vein: 48,
+  gold_vein: 22,
+  crystal: 30,
 };
 
 /** Total de nós do mundo (soma dos alvos acima). */

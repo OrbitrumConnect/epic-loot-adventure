@@ -55,6 +55,8 @@ type GameState = {
   harvestNodes: HarvestNodeState[];
   /** Bebe poção sozinho com vida baixa (piloto e luta manual). */
   autoPotion: boolean;
+  /** Raio (m) que o piloto ocioso usa pra caçar o bicho mais próximo (5–25; 0 = desligado). */
+  autoHuntRadius: number;
   /** Eventos efêmeros (dano, XP, loot) para o mundo 3D e o HUD. Somem pelo `ttl`. */
   feedback: FeedbackEvent[];
 };
@@ -96,6 +98,7 @@ type GameActions = {
   setTarget: (creatureId: string | null) => void;
   harvestAt: (nodeId: string) => void;
   toggleAutoPotion: () => void;
+  setAutoHuntRadius: (radius: number) => void;
   addHuntArea: (x: number, z: number) => void;
   drinkPotion: () => void;
   tickWorld: () => void;
@@ -217,6 +220,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   targetId: null,
   harvestNodes: createHarvestNodes(),
   autoPotion: true,
+  autoHuntRadius: 12,
   feedback: [],
   ui: {
     mode: 'world',
@@ -246,9 +250,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
 
+    // Item segurado na mão (hotbar selecionada). Atacar com a TOCHA vira dano
+    // de fogo: ignora a arma equipada e usa base + bônus de fogo.
+    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+    const heldItemId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    const usingTorch = heldItemId === 'torch';
+
     const equippedWeapon = state.player.inventory.equipment.primary;
     const weaponPower = equippedWeapon ? (ITEMS[equippedWeapon]?.attackPower ?? 0) : 0;
-    const totalPower = playerBaseAttack(state.player.level) + weaponPower;
+    const TORCH_FIRE_BONUS = 9;
+    const totalPower = usingTorch
+      ? playerBaseAttack(state.player.level) + TORCH_FIRE_BONUS
+      : playerBaseAttack(state.player.level) + weaponPower;
 
     const result = resolveAttack(totalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
 
@@ -267,6 +280,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const drafts: FeedbackDraft[] = [
       damageEvent(creature.id, result.damage, creature.position, {
         critical: isCriticalDamage(totalPower, creature.armor, result.damage),
+        fire: usingTorch,
       }),
     ];
 
@@ -372,17 +386,36 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   collectNearest: () => {
     const state = get();
-    let nearest: ResourceNode | null = null;
-    let bestDist = Infinity;
+    if (state.player.dead) return;
+    const pos = state.player.position;
+
+    // Nó de farm mais próximo DENTRO do alcance (árvore/rocha/veio/cristal/pedregulho).
+    let bestNode: (typeof state.harvestNodes)[number] | null = null;
+    let bestNodeDist = Infinity;
+    for (const node of state.harvestNodes) {
+      if (node.depleted) continue;
+      const def = HARVEST_NODES[node.kind];
+      if (!def) continue;
+      const d = getDistance(pos, node.position);
+      if (d <= def.range + 0.5 && d < bestNodeDist) { bestNodeDist = d; bestNode = node; }
+    }
+
+    // Recurso solto mais próximo (cristal/baú/torre), até 4 m.
+    let bestRes: ResourceNode | null = null;
+    let bestResDist = Infinity;
     for (const node of state.resources) {
       if (node.depleted) continue;
-      const d = getDistance(state.player.position, node.position);
-      if (d < bestDist) { bestDist = d; nearest = node; }
+      const d = getDistance(pos, node.position);
+      if (d <= 4 && d < bestResDist) { bestResDist = d; bestRes = node; }
     }
-    if (nearest && bestDist <= 4) {
-      get().collect(nearest.id);
+
+    // Pega o mais perto dos dois; E vira "interagir/pegar" genérico.
+    if (bestNode && bestNodeDist <= bestResDist) {
+      get().harvestAt(bestNode.id);
+    } else if (bestRes) {
+      get().collect(bestRes.id);
     } else {
-      set(s => ({ ui: { ...s.ui, message: 'Nenhum recurso próximo.' } }));
+      set(s => ({ ui: { ...s.ui, message: 'Nada por perto pra pegar.' } }));
     }
   },
 
@@ -633,6 +666,14 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }));
   },
 
+  setAutoHuntRadius: (radius) => {
+    const clamped = Math.round(Math.max(5, Math.min(25, radius)));
+    set(s => ({
+      autoHuntRadius: clamped,
+      ui: { ...s.ui, message: `Caça automática: raio ${clamped} m.` },
+    }));
+  },
+
   drinkPotion: () => {
     const state = get();
     if (state.player.dead) return;
@@ -824,6 +865,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // quem executa o `heal` deve chamar `drinkPotion()`, que ignora o índice.
       healSlot: findHealHotbarIndex(state.player.inventory) ?? (DEV_INFINITE_POTIONS ? 0 : null),
       autoPotion: state.autoPotion,
+      autoHuntRadius: state.autoHuntRadius,
       harvestNodes: state.harvestNodes.map(n => ({
         id: n.id,
         kind: n.kind,

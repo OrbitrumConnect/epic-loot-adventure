@@ -4,6 +4,7 @@
  * automático usem exatamente os mesmos valores (sem duplicar constantes).
  */
 import * as THREE from 'three';
+import { LAKE_CENTERS, RIVER_POINTS, RIVER_HALF_WIDTH, riverDistance } from '@/game/data/camps';
 
 const names = [
   'ground', 'ground-light', 'grass', 'pine', 'leaf', 'leaf-light', 'trunk',
@@ -35,15 +36,77 @@ export function rand(seed: number) {
   return n - Math.floor(n);
 }
 
-export function terrainHeight(x: number, z: number): number {
-  return (
-    Math.sin(x * 0.08) * 0.15 +
-    Math.cos(z * 0.07) * 0.12 +
-    Math.sin((x + z) * 0.04) * 0.2
-  );
+function noise2d(x: number, z: number, sx: number, sz: number): number {
+  return Math.sin(x * sx + 1.7) * Math.cos(z * sz + 2.3)
+       + Math.sin((x + z) * sx * 0.7 + 0.5) * 0.5;
 }
 
-export const MAP_HALF = 45;
+export { LAKE_CENTERS, RIVER_POINTS, riverDistance, RIVER_HALF_WIDTH };
+
+/**
+ * Superfície da água dos lagos: fixa, logo ABAIXO do nível do chão (0). Como a
+ * bacia do lago é escavada para baixo (ver `terrainHeight`), a água fica dentro
+ * do buraco e nunca "voa" sobre o relevo, esteja o lago em planície ou colina.
+ */
+export const LAKE_WATER_Y = -0.25;
+/** Profundidade máxima da bacia no centro do lago (~2 m, como pediu o Pedro). */
+const LAKE_DEPTH = 1.7;
+
+const RIVER_BLEND = 6;
+/** Canal raso: o leito do rio afunda isto abaixo do chão pra a água assentar. */
+const RIVER_DEPTH = 0.18;
+
+/** 1 no leito do córrego, caindo a 0 na margem (usa a linha de `camps.ts`). */
+function riverFlatten(x: number, z: number): number {
+  const d = riverDistance(x, z);
+  if (d <= RIVER_HALF_WIDTH) return 1;
+  if (d >= RIVER_HALF_WIDTH + RIVER_BLEND) return 0;
+  return 1 - (d - RIVER_HALF_WIDTH) / RIVER_BLEND;
+}
+
+function terrainHeightRaw(x: number, z: number): number {
+  const broad  = noise2d(x, z, 0.015, 0.017) * 3.6;
+  const hills  = noise2d(x, z, 0.04,  0.035) * 1.7;
+  const detail = noise2d(x, z, 0.09,  0.08)  * 0.4;
+
+  const cx = x / MAP_HALF;
+  const cz = z / MAP_HALF;
+  const edgeDist = 1 - Math.max(Math.abs(cx), Math.abs(cz));
+  const edgeFade = Math.min(1, edgeDist * 3);
+
+  // Clareira do nascedouro plana; relevo entra a partir de ~12 m e fica cheio em ~30 m.
+  const spawnR = Math.sqrt(x * x + z * z);
+  const spawnFlatten = Math.min(1, Math.max(0, (spawnR - 12) / 18));
+
+  const shaped = (broad + hills + detail) * edgeFade * spawnFlatten;
+  let ground = Math.max(0, shaped);
+
+  // Vale do rio: aplaina a faixa e escava um canal raso pra água correr.
+  const rf = riverFlatten(x, z);
+  ground = ground * (1 - rf) - rf * RIVER_DEPTH;
+
+  return ground;
+}
+
+export function lakeWaterY(_lake: { x: number; z: number; r: number }): number {
+  return LAKE_WATER_Y;
+}
+
+export function terrainHeight(x: number, z: number): number {
+  let h = terrainHeightRaw(x, z);
+
+  for (const lake of LAKE_CENTERS) {
+    const d = Math.sqrt((x - lake.x) ** 2 + (z - lake.z) ** 2);
+    if (d < lake.r) {
+      const t = Math.max(0, 1 - d / lake.r);
+      h = Math.min(h, LAKE_WATER_Y - 0.05 - t * t * LAKE_DEPTH);
+    }
+  }
+
+  return h;
+}
+
+export const MAP_HALF = 90;
 
 /** Hash estável de um id para alimentar `rand` sem guardar estado. */
 export function hashId(id: string): number {
@@ -84,6 +147,27 @@ export function markPointerConsumed(native?: { timeStamp: number }) {
 export function wasPointerConsumed(native?: { timeStamp: number }): boolean {
   if (native && Math.abs(native.timeStamp - consumedStamp) < 60) return true;
   return performance.now() - consumedAt < 80;
+}
+
+/* ------------------------------------------------------------------ *
+ * Impacto de combate: um golpe que acerta registra um "soco" que a câmera
+ * lê e tremula por ~150 ms — dá peso (sensação de hit stop) sem congelar o
+ * jogo nem acoplar a câmera ao sistema de feedback.
+ * ------------------------------------------------------------------ */
+let impactAt = -Infinity;
+let impactStrength = 0;
+const IMPACT_MS = 150;
+
+export function markImpact(strength = 1) {
+  impactAt = performance.now();
+  impactStrength = strength;
+}
+
+/** Intensidade do tremor agora (0 quando sem impacto recente). */
+export function impactShake(now: number = performance.now()): number {
+  const dt = now - impactAt;
+  if (dt < 0 || dt > IMPACT_MS) return 0;
+  return impactStrength * (1 - dt / IMPACT_MS);
 }
 
 /* ------------------------------------------------------------------ *

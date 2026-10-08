@@ -1,15 +1,15 @@
 import type { CreatureState, Position } from '../types';
 import { CREATURES } from '../data/creatures';
-import { CAMPS, CAMP_PLACEMENTS, PLAYER_SPAWN, RUINS_POSITION, RUINS_RADIUS, WORLD_HALF } from '../data/camps';
+import { CAMPS, CAMP_PLACEMENTS, LAKE_CENTERS, PLAYER_SPAWN, RIVER_HALF_WIDTH, RUINS_POSITION, RUINS_RADIUS, WORLD_HALF, riverDistance } from '../data/camps';
 
 /** Quantas de cada espécie `createWildCreatures` posiciona. */
 export const WILD_SPAWN_COUNTS: Record<string, number> = {
-  rabbit: 6,
-  deer: 8,
-  boar: 8,
-  wolf: 4,
-  wolf_alpha: 3,
-  bear: 3,
+  rabbit: 14,
+  deer: 18,
+  boar: 16,
+  wolf: 10,
+  wolf_alpha: 6,
+  bear: 6,
 };
 
 /** Total de criaturas selvagens geradas (soma de `WILD_SPAWN_COUNTS`). */
@@ -49,6 +49,10 @@ export function isFreeForWildlife(p: Position): boolean {
     if (!def) continue;
     if (dist(p, placement.position) < def.radius + WILD_CAMP_MARGIN) return false;
   }
+  for (const lake of LAKE_CENTERS) {
+    if (dist(p, { x: lake.x, z: lake.z }) < lake.r + 3) return false;
+  }
+  if (riverDistance(p.x, p.z) < RIVER_HALF_WIDTH + 2) return false;
   return true;
 }
 

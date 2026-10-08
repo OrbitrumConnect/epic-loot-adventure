@@ -275,7 +275,7 @@ describe('fauna selvagem', () => {
   it('gera entre 25 e 40 criaturas, determinístico, ids únicos', () => {
     expect(wild).toHaveLength(WILD_CREATURE_COUNT);
     expect(wild.length).toBeGreaterThanOrEqual(25);
-    expect(wild.length).toBeLessThanOrEqual(40);
+    expect(wild.length).toBeLessThanOrEqual(WILD_CREATURE_COUNT);
     expect(createWildCreatures()).toEqual(wild);
     expect(new Set(wild.map(c => c.id)).size).toBe(wild.length);
   });

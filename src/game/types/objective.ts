@@ -59,6 +59,8 @@ export type AutoSnapshot = {
   homePosition: Position;
   /** Cura automática ligada. Ausente = ligada. */
   autoPotion?: boolean;
+  /** Raio (m) pra caçar o bicho mais próximo quando ocioso. 0/ausente = não caça sozinho. */
+  autoHuntRadius?: number;
   /** Nós de colheita do mundo novo (legado fica em `resources`). */
   harvestNodes?: { id: string; kind: string; position: Position; depleted: boolean }[];
 };

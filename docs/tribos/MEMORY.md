@@ -2,6 +2,7 @@
 
 ## TRIBOS — projeto em foco
 
+- [**🧭 LEITURA CENTRAL — MUNDO PÓS-COLAPSO**](tribos-visao-pos-colapso.md) — DIREÇÃO OFICIAL (selada 07/10). Sobrevivência + reconstrução de civilização; infraestrutura sobreviveu, civilização não. Combate/raid/base SERVEM essa fantasia. Lente que afia o Mestre — passar toda prioridade por aqui.
 - [**DOCUMENTO MESTRE SELADO**](tribos-documento-mestre.md) — LER PRIMEIRO. 96 seções, 16 blocos, 14 fases (A–N), 15 pilares. Mundo multiplayer persistente: exploração+PvP+PvE+base+raid+guerra. Repo: epic-loot-adventure.
 - [Visão arquitetural + Diagnóstico](tribos-visao.md) — Estado do código (530 linhas em 3 arquivos), 16 problemas diagnosticados, arquitetura alvo (types→data→systems→store→UI→render), 3 etapas de evolução.
 - [Modo de trabalho](tribos-modo-de-trabalho.md) — Diário todo dia, escopo fechado TRIBOS, ordem dos blocos é lei, refinar≠trocar, filtro §95, não force push (Lovable).
@@ -9,6 +10,8 @@
 - [Sistema de câmera](tribos-camera-system.md) — Yaw/pitch próprio, Pointer Lock, WASD relativo à câmera, collision, zoom, transição suave. Space=PULO, click=ATTACK. PRÓXIMO.
 - [Mapa global (M)](tribos-mapa-global.md) — M abre hub de gestão (base, raids, inventário, personagem). Invencível no mapa. Mundo 3D limpo pra gameplay.
 - [**3 Camadas**](tribos-3-camadas.md) — TRIBOS = 3 jogos em 1: Mapa Aberto (survival/farm), Raid (MOBA/arena), Base (builder/Clash). Loop: Base→Mapa→Raid→Base.
+- [**Tribo + Base Comum**](tribos-tribo-base-comum.md) — SELADA 07/10: solo tem base própria; formar tribo soma recursos → UMA base comum em nova localidade, tier escolhido pelo pool. Alvo da raid.
+- [**Nível não é porta**](tribos-nivel-nao-e-porta.md) — SELADA 07/10: nível = preparo, não porta. Sem level-gate (overworld/raid). Geografia define o perigo; instância adapta a FORMA da ameaça, nunca a IDENTIDADE. Overworld compartilhado, sem level-scaling individual.
 - [Equipe](tribos-equipe.md) — Pedro (criador/design) + Caio (dev, entrou 06/10). Handoff no diário 06/10.
 
 - [Cidade / Base (visão de cima)](tribos-cidade.md) — Camada 3. Cidade isométrica em sprites, 8 construções × 20 níveis, filas de construção e produção, expedições. Assets em `art/city/`. Sessão 4 (Caio).
@@ -29,7 +32,7 @@
 
 > Correção: a pasta é `docs/tribos/diarios/`. Os links `diarios-tribos/` abaixo estão quebrados desde o começo.
 
-- [2026-10-07](diarios/2026-10-07.md) — Sessões 5-7. PR #1 (cidade) mergeado. Acampamentos + objetivos idle/manual, progressão e coleta, mapa real, sprites de item, troca de arma, transparência, retorno visual do combate. 136 testes. PR #2 aberto.
+- [2026-10-07](diarios/2026-10-07.md) — Sessões 5-7 (Caio) + **Sessão 8 (Pedro+Opus)**. S5-7: acampamentos, objetivos, progressão, coleta, sprites, combate visual (PR #1/#2). S8: relevo+córrego+ponte, dia/noite, colisão seletiva, câmera (zoom+colisão), tecla E, iluminação noturna, caça por raio+sprint, tocha de fogo+impacto. Visão selada (pós-colapso, nível não é porta, tribo+base comum). 136 testes, build limpo.
 - [2026-10-06](diarios/2026-10-06.md) — Sessões 1-4. Blocos 1 e 2 (refatoração, movimento, câmera) e a visão de cidade com 160 sprites.
 
 ### Links antigos (mantidos como estavam)

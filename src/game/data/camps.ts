@@ -13,8 +13,48 @@ import type { CampDefinition, CampStructure, Position } from '../types';
 // voltou vazia, então mudar uma posição no olhômetro falha o build.
 // ---------------------------------------------------------------------------
 
-export const WORLD_HALF = 45;
+export const WORLD_HALF = 90;
 export const PLAYER_SPAWN: Position = { x: 0, z: 0 };
+
+export const LAKE_CENTERS: { x: number; z: number; r: number }[] = [
+  { x: 55, z: 55, r: 16 },
+  { x: -60, z: -15, r: 12 },
+];
+
+/**
+ * Córrego: polilinha (coord. de mundo) que nasce nas colinas a nordeste,
+ * cruza a estrada UMA vez na frente do nascedouro (onde fica a ponte) e
+ * desemboca no laginho a sudoeste. Dado puro aqui para o terreno (world-kit),
+ * a água (game-world) e a exclusão de árvores/nós usarem a MESMA linha.
+ */
+export const RIVER_POINTS: Position[] = [
+  { x: 40, z: 38 },
+  { x: 22, z: 22 },
+  { x: 8,  z: 10 },
+  { x: -2, z: 2.5 },
+  { x: -18, z: -6 },
+  { x: -38, z: -12 },
+  { x: -55, z: -15 },
+];
+
+/** Metade da largura da água do córrego (para exclusões de spawn). */
+export const RIVER_HALF_WIDTH = 2.4;
+
+/** Distância (planar) de um ponto ao eixo do córrego. */
+export function riverDistance(x: number, z: number): number {
+  let min = Infinity;
+  for (let i = 0; i < RIVER_POINTS.length - 1; i++) {
+    const a = RIVER_POINTS[i]!, b = RIVER_POINTS[i + 1]!;
+    const vx = b.x - a.x, vz = b.z - a.z;
+    const wx = x - a.x, wz = z - a.z;
+    const len2 = vx * vx + vz * vz || 1;
+    const t = Math.max(0, Math.min(1, (wx * vx + wz * vz) / len2));
+    const cx = a.x + t * vx, cz = a.z + t * vz;
+    const d = Math.hypot(x - cx, z - cz);
+    if (d < min) min = d;
+  }
+  return min;
+}
 /** Nenhum acampamento começa a menos disto do nascedouro. */
 export const SPAWN_SAFE_RADIUS = 14;
 /** Folga mínima entre as bordas de dois acampamentos (ou de um acampamento e as ruínas). */
@@ -207,10 +247,10 @@ export const CAMP_IDS = Object.keys(CAMPS);
 
 /** Onde cada acampamento fica no mundo. O tier 1 é o mais perto do nascedouro. */
 export const CAMP_PLACEMENTS: CampPlacement[] = [
-  { id: 'raider_outpost', defId: 'raider_outpost', position: { x: 20, z: 14 } },
-  { id: 'blackclaw_camp', defId: 'blackclaw_camp', position: { x: -26, z: 20 } },
-  { id: 'crackedbone_warband', defId: 'crackedbone_warband', position: { x: 30, z: -24 } },
-  { id: 'stonefist_stronghold', defId: 'stonefist_stronghold', position: { x: -32, z: -30 } },
+  { id: 'raider_outpost', defId: 'raider_outpost', position: { x: 23, z: 7 } },
+  { id: 'blackclaw_camp', defId: 'blackclaw_camp', position: { x: -45, z: 35 } },
+  { id: 'crackedbone_warband', defId: 'crackedbone_warband', position: { x: 55, z: -50 } },
+  { id: 'stonefist_stronghold', defId: 'stonefist_stronghold', position: { x: -60, z: -58 } },
 ];
 
 // ---------------------------------------------------------------------------

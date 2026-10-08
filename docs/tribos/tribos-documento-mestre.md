@@ -10,6 +10,11 @@ metadata:
 
 # TRIBOS — Documento Mestre (selado 06/10/2026)
 
+> 🧭 **Leitura central (afinada 07/10):** TRIBOS é **sobrevivência + reconstrução de civilização
+> num mundo pós-colapso** — a infraestrutura sobreviveu, a civilização não. Tudo abaixo continua
+> valendo, mas lido por essa lente: combate, base, raid e economia **servem** a reconstrução.
+> Direção oficial em [[tribos-visao-pos-colapso]]. Este documento não foi apagado nem alterado no mérito.
+
 ## Conceito
 Mundo multiplayer persistente onde exploração, sobrevivência, progressão, PvE, PvP, construção, criaturas, operações e guerras acontecem no mesmo ecossistema.
 

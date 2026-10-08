@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import type { FeedbackEvent } from '@/game/types/feedback';
-import { pixelsPerUnit, terrainHeight } from './world-kit';
+import { markImpact, pixelsPerUnit, terrainHeight } from './world-kit';
 
 const NUMBER_POOL = 18;
 const PARTICLE_POOL = 96;
@@ -72,6 +72,7 @@ function drawNumber(slot: NumberSlot, text: string, color: string) {
 }
 
 const BLOOD = ['#b3261e', '#8f1a14', '#d9412f', '#a31d17'].map(c => new THREE.Color(c));
+const FIRE = ['#ff8a1e', '#ff5a00', '#ffc233', '#ff3b00'].map(c => new THREE.Color(c));
 const SPARK = new THREE.Color('#ffd34a');
 const dummy = new THREE.Object3D();
 
@@ -118,9 +119,11 @@ export function CombatFeedback() {
     const text = heal ? `+${ev.amount}` : crit ? `${ev.amount}!` : `${ev.amount}`;
     const color = heal
       ? '#8fe388'
-      : ev.onPlayer
-        ? (crit ? '#ff3a2a' : '#ff6a58')
-        : (crit ? '#ffe27a' : '#fff3d0');
+      : ev.fire
+        ? (crit ? '#ffb03a' : '#ff8a2a')
+        : ev.onPlayer
+          ? (crit ? '#ff3a2a' : '#ff6a58')
+          : (crit ? '#ffe27a' : '#fff3d0');
     drawNumber(slot, text, color);
     slot.active = true;
     slot.born = now.current;
@@ -136,6 +139,7 @@ export function CombatFeedback() {
     const m = partMesh.current;
     if (!m) return;
     const isDeath = ev.kind === 'death';
+    const palette = ev.fire ? FIRE : BLOOD;
     const n = isDeath ? 20 : ev.critical ? 16 : 9;
     const baseY = terrainHeight(ev.position.x, ev.position.z) + (ev.onPlayer ? 1.1 : 0.8);
     const arr = parts.current;
@@ -156,7 +160,7 @@ export function CombatFeedback() {
       arr[o + 8] = 0.07 + Math.random() * 0.1;
       partActive.current[i] = 1;
       const spark = ev.critical && k % 4 === 0;
-      m.setColorAt(i, spark ? SPARK : BLOOD[k % BLOOD.length]!);
+      m.setColorAt(i, spark ? SPARK : palette[k % palette.length]!);
     }
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   };
@@ -176,6 +180,9 @@ export function CombatFeedback() {
         seenIds.add(ev.id);
         if (ev.kind === 'damage' || ev.kind === 'heal') spawnNumber(ev);
         if (ev.kind === 'damage' || ev.kind === 'death') spawnBurst(ev);
+        // Soco de impacto → a câmera tremula (peso do golpe).
+        if (ev.kind === 'death') markImpact(1.6);
+        else if (ev.kind === 'damage') markImpact(ev.onPlayer ? 0.7 : ev.critical ? 1.4 : 1.0);
       }
       if (seenIds.size > 400) {
         const live = new Set(fb.map(e => e.id));

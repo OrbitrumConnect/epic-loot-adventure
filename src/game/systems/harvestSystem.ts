@@ -2,7 +2,7 @@ import type {
   HarvestNodeKind, HarvestNodeState, HarvestResult, HarvestTool, InventoryState, Position,
 } from '../types';
 import { HARVEST_NODES, HARVEST_NODE_TARGETS, HARVEST_TOOLS } from '../data/harvest-nodes';
-import { CAMPS, CAMP_PLACEMENTS, PLAYER_SPAWN, RUINS_POSITION, RUINS_RADIUS, WORLD_HALF } from '../data/camps';
+import { CAMPS, CAMP_PLACEMENTS, LAKE_CENTERS, PLAYER_SPAWN, RIVER_HALF_WIDTH, RUINS_POSITION, RUINS_RADIUS, WORLD_HALF, riverDistance } from '../data/camps';
 import { ITEMS } from '../data/items';
 import { addItem, canAddItem } from './inventorySystem';
 
@@ -24,20 +24,25 @@ type Zone = { x: number; z: number; spread: number };
 
 /** Centros de floresta e de terreno rochoso (pontos fixos do vale). */
 const FOREST_ZONES: Zone[] = [
-  { x: -20, z: -12, spread: 9 },
-  { x: 12, z: 26, spread: 9 },
-  { x: -12, z: 32, spread: 8 },
-  { x: 24, z: -4, spread: 8 },
-  { x: -38, z: 36, spread: 7 },
-  { x: 38, z: 30, spread: 7 },
-  { x: -8, z: -34, spread: 8 },
+  { x: -40, z: -24, spread: 14 },
+  { x: 24, z: 52, spread: 14 },
+  { x: -24, z: 64, spread: 12 },
+  { x: 48, z: -8, spread: 12 },
+  { x: -72, z: 60, spread: 11 },
+  { x: 72, z: 50, spread: 11 },
+  { x: -16, z: -68, spread: 12 },
+  { x: 60, z: 30, spread: 10 },
+  { x: -55, z: -50, spread: 10 },
+  { x: 10, z: -40, spread: 10 },
 ];
 const ROCKY_ZONES: Zone[] = [
-  { x: -36, z: 2, spread: 7 },
-  { x: 36, z: 8, spread: 7 },
-  { x: 2, z: -38, spread: 8 },
-  { x: 16, z: -30, spread: 6 },
-  { x: -18, z: 40, spread: 6 },
+  { x: -70, z: 4, spread: 11 },
+  { x: 70, z: 16, spread: 11 },
+  { x: 4, z: -72, spread: 12 },
+  { x: 32, z: -58, spread: 10 },
+  { x: -36, z: 76, spread: 9 },
+  { x: -60, z: -30, spread: 9 },
+  { x: 50, z: -40, spread: 9 },
 ];
 
 function mulberry32(seed: number): () => number {
@@ -68,6 +73,10 @@ export function isFreeForNode(p: Position): boolean {
     if (!def) continue;
     if (dist(p, placement.position) < def.radius + HARVEST_CAMP_MARGIN) return false;
   }
+  for (const lake of LAKE_CENTERS) {
+    if (dist(p, { x: lake.x, z: lake.z }) < lake.r + 2) return false;
+  }
+  if (riverDistance(p.x, p.z) < RIVER_HALF_WIDTH + 2) return false;
   return true;
 }
 

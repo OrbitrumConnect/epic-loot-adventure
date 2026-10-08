@@ -34,6 +34,8 @@ export type FeedbackEvent = {
   onPlayer?: boolean;
   /** `damage`: golpe crítico, para um efeito mais forte. */
   critical?: boolean;
+  /** `damage`: dano de fogo (tocha) — número laranja e faíscas de chama. */
+  fire?: boolean;
   createdAt: number;
   /** Duração em milissegundos antes de sumir. */
   ttl: number;

@@ -18,6 +18,7 @@ import { HuntBanner } from '@/components/hud/hunt-banner';
 import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
+import { gameClock } from '@/game/systems/dayNightSystem';
 import { RECIPES } from '@/game/data/recipes';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
 import {
@@ -101,6 +102,13 @@ function Index() {
     return () => clearInterval(id);
   }, []);
 
+  // Relógio do jogo (ciclo dia/noite de 30 min). Atualiza a cada segundo.
+  const [clock, setClock] = useState(() => gameClock());
+  useEffect(() => {
+    const id = setInterval(() => setClock(gameClock()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const activeObjective = objectives.items.find(o => o.status === 'active')
     ?? objectives.items.find(o => o.status === 'queued')
     ?? null;
@@ -118,6 +126,8 @@ function Index() {
 
   const autoPotion = useGameStore(s => s.autoPotion);
   const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
+  const autoHuntRadius = useGameStore(s => s.autoHuntRadius);
+  const setAutoHuntRadius = useGameStore(s => s.setAutoHuntRadius);
   const drinkPotion = useGameStore(s => s.drinkPotion);
   const xpPct = player.xpToNext > 0 ? Math.min(100, Math.round((player.xp / player.xpToNext) * 100)) : 0;
 
@@ -328,7 +338,7 @@ function Index() {
             <div className="minimap"><WorldMap size="mini" /><span className="minimap-north">N</span></div>
             <div className="map-coordinate">
               <span>{Math.round((position[0] ?? 0) + 124)}, {Math.round((position[1] ?? 0) + 86)}</span>
-              <span>Dia 1 · 08:42</span>
+              <span>Dia {clock.day} · {clock.time}</span>
             </div>
             <div className="quest">
               <div className="quest-caption"><Target />SUA EXPEDIÇÃO</div>
@@ -354,6 +364,17 @@ function Index() {
               {idleMode ? (INTENT_LABEL[pilot.kind] ?? pilot.label) : 'Controle manual'}
               {idleMode && pilot.detail ? <em> · {pilot.detail}</em> : null}
             </span>
+            {idleMode && (
+              <label className="pilot-hunt" title="Raio que o piloto ocioso usa pra caçar o bicho mais próximo">
+                <Crosshair />
+                <input
+                  type="range" min={5} max={25} step={1} value={autoHuntRadius}
+                  onChange={e => setAutoHuntRadius(Number(e.target.value))}
+                  aria-label="Raio de caça automática"
+                />
+                <span>{autoHuntRadius} m</span>
+              </label>
+            )}
             <Button variant="ghost" size="sm" className="pilot-toggle" title="Alternar piloto automático · G"
               onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>
               {idleMode ? 'Assumir' : 'Piloto'}
@@ -370,7 +391,7 @@ function Index() {
               {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
             </div>
             <div className="world-actions">
-              <Button variant="ghost" className="world-action" aria-label="Coletar recursos" title="Coletar recursos · E" onClick={collectNearest}><Package /></Button>
+              <Button variant="ghost" className="world-action" aria-label="Pegar / colher" title="Pegar / colher · E" onClick={collectNearest}><Package /></Button>
               <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
               <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
               <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>

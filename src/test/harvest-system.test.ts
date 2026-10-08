@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { HarvestNodeState, InventoryState } from '@/game/types';
 import { HARVEST_NODES, HARVEST_NODE_COUNT, HARVEST_NODE_TARGETS } from '@/game/data/harvest-nodes';
-import { CAMPS, CAMP_PLACEMENTS, PLAYER_SPAWN, RUINS_POSITION } from '@/game/data/camps';
+import { CAMPS, CAMP_PLACEMENTS, PLAYER_SPAWN, RUINS_POSITION, WORLD_HALF } from '@/game/data/camps';
 import { RECIPES } from '@/game/data/recipes';
 import { ITEMS } from '@/game/data/items';
 import {
@@ -50,8 +50,8 @@ describe('colocação dos nós', () => {
         const r = CAMPS[p.defId]!.radius;
         expect(Math.hypot(x - p.position.x, z - p.position.z)).toBeGreaterThanOrEqual(r);
       }
-      expect(Math.abs(x)).toBeLessThanOrEqual(45);
-      expect(Math.abs(z)).toBeLessThanOrEqual(45);
+      expect(Math.abs(x)).toBeLessThanOrEqual(WORLD_HALF);
+      expect(Math.abs(z)).toBeLessThanOrEqual(WORLD_HALF);
     }
   });
 

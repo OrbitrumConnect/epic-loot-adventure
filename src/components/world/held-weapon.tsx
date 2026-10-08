@@ -137,13 +137,17 @@ function Pickaxe({ k, iron }: { k: Kit; iron: boolean }) {
 
 function Torch({ k }: { k: Kit }) {
   const flame = useRef<THREE.Group>(null);
+  const light = useRef<THREE.PointLight>(null);
   useFrame(({ clock }) => {
-    const f = flame.current;
-    if (!f) return;
     const t = clock.elapsedTime;
-    const p = 1 + Math.sin(t * 17) * 0.12 + Math.sin(t * 29) * 0.06;
-    f.scale.set(p, 1 + Math.sin(t * 13) * 0.2, p);
-    f.rotation.y = t * 2;
+    const f = flame.current;
+    if (f) {
+      const p = 1 + Math.sin(t * 17) * 0.12 + Math.sin(t * 29) * 0.06;
+      f.scale.set(p, 1 + Math.sin(t * 13) * 0.2, p);
+      f.rotation.y = t * 2;
+    }
+    // Tremeluzir: a tocha realmente ilumina o raio ao redor do jogador.
+    if (light.current) light.current.intensity = 6.5 + Math.sin(t * 17) * 1.1 + Math.sin(t * 29) * 0.5;
   });
   return (
     <>
@@ -153,6 +157,7 @@ function Torch({ k }: { k: Kit }) {
       <group ref={flame} position={[0, 0.12, 0.76]}>
         <mesh geometry={geo.cone} material={k.flame} position={[0, 0.17, 0]} scale={[0.26, 0.5, 0.26]} />
         <mesh geometry={geo.cone} material={k.flameCore} position={[0.02, 0.1, 0.01]} scale={[0.14, 0.28, 0.14]} />
+        <pointLight ref={light} color="#ff9a44" intensity={6.5} distance={16} decay={1.6} />
       </group>
     </>
   );

@@ -54,7 +54,7 @@ export function damageEvent(
   targetId: string,
   amount: number,
   position: Position,
-  opts: { onPlayer?: boolean; critical?: boolean } = {},
+  opts: { onPlayer?: boolean; critical?: boolean; fire?: boolean } = {},
 ): FeedbackDraft {
   const critical = opts.critical === true;
   return {
@@ -65,6 +65,7 @@ export function damageEvent(
     amount,
     onPlayer: opts.onPlayer === true,
     critical,
+    fire: opts.fire === true,
     ttl: FEEDBACK_TTL.damage,
   };
 }

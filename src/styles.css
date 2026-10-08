@@ -415,6 +415,9 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .pilot-doing { color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pilot-doing em { font-style: normal; opacity: .75; }
 .pilot-toggle { margin-left: auto; height: 26px; font-size: 9px; letter-spacing: 1px; color: var(--primary); border: 1px solid color-mix(in oklch,var(--primary) 35%,transparent); }
+.pilot-hunt { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); white-space: nowrap; }
+.pilot-hunt input[type=range] { width: 78px; accent-color: var(--primary); cursor: pointer; }
+.pilot-hunt span { min-width: 30px; color: var(--primary); }
 .obj-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .obj-toggles button { font-size: 10px; letter-spacing: 1px; }
 .obj-toggles svg { width: 13px; height: 13px; }
