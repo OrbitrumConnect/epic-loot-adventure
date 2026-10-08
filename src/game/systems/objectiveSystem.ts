@@ -342,9 +342,11 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   // 5
   const active = getActiveObjective(snapshot.objectives);
   if (!active) {
-    // 6. Ocioso: caça o bicho vivo mais próximo dentro do raio configurado.
-    const huntRadius = snapshot.autoHuntRadius ?? 0;
-    if (huntRadius > 0) {
+    // 6. Ocioso: caça o bicho vivo mais próximo. Com arma de longe, o raio de
+    // caça chega ao alcance da arma (engaja de longe em vez de correr pra cima).
+    const huntBase = snapshot.autoHuntRadius ?? 0;
+    if (huntBase > 0) {
+      const huntRadius = Math.max(huntBase, snapshot.attackRange ?? 0);
       const prey = nearestCreatureWithin(snapshot, huntRadius);
       if (prey) return engage(snapshot, prey, 'Caçando por perto');
     }
