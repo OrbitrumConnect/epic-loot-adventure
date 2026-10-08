@@ -19,6 +19,7 @@ import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock } from '@/game/systems/dayNightSystem';
+import { specialCooldown } from '@/game/systems/progressionSystem';
 import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
@@ -109,6 +110,10 @@ function Index() {
     const id = setInterval(() => setClock(gameClock()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Cooldown do especial (Q/R compartilham). `clock` tica a cada 1s e força o recompute.
+  void clock;
+  const specialLeft = Math.max(0, Math.ceil(specialCooldown(player.level) - (Date.now() / 1000 - (player.lastSpecialAt ?? 0))));
 
   const activeObjective = objectives.items.find(o => o.status === 'active')
     ?? objectives.items.find(o => o.status === 'queued')
@@ -403,8 +408,8 @@ function Index() {
             <div className="world-actions">
               <Button variant="ghost" className="world-action" aria-label="Pegar / colher" title="Pegar / colher · E" onClick={collectNearest}><Package /></Button>
               <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
-              <Button variant="ghost" className="world-action" aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap /></Button>
-              <Button variant="ghost" className="world-action" aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat /></Button>
+              <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
+              <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
               <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
               <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
             </div>

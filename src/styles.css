@@ -255,6 +255,9 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .world-actions { display: flex; gap: 8px; pointer-events: auto; }
 .world-action { border: 1px solid color-mix(in oklch,var(--foreground) 20%,transparent); background: var(--overlay); height: 43px; width: 43px; color: var(--world-ink); box-shadow: var(--panel-shadow); }
 .world-action[data-primary=true] { border-color: var(--primary); color: var(--primary); }
+.world-action[data-cooldown=true] { opacity: .5; }
+.world-action { position: relative; }
+.world-action .cd { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--primary); background: color-mix(in oklch,var(--overlay) 70%,transparent); border-radius: inherit; }
 .game-footer { min-height: 110px; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 15px 25px; border-top: 1px solid var(--border); background: var(--background); }
 .loot-summary { min-width: 110px; }
 .footer-label { font-size: 8px; letter-spacing: 1.5px; color: var(--muted-foreground); margin-bottom: 9px; display: flex; align-items: center; gap: 7px; }
