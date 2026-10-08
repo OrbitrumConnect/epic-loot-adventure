@@ -140,7 +140,7 @@ function Tent({ kit }: { kit: CampKit }) {
           geometry={kit.box}
           material={kit.hide}
           position={[side * 0.5, 0.6, 0]}
-          rotation={[0, 0, side * -0.72]}
+          rotation={[0, 0, side * 0.72]}
           scale={[0.08, 1.75, 2.1]}
           castShadow
         />
