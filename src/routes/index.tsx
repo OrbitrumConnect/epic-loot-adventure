@@ -400,7 +400,7 @@ function Index() {
           <LevelUpBanner />
           <RewardFeed />
 
-          <div className="world-bottom">
+          {!panel && (<div className="world-bottom">
             <div className="world-message">
               <div><time>08:42</time><strong>Mundo</strong> · {ui.message}</div>
               {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
@@ -413,7 +413,7 @@ function Index() {
               <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
               <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
             </div>
-          </div>
+          </div>)}
           </>)}
 
           {panel && (
