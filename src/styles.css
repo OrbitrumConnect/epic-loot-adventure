@@ -143,6 +143,8 @@
     font-family: var(--font-sans);
     margin: 0;
     letter-spacing: 0;
+    /* Mobile: nada vaza pra direita (sem scroll horizontal da página). */
+    overflow-x: hidden;
   }
 }
 
@@ -260,7 +262,8 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .loot-resources { display: flex; gap: 15px; }
 .loot-resources span { display: flex; gap: 6px; align-items: center; font-size: 11px; }
 .loot-resources svg { width: 16px; color: var(--primary); }
-.hotbar { display: flex; gap: 6px; justify-content: center; }
+/* Desktop: os 11 slots cabem numa linha só (lado a lado). Mobile: quebra em vez de vazar pra direita. */
+.hotbar { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
 .hotbar-slot:nth-child(9) { margin-left: 14px; }
 .hotbar-slot { position: relative; width: 55px; height: 61px; border: 1px solid var(--border); border-radius: 4px; background: var(--card); padding: 0; color: var(--foreground); }
 .hotbar-slot[data-active=true] { border-color: var(--primary); background: color-mix(in oklch,var(--primary) 9%,var(--card)); color: var(--primary); }
