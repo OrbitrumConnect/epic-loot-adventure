@@ -209,6 +209,8 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
         <group ref={flameRef} position={[0, 0.45, 0]}>
           <mesh geometry={kit.cone} material={kit.flame} scale={[0.5, 1.1, 0.5]} />
           <mesh geometry={kit.cone} material={kit.flame} position={[0.12, 0.25, -0.08]} scale={[0.3, 0.7, 0.3]} />
+          {/* Luz de verdade: a fogueira do acampamento ilumina ao redor. */}
+          <pointLight color="#ff8a44" intensity={4} distance={10} decay={1.6} />
         </group>
       )}
       {cleared && (
