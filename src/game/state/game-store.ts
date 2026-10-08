@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { ITEMS } from '../data/items';
 import { weaponFor } from '../data/weapons';
+import { DEFAULT_ATTRIBUTES } from '../types/player';
 import { CREATURES } from '../data/creatures';
 import { CAMPS, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES } from '../data/harvest-nodes';
@@ -151,6 +152,7 @@ function createInitialPlayer(): PlayerState {
     lastAttackAt: 0,
     dead: false,
     respawnAt: 0,
+    attributes: { ...DEFAULT_ATTRIBUTES },
   };
 }
 
@@ -277,7 +279,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         ? base + TORCH_FIRE_BONUS
         : base + weaponPower;
 
-    const result = resolveAttack(totalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
+    // Atributo de dano (%): multiplica o poder final. Default 0 = sem mudança.
+    const finalPower = Math.round(totalPower * (1 + (state.player.attributes?.damage ?? 0) / 100));
+
+    const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
 
     const updatedCreatures = state.creatures.map(c => {
       if (c.id !== targetId) return c;
@@ -293,7 +298,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const stamp = Date.now();
     const drafts: FeedbackDraft[] = [
       damageEvent(creature.id, result.damage, creature.position, {
-        critical: isCriticalDamage(totalPower, creature.armor, result.damage),
+        critical: isCriticalDamage(finalPower, creature.armor, result.damage),
         fire: usingTorch,
       }),
     ];
