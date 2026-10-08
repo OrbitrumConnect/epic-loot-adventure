@@ -4,7 +4,7 @@ import type { CampState, CreatureState } from '@/game/types';
 import {
   CAMPS, CAMP_PLACEMENTS, PLAYER_SPAWN, WORLD_HALF, findPlacementIssues,
 } from '@/game/data/camps';
-import { CREATURES } from '@/game/data/creatures';
+import { CREATURES, ENEMY_RESPAWN_MULT } from '@/game/data/creatures';
 import {
   CAMP_SIGHT_MARGIN, createCamps, discoverCamps, getAliveCount, getCamp, getCampCreatures,
   getNearestLivingEnemy, getSpawnCreatureId, isCampCleared, tickCamps,
@@ -147,7 +147,7 @@ describe('campSystem · limpeza e recompensa', () => {
     const cleared = campById(done.camps, camp.id);
     expect(cleared.cleared).toBe(true);
     expect(cleared.clearedAt).toBe(T0 + 10);
-    expect(cleared.respawnAt).toBe(T0 + 10 + CAMPS[camp.defId]!.respawnMs);
+    expect(cleared.respawnAt).toBe(T0 + 10 + Math.round(CAMPS[camp.defId]!.respawnMs * ENEMY_RESPAWN_MULT));
   });
 
   it('a recompensa só pode sair uma vez: ticks seguintes não reportam de novo', () => {

@@ -549,3 +549,30 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 @keyframes xp-flash { 0%,100% { filter: none; transform: scaleY(1); } 40% { filter: brightness(2.2) saturate(1.4); transform: scaleY(2.2); } }
 @keyframes xp-flash-text { 40% { text-shadow: 0 0 10px var(--primary); } }
 .wm-key-target { border: 1.5px solid var(--primary); border-radius: 50%; }
+
+/* -------------------------------------------------------------------------
+ * Ajuste fino mobile (Pedro, 08/10): no celular o open world não pode ter
+ * card grande ocupando a tela. Minimapa −20%, título menor, barra de slots
+ * −10% e o card do piloto vira só [modo + botão].
+ * --------------------------------------------------------------------- */
+@media (max-width: 700px) {
+  /* Título do mundo menor */
+  .zone-heading { top: 14px; left: 14px; }
+  .zone-heading h1 { font-size: 17px; margin: 4px 0; }
+  .zone-heading .zone-meta { font-size: 9px; }
+
+  /* Minimapa −20% */
+  .minimap { width: 141px; height: 126px; }
+
+  /* Barra dos slots de armas −10% */
+  .hotbar-slot { width: 42px; height: 51px; }
+  .hotbar-slot > svg { width: 22px; height: 22px; }
+  .hotbar-slot .hotbar-sprite { width: 34px; height: 34px; }
+
+  /* Card do piloto compacto: só o modo + o botão (sem ocupar a tela) */
+  .pilot-strip { left: 10px; bottom: 68px; max-width: 62%; padding: 5px 9px; gap: 8px; }
+  .pilot-strip .pilot-objective,
+  .pilot-strip .pilot-doing,
+  .pilot-strip .pilot-hunt { display: none; }
+  .pilot-strip .pilot-toggle { margin-left: 0; }
+}

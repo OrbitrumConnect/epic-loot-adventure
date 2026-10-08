@@ -1,5 +1,5 @@
 import type { CreatureState, Position } from '../types';
-import { CREATURES } from '../data/creatures';
+import { CREATURES, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, CAMP_PLACEMENTS, LAKE_CENTERS, PLAYER_SPAWN, RIVER_HALF_WIDTH, RUINS_POSITION, RUINS_RADIUS, WORLD_HALF, riverDistance } from '../data/camps';
 
 /** Quantas de cada espécie `createWildCreatures` posiciona. */
@@ -82,8 +82,8 @@ export function createWildCreatures(seed: number = DEFAULT_WILD_SEED): CreatureS
         id: `wild_${speciesId}_${placed}`,
         speciesId,
         name: def.name,
-        hp: def.maxHp,
-        maxHp: def.maxHp,
+        hp: scaleEnemyHp(def.maxHp),
+        maxHp: scaleEnemyHp(def.maxHp),
         attackPower: def.attackPower,
         armor: def.armor,
         attackCooldown: def.attackCooldown,

@@ -1,6 +1,6 @@
 import type { CampDefinition, CampState, CreatureState, Position } from '../types';
 import { CAMPS, CAMP_PLACEMENTS, WORLD_HALF, type CampPlacement } from '../data/camps';
-import { CREATURES } from '../data/creatures';
+import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { getDistance } from './combatSystem';
 
 /** Distância extra além do raio do acampamento em que o jogador já o enxerga. */
@@ -64,8 +64,8 @@ function buildCreature(
     id,
     speciesId: species.id,
     name: species.name,
-    hp: species.maxHp,
-    maxHp: species.maxHp,
+    hp: scaleEnemyHp(species.maxHp),
+    maxHp: scaleEnemyHp(species.maxHp),
     attackPower: species.attackPower,
     armor: species.armor,
     attackCooldown: species.attackCooldown,
@@ -217,7 +217,7 @@ export function tickCamps(
         ...camp,
         cleared: true,
         clearedAt: now,
-        respawnAt: now + (def?.respawnMs ?? 300_000),
+        respawnAt: now + Math.round((def?.respawnMs ?? 300_000) * ENEMY_RESPAWN_MULT),
       };
       campsChanged = true;
       newlyCleared.push(cleared);

@@ -1,5 +1,19 @@
 import type { CreatureDefinition } from '../types';
 
+/**
+ * Ajustes globais de dificuldade/dinâmica (aplicados no SPAWN, não no dado-base).
+ * Mantêm `CREATURES` e `creatureXp` estáveis (valor da caça/economia intactos);
+ * só mudam o que a criatura instanciada tem no mundo.
+ */
+/** Vida dos inimigos +15% (lutas um pouco mais longas). */
+export const ENEMY_HP_MULT = 1.15;
+/** Reaparecem 20% mais rápido (mundo mais vivo). */
+export const ENEMY_RESPAWN_MULT = 0.8;
+/** Vida instanciada de um inimigo a partir da vida-base do dado. */
+export function scaleEnemyHp(baseHp: number): number {
+  return Math.round(baseHp * ENEMY_HP_MULT);
+}
+
 export const CREATURES: Record<string, CreatureDefinition> = {
   wolf: {
     id: 'wolf',

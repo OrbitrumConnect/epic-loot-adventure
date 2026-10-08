@@ -7,7 +7,7 @@ import type {
 import { ITEMS } from '../data/items';
 import { weaponFor } from '../data/weapons';
 import { DEFAULT_ATTRIBUTES } from '../types/player';
-import { CREATURES } from '../data/creatures';
+import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
@@ -179,8 +179,8 @@ function createInitialCreatures(): CreatureState[] {
       id: 'wolf_1',
       speciesId: 'wolf',
       name: 'Lobo do Vale',
-      hp: 80,
-      maxHp: 80,
+      hp: scaleEnemyHp(80),
+      maxHp: scaleEnemyHp(80),
       attackPower: 8,
       armor: 2,
       attackCooldown: 1.5,
@@ -194,8 +194,8 @@ function createInitialCreatures(): CreatureState[] {
       id: 'wolf_2',
       speciesId: 'wolf',
       name: 'Lobo do Vale',
-      hp: 80,
-      maxHp: 80,
+      hp: scaleEnemyHp(80),
+      maxHp: scaleEnemyHp(80),
       attackPower: 8,
       armor: 2,
       attackCooldown: 1.5,
@@ -209,8 +209,8 @@ function createInitialCreatures(): CreatureState[] {
       id: 'wolf_3',
       speciesId: 'wolf',
       name: 'Lobo do Vale',
-      hp: 80,
-      maxHp: 80,
+      hp: scaleEnemyHp(80),
+      maxHp: scaleEnemyHp(80),
       attackPower: 8,
       armor: 2,
       attackCooldown: 1.5,
@@ -306,7 +306,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const updatedCreatures = state.creatures.map(c => {
       if (c.id !== targetId) return c;
       if (result.targetDied) {
-        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + (180_000 + Math.random() * 120_000) };
+        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + Math.round((180_000 + Math.random() * 120_000) * ENEMY_RESPAWN_MULT) };
       }
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
@@ -448,7 +448,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         drafts.push(deathEvent(c.id, c.name, c.position));
         drafts.push(xpEvent(xpGain, pos));
         if (g.result.levelsGained > 0) drafts.push(levelUpEvent(g.result.newLevel, pos));
-        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + (180_000 + Math.random() * 120_000) };
+        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + Math.round((180_000 + Math.random() * 120_000) * ENEMY_RESPAWN_MULT) };
       }
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
