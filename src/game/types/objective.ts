@@ -61,6 +61,8 @@ export type AutoSnapshot = {
   autoPotion?: boolean;
   /** Raio (m) pra caçar o bicho mais próximo quando ocioso. 0/ausente = não caça sozinho. */
   autoHuntRadius?: number;
+  /** Alcance de ataque da arma na mão (m). Ranged atira de longe. Ausente = melee. */
+  attackRange?: number;
   /** Nós de colheita do mundo novo (legado fica em `resources`). */
   harvestNodes?: { id: string; kind: string; position: Position; depleted: boolean }[];
 };

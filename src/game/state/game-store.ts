@@ -5,6 +5,7 @@ import type {
   FeedbackEvent,
 } from '../types';
 import { ITEMS } from '../data/items';
+import { weaponFor } from '../data/weapons';
 import { CREATURES } from '../data/creatures';
 import { CAMPS, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES } from '../data/harvest-nodes';
@@ -32,7 +33,7 @@ import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
-  pushEvents, xpEvent,
+  pushEvents, shotEvent, xpEvent,
 } from '../systems/feedbackSystem';
 import type { FeedbackDraft } from '../systems/feedbackSystem';
 
@@ -109,6 +110,8 @@ type GameActions = {
 };
 
 function createInitialPlayer(): PlayerState {
+  // Itens originais nos 8 primeiros slots (hotbar antiga INTACTA). Arco/pistola/
+  // rifle entram DEPOIS (slots 10-12) e aparecem no fim da hotbar estendida.
   const inventory = createInventory([
     { itemId: 'iron_sword', quantity: 1 },
     { itemId: 'axe', quantity: 1 },
@@ -120,7 +123,12 @@ function createInitialPlayer(): PlayerState {
     { itemId: 'ancestral_strike', quantity: 1 },
     { itemId: 'wood', quantity: 12 },
     { itemId: 'stone', quantity: 8 },
+    { itemId: 'bow', quantity: 1 },
+    { itemId: 'pistol', quantity: 1 },
+    { itemId: 'rifle', quantity: 1 },
   ]);
+  // Hotbar estendida: 8 slots originais INTACTOS + arco/pistola/rifle no fim.
+  inventory.hotbar.slots = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
 
   return {
     id: 'player_1',
@@ -241,27 +249,33 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const creature = state.creatures.find(c => c.id === targetId);
     if (!creature || creature.behavior === 'dead') return;
 
+    // Arma ativa = item na mão (hotbar). O perfil define alcance, cadência e tipo
+    // (melee vs ranged). Tocha = dano de fogo. CombatController único: humano e
+    // piloto chamam este mesmo `attack`.
+    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+    const heldItemId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    const prof = weaponFor(heldItemId);
+    const usingRanged = prof.ranged;
+    const usingTorch = heldItemId === 'torch';
+
     const now = Date.now() / 1000;
-    if (now - state.player.lastAttackAt < state.player.attackCooldown) return;
+    if (now - state.player.lastAttackAt < prof.cooldown) return;
 
     const dist = getDistance(state.player.position, creature.position);
-    if (dist > 4) {
+    if (dist > prof.range) {
       set(s => ({ ui: { ...s.ui, message: `${creature.name} está longe demais.` } }));
       return;
     }
 
-    // Item segurado na mão (hotbar selecionada). Atacar com a TOCHA vira dano
-    // de fogo: ignora a arma equipada e usa base + bônus de fogo.
-    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
-    const heldItemId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
-    const usingTorch = heldItemId === 'torch';
-
     const equippedWeapon = state.player.inventory.equipment.primary;
     const weaponPower = equippedWeapon ? (ITEMS[equippedWeapon]?.attackPower ?? 0) : 0;
     const TORCH_FIRE_BONUS = 9;
-    const totalPower = usingTorch
-      ? playerBaseAttack(state.player.level) + TORCH_FIRE_BONUS
-      : playerBaseAttack(state.player.level) + weaponPower;
+    const base = playerBaseAttack(state.player.level);
+    const totalPower = usingRanged
+      ? base + (heldItemId ? ITEMS[heldItemId]?.attackPower ?? 0 : 0)
+      : usingTorch
+        ? base + TORCH_FIRE_BONUS
+        : base + weaponPower;
 
     const result = resolveAttack(totalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
 
@@ -283,6 +297,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         fire: usingTorch,
       }),
     ];
+    // Ranged: projétil visual do jogador até o alvo.
+    if (usingRanged && prof.projectile) {
+      drafts.push(shotEvent(state.player.position, creature.position, prof.projectile));
+    }
 
     if (result.targetDied) {
       const def = CREATURES[creature.speciesId];
@@ -309,7 +327,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }
     }
 
-    const creatureRetaliates = !result.targetDied;
+    // De longe (ranged) o bicho não revida na hora; ele ainda vai perseguir pela IA.
+    const creatureRetaliates = !result.targetDied && !usingRanged && dist <= 4.5;
     if (creatureRetaliates) {
       const dmgToPlayer = Math.max(1, creature.attackPower - 2);
       updatedPlayer = {
@@ -866,6 +885,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       healSlot: findHealHotbarIndex(state.player.inventory) ?? (DEV_INFINITE_POTIONS ? 0 : null),
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
+      attackRange: weaponFor(
+        (() => {
+          const s = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+          return s != null ? state.player.inventory.slots[s]?.itemId ?? null : null;
+        })(),
+      ).range,
       harvestNodes: state.harvestNodes.map(n => ({
         id: n.id,
         kind: n.kind,

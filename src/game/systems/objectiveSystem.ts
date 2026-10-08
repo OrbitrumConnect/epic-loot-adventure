@@ -296,7 +296,10 @@ function engage(
   creature: { id: string; position: Position },
   label: string,
 ): AutoIntent {
-  if (getDistance(snapshot.playerPosition, creature.position) <= ATTACK_RANGE) {
+  // Com arma de longe, o alcance vem da arma: o piloto atira de longe em vez
+  // de colar no bicho. Melee usa ATTACK_RANGE.
+  const range = snapshot.attackRange ?? ATTACK_RANGE;
+  if (getDistance(snapshot.playerPosition, creature.position) <= range) {
     return { kind: 'attack', creatureId: creature.id, to: { ...creature.position } };
   }
   return { kind: 'move', to: { ...creature.position }, reason: label };

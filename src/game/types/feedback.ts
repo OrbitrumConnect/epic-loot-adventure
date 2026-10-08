@@ -15,7 +15,8 @@ export type FeedbackKind =
   | 'xp'           // experiência ganha
   | 'loot'         // item recebido
   | 'levelup'      // subiu de nível
-  | 'harvest';     // recurso colhido
+  | 'harvest'      // recurso colhido
+  | 'shot';        // projétil de arma de longe (do jogador até o alvo)
 
 export type FeedbackEvent = {
   id: number;
@@ -36,6 +37,10 @@ export type FeedbackEvent = {
   critical?: boolean;
   /** `damage`: dano de fogo (tocha) — número laranja e faíscas de chama. */
   fire?: boolean;
+  /** `shot`: destino do projétil (o `position` é a origem). */
+  to?: Position;
+  /** `shot`: tipo do projétil visual. */
+  projectile?: 'arrow' | 'bullet';
   createdAt: number;
   /** Duração em milissegundos antes de sumir. */
   ttl: number;

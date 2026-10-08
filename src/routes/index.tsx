@@ -19,6 +19,7 @@ import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock } from '@/game/systems/dayNightSystem';
+import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
 import {
@@ -177,11 +178,16 @@ function Index() {
       return Math.sqrt(dx * dx + dz * dz);
     };
 
+    // Alcance vem da arma na mão (melee ~4 m, ranged até 22 m).
+    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+    const heldId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    const range = weaponFor(heldId).range;
+
     // Alvo selecionado tem prioridade sobre o mais próximo.
     const selectedId = (state as unknown as { targetId?: string | null }).targetId ?? null;
     if (selectedId) {
       const selected = creatures.find(c => c.id === selectedId && c.behavior !== 'dead');
-      if (selected && dist(selected) <= 4) { attack(selected.id); return; }
+      if (selected && dist(selected) <= range) { attack(selected.id); return; }
     }
 
     let nearest: string | null = null;
@@ -191,7 +197,7 @@ function Index() {
       const d = dist(c);
       if (d < bestDist) { bestDist = d; nearest = c.id; }
     }
-    if (nearest && bestDist <= 4) attack(nearest);
+    if (nearest && bestDist <= range) attack(nearest);
     else useGameStore.getState().setMessage('Nenhum inimigo próximo.');
   }, [attack]);
 
@@ -200,7 +206,8 @@ function Index() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
-      if (/^[1-8]$/.test(e.key)) useHotbarSlot(Number(e.key) - 1);
+      // 1–9 → slots 0–8; 0 → slot 9. Demais slots (ex.: rifle) por clique.
+      if (/^[0-9]$/.test(e.key)) useHotbarSlot(e.key === '0' ? 9 : Number(e.key) - 1);
       if (e.code === 'KeyE' && !inCity) collectNearest();
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'KeyV' && !inCity) toggleCamera();
@@ -580,7 +587,7 @@ function Index() {
           </div>
           <div>
             <div className="hotbar-row">
-            <div className="hotbar" aria-label="Hotbar de 8 slots">
+            <div className="hotbar" aria-label="Hotbar">
                 {hotbarItems.map((item, i) => {
                   return (
                     <Button variant="ghost" key={i} className="hotbar-slot"

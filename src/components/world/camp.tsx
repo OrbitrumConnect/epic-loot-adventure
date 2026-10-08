@@ -18,6 +18,7 @@ import type { CampState, CampStructure } from '@/game/types';
 import { addObjective, campDefinition } from './objective-bridge';
 import { useFadeGroup, type FadeSphere } from './occlusion';
 import { hashId, markPointerConsumed, mixColor, rand, terrainHeight, type Palette } from './world-kit';
+import { nightFactor } from '@/game/systems/dayNightSystem';
 
 /* ------------------------------------------------------------------ *
  * Layout procedural (fallback)
@@ -189,6 +190,11 @@ function Palisade({ kit }: { kit: CampKit }) {
 }
 
 function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; flameRef: React.RefObject<THREE.Group | null> }) {
+  const fireLight = useRef<THREE.PointLight>(null);
+  useFrame(({ clock }) => {
+    // Acende forte à noite (igual às luminárias e à fogueira do nascedouro).
+    if (fireLight.current) fireLight.current.intensity = (1.5 + nightFactor() * 5) + Math.sin(clock.elapsedTime * 7) * 0.6;
+  });
   return (
     <group>
       {[0, 1.2, 2.4, 3.6, 5].map((a, i) => (
@@ -209,8 +215,8 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
         <group ref={flameRef} position={[0, 0.45, 0]}>
           <mesh geometry={kit.cone} material={kit.flame} scale={[0.5, 1.1, 0.5]} />
           <mesh geometry={kit.cone} material={kit.flame} position={[0.12, 0.25, -0.08]} scale={[0.3, 0.7, 0.3]} />
-          {/* Luz de verdade: a fogueira acesa ilumina o acampamento. */}
-          <pointLight color="#ff8a44" intensity={5} distance={12} decay={1.5} />
+          {/* Luz de verdade: acende forte à noite. */}
+          <pointLight ref={fireLight} color="#ff8a44" intensity={5} distance={12} decay={1.5} />
         </group>
       )}
       {cleared && (

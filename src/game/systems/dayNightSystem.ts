@@ -7,8 +7,8 @@
 
 /** Momento em que a sessão começou — fixado quando o módulo carrega. */
 export const WORLD_EPOCH = Date.now();
-/** Duração real de um dia completo do jogo (30 min). */
-export const CYCLE_MS = 30 * 60 * 1000;
+/** Duração real de um dia completo do jogo (mais lento: a noite não cai tão rápido). */
+export const CYCLE_MS = 42 * 60 * 1000;
 /** Hora do jogo em que a sessão abre. */
 const START_HOUR = 8;
 

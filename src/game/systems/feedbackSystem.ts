@@ -16,6 +16,7 @@ export const FEEDBACK_TTL: Record<FeedbackKind, number> = {
   loot: 2600,
   harvest: 2200,
   levelup: 3000,
+  shot: 400,
 };
 
 /** Evento ainda sem `id` e `createdAt`: quem os preenche é `pushEvent`. */
@@ -67,6 +68,19 @@ export function damageEvent(
     critical,
     fire: opts.fire === true,
     ttl: FEEDBACK_TTL.damage,
+  };
+}
+
+export function shotEvent(from: Position, to: Position, projectile: 'arrow' | 'bullet'): FeedbackDraft {
+  return {
+    kind: 'shot',
+    position: { ...from },
+    to: { ...to },
+    projectile,
+    targetId: '',
+    label: '',
+    amount: 0,
+    ttl: FEEDBACK_TTL.shot,
   };
 }
 

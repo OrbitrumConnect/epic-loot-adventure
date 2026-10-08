@@ -8,7 +8,9 @@ import { AutoPilot } from './world/auto-pilot';
 import { HarvestNodes } from './world/harvest-nodes';
 import { queueNearestNode } from './world/objective-bridge';
 import { CombatFeedback } from './world/combat-feedback';
-import { HeldItem } from './world/held-weapon';
+import { Projectiles } from './world/projectiles';
+import { HeldItem, selectedItemId } from './world/held-weapon';
+import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
   makeInstanceFadeMaterial, registerInstancedFade, useFadeGroup, type FadeSphere,
@@ -252,7 +254,8 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
   const ref = useRef<THREE.PointLight>(null);
   const y = terrainHeight(pos[0], pos[2]);
   useFrame(({ clock }) => {
-    if (ref.current) ref.current.intensity = 3 + Math.sin(clock.elapsedTime * 8) * 0.8;
+    // Acende forte à noite, discreta de dia (consistente com as luminárias).
+    if (ref.current) ref.current.intensity = (2 + nightFactor() * 5) + Math.sin(clock.elapsedTime * 8) * 0.8;
   });
   return (
     <group position={[pos[0], y, pos[2]]}>
@@ -316,19 +319,21 @@ function Character({
       attackPhase.current = 'anticipation';
       attackTimer.current = 0;
     }
-    // Vira o personagem de frente pro bicho vivo mais próximo (até ~6 m).
+    // Vira de frente pro bicho vivo mais próximo, dentro do alcance da arma.
     const b = body.current;
     if (b) {
+      const st = useGameStore.getState();
+      const range = weaponFor(selectedItemId(st)).range + 1;
       let best: { x: number; z: number } | null = null;
       let bestD = Infinity;
-      for (const cr of useGameStore.getState().creatures) {
+      for (const cr of st.creatures) {
         if (cr.behavior === 'dead') continue;
         const dx = cr.position.x - b.position.x;
         const dz = cr.position.z - b.position.z;
         const d = dx * dx + dz * dz;
         if (d < bestD) { bestD = d; best = cr.position; }
       }
-      if (best && bestD < 36) {
+      if (best && bestD < range * range) {
         targetRotY.current = Math.atan2(best.x - b.position.x, best.z - b.position.z);
       }
     }
@@ -535,11 +540,22 @@ function Character({
         if (t >= 0.15) { attackPhase.current = 'idle'; attackTimer.current = 0; }
       }
 
+      const ranged = weaponFor(selectedItemId(useGameStore.getState())).ranged;
       if (phase !== 'idle') {
-        if (rightShoulder.current) rightShoulder.current.rotation.x = armX;
-        if (rightElbow.current) rightElbow.current.rotation.x = 0.2 + Math.max(0, -armX) * 0.3;
+        if (ranged) {
+          // Arma de longe: aponta pra frente e recua um pouco no tiro (não bate).
+          const shooting = phase === 'strike' || phase === 'impact';
+          if (rightShoulder.current) rightShoulder.current.rotation.x = -1.5 + (shooting ? 0.22 : 0);
+          if (rightElbow.current) rightElbow.current.rotation.x = 0.1;
+          sword.current.rotation.x = -0.4;  // alinha a arma na horizontal (mira)
+        } else {
+          if (rightShoulder.current) rightShoulder.current.rotation.x = armX;
+          if (rightElbow.current) rightElbow.current.rotation.x = 0.2 + Math.max(0, -armX) * 0.3;
+          sword.current.rotation.x = wrist;
+        }
+      } else {
+        sword.current.rotation.x = ranged ? -0.4 : 0;
       }
-      sword.current.rotation.x = wrist;
     }
 
     tick.current += dt;
@@ -1255,6 +1271,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
       <TargetRoute playerRef={playerRef} />
       <CombatFeedback />
+      <Projectiles />
       <OcclusionFader playerRef={playerRef} paused={props.paused} />
 
       <AutoPilot playerRef={playerRef} movement={target} paused={props.paused} />

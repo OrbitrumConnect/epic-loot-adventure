@@ -21,7 +21,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mixColor, type Palette } from './world-kit';
 
-export type HeldKind = 'sword' | 'axe' | 'pickaxe' | 'iron_axe' | 'iron_pickaxe' | 'torch' | 'fist';
+export type HeldKind = 'sword' | 'axe' | 'pickaxe' | 'iron_axe' | 'iron_pickaxe' | 'torch' | 'bow' | 'pistol' | 'rifle' | 'fist';
 
 const KIND_BY_ITEM: Record<string, HeldKind> = {
   iron_sword: 'sword',
@@ -30,6 +30,9 @@ const KIND_BY_ITEM: Record<string, HeldKind> = {
   iron_axe: 'iron_axe',
   iron_pickaxe: 'iron_pickaxe',
   torch: 'torch',
+  bow: 'bow',
+  pistol: 'pistol',
+  rifle: 'rifle',
 };
 
 export function heldKindFor(itemId: string | null | undefined): HeldKind {
@@ -173,6 +176,38 @@ function Fist({ k }: { k: Kit }) {
 }
 
 /** Modelo certo para o item selecionado, dentro do grupo de golpe. */
+function Bow({ k }: { k: Kit }) {
+  return (
+    <>
+      <mesh geometry={geo.box} material={k.wood} position={[0, 0.26, 0.1]} rotation={[0, 0, 0.42]} scale={[0.04, 0.5, 0.06]} castShadow />
+      <mesh geometry={geo.box} material={k.wood} position={[0, -0.26, 0.1]} rotation={[0, 0, -0.42]} scale={[0.04, 0.5, 0.06]} castShadow />
+      <mesh geometry={geo.box} material={k.ironDark} position={[0, 0, 0.1]} scale={[0.05, 0.24, 0.07]} />
+      <mesh geometry={geo.box} material={k.steel} position={[0.12, 0, 0.1]} scale={[0.008, 0.92, 0.008]} />
+    </>
+  );
+}
+
+function Pistol({ k }: { k: Kit }) {
+  return (
+    <>
+      <mesh geometry={geo.box} material={k.ironDark} position={[0, 0.02, 0.22]} scale={[0.06, 0.09, 0.34]} castShadow />
+      <mesh geometry={geo.box} material={k.steel} position={[0, 0.08, 0.3]} scale={[0.02, 0.04, 0.05]} />
+      <mesh geometry={geo.box} material={k.wood} position={[0, -0.1, 0.06]} rotation={[0.35, 0, 0]} scale={[0.06, 0.2, 0.09]} castShadow />
+    </>
+  );
+}
+
+function Rifle({ k }: { k: Kit }) {
+  return (
+    <>
+      <mesh geometry={geo.box} material={k.ironDark} position={[0, 0.02, 0.46]} scale={[0.05, 0.07, 0.82]} castShadow />
+      <mesh geometry={geo.box} material={k.steel} position={[0, 0, 0.12]} scale={[0.06, 0.1, 0.34]} />
+      <mesh geometry={geo.box} material={k.wood} position={[0, -0.04, -0.14]} scale={[0.06, 0.13, 0.3]} castShadow />
+      <mesh geometry={geo.box} material={k.wood} position={[0, -0.12, 0.08]} rotation={[0.3, 0, 0]} scale={[0.05, 0.16, 0.08]} />
+    </>
+  );
+}
+
 export function HeldItem({ c }: { c: Palette }) {
   const kind = useGameStore(s => heldKindFor(selectedItemId(s)));
   const k = kitFor(c);
@@ -183,6 +218,9 @@ export function HeldItem({ c }: { c: Palette }) {
     case 'pickaxe': return <Pickaxe k={k} iron={false} />;
     case 'iron_pickaxe': return <Pickaxe k={k} iron />;
     case 'torch': return <Torch k={k} />;
+    case 'bow': return <Bow k={k} />;
+    case 'pistol': return <Pistol k={k} />;
+    case 'rifle': return <Rifle k={k} />;
     default: return <Fist k={k} />;
   }
 }
