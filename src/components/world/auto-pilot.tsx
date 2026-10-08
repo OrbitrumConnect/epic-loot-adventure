@@ -18,7 +18,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { Position } from '@/game/types';
 import { HARVEST_NODES } from '@/game/data/harvest-nodes';
 import { weaponFor } from '@/game/data/weapons';
-import { specialCooldown } from '@/game/systems/progressionSystem';
+import { effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
 import { harvestNodeById } from './harvest-nodes';
 import { creatureById } from './hostile-ai';
 import { buildAutoSnapshot, decideIntent, getObjectives, setAutoMode, tickWorld } from './objective-bridge';
@@ -154,7 +154,7 @@ export function AutoPilot({
           // Especial quando melee e fora do cooldown (hit em área); senão ataque normal.
           const nowS = Date.now() / 1000;
           const canSpecial = !weaponFor(heldId).ranged
-            && nowS - (store.player.lastSpecialAt ?? 0) >= specialCooldown(store.player.level);
+            && nowS - (store.player.lastSpecialAt ?? 0) >= effectiveSpecialCooldown(store.player);
           if (canSpecial) {
             store.specialAttack('spin');
             setPilotStatus('attack', `Especial em ${name}`, '');

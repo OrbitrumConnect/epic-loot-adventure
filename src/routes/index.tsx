@@ -19,7 +19,7 @@ import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock } from '@/game/systems/dayNightSystem';
-import { specialCooldown } from '@/game/systems/progressionSystem';
+import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
 import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
@@ -113,7 +113,7 @@ function Index() {
 
   // Cooldown do especial (Q/R compartilham). `clock` tica a cada 1s e força o recompute.
   void clock;
-  const specialLeft = Math.max(0, Math.ceil(specialCooldown(player.level) - (Date.now() / 1000 - (player.lastSpecialAt ?? 0))));
+  const specialLeft = Math.max(0, Math.ceil(effectiveSpecialCooldown(player) - (Date.now() / 1000 - (player.lastSpecialAt ?? 0))));
 
   const activeObjective = objectives.items.find(o => o.status === 'active')
     ?? objectives.items.find(o => o.status === 'queued')
@@ -165,6 +165,7 @@ function Index() {
 
   const weight = getWeight(player.inventory);
   const usedSlots = getUsedSlots(player.inventory);
+  const attrs = effectiveAttributes(player);
 
   const woodCount = useGameStore(s => s.getItemCount)('wood');
   const stoneCount = useGameStore(s => s.getItemCount)('stone');
@@ -453,6 +454,12 @@ function Index() {
                       <span>Peso: {weight.toFixed(1)} / {player.inventory.maxWeight} kg</span>
                       <span>{usedSlots} / {player.inventory.maxSlots} slots</span>
                       <span>Era do Ferro</span>
+                    </div>
+                    <div className="panel-stats" aria-label="Atributos">
+                      <span title="Multiplica o dano de ataque">⚔ Dano +{attrs.damage}%</span>
+                      <span title="Reduz a cadência do especial">✦ Destreza +{attrs.dexterity}%</span>
+                      <span title="Aumenta o peso que a bolsa carrega">🎒 Capacidade +{attrs.carry}%</span>
+                      <span title="Aumenta a velocidade de movimento">» Velocidade +{attrs.moveSpeed}%</span>
                     </div>
                     <div className="panel-actions">
                       <Button variant="outline" onClick={() => open('home')}><Home />Retornar à base</Button>

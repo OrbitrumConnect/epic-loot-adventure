@@ -28,7 +28,8 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
-import { creatureXp, grantXp, playerBaseAttack, specialCooldown, xpForLevel } from '../systems/progressionSystem';
+import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
+import { damageMultiplier, effectiveMaxWeight, effectiveSpecialCooldown } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
@@ -113,6 +114,17 @@ type GameActions = {
   pruneFeedback: () => void;
   buildAutoSnapshot: () => AutoSnapshot;
 };
+
+/**
+ * Mantém o peso máximo da bolsa coerente com a capacidade% (que cresce com o
+ * nível). Chamado depois de cada `grantXp`: se o nível subiu, a bolsa carrega
+ * mais. No nível 1 (carry 0) devolve 40 — igual ao de antes.
+ */
+function syncCarry(player: PlayerState): PlayerState {
+  const maxWeight = effectiveMaxWeight(player);
+  if (player.inventory.maxWeight === maxWeight) return player;
+  return { ...player, inventory: { ...player.inventory, maxWeight } };
+}
 
 function createInitialPlayer(): PlayerState {
   // Itens originais nos 8 primeiros slots (hotbar antiga INTACTA). Arco/pistola/
@@ -286,8 +298,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         ? base + TORCH_FIRE_BONUS
         : base + weaponPower;
 
-    // Atributo de dano (%): multiplica o poder final. Default 0 = sem mudança.
-    const finalPower = Math.round(totalPower * (1 + (state.player.attributes?.damage ?? 0) / 100));
+    // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
+    const finalPower = Math.round(totalPower * damageMultiplier(state.player));
 
     const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
 
@@ -330,7 +342,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
       const xpGain = creatureXp(def ?? creature);
       const granted = grantXp(updatedPlayer, xpGain);
-      updatedPlayer = granted.player;
+      updatedPlayer = syncCarry(granted.player);
       msg = granted.message ?? `${msg} +${xpGain} XP.`;
       drafts.push(deathEvent(creature.id, creature.name, creature.position));
       drafts.push(xpEvent(xpGain, state.player.position));
@@ -393,7 +405,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
 
     const now = Date.now() / 1000;
-    const cd = specialCooldown(state.player.level);
+    const cd = effectiveSpecialCooldown(state.player);
     const since = now - (state.player.lastSpecialAt ?? 0);
     if (since < cd) {
       set(s => ({ ui: { ...s.ui, message: `Especial recarregando (${Math.ceil(cd - since)}s).` } }));
@@ -404,7 +416,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const equipped = state.player.inventory.equipment.primary;
     const weaponPower = equipped ? (ITEMS[equipped]?.attackPower ?? 0) : 0;
     const base = playerBaseAttack(state.player.level) + (usingTorch ? 9 : weaponPower);
-    const dmgMult = 1 + (state.player.attributes?.damage ?? 0) / 100;
+    const dmgMult = damageMultiplier(state.player);
     // Jump: dano alto, raio menor. Spin: 360°, raio maior, dano menor.
     const radius = kind === 'spin' ? 3.8 : 3.2;
     const power = Math.round(base * (kind === 'jump' ? 1.8 : 1.2) * dmgMult);
@@ -432,7 +444,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         }
         const xpGain = creatureXp(def ?? c);
         const g = grantXp({ ...updatedPlayer, gold: updatedPlayer.gold + 15 }, xpGain);
-        updatedPlayer = g.player;
+        updatedPlayer = syncCarry(g.player);
         drafts.push(deathEvent(c.id, c.name, c.position));
         drafts.push(xpEvent(xpGain, pos));
         if (g.result.levelsGained > 0) drafts.push(levelUpEvent(g.result.newLevel, pos));
@@ -863,7 +875,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       drafts.push(levelUpEvent(granted.result.newLevel, state.player.position));
     }
     set({
-      player: granted.player,
+      player: syncCarry(granted.player),
       feedback: pushEvents(state.feedback, drafts, stamp),
       harvestNodes,
       ui: { ...state.ui, message: granted.message ?? `${result.message} +${result.xp} XP.` },

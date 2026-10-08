@@ -23,6 +23,7 @@ import {
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
+import { effectiveAttributes } from '@/game/systems/attributesSystem';
 
 export type WorldProps = {
   mode: string;
@@ -418,7 +419,7 @@ function Character({
     const px = body.current.position.x;
     const pz = body.current.position.z;
     const inLake = LAKE_CENTERS.some(l => (px - l.x) ** 2 + (pz - l.z) ** 2 < l.r * l.r);
-    const moveBonus = 1 + (useGameStore.getState().player.attributes?.moveSpeed ?? 0) / 100;
+    const moveBonus = 1 + effectiveAttributes(useGameStore.getState().player).moveSpeed / 100;
     const MAX_SPEED = (sprinting ? 6.5 : 4.5) * (inLake ? 0.4 : 1) * moveBonus;
 
     if (targetVx !== 0 || targetVz !== 0) {
