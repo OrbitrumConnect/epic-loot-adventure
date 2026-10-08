@@ -222,6 +222,10 @@ export function useHostileAI(opts: HostileOptions) {
   const anim = useRef<HostileAnim>({
     moving: false, walkCycle: 0, distToPlayer: Infinity, swing: 0, chasing: false,
   });
+  // Hit reaction: quando o HP cai, o bicho dá um "squash" rápido (recuo visual).
+  const prevHp = useRef<number | null>(null);
+  const hitTime = useRef(-Infinity);
+  const baseScale = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => () => { creatureAnchors.delete(creatureId); anchor.current = null; }, [creatureId]);
 
@@ -256,6 +260,11 @@ export function useHostileAI(opts: HostileOptions) {
     }
     g.visible = true;
     anc.alive = true;
+
+    // Guarda a escala base uma vez e marca o instante do golpe quando o HP cai.
+    if (!baseScale.current) baseScale.current = g.scale.clone();
+    if (prevHp.current !== null && creature.hp < prevHp.current) hitTime.current = state.clock.elapsedTime;
+    prevHp.current = creature.hp;
 
     if (!homePos.current) homePos.current = { ...creature.position };
 
@@ -372,6 +381,18 @@ export function useHostileAI(opts: HostileOptions) {
       currentRotY.current += diff * Math.min(8 * dt, 1);
     }
     g.rotation.y = currentRotY.current;
+
+    // Hit reaction: squash (xz esticam, y achata) decaindo em ~0,22 s.
+    const hb = baseScale.current;
+    if (hb) {
+      const since = state.clock.elapsedTime - hitTime.current;
+      if (since >= 0 && since < 0.22) {
+        const k = 1 - since / 0.22;
+        g.scale.set(hb.x * (1 + 0.16 * k), hb.y * (1 - 0.14 * k), hb.z * (1 + 0.16 * k));
+      } else {
+        g.scale.copy(hb);
+      }
+    }
 
     if (moving) {
       walkCycle.current += dt * (distToPlayer < aggroRange ? tuning.walkSpeedChase : tuning.walkSpeedIdle);

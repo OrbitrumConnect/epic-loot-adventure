@@ -285,9 +285,15 @@ function Character({
 }) {
   const body = useRef<THREE.Group>(null);
   const sword = useRef<THREE.Group>(null);
-  const leftLeg = useRef<THREE.Mesh>(null);
-  const rightLeg = useRef<THREE.Mesh>(null);
-  const leftArm = useRef<THREE.Mesh>(null);
+  // Rig articulado (grupos de junta, pivô no quadril/joelho/ombro/cotovelo).
+  const leftHip = useRef<THREE.Group>(null);
+  const rightHip = useRef<THREE.Group>(null);
+  const leftKnee = useRef<THREE.Group>(null);
+  const rightKnee = useRef<THREE.Group>(null);
+  const leftShoulder = useRef<THREE.Group>(null);
+  const rightShoulder = useRef<THREE.Group>(null);
+  const leftElbow = useRef<THREE.Group>(null);
+  const rightElbow = useRef<THREE.Group>(null);
   const keys = useRef(new Set<string>());
   const pulse = useRef(0);
   const attackPhase = useRef<'idle' | 'anticipation' | 'strike' | 'impact' | 'recovery'>('idle');
@@ -309,6 +315,22 @@ function Character({
     if (attackPhase.current === 'idle') {
       attackPhase.current = 'anticipation';
       attackTimer.current = 0;
+    }
+    // Vira o personagem de frente pro bicho vivo mais próximo (até ~6 m).
+    const b = body.current;
+    if (b) {
+      let best: { x: number; z: number } | null = null;
+      let bestD = Infinity;
+      for (const cr of useGameStore.getState().creatures) {
+        if (cr.behavior === 'dead') continue;
+        const dx = cr.position.x - b.position.x;
+        const dz = cr.position.z - b.position.z;
+        const d = dx * dx + dz * dz;
+        if (d < bestD) { bestD = d; best = cr.position; }
+      }
+      if (best && bestD < 36) {
+        targetRotY.current = Math.atan2(best.x - b.position.x, best.z - b.position.z);
+      }
     }
   }, [attack]);
 
@@ -455,51 +477,69 @@ function Character({
       body.current.position.y = groundY;
     }
 
-    // Walk + idle animation
+    // Walk + idle animation — coxa balança no quadril, joelho dobra em contratempo;
+    // ombro balança oposto à perna, cotovelo mantém leve flexão.
     if (moving && isGrounded.current) {
       idleTime.current = 0;
       walkCycle.current += dt * 12;
-      const swing = Math.sin(walkCycle.current) * 0.6;
-      const bob = Math.abs(Math.sin(walkCycle.current * 2)) * 0.04;
-      if (leftLeg.current) leftLeg.current.rotation.x = swing;
-      if (rightLeg.current) rightLeg.current.rotation.x = -swing;
-      if (leftArm.current) leftArm.current.rotation.x = -swing * 0.5;
+      const wc = walkCycle.current;
+      const swing = Math.sin(wc) * 0.6;
+      const bob = Math.abs(Math.sin(wc * 2)) * 0.04;
+      if (leftHip.current) leftHip.current.rotation.x = swing;
+      if (rightHip.current) rightHip.current.rotation.x = -swing;
+      if (leftKnee.current) leftKnee.current.rotation.x = 0.1 + Math.max(0, Math.sin(wc)) * 0.8;
+      if (rightKnee.current) rightKnee.current.rotation.x = 0.1 + Math.max(0, -Math.sin(wc)) * 0.8;
+      if (leftShoulder.current) leftShoulder.current.rotation.x = -swing * 0.6;
+      if (rightShoulder.current) rightShoulder.current.rotation.x = swing * 0.6;
+      if (leftElbow.current) leftElbow.current.rotation.x = 0.25 + Math.abs(swing) * 0.4;
+      if (rightElbow.current) rightElbow.current.rotation.x = 0.25 + Math.abs(swing) * 0.4;
       body.current.position.y += bob;
     } else {
       walkCycle.current = 0;
       idleTime.current += dt;
       const breath = Math.sin(idleTime.current * 2.2) * 0.012;
       const sway = Math.sin(idleTime.current * 1.1) * 0.008;
-      if (leftLeg.current) leftLeg.current.rotation.x = 0;
-      if (rightLeg.current) rightLeg.current.rotation.x = 0;
-      if (leftArm.current) leftArm.current.rotation.x = sway;
+      if (leftHip.current) leftHip.current.rotation.x = 0;
+      if (rightHip.current) rightHip.current.rotation.x = 0;
+      if (leftKnee.current) leftKnee.current.rotation.x = 0.1;
+      if (rightKnee.current) rightKnee.current.rotation.x = 0.1;
+      if (leftShoulder.current) leftShoulder.current.rotation.x = sway;
+      if (rightShoulder.current) rightShoulder.current.rotation.x = -sway;
+      if (leftElbow.current) leftElbow.current.rotation.x = 0.3;
+      if (rightElbow.current) rightElbow.current.rotation.x = 0.3;
       body.current.position.y += breath;
     }
 
-    // Attack — 4 phases
+    // Ataque — 4 fases. O BRAÇO direito faz o golpe (ergue → desce); a arma
+    // acompanha na mão. Sobrescreve a animação do braço direito só enquanto ataca.
     if (sword.current) {
       attackTimer.current += dt;
       const phase = attackPhase.current;
       const t = attackTimer.current;
-      let swordX = 0;
-      let lungeDelta = 0;
+      let armX = 0;   // <0 ergue o braço, >0 golpe pra baixo/frente
+      let wrist = 0;  // pequeno snap do punho no impacto
 
       if (phase === 'anticipation') {
-        swordX = -0.8 * Math.min(t / 0.1, 1);
-        if (t >= 0.1) { attackPhase.current = 'strike'; attackTimer.current = 0; }
+        armX = -2.5 * Math.min(t / 0.12, 1);   // ergue bem mais o braço
+        if (t >= 0.12) { attackPhase.current = 'strike'; attackTimer.current = 0; }
       } else if (phase === 'strike') {
-        swordX = -0.8 + 2.6 * Math.min(t / 0.08, 1);
-        lungeDelta = 0.35 * Math.min(t / 0.08, 1);
+        armX = -2.5 + 3.0 * Math.min(t / 0.08, 1);  // desce e PARA em +0.5 (não passa pra trás)
+        wrist = 0.35 * Math.min(t / 0.08, 1);
         if (t >= 0.08) { attackPhase.current = 'impact'; attackTimer.current = 0; }
       } else if (phase === 'impact') {
-        swordX = 1.8;
+        armX = 0.5; wrist = 0.35;
         if (t >= 0.06) { attackPhase.current = 'recovery'; attackTimer.current = 0; }
       } else if (phase === 'recovery') {
-        swordX = 1.8 * Math.max(0, 1 - t / 0.15);
+        const k = Math.max(0, 1 - t / 0.15);
+        armX = 0.5 * k; wrist = 0.35 * k;
         if (t >= 0.15) { attackPhase.current = 'idle'; attackTimer.current = 0; }
       }
 
-      sword.current.rotation.x = swordX;
+      if (phase !== 'idle') {
+        if (rightShoulder.current) rightShoulder.current.rotation.x = armX;
+        if (rightElbow.current) rightElbow.current.rotation.x = 0.2 + Math.max(0, -armX) * 0.3;
+      }
+      sword.current.rotation.x = wrist;
     }
 
     tick.current += dt;
@@ -522,15 +562,47 @@ function Character({
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
 
-      {/* Legs - animated */}
-      <mesh ref={leftLeg} position={[-0.14, 0.3, 0]} castShadow>
-        <boxGeometry args={[0.2, 0.6, 0.22]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-      <mesh ref={rightLeg} position={[0.14, 0.3, 0]} castShadow>
-        <boxGeometry args={[0.2, 0.6, 0.22]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
+      {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
+      <group ref={leftHip} position={[-0.14, 0.6, 0]}>
+        <mesh position={[0, -0.15, 0]} castShadow>
+          <boxGeometry args={[0.19, 0.3, 0.21]} />
+          <meshStandardMaterial color={c.dark} />
+        </mesh>
+        <group ref={leftKnee} position={[0, -0.3, 0]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.1, 8, 6]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          <mesh position={[0, -0.15, 0.01]} castShadow>
+            <boxGeometry args={[0.16, 0.28, 0.18]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          <mesh position={[0, -0.28, 0.07]} castShadow>
+            <boxGeometry args={[0.18, 0.1, 0.3]} />
+            <meshStandardMaterial color={c.metal} />
+          </mesh>
+        </group>
+      </group>
+      <group ref={rightHip} position={[0.14, 0.6, 0]}>
+        <mesh position={[0, -0.15, 0]} castShadow>
+          <boxGeometry args={[0.19, 0.3, 0.21]} />
+          <meshStandardMaterial color={c.dark} />
+        </mesh>
+        <group ref={rightKnee} position={[0, -0.3, 0]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.1, 8, 6]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          <mesh position={[0, -0.15, 0.01]} castShadow>
+            <boxGeometry args={[0.16, 0.28, 0.18]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          <mesh position={[0, -0.28, 0.07]} castShadow>
+            <boxGeometry args={[0.18, 0.1, 0.3]} />
+            <meshStandardMaterial color={c.metal} />
+          </mesh>
+        </group>
+      </group>
 
       {/* Body */}
       <mesh position={[0, 0.9, 0]} castShadow>
@@ -554,21 +626,67 @@ function Character({
         <meshStandardMaterial color={c.cloak} />
       </mesh>
 
-      {/* Left arm - animated */}
-      <mesh ref={leftArm} position={[-0.48, 0.92, 0.08]} rotation={[0, 0, -0.15]} castShadow>
-        <cylinderGeometry args={[0.12, 0.1, 0.6, 6]} />
-        <meshStandardMaterial color={c.armor} />
-      </mesh>
+      {/* Braço esquerdo articulado + escudo no antebraço */}
+      <group ref={leftShoulder} position={[-0.38, 1.12, 0.02]}>
+        <mesh castShadow>
+          <sphereGeometry args={[0.1, 8, 6]} />
+          <meshStandardMaterial color={c.armor} />
+        </mesh>
+        <mesh position={[0, -0.14, 0]} castShadow>
+          <cylinderGeometry args={[0.09, 0.08, 0.28, 6]} />
+          <meshStandardMaterial color={c.armor} />
+        </mesh>
+        <group ref={leftElbow} position={[0, -0.28, 0]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.08, 8, 6]} />
+            <meshStandardMaterial color={c.armor} />
+          </mesh>
+          <mesh position={[0, -0.13, 0.01]} castShadow>
+            <cylinderGeometry args={[0.08, 0.07, 0.26, 6]} />
+            <meshStandardMaterial color={c.armor} />
+          </mesh>
+          <mesh position={[0, -0.27, 0.02]} castShadow>
+            <boxGeometry args={[0.11, 0.11, 0.13]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          {/* Escudo preso ao antebraço */}
+          <mesh position={[0, -0.14, 0.13]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.3, 0.3, 0.08, 12]} />
+            <meshStandardMaterial color={c.trunk} />
+          </mesh>
+        </group>
+      </group>
 
-      {/* Shield on left arm */}
-      <mesh position={[-0.48, 0.92, 0.08]} rotation={[0, 0, -0.15]} castShadow>
-        <cylinderGeometry args={[0.34, 0.34, 0.1, 6]} />
-        <meshStandardMaterial color={c.trunk} />
-      </mesh>
-
-      {/* Mão direita: o balanço gira este grupo; o modelo dentro segue a hotbar */}
-      <group ref={sword} position={[0.45, 1, 0.15]}>
-        <HeldItem c={c} />
+      {/* Braço direito articulado — segura a arma na mão (socket hand_R) */}
+      <group ref={rightShoulder} position={[0.38, 1.12, 0.02]}>
+        <mesh castShadow>
+          <sphereGeometry args={[0.1, 8, 6]} />
+          <meshStandardMaterial color={c.armor} />
+        </mesh>
+        <mesh position={[0, -0.14, 0]} castShadow>
+          <cylinderGeometry args={[0.09, 0.08, 0.28, 6]} />
+          <meshStandardMaterial color={c.armor} />
+        </mesh>
+        <group ref={rightElbow} position={[0, -0.28, 0]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.08, 8, 6]} />
+            <meshStandardMaterial color={c.armor} />
+          </mesh>
+          <mesh position={[0, -0.13, 0.01]} castShadow>
+            <cylinderGeometry args={[0.08, 0.07, 0.26, 6]} />
+            <meshStandardMaterial color={c.armor} />
+          </mesh>
+          <mesh position={[0, -0.27, 0.02]} castShadow>
+            <boxGeometry args={[0.11, 0.11, 0.13]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          {/* Pose-base da mão; o ataque gira o grupo interno `sword`. */}
+          <group position={[0, -0.3, 0.08]} rotation={[0.5, 0, 0]}>
+            <group ref={sword}>
+              <HeldItem c={c} />
+            </group>
+          </group>
+        </group>
       </group>
     </group>
   );

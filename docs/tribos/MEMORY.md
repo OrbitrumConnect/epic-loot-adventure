@@ -12,6 +12,8 @@
 - [**3 Camadas**](tribos-3-camadas.md) — TRIBOS = 3 jogos em 1: Mapa Aberto (survival/farm), Raid (MOBA/arena), Base (builder/Clash). Loop: Base→Mapa→Raid→Base.
 - [**Tribo + Base Comum**](tribos-tribo-base-comum.md) — SELADA 07/10: solo tem base própria; formar tribo soma recursos → UMA base comum em nova localidade, tier escolhido pelo pool. Alvo da raid.
 - [**Nível não é porta**](tribos-nivel-nao-e-porta.md) — SELADA 07/10: nível = preparo, não porta. Sem level-gate (overworld/raid). Geografia define o perigo; instância adapta a FORMA da ameaça, nunca a IDENTIDADE. Overworld compartilhado, sem level-scaling individual.
+- [**Direção visual: personagem articulado**](tribos-visual-articulado.md) — SELADA 08/10: separar gameplay×visual (= asset-swap); articular personagem (cotovelo/joelho) com rig hierárquico (não skinned); REGRA do orçamento de performance. Ordem: personagem → camada visual/registry → polimento.
+- [**Weapon System + CombatController**](tribos-weapon-combat-system.md) — SELADA 08/10: arma = dado (data-driven); CombatController compartilhado (humano E idle); ranged primeiro arco/pistola/rifle; LMB primário/RMB mira/Q-R especiais. Melee atual INTACTO. Mapa de raid = ciclo depois.
 - [Equipe](tribos-equipe.md) — Pedro (criador/design) + Caio (dev, entrou 06/10). Handoff no diário 06/10.
 
 - [Cidade / Base (visão de cima)](tribos-cidade.md) — Camada 3. Cidade isométrica em sprites, 8 construções × 20 níveis, filas de construção e produção, expedições. Assets em `art/city/`. Sessão 4 (Caio).
@@ -32,6 +34,7 @@
 
 > Correção: a pasta é `docs/tribos/diarios/`. Os links `diarios-tribos/` abaixo estão quebrados desde o começo.
 
+- [2026-10-08](diarios/2026-10-08.md) — **Polish pós-sessão 8 (Pedro+Opus):** luz da fogueira do acampamento (acesa + brasa quando limpo) · hit reaction (squash por-criatura no `useHostileAI`). Repo sincronizado, nada novo do Caio.
 - [2026-10-07](diarios/2026-10-07.md) — Sessões 5-7 (Caio) + **Sessão 8 (Pedro+Opus)**. S5-7: acampamentos, objetivos, progressão, coleta, sprites, combate visual (PR #1/#2). S8: relevo+córrego+ponte, dia/noite, colisão seletiva, câmera (zoom+colisão), tecla E, iluminação noturna, caça por raio+sprint, tocha de fogo+impacto. Visão selada (pós-colapso, nível não é porta, tribo+base comum). 136 testes, build limpo.
 - [2026-10-06](diarios/2026-10-06.md) — Sessões 1-4. Blocos 1 e 2 (refatoração, movimento, câmera) e a visão de cidade com 160 sprites.
 
