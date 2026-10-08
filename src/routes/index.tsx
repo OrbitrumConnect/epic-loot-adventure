@@ -375,7 +375,7 @@ function Index() {
               <label className="pilot-hunt" title="Raio que o piloto ocioso usa pra caçar o bicho mais próximo">
                 <Crosshair />
                 <input
-                  type="range" min={5} max={25} step={1} value={autoHuntRadius}
+                  type="range" min={5} max={35} step={1} value={autoHuntRadius}
                   onChange={e => setAutoHuntRadius(Number(e.target.value))}
                   aria-label="Raio de caça automática"
                 />
