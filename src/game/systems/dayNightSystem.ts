@@ -29,13 +29,13 @@ type Keyframe = DayNight & { h: number };
 // Noite com luz azulada suave — escura pra ter clima, mas ainda jogável
 // (o jogador enxerga ao redor; a tocha e as luminárias completam).
 const KEYFRAMES: Keyframe[] = [
-  { h: 0,  sunPos: [6, 11, 10],   sunColor: '#5c74b8', sunIntensity: 0.7,  ambientColor: '#3a4570', ambientIntensity: 0.85, fogColor: '#1c2742', fogNear: 48, fogFar: 160 },
+  { h: 0,  sunPos: [6, 11, 10],   sunColor: '#5c74b8', sunIntensity: 0.85, ambientColor: '#3a4570', ambientIntensity: 1.0,  fogColor: '#1c2742', fogNear: 48, fogFar: 160 },
   { h: 5,  sunPos: [-16, 4, 8],   sunColor: '#8a78c0', sunIntensity: 0.95, ambientColor: '#5a5680', ambientIntensity: 1.0,  fogColor: '#55566f', fogNear: 55, fogFar: 160 },
   { h: 7,  sunPos: [-18, 7, 8],   sunColor: '#ffb36b', sunIntensity: 1.9,  ambientColor: '#8a7a90', ambientIntensity: 1.2,  fogColor: '#d9b48a', fogNear: 65, fogFar: 175 },
   { h: 12, sunPos: [-5, 28, 8],   sunColor: '#fff3d6', sunIntensity: 3.0,  ambientColor: '#bfe0ff', ambientIntensity: 1.6,  fogColor: '#cfe6c0', fogNear: 90, fogFar: 195 },
   { h: 17, sunPos: [12, 10, 8],   sunColor: '#ffbf7a', sunIntensity: 2.2,  ambientColor: '#c7b3cf', ambientIntensity: 1.3,  fogColor: '#d6b59a', fogNear: 75, fogFar: 185 },
   { h: 19, sunPos: [18, 5, 8],    sunColor: '#ff7a45', sunIntensity: 1.5,  ambientColor: '#6a5a86', ambientIntensity: 1.05, fogColor: '#9c6f86', fogNear: 60, fogFar: 165 },
-  { h: 21, sunPos: [10, 12, 10],  sunColor: '#5467ac', sunIntensity: 0.8,  ambientColor: '#424d80', ambientIntensity: 0.9,  fogColor: '#1f2a46', fogNear: 50, fogFar: 158 },
+  { h: 21, sunPos: [10, 12, 10],  sunColor: '#5467ac', sunIntensity: 0.95, ambientColor: '#424d80', ambientIntensity: 1.05, fogColor: '#1f2a46', fogNear: 50, fogFar: 158 },
 ];
 
 function lerp(a: number, b: number, t: number): number {

@@ -150,7 +150,7 @@ function Torch({ k }: { k: Kit }) {
       f.rotation.y = t * 2;
     }
     // Tremeluzir: a tocha realmente ilumina o raio ao redor do jogador.
-    if (light.current) light.current.intensity = 6.5 + Math.sin(t * 17) * 1.1 + Math.sin(t * 29) * 0.5;
+    if (light.current) light.current.intensity = 7.8 + Math.sin(t * 17) * 1.1 + Math.sin(t * 29) * 0.5;
   });
   return (
     <>

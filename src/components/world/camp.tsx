@@ -193,7 +193,7 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
   const fireLight = useRef<THREE.PointLight>(null);
   useFrame(({ clock }) => {
     // Acende forte à noite (igual às luminárias e à fogueira do nascedouro).
-    if (fireLight.current) fireLight.current.intensity = (1.5 + nightFactor() * 5) + Math.sin(clock.elapsedTime * 7) * 0.6;
+    if (fireLight.current) fireLight.current.intensity = (1.8 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 7) * 0.6;
   });
   return (
     <group>

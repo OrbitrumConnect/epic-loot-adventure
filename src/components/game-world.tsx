@@ -254,8 +254,8 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
   const ref = useRef<THREE.PointLight>(null);
   const y = terrainHeight(pos[0], pos[2]);
   useFrame(({ clock }) => {
-    // Acende forte à noite, discreta de dia (consistente com as luminárias).
-    if (ref.current) ref.current.intensity = (2 + nightFactor() * 5) + Math.sin(clock.elapsedTime * 8) * 0.8;
+    // Acende forte à noite, discreta de dia (consistente com as luminárias). +20%.
+    if (ref.current) ref.current.intensity = (2.4 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 8) * 0.8;
   });
   return (
     <group position={[pos[0], y, pos[2]]}>
@@ -846,7 +846,7 @@ function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
   useFrame(() => {
     const nf = nightFactor();
     const flick = 0.9 + Math.sin(performance.now() * 0.006 + x * 1.3) * 0.1;
-    if (light.current) light.current.intensity = nf * 5.5 * flick;
+    if (light.current) light.current.intensity = nf * 6.6 * flick;
     if (bulb.current) bulb.current.emissiveIntensity = nf * 2.4 * flick;
   });
   return (
