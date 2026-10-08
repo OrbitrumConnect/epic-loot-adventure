@@ -30,6 +30,7 @@ import {
 import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/world/pilot-status';
 
 const GameWorld = lazy(() => import('@/components/game-world'));
+import { BossSpawner } from '@/components/world/boss-spawner';
 const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
@@ -326,6 +327,7 @@ function Index() {
               <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel)} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
+          {ready && ui.mode === 'world' && <BossSpawner />}
           {player.dead && !inCity && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 50,

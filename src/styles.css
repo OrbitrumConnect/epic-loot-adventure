@@ -552,27 +552,28 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 
 /* -------------------------------------------------------------------------
  * Ajuste fino mobile (Pedro, 08/10): no celular o open world não pode ter
- * card grande ocupando a tela. Minimapa −20%, título menor, barra de slots
- * −10% e o card do piloto vira só [modo + botão].
+ * nada grande ocupando a tela. O `max-height` pega o celular DEITADO (paisagem),
+ * cuja largura passa de 700px — por isso o minimapa ainda vinha grande antes.
+ * Minimapa bem menor e colado à direita (sem vazar), título menor, barra de
+ * slots −10% e o card do piloto some da tela (o modo idle/manual fica no
+ * painel Objetivos e no botão da base).
  * --------------------------------------------------------------------- */
-@media (max-width: 700px) {
+@media (max-width: 820px), (max-height: 520px) {
   /* Título do mundo menor */
-  .zone-heading { top: 14px; left: 14px; }
-  .zone-heading h1 { font-size: 17px; margin: 4px 0; }
+  .zone-heading { top: 12px; left: 12px; }
+  .zone-heading h1 { font-size: 16px; margin: 4px 0; }
   .zone-heading .zone-meta { font-size: 9px; }
 
-  /* Minimapa −20% */
-  .minimap { width: 141px; height: 126px; }
+  /* Minimapa menor e snug no canto (container acompanha, sem sobra à direita) */
+  .world-right { width: 116px; right: 10px; top: 12px; }
+  .minimap { width: 116px; height: 104px; }
+  .map-coordinate { margin: 6px 0 12px; }
 
   /* Barra dos slots de armas −10% */
   .hotbar-slot { width: 42px; height: 51px; }
   .hotbar-slot > svg { width: 22px; height: 22px; }
   .hotbar-slot .hotbar-sprite { width: 34px; height: 34px; }
 
-  /* Card do piloto compacto: só o modo + o botão (sem ocupar a tela) */
-  .pilot-strip { left: 10px; bottom: 68px; max-width: 62%; padding: 5px 9px; gap: 8px; }
-  .pilot-strip .pilot-objective,
-  .pilot-strip .pilot-doing,
-  .pilot-strip .pilot-hunt { display: none; }
-  .pilot-strip .pilot-toggle { margin-left: 0; }
+  /* Card do piloto fora da tela do open world (toggle fica em Objetivos) */
+  .pilot-strip { display: none; }
 }

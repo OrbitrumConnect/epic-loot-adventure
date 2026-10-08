@@ -23,6 +23,8 @@ type Species = {
   hood: boolean;
   shoulders: boolean;
   charm: boolean;
+  /** Mini-boss: gira o torso (redemoinho) como o especial do herói. */
+  boss?: boolean;
   tuning: HostileTuning;
 };
 
@@ -73,6 +75,17 @@ export const RAIDER_SPECIES: Record<string, Species> = {
       ...base, speed: 3.4, aggroRange: 13, attackRange: 3.2, leashRange: 13,
       chaseTimeout: 12, provokeRange: 24, walkSpeedChase: 14, walkSpeedIdle: 7,
       hitVerb: 'amaldiçoou',
+    },
+  },
+  // Mini-boss: 2,5× o brutamontes (1.32 → 3.3). Caça pelo mapa (leash longo),
+  // reage de longe e gira num redemoinho ao golpear.
+  raider_warlord: {
+    scale: 3.3, bodyWidth: 0.95, bodyDepth: 0.55, weapon: 'club',
+    hood: false, shoulders: true, charm: false, boss: true,
+    tuning: {
+      ...base, speed: 3.2, aggroRange: 22, attackRange: 4.5, leashRange: 200,
+      chaseTimeout: 60, provokeRange: 40, walkSpeedChase: 9, walkSpeedIdle: 4,
+      hitVerb: 'esmagou',
     },
   },
 };
@@ -190,6 +203,7 @@ export function Raider({
   const leftArm = useRef<THREE.Mesh>(null);
   const weaponArm = useRef<THREE.Group>(null);
   const torso = useRef<THREE.Group>(null);
+  const spin = useRef(0);
   const hpGroup = useRef<THREE.Group>(null);
   const label = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
@@ -209,6 +223,29 @@ export function Raider({
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.6 : 0;
       if (leftLeg.current) leftLeg.current.rotation.x = swing;
       if (rightLeg.current) rightLeg.current.rotation.x = -swing;
+
+      if (spec.boss) {
+        // Redemoinho: só gira enquanto golpeia ou está no alcance; fora disso
+        // NÃO gira à toa — volta suave a encarar pra frente (sem girar eterno).
+        const whirling = anim.swing > 0 || anim.distToPlayer <= spec.tuning.attackRange + 1.5;
+        if (whirling) {
+          spin.current += dt * 15;
+        } else {
+          // Alinha ao giro completo mais próximo → para encarando pra frente.
+          const target = Math.round(spin.current / (Math.PI * 2)) * (Math.PI * 2);
+          spin.current += (target - spin.current) * Math.min(1, dt * 8);
+          if (Math.abs(spin.current - target) < 0.01) spin.current = 0;
+        }
+        if (torso.current) {
+          torso.current.rotation.y = spin.current;
+          torso.current.position.y = anim.moving ? Math.abs(Math.sin(anim.walkCycle * 2)) * 0.04 : 0;
+          torso.current.rotation.z = 0;
+        }
+        if (weaponArm.current) weaponArm.current.rotation.x = whirling ? -1.35 : -0.2;
+        if (leftArm.current) leftArm.current.rotation.x = whirling ? -1.2 : -swing * 0.5;
+        return;
+      }
+
       if (leftArm.current) leftArm.current.rotation.x = -swing * 0.5;
       // Golpe: levanta a arma e volta.
       if (weaponArm.current) {

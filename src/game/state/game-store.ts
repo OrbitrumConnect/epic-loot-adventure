@@ -72,6 +72,8 @@ type GameActions = {
   specialAttack: (kind: 'jump' | 'spin') => void;
   collect: (nodeId: string) => void;
   collectNearest: () => void;
+  /** Faz nascer o mini-boss (um por vez) perto do jogador. Chamado pelo timer. */
+  spawnBoss: () => void;
   useHotbarSlot: (index: number) => void;
   craftItem: (recipeId: string) => void;
   rest: () => void;
@@ -306,7 +308,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const updatedCreatures = state.creatures.map(c => {
       if (c.id !== targetId) return c;
       if (result.targetDied) {
-        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + Math.round((180_000 + Math.random() * 120_000) * ENEMY_RESPAWN_MULT) };
+        const respawnAt = c.speciesId === 'raider_warlord'
+          ? null // o mini-boss só volta pelo timer (BossSpawner), não renasce sozinho.
+          : Date.now() + Math.round((180_000 + Math.random() * 120_000) * ENEMY_RESPAWN_MULT);
+        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt };
       }
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
@@ -448,7 +453,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         drafts.push(deathEvent(c.id, c.name, c.position));
         drafts.push(xpEvent(xpGain, pos));
         if (g.result.levelsGained > 0) drafts.push(levelUpEvent(g.result.newLevel, pos));
-        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + Math.round((180_000 + Math.random() * 120_000) * ENEMY_RESPAWN_MULT) };
+        const respawnAt = c.speciesId === 'raider_warlord'
+          ? null // o mini-boss só volta pelo timer (BossSpawner), não renasce sozinho.
+          : Date.now() + Math.round((180_000 + Math.random() * 120_000) * ENEMY_RESPAWN_MULT);
+        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt };
       }
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
@@ -613,6 +621,46 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   toggleSidebar: () => set(s => ({ ui: { ...s.ui, sidebarCollapsed: !s.ui.sidebarCollapsed } })),
   toggleChat: () => set(s => ({ ui: { ...s.ui, chatOpen: !s.ui.chatOpen } })),
   setMessage: (msg) => set(s => ({ ui: { ...s.ui, message: msg } })),
+
+  spawnBoss: () => {
+    const state = get();
+    // Um colosso por vez: se já há um vivo, não nasce outro.
+    if (state.creatures.some(c => c.speciesId === 'raider_warlord' && c.behavior !== 'dead')) return;
+    const def = CREATURES['raider_warlord'];
+    if (!def) return;
+    const p = state.player.position;
+    const margin = WORLD_HALF - 6;
+    // Nasce 22–34 m do jogador, direção aleatória, dentro do mundo.
+    let x = Math.max(-margin, Math.min(margin, p.x + 26));
+    let z = p.z;
+    for (let i = 0; i < 12; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = 22 + Math.random() * 12;
+      const cx = Math.max(-margin, Math.min(margin, p.x + Math.sin(ang) * r));
+      const cz = Math.max(-margin, Math.min(margin, p.z + Math.cos(ang) * r));
+      if (getDistance(p, { x: cx, z: cz }) >= 18) { x = cx; z = cz; break; }
+    }
+    const hp = scaleEnemyHp(def.maxHp);
+    const boss: CreatureState = {
+      id: `boss_${Date.now()}`,
+      speciesId: 'raider_warlord',
+      name: def.name,
+      hp,
+      maxHp: hp,
+      attackPower: def.attackPower,
+      armor: def.armor,
+      attackCooldown: def.attackCooldown,
+      lastAttackAt: 0,
+      position: { x, z },
+      behavior: 'patrol',
+      lootTable: [],
+      respawnAt: null,
+    };
+    set(s => ({
+      creatures: [...s.creatures, boss],
+      ui: { ...s.ui, message: `⚠️ ${def.name} surgiu no vale! Prepare-se.` },
+    }));
+  },
   setPanelMessage: (msg) => set(s => ({ ui: { ...s.ui, panelMessage: msg } })),
   updatePosition: (x, z) => set(s => ({ player: { ...s.player, position: { x, z } } })),
   startRaid: () => set(s => ({

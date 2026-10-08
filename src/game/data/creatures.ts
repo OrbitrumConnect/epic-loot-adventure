@@ -119,6 +119,29 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 
+  // Mini-boss do vale: nasce aleatório (timer de 15 min, ver BossSpawner), não
+  // pertence a acampamento. Humanoide articulado gigante (2,5× o brutamontes),
+  // gira como o especial do herói. Vida muito maior e dano um pouco acima do urso.
+  raider_warlord: {
+    id: 'raider_warlord',
+    name: 'Colosso dos Ancestrais',
+    maxHp: 600,
+    attackPower: 30,
+    armor: 10,
+    attackCooldown: 2.2,
+    attackRange: 4.5,
+    aggroRange: 22,
+    lootTable: [
+      { itemId: 'iron_ore', quantity: 8, chance: 0.9 },
+      { itemId: 'leather_armor', quantity: 1, chance: 0.5 },
+      { itemId: 'iron_sword', quantity: 1, chance: 0.4 },
+      { itemId: 'raider_token', quantity: 10, chance: 1 },
+      { itemId: 'cooked_meat', quantity: 6, chance: 0.8 },
+    ],
+    icon: 'Shield',
+    peaceful: false,
+  },
+
   // ---------------------------------------------------------------------------
   // Fauna selvagem do vale. `peaceful` foge do jogador; hostil ataca ao ver.
   // O XP de cada uma sai de `creatureXp` (progressionSystem).
