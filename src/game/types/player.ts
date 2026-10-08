@@ -42,6 +42,8 @@ export type PlayerState = {
   inventory: InventoryState;
   attackCooldown: number;
   lastAttackAt: number;
+  /** Último uso de ataque especial (Q/R), em segundos. Cooldown escala por nível. */
+  lastSpecialAt?: number;
   dead: boolean;
   respawnAt: number;
   /** Bônus percentuais aditivos (ver PlayerAttributes). Ausente = sem bônus. */

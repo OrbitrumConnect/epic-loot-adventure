@@ -309,6 +309,8 @@ function Character({
   const targetRotY = useRef(0);
   const currentRotY = useRef(0);
   const idleTime = useRef(0);
+  const prevSpecial = useRef(0);
+  const spinTimer = useRef(0);
 
   useEffect(() => {
     if (body.current && playerRef) (playerRef as any).current = body.current;
@@ -458,6 +460,20 @@ function Character({
     while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
     currentRotY.current += rotDiff * Math.min(15 * dt, 1);
     body.current.rotation.y = currentRotY.current;
+
+    // Especial (Q/R): pulo pro 'jump', giro 360° pro 'spin'. O dano/feedback
+    // acontece no store; aqui é só a animação. O soco de impacto vem dos eventos.
+    const gs = useGameStore.getState();
+    if (gs.specialTick !== prevSpecial.current) {
+      prevSpecial.current = gs.specialTick;
+      if (gs.specialKind === 'jump' && isGrounded.current) { jumpVelocity.current = 7; isGrounded.current = false; }
+      else if (gs.specialKind === 'spin') spinTimer.current = 0.45;
+    }
+    if (spinTimer.current > 0) {
+      spinTimer.current = Math.max(0, spinTimer.current - dt);
+      const p = 1 - spinTimer.current / 0.45;
+      body.current.rotation.y = currentRotY.current + p * Math.PI * 2;
+    }
 
     // Jump
     if (k.has('Space') && isGrounded.current) {

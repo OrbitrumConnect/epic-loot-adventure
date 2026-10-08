@@ -45,6 +45,15 @@ export function playerBaseAttack(level: number): number {
   return BASE_ATTACK_AT_LEVEL_1 + LEVEL_GAINS.attackPower * (Math.max(1, level) - 1);
 }
 
+/**
+ * Cooldown (s) do ataque especial (Q/R) por nível: 30 s no lvl 1 → 2 s no nível
+ * máximo (linear). Recalibrar quando `MAX_LEVEL` subir. Destreza% pode reduzir depois.
+ */
+export function specialCooldown(level: number): number {
+  const lv = Math.min(MAX_LEVEL, Math.max(1, Math.floor(level)));
+  return Math.max(2, 30 - (lv - 1) * (28 / Math.max(1, MAX_LEVEL - 1)));
+}
+
 export function createProgression(level = 1): ProgressionState {
   return { xp: 0, xpToNext: xpForLevel(level), totalXp: 0 };
 }

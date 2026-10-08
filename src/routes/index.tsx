@@ -134,6 +134,7 @@ function Index() {
 
   const attack = useGameStore(s => s.attack);
   const collectNearest = useGameStore(s => s.collectNearest);
+  const specialAttack = useGameStore(s => s.specialAttack);
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);
@@ -209,6 +210,8 @@ function Index() {
       // 1–9 → slots 0–8; 0 → slot 9. Demais slots (ex.: rifle) por clique.
       if (/^[0-9]$/.test(e.key)) useHotbarSlot(e.key === '0' ? 9 : Number(e.key) - 1);
       if (e.code === 'KeyE' && !inCity) collectNearest();
+      if (e.code === 'KeyQ' && !inCity) specialAttack('jump');
+      if (e.code === 'KeyR' && !inCity) specialAttack('spin');
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'KeyV' && !inCity) toggleCamera();
       if (e.code === 'KeyG' && !inCity) toggleAutoMode();
@@ -218,7 +221,7 @@ function Index() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, hitNearest, useHotbarSlot, setPanel, setMode, toggleCamera, ui.panel, inCity]);
+  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, toggleCamera, ui.panel, inCity]);
 
   function open(id: string) {
     setPanelMessage('');

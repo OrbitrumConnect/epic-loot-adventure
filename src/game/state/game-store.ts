@@ -28,7 +28,7 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
-import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
+import { creatureXp, grantXp, playerBaseAttack, specialCooldown, xpForLevel } from '../systems/progressionSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
@@ -48,6 +48,9 @@ type GameState = {
   deathBags: DeathBag[];
   ui: UIState;
   attackTick: number;
+  /** Incrementa a cada especial (Q/R); o mundo 3D anima. `specialKind` diz qual. */
+  specialTick: number;
+  specialKind: 'jump' | 'spin' | null;
   base: BaseState;
   camps: CampState[];
   objectives: ObjectiveQueueState;
@@ -65,6 +68,7 @@ type GameState = {
 
 type GameActions = {
   attack: (targetId: string) => void;
+  specialAttack: (kind: 'jump' | 'spin') => void;
   collect: (nodeId: string) => void;
   collectNearest: () => void;
   useHotbarSlot: (index: number) => void;
@@ -152,6 +156,7 @@ function createInitialPlayer(): PlayerState {
     lastAttackAt: 0,
     dead: false,
     respawnAt: 0,
+    lastSpecialAt: 0,
     attributes: { ...DEFAULT_ATTRIBUTES },
   };
 }
@@ -224,6 +229,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   resources: createInitialResources(),
   deathBags: [],
   attackTick: 0,
+  specialTick: 0,
+  specialKind: null,
   base: createInitialBase(Date.now()),
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
@@ -369,6 +376,79 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       attackTick: state.attackTick + 1,
       feedback: pushEvents(state.feedback, drafts, stamp),
       ui: { ...state.ui, message: msg },
+    });
+  },
+
+  // Ataque especial Q/R. Só melee/tocha (ranged não tem). Dano EM ÁREA ao redor.
+  // Cooldown escala por nível (30 s → 2 s). Humano e piloto chamam esta mesma ação.
+  specialAttack: (kind) => {
+    const state = get();
+    if (state.player.dead) return;
+
+    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+    const heldId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    if (weaponFor(heldId).ranged) {
+      set(s => ({ ui: { ...s.ui, message: 'Arma de longe não tem ataque especial.' } }));
+      return;
+    }
+
+    const now = Date.now() / 1000;
+    const cd = specialCooldown(state.player.level);
+    const since = now - (state.player.lastSpecialAt ?? 0);
+    if (since < cd) {
+      set(s => ({ ui: { ...s.ui, message: `Especial recarregando (${Math.ceil(cd - since)}s).` } }));
+      return;
+    }
+
+    const usingTorch = heldId === 'torch';
+    const equipped = state.player.inventory.equipment.primary;
+    const weaponPower = equipped ? (ITEMS[equipped]?.attackPower ?? 0) : 0;
+    const base = playerBaseAttack(state.player.level) + (usingTorch ? 9 : weaponPower);
+    const dmgMult = 1 + (state.player.attributes?.damage ?? 0) / 100;
+    // Jump: dano alto, raio menor. Spin: 360°, raio maior, dano menor.
+    const radius = kind === 'spin' ? 3.8 : 3.2;
+    const power = Math.round(base * (kind === 'jump' ? 1.8 : 1.2) * dmgMult);
+
+    const pos = state.player.position;
+    const drafts: FeedbackDraft[] = [];
+    let updatedPlayer: PlayerState = { ...state.player, lastSpecialAt: now };
+    let updatedBags = state.deathBags;
+    let hits = 0;
+
+    const creatures = state.creatures.map(c => {
+      if (c.behavior === 'dead') return c;
+      if (getDistance(pos, c.position) > radius) return c;
+      hits += 1;
+      const result = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name);
+      drafts.push(damageEvent(c.id, result.damage, c.position, {
+        critical: isCriticalDamage(power, c.armor, result.damage), fire: usingTorch,
+      }));
+      if (result.targetDied) {
+        const def = CREATURES[c.speciesId];
+        if (def) {
+          const loot = rollCreatureLoot(def);
+          for (const d of loot) if (d.itemId) drafts.push(lootEvent(d.itemId, d.quantity, c.position));
+          if (loot.length > 0) updatedBags = [...updatedBags, createDeathBag(c.id, c.name, c.position, loot)];
+        }
+        const xpGain = creatureXp(def ?? c);
+        const g = grantXp({ ...updatedPlayer, gold: updatedPlayer.gold + 15 }, xpGain);
+        updatedPlayer = g.player;
+        drafts.push(deathEvent(c.id, c.name, c.position));
+        drafts.push(xpEvent(xpGain, pos));
+        if (g.result.levelsGained > 0) drafts.push(levelUpEvent(g.result.newLevel, pos));
+        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt: Date.now() + (180_000 + Math.random() * 120_000) };
+      }
+      return { ...c, hp: result.targetHp, behavior: 'chase' as const };
+    });
+
+    set({
+      player: updatedPlayer,
+      creatures,
+      deathBags: updatedBags,
+      feedback: pushEvents(state.feedback, drafts, Date.now()),
+      specialTick: state.specialTick + 1,
+      specialKind: kind,
+      ui: { ...state.ui, message: hits > 0 ? `Especial! ${hits} atingido(s).` : 'Especial (nada no alcance).' },
     });
   },
 

@@ -18,6 +18,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { Position } from '@/game/types';
 import { HARVEST_NODES } from '@/game/data/harvest-nodes';
 import { weaponFor } from '@/game/data/weapons';
+import { specialCooldown } from '@/game/systems/progressionSystem';
 import { harvestNodeById } from './harvest-nodes';
 import { creatureById } from './hostile-ai';
 import { buildAutoSnapshot, decideIntent, getObjectives, setAutoMode, tickWorld } from './objective-bridge';
@@ -150,11 +151,20 @@ export function AutoPilot({
         const reach = Math.max(1, weaponFor(heldId).range - 0.4);
         if (distTo(target) <= reach) {
           hold();
-          if (now - lastAttack.current > 450) {
+          // Especial quando melee e fora do cooldown (hit em área); senão ataque normal.
+          const nowS = Date.now() / 1000;
+          const canSpecial = !weaponFor(heldId).ranged
+            && nowS - (store.player.lastSpecialAt ?? 0) >= specialCooldown(store.player.level);
+          if (canSpecial) {
+            store.specialAttack('spin');
+            setPilotStatus('attack', `Especial em ${name}`, '');
+          } else if (now - lastAttack.current > 450) {
             lastAttack.current = now;
             store.attack(intent.creatureId);
+            setPilotStatus('attack', `Atacando ${name}`, '');
+          } else {
+            setPilotStatus('attack', `Atacando ${name}`, '');
           }
-          setPilotStatus('attack', `Atacando ${name}`, '');
         } else {
           goTo(target);
           setPilotStatus('move', `Fechando em ${name}`, '');
