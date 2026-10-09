@@ -216,14 +216,14 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
           <mesh geometry={kit.cone} material={kit.flame} scale={[0.5, 1.1, 0.5]} />
           <mesh geometry={kit.cone} material={kit.flame} position={[0.12, 0.25, -0.08]} scale={[0.3, 0.7, 0.3]} />
           {/* Luz de verdade: acende forte à noite. */}
-          <pointLight ref={fireLight} color="#ff8a44" intensity={5} distance={13} decay={1.5} />
+          <pointLight ref={fireLight} color="#ff8a44" intensity={5} distance={14} decay={1.5} />
         </group>
       )}
       {cleared && (
         <group position={[0, 0.1, 0]}>
           <mesh geometry={kit.sphere} material={kit.ember} scale={[0.6, 0.12, 0.6]} />
           {/* Brasa morrendo: brilho fraco pra o acampamento limpo não ficar apagado. */}
-          <pointLight color="#ff5a22" intensity={1.1} distance={6} decay={1.8} />
+          <pointLight color="#ff5a22" intensity={1.1} distance={7} decay={1.8} />
         </group>
       )}
     </group>

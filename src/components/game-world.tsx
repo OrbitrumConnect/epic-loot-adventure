@@ -266,7 +266,7 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
           <meshStandardMaterial color={c.rock} />
         </mesh>
       ))}
-      <pointLight ref={ref} position={[0, 0.6, 0]} color="#ff8844" intensity={3} distance={9} />
+      <pointLight ref={ref} position={[0, 0.6, 0]} color="#ff8844" intensity={3} distance={10} />
       <mesh position={[0, 0.3, 0]}>
         <coneGeometry args={[0.15, 0.5, 4]} />
         <meshStandardMaterial color="#ff6622" emissive="#ff4400" emissiveIntensity={2} transparent opacity={0.8} />
@@ -893,7 +893,7 @@ function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
         <boxGeometry args={[0.26, 0.32, 0.26]} />
         <meshStandardMaterial ref={bulb} color="#ffd98a" emissive="#ffb040" emissiveIntensity={0} />
       </mesh>
-      <pointLight ref={light} position={[0, 2.6, 0]} color="#ffcf87" intensity={0} distance={12} decay={1.6} />
+      <pointLight ref={light} position={[0, 2.6, 0]} color="#ffcf87" intensity={0} distance={13} decay={1.6} />
     </group>
   );
 }
