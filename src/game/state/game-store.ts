@@ -6,7 +6,7 @@ import type {
 } from '../types';
 import { ITEMS } from '../data/items';
 import { weaponFor } from '../data/weapons';
-import { DEFAULT_ATTRIBUTES } from '../types/player';
+import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES } from '../data/harvest-nodes';
@@ -29,7 +29,7 @@ import {
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
-import { damageMultiplier, effectiveMaxWeight, effectiveSpecialCooldown } from '../systems/attributesSystem';
+import { damageMultiplier, effectiveMaxWeight, effectiveSpecialCooldown, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
@@ -74,6 +74,10 @@ type GameActions = {
   collectNearest: () => void;
   /** Faz nascer o mini-boss (um por vez) perto do jogador. Chamado pelo timer. */
   spawnBoss: () => void;
+  /** Gasta 1 ponto de skill subindo um atributo (0–100%). */
+  allocateSkill: (attr: keyof PlayerAttributes) => void;
+  /** Devolve 1 ponto, baixando um atributo alocado. */
+  deallocateSkill: (attr: keyof PlayerAttributes) => void;
   useHotbarSlot: (index: number) => void;
   craftItem: (recipeId: string) => void;
   rest: () => void;
@@ -172,6 +176,7 @@ function createInitialPlayer(): PlayerState {
     respawnAt: 0,
     lastSpecialAt: 0,
     attributes: { ...DEFAULT_ATTRIBUTES },
+    skillPoints: 0,
   };
 }
 
@@ -660,6 +665,31 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       creatures: [...s.creatures, boss],
       ui: { ...s.ui, message: `⚠️ ${def.name} surgiu no vale! Prepare-se.` },
     }));
+  },
+
+  allocateSkill: (attr) => {
+    const p = get().player;
+    if ((p.skillPoints ?? 0) <= 0) return;
+    const attrs: PlayerAttributes = { ...DEFAULT_ATTRIBUTES, ...(p.attributes ?? {}) };
+    if (attrs[attr] >= SKILL_CAP_PER_ATTR) return; // teto por atributo
+    const next: PlayerState = {
+      ...p,
+      skillPoints: (p.skillPoints ?? 0) - 1,
+      attributes: { ...attrs, [attr]: attrs[attr] + SKILL_STEP },
+    };
+    set({ player: syncCarry(next) }); // capacidade% pode ter mudado -> peso máx acompanha
+  },
+
+  deallocateSkill: (attr) => {
+    const p = get().player;
+    const attrs: PlayerAttributes = { ...DEFAULT_ATTRIBUTES, ...(p.attributes ?? {}) };
+    if (attrs[attr] <= 0) return;
+    const next: PlayerState = {
+      ...p,
+      skillPoints: (p.skillPoints ?? 0) + 1,
+      attributes: { ...attrs, [attr]: attrs[attr] - SKILL_STEP },
+    };
+    set({ player: syncCarry(next) });
   },
   setPanelMessage: (msg) => set(s => ({ ui: { ...s.ui, panelMessage: msg } })),
   updatePosition: (x, z) => set(s => ({ player: { ...s.player, position: { x, z } } })),

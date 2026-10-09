@@ -141,6 +141,8 @@ function Index() {
   const attack = useGameStore(s => s.attack);
   const collectNearest = useGameStore(s => s.collectNearest);
   const specialAttack = useGameStore(s => s.specialAttack);
+  const allocateSkill = useGameStore(s => s.allocateSkill);
+  const deallocateSkill = useGameStore(s => s.deallocateSkill);
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);
@@ -465,11 +467,31 @@ function Index() {
                       <span>{usedSlots} / {player.inventory.maxSlots} slots</span>
                       <span>Era do Ferro</span>
                     </div>
-                    <div className="panel-stats" aria-label="Atributos">
-                      <span title="Multiplica o dano de ataque">⚔ Dano +{attrs.damage}%</span>
-                      <span title="Reduz a cadência do especial">✦ Destreza +{attrs.dexterity}%</span>
-                      <span title="Aumenta o peso que a bolsa carrega">🎒 Capacidade +{attrs.carry}%</span>
-                      <span title="Aumenta a velocidade de movimento">» Velocidade +{attrs.moveSpeed}%</span>
+                    <div className="attr-panel" aria-label="Atributos">
+                      <div className="attr-head">
+                        <strong>Atributos</strong>
+                        <span className="attr-points" data-has={(player.skillPoints ?? 0) > 0}>
+                          {player.skillPoints ?? 0} ponto{(player.skillPoints ?? 0) === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      {([
+                        { key: 'damage', icon: '⚔', label: 'Dano', hint: 'Multiplica o dano de ataque' },
+                        { key: 'dexterity', icon: '✦', label: 'Destreza', hint: 'Reduz a cadência do especial' },
+                        { key: 'carry', icon: '🎒', label: 'Capacidade', hint: 'Aumenta o peso que a bolsa carrega' },
+                        { key: 'moveSpeed', icon: '»', label: 'Velocidade', hint: 'Aumenta a velocidade de movimento' },
+                      ] as const).map(row => {
+                        const own = player.attributes?.[row.key] ?? 0;
+                        return (
+                          <div className="attr-row" key={row.key} title={row.hint}>
+                            <span className="attr-name">{row.icon} {row.label}</span>
+                            <span className="attr-val">+{attrs[row.key]}%</span>
+                            <Button variant="ghost" className="attr-btn" aria-label={`Diminuir ${row.label}`}
+                              disabled={own <= 0} onClick={() => deallocateSkill(row.key)}>−</Button>
+                            <Button variant="ghost" className="attr-btn" aria-label={`Aumentar ${row.label}`}
+                              disabled={(player.skillPoints ?? 0) <= 0 || own >= 60} onClick={() => allocateSkill(row.key)}>+</Button>
+                          </div>
+                        );
+                      })}
                     </div>
                     <div className="panel-actions">
                       <Button variant="outline" onClick={() => open('home')}><Home />Retornar à base</Button>

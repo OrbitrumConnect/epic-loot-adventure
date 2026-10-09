@@ -26,6 +26,12 @@ export const ATTRIBUTE_CAPS: PlayerAttributes = { damage: 40, dexterity: 50, car
 /** Peso máximo base da bolsa (carry 0% = este valor). */
 export const BASE_MAX_WEIGHT = 40;
 
+/** Quanto cada ponto de skill soma num atributo (%). */
+export const SKILL_STEP = 1;
+/** Teto do que a SKILL (alocação manual) pode somar por atributo (%). O efetivo
+ *  ainda é travado em 100% no total (nível + equip + skill). */
+export const SKILL_CAP_PER_ATTR = 60;
+
 /** Bônus de dano (%) por raridade da arma equipada. */
 const RARITY_DAMAGE: Record<string, number> = { common: 0, rare: 8, epic: 16, mythic: 28 };
 

@@ -48,4 +48,6 @@ export type PlayerState = {
   respawnAt: number;
   /** Bônus percentuais aditivos (ver PlayerAttributes). Ausente = sem bônus. */
   attributes?: PlayerAttributes;
+  /** Pontos de skill não gastos (ganhos por nível, distribuídos nos atributos). Ausente = 0. */
+  skillPoints?: number;
 };

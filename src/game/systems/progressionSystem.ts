@@ -39,6 +39,9 @@ export const LEVEL_GAINS: LevelUpGains = {
   attackPower: 2,
 };
 
+/** Pontos de skill ganhos por nível, pra distribuir nos atributos (0–100%). */
+export const SKILL_POINTS_PER_LEVEL = 3;
+
 /** Ataque base do jogador (sem arma) naquele nível. Nível 1 = 10, como era. */
 export const BASE_ATTACK_AT_LEVEL_1 = 10;
 export function playerBaseAttack(level: number): number {
@@ -137,7 +140,8 @@ export function grantXp(
     const maxHp = player.maxHp + applied.result.gains.maxHp;
     const maxMana = player.maxMana + applied.result.gains.maxMana;
     const maxStamina = player.maxStamina + applied.result.gains.maxStamina;
-    next = { ...next, maxHp, maxMana, maxStamina, hp: maxHp, mana: maxMana, stamina: maxStamina };
+    const skillPoints = (player.skillPoints ?? 0) + applied.result.levelsGained * SKILL_POINTS_PER_LEVEL;
+    next = { ...next, maxHp, maxMana, maxStamina, hp: maxHp, mana: maxMana, stamina: maxStamina, skillPoints };
   }
   return {
     player: next,
