@@ -15,6 +15,7 @@ import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddIt
 import { resolveAttack, getDistance, isCriticalDamage } from '../systems/combatSystem';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
 import { rollBonusLoot } from '../systems/lootEconomySystem';
+import { findClaimSpot, upgradeCost, MAX_BASE_TIER, type PlayerBase } from '../systems/baseClaimSystem';
 import { canCraft, craft } from '../systems/craftSystem';
 import {
   createInitialBase, tickBase as resolveBase, placeBuilding as placeBaseBuilding, startUpgrade,
@@ -54,6 +55,8 @@ type GameState = {
   specialTick: number;
   specialKind: 'jump' | 'spin' | null;
   base: BaseState;
+  /** Base própria reivindicada no mundo aberto (Fase 3). null = ainda não reivindicou. */
+  playerBase: PlayerBase | null;
   camps: CampState[];
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
@@ -75,6 +78,10 @@ type GameActions = {
   collectNearest: () => void;
   /** Faz nascer o mini-boss (um por vez) perto do jogador. Chamado pelo timer. */
   spawnBoss: () => void;
+  /** Reivindica uma base própria num terreno livre perto do jogador (Fase 3). */
+  claimBase: () => void;
+  /** Sobe o tier da base (gasta madeira/pedra da bolsa). */
+  upgradeBase: () => void;
   /** Gasta 1 ponto de skill subindo um atributo (0–100%). */
   allocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Devolve 1 ponto, baixando um atributo alocado. */
@@ -258,6 +265,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   specialTick: 0,
   specialKind: null,
   base: createInitialBase(Date.now()),
+  playerBase: null,
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
   targetId: null,
@@ -696,6 +704,48 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       creatures: [...s.creatures, boss],
       ui: { ...s.ui, message: `⚠️ ${def.name} surgiu no vale! Prepare-se.` },
     }));
+  },
+
+  claimBase: () => {
+    const s = get();
+    if (s.playerBase) {
+      set({ ui: { ...s.ui, message: 'Você já tem uma base. Use Expandir pra evoluir.' } });
+      return;
+    }
+    const spot = findClaimSpot(s.player.position);
+    if (!spot) {
+      set({ ui: { ...s.ui, message: 'Sem espaço livre aqui. Afaste-se de água, ruínas e acampamentos.' } });
+      return;
+    }
+    const base: PlayerBase = { position: spot, tier: 1, claimedAt: Date.now() };
+    set({ playerBase: base, ui: { ...s.ui, message: 'Base reivindicada! Volte pra ela e expanda com recursos.' } });
+  },
+
+  upgradeBase: () => {
+    const s = get();
+    if (!s.playerBase) {
+      set({ ui: { ...s.ui, message: 'Reivindique uma base primeiro.' } });
+      return;
+    }
+    if (s.playerBase.tier >= MAX_BASE_TIER) {
+      set({ ui: { ...s.ui, message: 'Base já está no tier máximo.' } });
+      return;
+    }
+    const next = s.playerBase.tier + 1;
+    const cost = upgradeCost(next);
+    const haveWood = getItemCount(s.player.inventory, 'wood');
+    const haveStone = getItemCount(s.player.inventory, 'stone');
+    if (haveWood < cost.wood || haveStone < cost.stone) {
+      set({ ui: { ...s.ui, message: `Faltam recursos: ${cost.wood} madeira + ${cost.stone} pedra.` } });
+      return;
+    }
+    let inv = removeItem(s.player.inventory, 'wood', cost.wood);
+    inv = removeItem(inv, 'stone', cost.stone);
+    set({
+      player: { ...s.player, inventory: inv },
+      playerBase: { ...s.playerBase, tier: next },
+      ui: { ...s.ui, message: `Base evoluída para o tier ${next}!` },
+    });
   },
 
   allocateSkill: (attr) => {

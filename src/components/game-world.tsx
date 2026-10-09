@@ -17,6 +17,7 @@ import {
 } from './world/occlusion';
 import { TargetRoute } from './world/target-route';
 import { Camps, Enemies } from './world/world-entities';
+import { PlayerBaseView } from './world/player-base';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
@@ -1351,6 +1352,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
       <HarvestNodes c={c} />
       <Camps c={c} />
+      <PlayerBaseView c={c} />
       <Enemies c={c} playerRef={playerRef} />
 
       <TargetRoute playerRef={playerRef} />

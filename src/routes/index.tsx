@@ -20,6 +20,7 @@ import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
+import { upgradeCost, MAX_BASE_TIER } from '@/game/systems/baseClaimSystem';
 import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
@@ -145,6 +146,9 @@ function Index() {
   const deallocateSkill = useGameStore(s => s.deallocateSkill);
   const equipItem = useGameStore(s => s.equipItem);
   const unequipSlot = useGameStore(s => s.unequipSlot);
+  const playerBase = useGameStore(s => s.playerBase);
+  const claimBase = useGameStore(s => s.claimBase);
+  const upgradeBase = useGameStore(s => s.upgradeBase);
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);
@@ -626,6 +630,19 @@ function Index() {
                     <div className="home-grid">
                       <div className="home-building"><Castle /><div><strong>Casa da tribo</strong><small>Nível 1 · Era do Ferro</small></div></div>
                       <div className="home-building"><Shield /><div><strong>Defesas</strong><small>Muralha de madeira</small></div></div>
+                    </div>
+                    <div className="home-building">
+                      <Castle /><div>
+                        <strong>Minha base (terreno)</strong>
+                        <small>{playerBase ? `Tier ${playerBase.tier}/${MAX_BASE_TIER} · reivindicada no vale` : 'Nenhuma — reivindique um terreno livre onde você está'}</small>
+                      </div>
+                      {playerBase ? (
+                        <Button variant="outline" size="sm" disabled={playerBase.tier >= MAX_BASE_TIER} onClick={upgradeBase}>
+                          {playerBase.tier >= MAX_BASE_TIER ? 'Tier máximo' : `Expandir · ${upgradeCost(playerBase.tier + 1).wood}m+${upgradeCost(playerBase.tier + 1).stone}p`}
+                        </Button>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={claimBase}>Reivindicar aqui</Button>
+                      )}
                     </div>
                     <div className="home-building">
                       <Package /><div><strong>Armazém</strong><small className="item-inline">
