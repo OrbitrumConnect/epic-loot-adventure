@@ -83,8 +83,10 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     scale: 3.3, bodyWidth: 0.95, bodyDepth: 0.55, weapon: 'club',
     hood: false, shoulders: true, charm: false, boss: true,
     tuning: {
-      ...base, speed: 3.2, aggroRange: 22, attackRange: 4.5, leashRange: 200,
-      chaseTimeout: 60, provokeRange: 40, walkSpeedChase: 9, walkSpeedIdle: 4,
+      // Caçador implacável: aggro largo, NÃO desiste (timeout enorme) e rápido o
+      // bastante pra alcançar e bater como os outros — com o giro por cima.
+      ...base, speed: 3.9, aggroRange: 30, attackRange: 4.5, leashRange: 400,
+      chaseTimeout: 600, provokeRange: 45, walkSpeedChase: 13, walkSpeedIdle: 5,
       hitVerb: 'esmagou',
     },
   },

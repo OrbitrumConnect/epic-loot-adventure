@@ -636,14 +636,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const p = state.player.position;
     const margin = WORLD_HALF - 6;
     // Nasce 22–34 m do jogador, direção aleatória, dentro do mundo.
-    let x = Math.max(-margin, Math.min(margin, p.x + 26));
+    let x = Math.max(-margin, Math.min(margin, p.x + 20));
     let z = p.z;
+    // Nasce 16–26 m do jogador: longe o bastante pra ser um susto, perto o
+    // bastante pra já entrar no aggro (30) e vir caçar imediatamente.
     for (let i = 0; i < 12; i++) {
       const ang = Math.random() * Math.PI * 2;
-      const r = 22 + Math.random() * 12;
+      const r = 16 + Math.random() * 10;
       const cx = Math.max(-margin, Math.min(margin, p.x + Math.sin(ang) * r));
       const cz = Math.max(-margin, Math.min(margin, p.z + Math.cos(ang) * r));
-      if (getDistance(p, { x: cx, z: cz }) >= 18) { x = cx; z = cz; break; }
+      if (getDistance(p, { x: cx, z: cz }) >= 14) { x = cx; z = cz; break; }
     }
     const hp = scaleEnemyHp(def.maxHp);
     const boss: CreatureState = {
