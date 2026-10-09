@@ -409,6 +409,7 @@ function Index() {
               {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
             </div>
             <div className="world-actions">
+              <Button variant="ghost" className="world-action" data-on={idleMode} aria-label="Piloto automático" title={`Piloto: ${idleMode ? 'IDLE (toque p/ assumir)' : 'MANUAL (toque p/ ligar)'} · G`} onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>{idleMode ? <Bot /> : <Hand />}</Button>
               <Button variant="ghost" className="world-action" aria-label="Pegar / colher" title="Pegar / colher · E" onClick={collectNearest}><Package /></Button>
               <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
               <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
