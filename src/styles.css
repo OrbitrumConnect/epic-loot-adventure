@@ -581,4 +581,10 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 
   /* Card do piloto fora da tela do open world (toggle fica em Objetivos) */
   .pilot-strip { display: none; }
+
+  /* Fileira de triggers: com o botão do piloto são 7 — deixa QUEBRAR linha e
+     encolhe um pouco, alinhado à direita, pra NENHUM (ex.: casa) ficar fora. */
+  .world-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 72%; }
+  .world-action { width: 38px; height: 38px; }
+  .world-message { font-size: 10px; line-height: 1.6; }
 }
