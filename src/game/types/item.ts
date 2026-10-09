@@ -22,6 +22,13 @@ export type Item = {
   attackPower?: number;
   armor?: number;
   healAmount?: number;
+  /**
+   * Bônus de atributo (%) explícito ao equipar. Se ausente, armadura/acessório
+   * usam a tabela por raridade de `attributesSystem`. Somado e travado em 0–100.
+   */
+  attrBonus?: Partial<{ damage: number; dexterity: number; carry: number; moveSpeed: number }>;
+  /** Força o slot de equipamento (ex.: 'accessory'); sem isso o slot sai da categoria. */
+  equipSlot?: 'accessory';
   icon: string;
   /**
    * Convenção: o sprite de todo item fica em `/assets/items/<id>.webp` (ver

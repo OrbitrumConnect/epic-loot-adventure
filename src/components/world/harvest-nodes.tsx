@@ -47,7 +47,7 @@ export function harvestNodeById(id: string): HarvestNodeState | undefined {
 /* ------------------------------------------------------------------ *
  * Geometria assada: várias formas -> 1 BufferGeometry com cor por vértice
  * ------------------------------------------------------------------ */
-type Part = {
+export type Part = {
   g: THREE.BufferGeometry;
   color: string;
   pos?: [number, number, number];
@@ -61,7 +61,7 @@ const tmpQuat = new THREE.Quaternion();
 const tmpEuler = new THREE.Euler();
 const tmpMat = new THREE.Matrix4();
 
-function bake(parts: Part[]): THREE.BufferGeometry {
+export function bake(parts: Part[]): THREE.BufferGeometry {
   const pos: number[] = [];
   const nor: number[] = [];
   const col: number[] = [];

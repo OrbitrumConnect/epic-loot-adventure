@@ -643,3 +643,79 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .world-action { width: 30px; height: 30px; }
   .world-message { font-size: 10px; line-height: 1.6; }
 }
+
+/* -------------------------------------------------------------------------
+ * Base persistente do jogador (Fase 3): painel "Minha base", seletor de peças
+ * do modo de construção, cadeado da Cidade e legenda do mapa.
+ * --------------------------------------------------------------------- */
+.nav-item[data-locked=true] { opacity: .75; }
+.nav-item .nav-lock { margin-left: auto; width: 13px; height: 13px; color: var(--primary); }
+.sidebar-nav .nav-item[data-locked=true] .nav-lock { width: 13px; height: 13px; }
+
+.base-empty { display: flex; gap: 16px; align-items: flex-start; padding: 6px 0 14px; }
+.base-empty > svg { width: 34px; height: 34px; flex-shrink: 0; color: var(--primary); }
+.base-empty strong { display: block; font-size: 13px; margin-bottom: 6px; }
+.base-empty p { margin: 0 0 8px; font-size: 11px; line-height: 1.7; color: var(--muted-foreground); }
+.base-empty kbd { padding: 1px 6px; border: 1px solid var(--border); border-radius: 3px; color: var(--primary); font-size: 10px; }
+
+.base-stage { padding: 4px 0 14px; }
+.base-stage-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.base-stage-head > span:first-child { margin-right: auto; }
+.base-stage-head small { display: block; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted-foreground); }
+.base-stage-head strong { font-family: var(--font-display); font-size: 20px; font-weight: 500; color: var(--primary); }
+.base-stage progress { width: 100%; height: 6px; }
+.base-next { margin: 12px 0 0; font-size: 12px; line-height: 1.6; }
+.base-next small { display: block; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted-foreground); margin-bottom: 3px; }
+
+.base-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 10px; color: var(--muted-foreground); }
+.base-chip svg { width: 13px; height: 13px; }
+.base-chip[data-quality=nobre] { color: var(--primary); border-color: color-mix(in oklch,var(--primary) 40%,transparent); }
+.base-chip[data-quality=fronteira] { color: var(--world-leaf-light); border-color: color-mix(in oklch,var(--world-leaf-light) 40%,transparent); }
+.base-chip[data-alert=true] { color: var(--destructive); border-color: var(--destructive); animation: base-pulse 1s ease-in-out infinite alternate; }
+@keyframes base-pulse { to { background: color-mix(in oklch,var(--destructive) 22%,transparent); } }
+
+.base-perimeter { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; }
+.base-perimeter svg { width: 18px; height: 18px; flex-shrink: 0; }
+.base-perimeter[data-closed=true] { color: var(--world-leaf-light); border-color: color-mix(in oklch,var(--world-leaf-light) 45%,transparent); background: color-mix(in oklch,var(--world-leaf-light) 8%,transparent); }
+.base-perimeter[data-closed=false] { color: var(--destructive); border-color: var(--destructive); background: color-mix(in oklch,var(--destructive) 10%,transparent); }
+
+.base-pieces { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin: 14px 0; }
+.base-pieces > span { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border: 1px solid var(--border); border-radius: 4px; }
+.base-pieces > span[data-empty=true] { opacity: .5; }
+.base-pieces svg { width: 18px; height: 18px; color: var(--primary); }
+.base-pieces em { font-style: normal; font-size: 16px; font-weight: 600; }
+.base-pieces small { font-size: 9px; color: var(--muted-foreground); }
+
+.base-lock { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: 4px; font-size: 11px; line-height: 1.6; color: var(--muted-foreground); }
+.base-lock svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.base-lock[data-locked=true] { color: var(--foreground); border-color: color-mix(in oklch,var(--primary) 50%,transparent); }
+.base-lock[data-locked=true] svg { color: var(--primary); }
+.base-lock[data-locked=false] svg { color: var(--world-leaf-light); }
+.base-lock[data-warn=true] { color: var(--destructive); border-color: var(--destructive); }
+.base-lock[data-warn=true] svg { color: var(--destructive); }
+
+.build-picker { position: absolute; left: 50%; bottom: 124px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px); padding: 8px 12px; border: 1px solid color-mix(in oklch,var(--primary) 45%,transparent); border-radius: 6px; background: color-mix(in oklch,var(--world-dark) 92%,transparent); color: var(--world-ink); box-shadow: var(--panel-shadow); }
+.build-hint { font-size: 11px; }
+.build-kinds, .build-tiers { display: flex; gap: 6px; }
+.build-kind, .build-tier, .build-close { border: 1px solid var(--border); border-radius: 4px; background: transparent; color: inherit; font-size: 11px; cursor: pointer; }
+.build-kind { padding: 7px 12px; }
+.build-tier { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 9px; }
+.build-tier b { font-size: 10px; font-weight: 600; }
+.build-cost { display: flex; gap: 6px; font-size: 10px; }
+.build-cost > span { display: inline-flex; align-items: center; gap: 3px; }
+.build-cost > span[data-short=true] { color: var(--destructive); }
+.build-kind[data-active=true], .build-tier[data-active=true] { color: var(--primary); border-color: var(--primary); background: color-mix(in oklch,var(--primary) 12%,transparent); }
+.build-tier[data-blocked=true] { opacity: .45; cursor: not-allowed; }
+.build-close { padding: 7px 10px; color: var(--muted-foreground); }
+.build-close:hover, .build-kind:hover { border-color: var(--primary); }
+
+.wm-key-claim { border: 1.5px solid var(--world-leaf-light); }
+.wm-key-claim[data-closed=false] { border-color: var(--world-cloak); border-style: dashed; }
+
+@media (max-width: 1100px), (max-height: 600px) {
+  .build-picker { bottom: 70px; gap: 6px; padding: 5px 6px; flex-wrap: wrap; justify-content: center; }
+  .build-kind { padding: 5px 7px; font-size: 10px; }
+  .build-tier { padding: 3px 6px; }
+  .base-pieces { grid-template-columns: repeat(3,1fr); }
+}
+.base-lock + .base-stage { padding-top: 14px; }

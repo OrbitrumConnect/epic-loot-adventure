@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
   Circle, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
-  Heart, Home, Leaf, ListChecks, Map, Menu, MessageSquare, Mountain, Package,
+  Heart, Home, Landmark, Leaf, ListChecks, Lock, Map, Menu, MessageSquare, Mountain, Package,
   PanelLeftClose, Pickaxe, Repeat, Settings, Shield, ShieldCheck, Skull,
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
@@ -13,6 +13,9 @@ import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
 import { ToolCrafting } from '@/components/hud/tool-crafting';
 import { ItemSprite, ICON_MAP } from '@/components/hud/item-sprite';
+import { BasePanel, cityLockReason } from '@/components/hud/base-panel';
+import { PiecePicker } from '@/components/hud/base-picker';
+import { canOpenCityView } from '@/game/systems/playerBaseSystem';
 import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
 import { HuntBanner } from '@/components/hud/hunt-banner';
 import { ITEMS } from '@/game/data/items';
@@ -67,6 +70,7 @@ const navigation = [
   { id: 'world', name: 'Explorar', icon: Compass },
   { id: 'objectives', name: 'Objetivos', icon: ListChecks },
   { id: 'home', name: 'Home · Base', icon: Home },
+  { id: 'base', name: 'Minha base', icon: Landmark },
   { id: 'city', name: 'Cidade', icon: Castle },
   { id: 'map', name: 'Mapa', icon: Map },
   { id: 'raid', name: 'Raids', icon: Swords },
@@ -131,6 +135,8 @@ function Index() {
     return undefined;
   }, [player.level]);
 
+  // Boolean estreito: só muda quando a base entra/sai do estágio Clash.
+  const cityUnlocked = useGameStore(s => canOpenCityView(s.playerBase));
   const autoPotion = useGameStore(s => s.autoPotion);
   const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
   const autoHuntRadius = useGameStore(s => s.autoHuntRadius);
@@ -226,19 +232,26 @@ function Index() {
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'KeyV' && !inCity) toggleCamera();
       if (e.code === 'KeyG' && !inCity) toggleAutoMode();
-      if (e.code === 'KeyB') { setPanel(null); setMode(inCity ? 'world' : 'city'); }
+      if (e.code === 'KeyB') {
+        // A cidade só abre no estágio Clash; trancada, o B mostra o que falta.
+        if (!inCity && !canOpenCityView(useGameStore.getState().playerBase)) { setPanelMessage(''); setPanel('base'); return; }
+        setPanel(null); setMode(inCity ? 'world' : 'city');
+      }
       if (e.code === 'KeyI') setPanel(ui.panel === 'inventory' ? null : 'inventory');
       if (e.code === 'KeyM') setPanel(ui.panel === 'map' ? null : 'map');
       if (e.code === 'Escape') setPanel(null);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, toggleCamera, ui.panel, inCity]);
+  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, ui.panel, inCity]);
 
   function open(id: string) {
     setPanelMessage('');
     if (id === 'world') { setPanel(null); setMode('world'); }
-    else if (id === 'city') { setPanel(null); setMode('city'); }
+    else if (id === 'city') {
+      if (cityUnlocked) { setPanel(null); setMode('city'); }
+      else setPanel('base');
+    }
     else setPanel(id);
   }
 
@@ -252,7 +265,7 @@ function Index() {
   });
 
   const panel = ui.panel;
-  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
+  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
 
   // Triggers do mundo (piloto/pegar/atacar/especiais/câmera/casa). Mesma fonte
   // renderizada em dois lugares: sobre o mundo (desktop) e no rodapé ao lado do
@@ -280,9 +293,13 @@ function Index() {
         <div className="sidebar-label">SEU MUNDO</div>
         <nav className="sidebar-nav">
           {navigation.map(item => (
-            <Button key={item.id} variant="ghost" className="nav-item" title={item.name}
+            <Button key={item.id} variant="ghost" className="nav-item"
+              title={item.id === 'city' && !cityUnlocked ? (cityLockReason(useGameStore.getState().playerBase) ?? item.name) : item.name}
+              aria-label={item.id === 'city' && !cityUnlocked ? 'Cidade (trancada) — clique para ver o que falta' : undefined}
+              data-locked={item.id === 'city' && !cityUnlocked ? true : undefined}
               data-active={panel === item.id || (!panel && item.id === ui.mode)} onClick={() => open(item.id)}>
               <item.icon strokeWidth={1.5} /><span>{item.name}</span>
+              {item.id === 'city' && !cityUnlocked && <Lock className="nav-lock" aria-hidden="true" />}
               {item.id === 'loot' && <span className="nav-count">{totalResources}</span>}
             </Button>
           ))}
@@ -436,12 +453,14 @@ function Index() {
           </div>)}
           </>)}
 
+          {!inCity && !panel && <PiecePicker />}
+
           {panel && (
             <div className="modal-backdrop">
               <section className="game-panel" role="dialog" aria-modal="true" aria-label={title}>
                 <div className="panel-heading">
                   <div>
-                    <small>{panel === 'map' ? 'Território livre' : panel === 'home' ? 'Os Guardiões' : 'TRIBOS'}</small>
+                    <small>{panel === 'map' ? 'Território livre' : panel === 'home' ? 'Os Guardiões' : panel === 'base' ? 'Terreno e muralhas' : 'TRIBOS'}</small>
                     <h2>{title}</h2>
                   </div>
                   <Button variant="ghost" size="icon" title="Fechar" aria-label="Fechar" onClick={() => setPanel(null)}><X /></Button>
@@ -645,6 +664,8 @@ function Index() {
                     </div>
                   </>
                 )}
+
+                {panel === 'base' && <BasePanel onClose={() => setPanel(null)} />}
 
                 {panel === 'tribe' && (
                   <>

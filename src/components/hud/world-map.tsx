@@ -4,6 +4,7 @@ import { CREATURES } from '@/game/data/creatures';
 import { PLAYER_SPAWN } from '@/game/data/camps';
 import type { CampState, CreatureState, HarvestNodeState, ObjectiveKind } from '@/game/types';
 import { addObjective, setAutoMode } from '@/components/world/objective-bridge';
+import { BASE_GRID } from '@/game/types/playerbase';
 import { fromView, makeFrame, toView, WORLD_HALF, type MapFrame } from './map-transform';
 
 /**
@@ -172,6 +173,14 @@ export function WorldMap({ size }: WorldMapProps) {
       });
     }
     if (best) return best;
+    const pb = st.playerBase;
+    if (pb) {
+      const [x0, y0] = toView(f, pb.origin.gx * BASE_GRID, pb.origin.gz * BASE_GRID);
+      const side = pb.size * BASE_GRID * f.scale;
+      if (px >= x0 - 2 && px <= x0 + side + 2 && py >= y0 - 2 && py <= y0 + side + 2) {
+        return { type: 'base', label: `Sua base · ${pb.enclosed ? 'perímetro fechado' : 'perímetro ABERTO (há uma brecha)'}` };
+      }
+    }
     const [bx, by] = toView(f, PLAYER_SPAWN.x, PLAYER_SPAWN.z);
     if (Math.hypot(bx - px, by - py) <= R) return { type: 'base', label: 'Base / ponto de renascimento' };
     const [rx, ry] = toView(f, RUINS.x, RUINS.z);
@@ -248,6 +257,45 @@ export function WorldMap({ size }: WorldMapProps) {
     const hr = large ? 4 : 3;
     ctx.fillRect(rx - hr, ry - hr, hr * 2, hr * 2);
     ctx.strokeRect(rx - hr + 0.5, ry - hr + 0.5, hr * 2 - 1, hr * 2 - 1);
+
+    // Base do jogador: quadrado do claim (verde sólido = fechado; vermelho tracejado = aberto),
+    // contorno dos muros e a cama. Simplificado de propósito: uma passada de retângulos.
+    const pb = st.playerBase;
+    if (pb) {
+      const cell = BASE_GRID * f.scale;
+      const [x0, y0] = toView(f, pb.origin.gx * BASE_GRID, pb.origin.gz * BASE_GRID);
+      const side = pb.size * cell;
+      const pieceSide = Math.max(cell, 1.6);
+      ctx.fillStyle = C(pb.enclosed ? '--world-leaf-light' : '--world-cloak');
+      ctx.globalAlpha = 0.18;
+      ctx.fillRect(x0, y0, side, side);
+      ctx.globalAlpha = 1;
+      for (const pc of pb.pieces) {
+        const [cx0, cy0] = toView(f, pc.cell.gx * BASE_GRID, pc.cell.gz * BASE_GRID);
+        if (pc.kind === 'core') {
+          ctx.fillStyle = C('--world-gold'); ctx.strokeStyle = C('--world-dark'); ctx.lineWidth = 0.8;
+          const r = Math.max(pieceSide * 0.9, large ? 3 : 2);
+          ctx.beginPath(); ctx.arc(cx0 + cell / 2, cy0 + cell / 2, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        } else if (pc.kind !== 'roof') {
+          ctx.fillStyle = C(pc.kind === 'door' ? '--world-gold' : pc.kind === 'tower' ? '--world-metal' : '--world-light');
+          ctx.fillRect(cx0, cy0, pieceSide, pieceSide);
+        }
+      }
+      ctx.save();
+      ctx.lineWidth = large ? 2 : 1.4;
+      ctx.strokeStyle = C(pb.enclosed ? '--world-leaf-light' : '--world-cloak');
+      if (!pb.enclosed) ctx.setLineDash([4, 3]);
+      // Halo por FORA dos muros: continua legível quando os muros cobrem a borda inteira.
+      const halo = large ? 4 : 3;
+      ctx.strokeRect(x0 - halo, y0 - halo, side + halo * 2, side + halo * 2);
+      ctx.restore();
+      if (large) {
+        ctx.fillStyle = C(pb.enclosed ? '--world-leaf-light' : '--world-cloak');
+        ctx.font = 'bold 9px Manrope, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(pb.enclosed ? 'BASE FECHADA' : 'BASE ABERTA', x0 + side / 2, y0 - 3);
+      }
+    }
 
     // Acampamentos.
     for (const camp of st.camps as CampState[]) {
@@ -461,6 +509,8 @@ export function WorldMapLegend() {
       <span><i className="wm-key wm-key-player" />Você</span>
       <span><i className="wm-key wm-key-base" />Base</span>
       <span><i className="wm-key wm-key-ruins" />Ruínas</span>
+      <span title="Quadrado verde sólido: perímetro fechado"><i className="wm-key wm-key-claim" data-closed="true" />Sua base (fechada)</span>
+      <span title="Quadrado vermelho tracejado: há uma brecha nos muros"><i className="wm-key wm-key-claim" data-closed="false" />Sua base (aberta)</span>
       <span><i className="wm-key wm-key-camp" />Acampamento (cor = tier)</span>
       <span><i className="wm-key wm-key-clear" />Limpo</span>
       <span><i className="wm-key wm-key-unknown" />Não explorado</span>

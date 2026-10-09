@@ -116,3 +116,17 @@ O array legado `resources` continua ativo e dá madeira ao clicar no terreno, co
 novo de nós — vale aposentar.
 
 Relacionado: [tribos-acampamentos-objetivos.md](tribos-acampamentos-objetivos.md) · [tribos-cidade.md](tribos-cidade.md)
+
+## Atualização 09/10 — crítico e equipamento
+
+Crítico vem da **destreza**: chance `0,30 × destreza/100`, multiplicador de 1,5× a 2,0×. Destreza 0
+dá chance zero, então o nível 1 sem pontos é idêntico ao de antes. O sorteio é injetável (`rng`).
+
+O número laranja de dano passou a vir do crítico **real**. Antes vinha de uma heurística de "sorteio
+alto" que o pintava em ~1/6 dos golpes mesmo no nível 1. `isCriticalDamage` continua exportado como
+legado porque um teste o usa.
+
+Armadura dá **carga** por raridade (4/8/14/22%) — a mitigação de dano já vem do campo `armor`, não
+contar duas vezes. Acessório dá destreza e velocidade. Campo opcional `Item.attrBonus` tem prioridade
+quando existe. **Não existe nenhum item de acessório no jogo ainda** — o código aceita, falta arte e
+decisão de design.
