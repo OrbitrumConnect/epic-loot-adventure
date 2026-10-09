@@ -160,7 +160,7 @@ function Torch({ k }: { k: Kit }) {
       <group ref={flame} position={[0, 0.12, 0.76]}>
         <mesh geometry={geo.cone} material={k.flame} position={[0, 0.17, 0]} scale={[0.26, 0.5, 0.26]} />
         <mesh geometry={geo.cone} material={k.flameCore} position={[0.02, 0.1, 0.01]} scale={[0.14, 0.28, 0.14]} />
-        <pointLight ref={light} color="#ff9a44" intensity={6.5} distance={16} decay={1.6} />
+        <pointLight ref={light} color="#ff9a44" intensity={6.5} distance={18} decay={1.6} />
       </group>
     </>
   );

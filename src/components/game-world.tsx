@@ -266,7 +266,7 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
           <meshStandardMaterial color={c.rock} />
         </mesh>
       ))}
-      <pointLight ref={ref} position={[0, 0.6, 0]} color="#ff8844" intensity={3} distance={8} />
+      <pointLight ref={ref} position={[0, 0.6, 0]} color="#ff8844" intensity={3} distance={9} />
       <mesh position={[0, 0.3, 0]}>
         <coneGeometry args={[0.15, 0.5, 4]} />
         <meshStandardMaterial color="#ff6622" emissive="#ff4400" emissiveIntensity={2} transparent opacity={0.8} />
@@ -834,6 +834,39 @@ function DayNightLighting({ c }: { c: Palette }) {
   );
 }
 
+/**
+ * Lua (meia-lua) no céu noturno. Billboard: dois discos que encaram a câmera —
+ * um pálido (a lua) e um escuro deslocado por cima, que "recorta" a meia-lua.
+ * Aparece ao anoitecer (`nightFactor`) e some de dia. Só clima/leitura, lift
+ * suave na noite pra não ficar breu. Sem custo por quadro além do lookAt.
+ */
+function Moon() {
+  const grp = useRef<THREE.Group>(null);
+  const { camera } = useThree();
+  useFrame(() => {
+    const g = grp.current;
+    if (!g) return;
+    const nf = nightFactor();
+    g.visible = nf > 0.12;
+    if (nf > 0.12) {
+      g.lookAt(camera.position);
+      g.scale.setScalar(0.7 + nf * 0.35);
+    }
+  });
+  return (
+    <group ref={grp} position={[62, 80, -96]}>
+      <mesh renderOrder={1}>
+        <circleGeometry args={[7, 32]} />
+        <meshBasicMaterial color="#eef1f8" fog={false} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[3, 0.9, 0]} renderOrder={2}>
+        <circleGeometry args={[7.1, 32]} />
+        <meshBasicMaterial color="#141f38" fog={false} depthWrite={false} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
 // Pontos da estrada (coord. de mundo). Compartilhados entre o asfalto e as
 // luminárias, pra os postes ficarem exatamente na beira do caminho.
 const ROAD_POINTS: [number, number][] = [
@@ -860,7 +893,7 @@ function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
         <boxGeometry args={[0.26, 0.32, 0.26]} />
         <meshStandardMaterial ref={bulb} color="#ffd98a" emissive="#ffb040" emissiveIntensity={0} />
       </mesh>
-      <pointLight ref={light} position={[0, 2.6, 0]} color="#ffcf87" intensity={0} distance={11} decay={1.6} />
+      <pointLight ref={light} position={[0, 2.6, 0]} color="#ffcf87" intensity={0} distance={12} decay={1.6} />
     </group>
   );
 }
@@ -1175,6 +1208,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
   return (
     <>
       <DayNightLighting c={c} />
+      <Moon />
 
       <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
 

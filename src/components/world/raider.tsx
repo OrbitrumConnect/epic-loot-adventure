@@ -204,6 +204,8 @@ export function Raider({
   const weaponArm = useRef<THREE.Group>(null);
   const torso = useRef<THREE.Group>(null);
   const spin = useRef(0);
+  const spinActive = useRef(0); // tempo restante do golpe giratório (s)
+  const spinCd = useRef(2);     // tempo até o próximo giro (s)
   const hpGroup = useRef<THREE.Group>(null);
   const label = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
@@ -225,24 +227,33 @@ export function Raider({
       if (rightLeg.current) rightLeg.current.rotation.x = -swing;
 
       if (spec.boss) {
-        // Redemoinho: só gira enquanto golpeia ou está no alcance; fora disso
-        // NÃO gira à toa — volta suave a encarar pra frente (sem girar eterno).
-        const whirling = anim.swing > 0 || anim.distToPlayer <= spec.tuning.attackRange + 1.5;
-        if (whirling) {
-          spin.current += dt * 15;
+        // Golpe giratório COM cooldown: gira forte por ~0.6 s e só repete a cada
+        // ~5 s. No meio, ataque normal (igual aos outros). Nunca gira eterno.
+        spinCd.current -= dt;
+        const inRange = anim.distToPlayer <= spec.tuning.attackRange + 1.5;
+        if (spinActive.current <= 0 && spinCd.current <= 0 && inRange) {
+          spinActive.current = 0.6; // duração do redemoinho
+          spinCd.current = 5;       // próximo giro só daqui ~5 s
+        }
+        if (spinActive.current > 0) {
+          spinActive.current -= dt;
+          spin.current += dt * 18;
+          if (weaponArm.current) weaponArm.current.rotation.x = -1.35;
+          if (leftArm.current) leftArm.current.rotation.x = -1.2;
         } else {
-          // Alinha ao giro completo mais próximo → para encarando pra frente.
+          // Alinha ao giro completo mais próximo → encara pra frente e ataca normal.
           const target = Math.round(spin.current / (Math.PI * 2)) * (Math.PI * 2);
           spin.current += (target - spin.current) * Math.min(1, dt * 8);
           if (Math.abs(spin.current - target) < 0.01) spin.current = 0;
+          const strike = anim.swing > 0 ? Math.sin((0.35 - anim.swing) / 0.35 * Math.PI) : 0;
+          if (weaponArm.current) weaponArm.current.rotation.x = -1.5 * strike + swing * 0.35;
+          if (leftArm.current) leftArm.current.rotation.x = -swing * 0.5;
         }
         if (torso.current) {
           torso.current.rotation.y = spin.current;
           torso.current.position.y = anim.moving ? Math.abs(Math.sin(anim.walkCycle * 2)) * 0.04 : 0;
           torso.current.rotation.z = 0;
         }
-        if (weaponArm.current) weaponArm.current.rotation.x = whirling ? -1.35 : -0.2;
-        if (leftArm.current) leftArm.current.rotation.x = whirling ? -1.2 : -swing * 0.5;
         return;
       }
 
