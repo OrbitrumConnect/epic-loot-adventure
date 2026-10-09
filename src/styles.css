@@ -599,15 +599,18 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   /* No mobile os triggers saem de cima do open world e vão pro rodapé, ao lado
      do AUTO ON (no espaço vazio da barra de itens). Quebram linha e encolhem
      um pouco pra caber todos — nenhum (ex.: casa) fica fora. */
+  /* Título reforçado pequeno no mobile (além do clamp), caso o device não pegue o vw. */
+  .zone-heading h1 { font-size: 11px; margin: 2px 0; letter-spacing: .3px; }
+
   .world-actions--overlay { display: none; }
-  /* Triggers SOBREPOSTOS no espaço vazio (direita) do rodapé — fora do fluxo,
-     então NÃO aumentam a barra escura (o mapa não encolhe). A MOCHILA some no
-     mobile (o peso já aparece no inventário) pra liberar a direita sem sobrepor. */
+  /* Triggers ORGANIZADOS no fluxo, logo ABAIXO do AUTO ON (na mesma coluna):
+     grade de 3 por linha, sem sobrepor o botão verde e sem crescer a barra
+     (a coluna cabe na altura da hotbar). MOCHILA some no mobile pra não apertar. */
   .bag-summary { display: none; }
   .world-actions--footer {
-    display: flex; flex-wrap: wrap; justify-content: flex-end; align-content: center;
-    position: absolute; right: 10px; bottom: 8px; gap: 5px; max-width: 142px;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 5px;
+    width: 100px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
   }
-  .world-action { width: 32px; height: 32px; }
+  .world-action { width: 30px; height: 30px; }
   .world-message { font-size: 10px; line-height: 1.6; }
 }

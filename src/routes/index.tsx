@@ -668,8 +668,8 @@ function Index() {
                   disabled={!DEV_INFINITE_POTIONS && potionCount <= 0} onClick={drinkPotion}>
                   Beber agora
                 </Button>
+                {!panel && <div className="world-actions world-actions--footer">{actionButtons}</div>}
               </div>
-              {!panel && <div className="world-actions world-actions--footer">{actionButtons}</div>}
             </div>
             <div className="hotbar-note">{hotbarItems[ui.selectedHotbar]?.name ?? 'Vazio'} <span className="text-primary">·</span> Guerreiro</div>
           </div>
