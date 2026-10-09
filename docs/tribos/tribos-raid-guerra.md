@@ -47,6 +47,17 @@ Sugestão: **escudo curto após um wipe** + **janela de ondas durante o cerco at
 
 Cidade (gerir base, remanejar tropas, farmar, evoluir) → botão **"Mapa geral"** → vê o mundo e as bases → clica numa base inimiga → **raid**. Overworld compartilhado; "offline mantém, online conquista".
 
+## Guerra multi-tribo (terceiros entram no raid) — Fase M
+
+Um raid em andamento é **aberto a terceiros** (quem está no mundo perto da base em guerra, ou vê no mapa, pode escolher lado). Detalha a **Fase M (Guerra)** do Mestre + alianças (Camada 3). Três entradas:
+- **Atacar junto (aliar):** outra tribo entra AO LADO do atacante (reforço). Divide o espólio por acordo/tribo.
+- **Atacar o atacante:** terceira tribo cai em cima de quem está atacando — defende o alvo (aliança defensiva) ou quer o espólio pra si.
+- **Abutre (swoop no fim):** chega depois do alvo enfraquecido e **engole geral** — "o maior leva o resto".
+
+Isso gera **guerra emergente, alianças e traições** (o coração da Fase M). Precisa de **declaração de guerra / lados** claros na UI pra não virar confusão.
+
+**Técnico (mantém escalável):** continua **escopado à base-alvo** — a instância comporta **N participantes naquela base**, não o mundo todo. **Limite de participantes por raid a selar** (perf/netcode). Multi-party é essencialmente **online/live** (a Fase 10 habilita); offline continua snapshot 1-atacante assíncrono.
+
 ## A SELAR depois (números/online)
 
 - x% de sucesso do raid; quanto cada onda derruba (pra dar os ~5 pra wipe); custo exato da raid.
