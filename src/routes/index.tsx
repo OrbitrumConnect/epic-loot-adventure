@@ -23,8 +23,6 @@ import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
-import { SoundFX } from '@/components/hud/sound-fx';
-import { isMuted, toggleMuted } from '@/game/systems/sound';
 import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
@@ -83,7 +81,6 @@ const navigation = [
 function Index() {
   const [ready, setReady] = useState(false);
   const [cameraMode, setCameraMode] = useState<'iso' | 'third'>('iso');
-  const [soundOff, setSoundOff] = useState(() => isMuted());
   const [deathCountdown, setDeathCountdown] = useState(0);
   const toggleCamera = useCallback(() => setCameraMode(m => (m === 'iso' ? 'third' : 'iso')), []);
   useEffect(() => setReady(true), []);
@@ -287,7 +284,6 @@ function Index() {
 
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
-      <SoundFX />
       <aside className="game-sidebar" aria-label="Navegação do jogo">
         <Button variant="ghost" size="icon" className="sidebar-toggle"
           title="Esconder menu (mais espaço pro jogo)" aria-label="Esconder menu" onClick={toggleSidebar}>
@@ -681,9 +677,7 @@ function Index() {
 
                 {panel === 'settings' && (
                   <>
-                    <div className="home-building"><Wind /><div><strong>Som</strong><small>{soundOff ? 'Mudo' : 'Efeitos sonoros ligados'}</small></div>
-                      <Button variant="outline" size="sm" onClick={() => setSoundOff(toggleMuted())}>{soundOff ? 'Ligar som' : 'Mutar'}</Button>
-                    </div>
+                    <div className="home-building"><Wind /><div><strong>Áudio ambiente</strong><small>Desativado nesta versão</small></div></div>
                     <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · Clique no inimigo seleciona · Shift+clique enfileira · V câmera · E coletar · I inventário · B cidade · G piloto automático (idle/manual)</small></div></div>
                     <div className="panel-stats"><span>TRIBOS v0.2 · Protótipo local · Sem multiplayer conectado</span></div>
                   </>
