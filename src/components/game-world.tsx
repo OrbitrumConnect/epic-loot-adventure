@@ -995,29 +995,47 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       }
     };
 
-    // Touch (mobile): arrastar 1 dedo gira a câmera no 3ª pessoa (yaw/pitch),
-    // igual ao mouse. Tap sem arrastar continua atacando (não damos preventDefault
-    // no start, só no move), então o clique sintetizado ainda dispara.
-    let lastTX = 0, lastTY = 0, dragging = false;
+    // Touch (mobile): arrastar 1 dedo gira a câmera no 3ª pessoa; TAP no chão
+    // anda até o ponto (modo manual). Reusa a infra de "clique-pra-andar": basta
+    // setar o alvo `target` que o personagem já persegue quando não há WASD.
+    const raycaster = new THREE.Raycaster();
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const tmpNdc = new THREE.Vector2();
+    const tmpHit = new THREE.Vector3();
+    const walkTo = (clientX: number, clientY: number) => {
+      if (useGameStore.getState().objectives.mode === 'idle') return; // só no manual
+      const r = canvas.getBoundingClientRect();
+      tmpNdc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+      raycaster.setFromCamera(tmpNdc, camera);
+      if (raycaster.ray.intersectPlane(groundPlane, tmpHit)) target.current.set(tmpHit.x, 0, tmpHit.z);
+    };
+
+    let startX = 0, startY = 0, lastTX = 0, lastTY = 0, moved = false;
     const onTouchStart = (e: TouchEvent) => {
-      if (cameraMode !== 'third' || props.paused || e.touches.length !== 1 || isBuildActive()) return;
-      lastTX = e.touches[0]!.clientX;
-      lastTY = e.touches[0]!.clientY;
-      dragging = true;
+      if (props.paused || e.touches.length !== 1 || isBuildActive()) return;
+      const t = e.touches[0]!;
+      startX = lastTX = t.clientX; startY = lastTY = t.clientY; moved = false;
     };
     const onTouchMove = (e: TouchEvent) => {
-      if (!dragging || cameraMode !== 'third' || e.touches.length !== 1) return;
+      if (e.touches.length !== 1) return;
       const t = e.touches[0]!;
-      const dx = t.clientX - lastTX;
-      const dy = t.clientY - lastTY;
-      lastTX = t.clientX;
-      lastTY = t.clientY;
-      const sensitivity = 0.005;
-      cameraYaw.current -= dx * sensitivity;
-      cameraPitch.current = THREE.MathUtils.clamp(cameraPitch.current - dy * sensitivity, -1.0, 0.65);
-      e.preventDefault(); // só enquanto gira: evita o scroll/zoom da página
+      if (Math.abs(t.clientX - startX) + Math.abs(t.clientY - startY) > 10) moved = true;
+      if (cameraMode === 'third') {
+        const sensitivity = 0.005;
+        cameraYaw.current -= (t.clientX - lastTX) * sensitivity;
+        cameraPitch.current = THREE.MathUtils.clamp(cameraPitch.current - (t.clientY - lastTY) * sensitivity, -1.0, 0.65);
+        e.preventDefault(); // enquanto gira: evita scroll/zoom da página
+      }
+      lastTX = t.clientX; lastTY = t.clientY;
     };
-    const onTouchEnd = () => { dragging = false; };
+    const onTouchEnd = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      if (!moved && t && !props.paused && !isBuildActive()) {
+        walkTo(t.clientX, t.clientY);
+        e.preventDefault(); // suprime o mousedown sintetizado (tap não ataca)
+      }
+      moved = false;
+    };
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mousedown', onMouseDown);
@@ -1026,7 +1044,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('touchstart', onTouchStart, { passive: true });
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
     canvas.addEventListener('touchcancel', onTouchEnd);
 
     return () => {
