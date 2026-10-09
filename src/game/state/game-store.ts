@@ -30,7 +30,7 @@ import {
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
-import { damageMultiplier, effectiveMaxWeight, effectiveSpecialCooldown, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
+import { damageMultiplier, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
@@ -79,6 +79,10 @@ type GameActions = {
   allocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Devolve 1 ponto, baixando um atributo alocado. */
   deallocateSkill: (attr: keyof PlayerAttributes) => void;
+  /** Equipa um item da bolsa no slot certo pela categoria (arma/armadura/acessório). */
+  equipItem: (itemId: string) => void;
+  /** Tira o equipamento de um slot (volta pro "nu"). */
+  unequipSlot: (slot: 'primary' | 'secondary' | 'armor' | 'accessory') => void;
   useHotbarSlot: (index: number) => void;
   craftItem: (recipeId: string) => void;
   rest: () => void;
@@ -378,7 +382,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // De longe (ranged) o bicho não revida na hora; ele ainda vai perseguir pela IA.
     const creatureRetaliates = !result.targetDied && !usingRanged && dist <= 4.5;
     if (creatureRetaliates) {
-      const dmgToPlayer = Math.max(1, creature.attackPower - 2);
+      const dmgToPlayer = mitigateDamage(Math.max(1, creature.attackPower - 2), updatedPlayer);
       updatedPlayer = {
         ...updatedPlayer,
         hp: Math.max(0, updatedPlayer.hp - dmgToPlayer),
@@ -716,6 +720,50 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     };
     set({ player: syncCarry(next) });
   },
+
+  equipItem: (itemId) => {
+    const item = ITEMS[itemId];
+    if (!item || !item.equippable) return;
+    // Roteia pelo tipo: armadura → armor, resto (arma/ferramenta) → primary.
+    const slot: 'primary' | 'armor' = item.category === 'armor' ? 'armor' : 'primary';
+    set(s => {
+      const inv = s.player.inventory;
+      let hotbar = inv.hotbar;
+      // Arma: além de equipar, coloca no SLOT ATIVO da hotbar pra ficar na mão e
+      // usar o perfil dela (alcance/anim). Tocha fica fora disso (não é equipável).
+      if (slot === 'primary') {
+        const invIdx = inv.slots.findIndex(sl => sl.itemId === itemId);
+        if (invIdx >= 0) {
+          const slots = [...hotbar.slots];
+          slots[s.ui.selectedHotbar] = invIdx;
+          hotbar = { ...hotbar, slots };
+        }
+      }
+      return {
+        player: {
+          ...s.player,
+          inventory: { ...inv, hotbar, equipment: { ...inv.equipment, [slot]: itemId } },
+        },
+        ui: { ...s.ui, message: `${item.name} equipado.` },
+      };
+    });
+  },
+
+  unequipSlot: (slot) => {
+    set(s => {
+      const current = s.player.inventory.equipment[slot];
+      if (!current) return {};
+      const name = ITEMS[current]?.name ?? 'Item';
+      return {
+        player: {
+          ...s.player,
+          inventory: { ...s.player.inventory, equipment: { ...s.player.inventory.equipment, [slot]: null } },
+        },
+        ui: { ...s.ui, message: `${name} desequipado.` },
+      };
+    });
+  },
+
   setPanelMessage: (msg) => set(s => ({ ui: { ...s.ui, panelMessage: msg } })),
   updatePosition: (x, z) => set(s => ({ player: { ...s.player, position: { x, z } } })),
   startRaid: () => set(s => ({

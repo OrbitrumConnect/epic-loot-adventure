@@ -278,6 +278,26 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .attr-val { min-width: 42px; text-align: right; color: var(--primary); }
 .attr-btn { width: 24px; height: 24px; padding: 0; font-size: 15px; line-height: 1; border: 1px solid var(--border); border-radius: 4px; color: var(--foreground); }
 .attr-btn:disabled { opacity: .35; }
+
+/* Tela de personagem (Inventário): boneco + slots de equipar */
+.char-sheet { display: flex; gap: 14px; margin-bottom: 14px; align-items: stretch; }
+.char-doll { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: color-mix(in oklch,var(--primary) 6%,var(--card)); min-width: 112px; }
+.char-figure { width: 44px; height: 72px; fill: color-mix(in oklch,var(--primary) 75%,var(--foreground)); }
+.char-ident { text-align: center; }
+.char-ident strong { display: block; font-size: 12px; font-weight: 500; }
+.char-ident small { font-size: 9px; color: var(--muted-foreground); }
+.char-slots { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
+.equip-slot { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--foreground); text-align: left; cursor: pointer; min-height: 50px; }
+.equip-slot > svg { width: 22px; height: 22px; color: var(--muted-foreground); flex-shrink: 0; }
+.equip-slot[data-filled=true] { border-color: color-mix(in oklch,var(--primary) 45%,transparent); }
+.equip-slot[data-filled=true] span { color: var(--primary); }
+.equip-slot span { font-size: 11px; }
+.inventory-item { position: relative; }
+.inventory-item[data-equippable] { cursor: pointer; }
+.inventory-item[data-equippable]:hover { border-color: color-mix(in oklch,var(--primary) 50%,transparent); }
+.inventory-item[data-equipped] { border-color: var(--primary); }
+.equipped-tag { position: absolute; top: 4px; right: 4px; font-size: 7px; font-style: normal; letter-spacing: .5px; color: var(--primary); background: color-mix(in oklch,var(--primary) 16%,var(--card)); padding: 1px 4px; border-radius: 3px; }
+@media (max-width: 700px) { .char-sheet { flex-direction: column; gap: 10px; } .char-doll { flex-direction: row; min-width: 0; } .char-figure { width: 30px; height: 50px; } }
 .world-action { border: 1px solid color-mix(in oklch,var(--foreground) 20%,transparent); background: var(--overlay); height: 43px; width: 43px; color: var(--world-ink); box-shadow: var(--panel-shadow); }
 .world-action[data-primary=true] { border-color: var(--primary); color: var(--primary); }
 .world-action[data-on=true] { border-color: var(--primary); color: var(--primary); background: color-mix(in oklch,var(--primary) 12%,var(--overlay)); }

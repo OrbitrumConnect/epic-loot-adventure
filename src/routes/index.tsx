@@ -143,6 +143,8 @@ function Index() {
   const specialAttack = useGameStore(s => s.specialAttack);
   const allocateSkill = useGameStore(s => s.allocateSkill);
   const deallocateSkill = useGameStore(s => s.deallocateSkill);
+  const equipItem = useGameStore(s => s.equipItem);
+  const unequipSlot = useGameStore(s => s.unequipSlot);
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);
@@ -447,6 +449,38 @@ function Index() {
 
                 {(panel === 'inventory' || panel === 'loot') && (
                   <>
+                    <div className="char-sheet">
+                      <div className="char-doll">
+                        <svg className="char-figure" viewBox="0 0 24 40" aria-hidden="true">
+                          <circle cx="12" cy="6" r="4.5" />
+                          <path d="M5 15 Q12 11 19 15 L18 27 Q12 29 6 27 Z" />
+                          <rect x="3" y="15" width="3.2" height="11" rx="1.4" />
+                          <rect x="17.8" y="15" width="3.2" height="11" rx="1.4" />
+                          <rect x="7.5" y="28" width="3.4" height="11" rx="1.5" />
+                          <rect x="13.1" y="28" width="3.4" height="11" rx="1.5" />
+                        </svg>
+                        <div className="char-ident"><strong>{player.name}</strong><small>Guerreiro · Nível {player.level}</small></div>
+                      </div>
+                      <div className="char-slots">
+                        {([
+                          { slot: 'primary', label: 'Arma', Icon: Swords },
+                          { slot: 'armor', label: 'Armadura', Icon: Shield },
+                          { slot: 'accessory', label: 'Acessório', Icon: Gem },
+                        ] as const).map(({ slot, label, Icon }) => {
+                          const id = player.inventory.equipment[slot];
+                          const it = id ? ITEMS[id] : null;
+                          return (
+                            <button key={slot} className="equip-slot" data-filled={!!it}
+                              title={it ? (slot === 'primary' ? it.name : `${it.name} · clique p/ tirar`) : `${label} (vazio)`}
+                              aria-label={it ? `${label}: ${it.name}` : `${label} vazio`}
+                              onClick={() => { if (slot !== 'primary' && it) unequipSlot(slot); }}>
+                              {it ? <ItemSprite itemId={id!} size={34} /> : <Icon strokeWidth={1.4} />}
+                              <span>{it ? it.name : label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <div className="inventory-grid">
                       {player.inventory.slots.map((slot, i) => {
                         if (!slot.itemId) return (
@@ -456,13 +490,17 @@ function Index() {
                         );
                         const item = ITEMS[slot.itemId];
                         if (!item) return null;
+                        const equipped = item.equippable && (player.inventory.equipment.primary === slot.itemId || player.inventory.equipment.armor === slot.itemId || player.inventory.equipment.accessory === slot.itemId);
                         return (
                           <div className="inventory-item" key={i} draggable
-                            title={`${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
+                            data-equippable={item.equippable || undefined} data-equipped={equipped || undefined}
+                            title={item.equippable ? `${item.name} · clique p/ equipar` : `${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
                             aria-label={`${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
+                            onClick={() => { if (item.equippable && slot.itemId) equipItem(slot.itemId); }}
                             onDragStart={e => e.dataTransfer.setData('text/plain', String(i))}>
-                            <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura' : item.category}</small>
+                            <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura · ' + item.rarity : item.category}</small>
                             <em>{slot.quantity > 1 ? slot.quantity : ''}</em>
+                            {equipped && <i className="equipped-tag">equipado</i>}
                           </div>
                         );
                       })}

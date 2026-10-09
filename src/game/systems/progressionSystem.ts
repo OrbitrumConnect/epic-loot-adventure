@@ -50,8 +50,8 @@ export const LEVEL_GAINS: LevelUpGains = {
   attackPower: 2,
 };
 
-/** Pontos de skill ganhos por nível, pra distribuir nos atributos (0–100%). */
-export const SKILL_POINTS_PER_LEVEL = 3;
+/** Pontos de skill por nível (dá pra pôr até 2 em cada um dos 4 atributos). */
+export const SKILL_POINTS_PER_LEVEL = 8;
 
 /** Ataque base do jogador (sem arma) naquele nível. Nível 1 = 10, como era. */
 export const BASE_ATTACK_AT_LEVEL_1 = 10;

@@ -86,6 +86,23 @@ export function effectiveMaxWeight(player: PlayerState): number {
   return Math.round(BASE_MAX_WEIGHT * (1 + effectiveAttributes(player).carry / 100));
 }
 
+/** Armadura do peito equipado (0 = nu). */
+export function equippedArmor(player: PlayerState): number {
+  const id = player.inventory.equipment.armor;
+  return (id ? ITEMS[id]?.armor : 0) ?? 0;
+}
+
+/**
+ * Dano que o jogador REALMENTE leva, já reduzido pela armadura. Mitigação
+ * suave (armor/(armor+50)): armadura de osso (16) corta ~24%, peitoral do
+ * guardião (26) ~34%. Sem armadura = dano cheio (mínimo 1).
+ */
+export function mitigateDamage(rawDamage: number, player: PlayerState): number {
+  const a = equippedArmor(player);
+  const mitigated = rawDamage * (1 - a / (a + 50));
+  return Math.max(1, Math.round(mitigated));
+}
+
 /**
  * Cadência (cooldown, s) do especial com destreza. A destreza reduz o cooldown
  * em até 25% (dex 100 → −25%), por cima da redução que já vem do nível.

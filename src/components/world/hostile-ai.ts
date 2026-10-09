@@ -16,6 +16,7 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useCallback, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
+import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight } from './world-kit';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
@@ -329,7 +330,7 @@ export function useHostileAI(opts: HostileOptions) {
         if (attackCooldown.current <= 0) {
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
-          const dmg = Math.max(1, creature.attackPower);
+          const dmg = mitigateDamage(Math.max(1, creature.attackPower), useGameStore.getState().player);
           if (!useGameStore.getState().player.dead) reportDamageToStore("player", dmg, { x: px, z: pz }, true);
           useGameStore.setState(s => {
             if (s.player.dead) return {};
