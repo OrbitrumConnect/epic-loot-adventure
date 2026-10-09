@@ -606,15 +606,14 @@ function BuildLayer({
       if (e.button === 2) { st.dragging = false; recomputePreview(true); return; }
       if (e.button !== 0) return;
       if (!useGameStore.getState().playerBase) { doClaim(); return; }
-      if (!pickGround(e)) return;
-      st.dragging = true;
-      st.dragFrom.x = st.cursor.x;
-      st.dragFrom.z = st.cursor.z;
-      recomputePreview(true);
+      // Build MANUAL desligado (decisão selada): com base já reivindicada, a base
+      // sobe ENTREGANDO recurso (botão de construir / martelo), não arrastando muro.
+      useGameStore.getState().setMessage('Para construir, farme recursos e entregue na base (botão de construir).');
     };
 
     const onMove = (e: PointerEvent) => {
       if (!isBuildActive() || pausedRef.current) return;
+      if (useGameStore.getState().playerBase) return; // sem prévia de build manual
       if (!pickGround(e)) return;
       recomputePreview();
     };

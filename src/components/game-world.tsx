@@ -18,6 +18,7 @@ import {
 import { TargetRoute } from './world/target-route';
 import { PlayerBase } from './world/player-base';
 import { BaseFireFX } from './world/base-fire';
+import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies } from './world/world-entities';
 import {
@@ -371,11 +372,15 @@ function Character({
     const ps = useGameStore.getState().player;
     if (ps.dead) {
       if (ps.respawnAt > 0 && Date.now() >= ps.respawnAt) {
+        // Renasce na CAMA da base, se já tiver uma; senão no ponto inicial.
+        const pb = useGameStore.getState().playerBase;
+        const core = pb?.pieces.find(p => p.kind === 'core');
+        const sp = core ? cellCenter(core.cell) : { x: 0, z: 0 };
         useGameStore.setState(s => ({
-          player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: 0, z: 0 } },
-          ui: { ...s.ui, message: 'Você reviveu!' },
+          player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: sp.x, z: sp.z } },
+          ui: { ...s.ui, message: core ? 'Você reviveu na sua base.' : 'Você reviveu!' },
         }));
-        body.current.position.set(0, terrainHeight(0, 0), 0);
+        body.current.position.set(sp.x, terrainHeight(sp.x, sp.z), sp.z);
         velocity.current.set(0, 0);
       }
       return;

@@ -19,11 +19,12 @@ const baseAt = (): PlayerBaseState => ({
 });
 
 describe('layout Lv1 padrão', () => {
-  it('tem perímetro de muros + exatamente 1 porta', () => {
+  it('perímetro: 4 torres nos cantos + 1 porta + muros', () => {
     const layout = baseLv1Layout({ gx: 0, gz: 0 }, 8);
     expect(layout.length).toBe(28); // borda de um 8x8
+    expect(layout.filter(p => p.kind === 'tower').length).toBe(4);
     expect(layout.filter(p => p.kind === 'door').length).toBe(1);
-    expect(layout.filter(p => p.kind === 'wall').length).toBe(27);
+    expect(layout.filter(p => p.kind === 'wall').length).toBe(23);
   });
 
   it('progresso 0% com só a cama; 100% com todo o layout', () => {
