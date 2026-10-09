@@ -257,13 +257,25 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .world-actions { display: flex; gap: 8px; pointer-events: auto; }
 /* A versão rodapé (ao lado do AUTO ON) só aparece no mobile; desktop usa o overlay. */
 .world-actions--footer { display: none; }
+
+/* Painel de atributos (inventário): pontos de skill + distribuição −/+ */
+.attr-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.attr-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.attr-head strong { font-weight: 500; letter-spacing: .5px; }
+.attr-points { font-size: 10px; color: var(--muted-foreground); }
+.attr-points[data-has=true] { color: var(--primary); font-weight: 600; }
+.attr-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.attr-name { flex: 1 1 auto; }
+.attr-val { min-width: 42px; text-align: right; color: var(--primary); }
+.attr-btn { width: 24px; height: 24px; padding: 0; font-size: 15px; line-height: 1; border: 1px solid var(--border); border-radius: 4px; color: var(--foreground); }
+.attr-btn:disabled { opacity: .35; }
 .world-action { border: 1px solid color-mix(in oklch,var(--foreground) 20%,transparent); background: var(--overlay); height: 43px; width: 43px; color: var(--world-ink); box-shadow: var(--panel-shadow); }
 .world-action[data-primary=true] { border-color: var(--primary); color: var(--primary); }
 .world-action[data-on=true] { border-color: var(--primary); color: var(--primary); background: color-mix(in oklch,var(--primary) 12%,var(--overlay)); }
 .world-action[data-cooldown=true] { opacity: .5; }
 .world-action { position: relative; }
 .world-action .cd { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--primary); background: color-mix(in oklch,var(--overlay) 70%,transparent); border-radius: inherit; }
-.game-footer { min-height: 110px; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 15px 25px; border-top: 1px solid var(--border); background: var(--background); }
+.game-footer { position: relative; min-height: 110px; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 15px 25px; border-top: 1px solid var(--border); background: var(--background); }
 .loot-summary { min-width: 110px; }
 .footer-label { font-size: 8px; letter-spacing: 1.5px; color: var(--muted-foreground); margin-bottom: 9px; display: flex; align-items: center; gap: 7px; }
 .footer-label svg { width: 12px; height: 12px; }
@@ -587,9 +599,15 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   /* No mobile os triggers saem de cima do open world e vão pro rodapé, ao lado
      do AUTO ON (no espaço vazio da barra de itens). Quebram linha e encolhem
      um pouco pra caber todos — nenhum (ex.: casa) fica fora. */
-  .hotbar-row { flex-wrap: wrap; } /* triggers caem ao lado/embaixo do AUTO ON sem clipar */
   .world-actions--overlay { display: none; }
-  .world-actions--footer { display: flex; flex-wrap: wrap; gap: 6px; max-width: 168px; align-content: center; }
-  .world-action { width: 38px; height: 38px; }
+  /* Triggers SOBREPOSTOS no espaço vazio (direita) do rodapé — fora do fluxo,
+     então NÃO aumentam a barra escura (o mapa não encolhe). A MOCHILA some no
+     mobile (o peso já aparece no inventário) pra liberar a direita sem sobrepor. */
+  .bag-summary { display: none; }
+  .world-actions--footer {
+    display: flex; flex-wrap: wrap; justify-content: flex-end; align-content: center;
+    position: absolute; right: 10px; bottom: 8px; gap: 5px; max-width: 142px;
+  }
+  .world-action { width: 32px; height: 32px; }
   .world-message { font-size: 10px; line-height: 1.6; }
 }
