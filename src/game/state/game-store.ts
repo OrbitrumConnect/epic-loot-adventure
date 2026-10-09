@@ -27,6 +27,7 @@ import { CLAIM_SIZE } from '../data/base-pieces';
 import {
   advanceStage as advanceBaseStageOnce, advanceStageFully, canOpenCityView as cityViewOpen,
   claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
+  cellInSquare as cellInBaseSquare, worldToCell as worldToBaseCell,
 } from '../systems/playerBaseSystem';
 import {
   addObjective as addQueueObjective, clearObjectives as clearQueueObjectives, createQueue,
@@ -879,9 +880,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
     const owner = { kind: 'player' as const, id: state.player.id, name: state.player.name };
     const result = claimPlayerBase(origin, CLAIM_SIZE, owner, { bases: [], heightAt }, Date.now());
+    const base = result.base;
+    if (!base) { set({ ui: { ...state.ui, message: result.message } }); return; }
+    // Limpa o terreno reivindicado: tira madeira/pedra/árvore dentro do quadrado da base.
+    const cleared = state.harvestNodes.filter(
+      n => !cellInBaseSquare(worldToBaseCell(n.position), base.origin, base.size),
+    );
+    const removed = state.harvestNodes.length - cleared.length;
     set({
-      playerBase: result.base,
-      ui: { ...state.ui, message: result.message },
+      playerBase: base,
+      harvestNodes: cleared,
+      ui: { ...state.ui, message: removed > 0 ? `${result.message} Terreno limpo.` : result.message },
     });
   },
 
