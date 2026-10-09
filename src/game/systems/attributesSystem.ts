@@ -18,10 +18,17 @@
 import type { InventoryState, PlayerState } from '../types';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { ITEMS } from '../data/items';
-import { MAX_LEVEL, specialCooldown } from './progressionSystem';
+import { specialCooldown } from './progressionSystem';
 
-/** Teto de cada atributo no nível máximo (em %). Recalibrar junto com MAX_LEVEL. */
+/** Teto de cada atributo em % (atingido no nível-referência). */
 export const ATTRIBUTE_CAPS: PlayerAttributes = { damage: 40, dexterity: 50, carry: 100, moveSpeed: 20 };
+/**
+ * Nível em que os atributos VINDOS DO NÍVEL chegam ao teto. Ancorado em 30 (não
+ * em MAX_LEVEL) pra a progressão amadurecer cedo: subir o teto pra 250 NÃO achata
+ * o começo (níveis 1–30 idênticos). Acima de 30, o poder vem de HP/ataque/pontos
+ * de skill por nível — não de mais % automático.
+ */
+export const ATTR_REF_LEVEL = 30;
 
 /** Peso máximo base da bolsa (carry 0% = este valor). */
 export const BASE_MAX_WEIGHT = 40;
@@ -35,10 +42,10 @@ export const SKILL_CAP_PER_ATTR = 60;
 /** Bônus de dano (%) por raridade da arma equipada. */
 const RARITY_DAMAGE: Record<string, number> = { common: 0, rare: 8, epic: 16, mythic: 28 };
 
-/** Contribuição do NÍVEL para cada atributo (%). Linear: 0 no lvl 1 → teto no máximo. */
+/** Contribuição do NÍVEL para cada atributo (%). Linear: 0 no lvl 1 → teto no nível-referência (e fica no teto acima dele). */
 export function levelAttributes(level: number): PlayerAttributes {
-  const lv = Math.min(MAX_LEVEL, Math.max(1, Math.floor(level)));
-  const t = (lv - 1) / Math.max(1, MAX_LEVEL - 1); // 0 → 1
+  const lv = Math.max(1, Math.floor(level));
+  const t = Math.min(1, (lv - 1) / Math.max(1, ATTR_REF_LEVEL - 1)); // 0 → 1 (satura em ATTR_REF_LEVEL)
   return {
     damage: Math.round(ATTRIBUTE_CAPS.damage * t),
     dexterity: Math.round(ATTRIBUTE_CAPS.dexterity * t),

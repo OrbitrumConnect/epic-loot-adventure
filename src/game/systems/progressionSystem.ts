@@ -19,16 +19,27 @@ export function creatureXp(def: Pick<CreatureDefinition, 'maxHp' | 'attackPower'
 // Curva de nível
 // ---------------------------------------------------------------------------
 
-export const MAX_LEVEL = 30;
+export const MAX_LEVEL = 250;
 /** XP para sair do nível 1. */
 export const XP_BASE = 110;
-/** Cada nível exige 20% a mais que o anterior. */
+/** Cada nível exige 20% a mais que o anterior (até o soft cap). */
 export const XP_GROWTH = 1.2;
+/**
+ * Até o soft cap a curva é geométrica (×1.2) — IDÊNTICA à de antes (zero
+ * regressão nos níveis 1–30). Acima, cresce LINEAR e controlada até 250: 1.2^249
+ * explodiria. Os níveis altos continuam valendo muito (HP/ataque/pontos de skill
+ * seguem subindo por nível), só não exigem XP absurdo.
+ */
+export const XP_SOFT_CAP = 30;
+const XP_SOFT_CAP_VALUE = Math.round(XP_BASE * Math.pow(XP_GROWTH, XP_SOFT_CAP - 1));
+/** Acréscimo fixo de XP por nível acima do soft cap. */
+export const XP_LINEAR_STEP = 150;
 
 /** XP necessário para sair de `level` para `level + 1`. No nível máximo, devolve o do último degrau. */
 export function xpForLevel(level: number): number {
   const lv = Math.min(MAX_LEVEL, Math.max(1, Math.floor(level)));
-  return Math.round(XP_BASE * Math.pow(XP_GROWTH, lv - 1));
+  if (lv <= XP_SOFT_CAP) return Math.round(XP_BASE * Math.pow(XP_GROWTH, lv - 1));
+  return XP_SOFT_CAP_VALUE + (lv - XP_SOFT_CAP) * XP_LINEAR_STEP;
 }
 
 /** Ganho por nível. */
@@ -49,12 +60,15 @@ export function playerBaseAttack(level: number): number {
 }
 
 /**
- * Cooldown (s) do ataque especial (Q/R) por nível: 30 s no lvl 1 → 2 s no nível
- * máximo (linear). Recalibrar quando `MAX_LEVEL` subir. Destreza% pode reduzir depois.
+ * Cooldown (s) do ataque especial (Q/R): 30 s no lvl 1 → 2 s no nível de
+ * referência (30), e fica no mínimo daí pra cima. Ancorado em `CD_REF_LEVEL`
+ * (não em `MAX_LEVEL`) pra a cadência amadurecer cedo — subir o teto pra 250
+ * NÃO estica essa curva (níveis 1–30 idênticos ao de antes). Destreza% reduz mais.
  */
+export const CD_REF_LEVEL = 30;
 export function specialCooldown(level: number): number {
-  const lv = Math.min(MAX_LEVEL, Math.max(1, Math.floor(level)));
-  return Math.max(2, 30 - (lv - 1) * (28 / Math.max(1, MAX_LEVEL - 1)));
+  const lv = Math.min(CD_REF_LEVEL, Math.max(1, Math.floor(level)));
+  return Math.max(2, 30 - (lv - 1) * (28 / Math.max(1, CD_REF_LEVEL - 1)));
 }
 
 export function createProgression(level = 1): ProgressionState {
