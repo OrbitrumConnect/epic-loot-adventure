@@ -270,6 +270,10 @@ function Index() {
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
       <aside className="game-sidebar" aria-label="Navegação do jogo">
+        <Button variant="ghost" size="icon" className="sidebar-toggle"
+          title="Esconder menu (mais espaço pro jogo)" aria-label="Esconder menu" onClick={toggleSidebar}>
+          <ArrowDown strokeWidth={1.6} />
+        </Button>
         <div className="brand"><ShieldCheck strokeWidth={1.3} /><span className="brand-name">TRIBOS</span></div>
         <div className="sidebar-label">SEU MUNDO</div>
         <nav className="sidebar-nav">
