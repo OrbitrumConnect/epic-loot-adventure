@@ -50,4 +50,8 @@ export type PlayerState = {
   attributes?: PlayerAttributes;
   /** Pontos de skill não gastos (ganhos por nível, distribuídos nos atributos). Ausente = 0. */
   skillPoints?: number;
+  /** Valor de caça acumulado (soma de dificuldade dos abates) — gate da economia de loot. Ausente = 0. */
+  huntValue?: number;
+  /** Quantas vezes cada espécie já foi abatida (diminishing returns do loot). Ausente = {}. */
+  huntSeen?: Record<string, number>;
 };

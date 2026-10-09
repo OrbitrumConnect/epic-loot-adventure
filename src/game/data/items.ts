@@ -415,6 +415,48 @@ export const ITEMS: Record<string, Item> = {
     armor: 16,
     icon: 'Shield',
   },
+
+  // --- Recompensas de topo (economia de loot / Fase 7). Só caem pela raridade
+  // por marco de valor de caça. Ícones lucide (sem sprite webp → ver NO_SPRITE).
+  ancestral_blade: {
+    id: 'ancestral_blade',
+    name: 'Lâmina Ancestral',
+    category: 'weapon',
+    rarity: 'epic',
+    weight: 4.0,
+    maxStack: 1,
+    dropOnDeath: false,
+    usable: false,
+    equippable: true,
+    attackPower: 44,
+    icon: 'Swords',
+  },
+  guardian_plate: {
+    id: 'guardian_plate',
+    name: 'Peitoral do Guardião',
+    category: 'armor',
+    rarity: 'epic',
+    weight: 6.5,
+    maxStack: 1,
+    dropOnDeath: false,
+    usable: false,
+    equippable: true,
+    armor: 26,
+    icon: 'Shield',
+  },
+  eclipse_blade: {
+    id: 'eclipse_blade',
+    name: 'Lâmina do Eclipse',
+    category: 'weapon',
+    rarity: 'mythic',
+    weight: 4.5,
+    maxStack: 1,
+    dropOnDeath: false,
+    usable: false,
+    equippable: true,
+    attackPower: 62,
+    icon: 'Swords',
+  },
 };
 
 /** Caminho do sprite do item. `Item.sprite` sobrescreve; senão vale a convenção por id. */

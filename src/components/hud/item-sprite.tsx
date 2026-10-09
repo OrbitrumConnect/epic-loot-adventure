@@ -39,7 +39,7 @@ export const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGE
 };
 
 /** Itens que não têm sprite webp: renderizam o ícone direto (sem 404). */
-const NO_SPRITE = new Set(['bow', 'pistol', 'rifle']);
+const NO_SPRITE = new Set(['bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade']);
 
 export type ItemSpriteProps = {
   itemId: string | null | undefined;

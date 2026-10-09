@@ -14,6 +14,7 @@ import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
 import { resolveAttack, getDistance, isCriticalDamage } from '../systems/combatSystem';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
+import { rollBonusLoot } from '../systems/lootEconomySystem';
 import { canCraft, craft } from '../systems/craftSystem';
 import {
   createInitialBase, tickBase as resolveBase, placeBuilding as placeBaseBuilding, startUpgrade,
@@ -177,6 +178,8 @@ function createInitialPlayer(): PlayerState {
     lastSpecialAt: 0,
     attributes: { ...DEFAULT_ATTRIBUTES },
     skillPoints: 0,
+    huntValue: 0,
+    huntSeen: {},
   };
 }
 
@@ -340,13 +343,24 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const def = CREATURES[creature.speciesId];
       if (def) {
         const loot = rollCreatureLoot(def);
+        // Economia de loot: acumula valor de caça e rola um bônus de raridade
+        // por marco (aditivo à lootTable; diminishing por espécie).
+        const newHunt = (updatedPlayer.huntValue ?? 0) + creatureXp(def);
+        const seen = updatedPlayer.huntSeen?.[creature.speciesId] ?? 0;
+        const bonus = rollBonusLoot(def, newHunt, seen);
+        updatedPlayer = {
+          ...updatedPlayer,
+          huntValue: newHunt,
+          huntSeen: { ...(updatedPlayer.huntSeen ?? {}), [creature.speciesId]: seen + 1 },
+        };
+        if (bonus) loot.push(bonus);
         for (const drop of loot) {
           if (drop.itemId) drafts.push(lootEvent(drop.itemId, drop.quantity, creature.position));
         }
         if (loot.length > 0) {
           const bag = createDeathBag(creature.id, creature.name, creature.position, loot);
           updatedBags = [...state.deathBags, bag];
-          msg += ` Loot no chão!`;
+          msg += bonus ? ` ✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} dropou!` : ` Loot no chão!`;
         }
       }
       updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
@@ -449,6 +463,15 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         const def = CREATURES[c.speciesId];
         if (def) {
           const loot = rollCreatureLoot(def);
+          const newHunt = (updatedPlayer.huntValue ?? 0) + creatureXp(def);
+          const seen = updatedPlayer.huntSeen?.[c.speciesId] ?? 0;
+          const bonus = rollBonusLoot(def, newHunt, seen);
+          updatedPlayer = {
+            ...updatedPlayer,
+            huntValue: newHunt,
+            huntSeen: { ...(updatedPlayer.huntSeen ?? {}), [c.speciesId]: seen + 1 },
+          };
+          if (bonus) loot.push(bonus);
           for (const d of loot) if (d.itemId) drafts.push(lootEvent(d.itemId, d.quantity, c.position));
           if (loot.length > 0) updatedBags = [...updatedBags, createDeathBag(c.id, c.name, c.position, loot)];
         }
