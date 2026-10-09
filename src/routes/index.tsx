@@ -249,6 +249,21 @@ function Index() {
   const panel = ui.panel;
   const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
 
+  // Triggers do mundo (piloto/pegar/atacar/especiais/câmera/casa). Mesma fonte
+  // renderizada em dois lugares: sobre o mundo (desktop) e no rodapé ao lado do
+  // AUTO ON (mobile). CSS decide qual aparece — sem duplicar lógica.
+  const actionButtons = (
+    <>
+      <Button variant="ghost" className="world-action" data-on={idleMode} aria-label="Piloto automático" title={`Piloto: ${idleMode ? 'IDLE (toque p/ assumir)' : 'MANUAL (toque p/ ligar)'} · G`} onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>{idleMode ? <Bot /> : <Hand />}</Button>
+      <Button variant="ghost" className="world-action" aria-label="Pegar / colher" title="Pegar / colher · E" onClick={collectNearest}><Package /></Button>
+      <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
+      <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
+      <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
+      <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
+      <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
+    </>
+  );
+
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
       <aside className="game-sidebar" aria-label="Navegação do jogo">
@@ -408,15 +423,7 @@ function Index() {
               <div><time>08:42</time><strong>Mundo</strong> · {ui.message}</div>
               {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
             </div>
-            <div className="world-actions">
-              <Button variant="ghost" className="world-action" data-on={idleMode} aria-label="Piloto automático" title={`Piloto: ${idleMode ? 'IDLE (toque p/ assumir)' : 'MANUAL (toque p/ ligar)'} · G`} onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>{idleMode ? <Bot /> : <Hand />}</Button>
-              <Button variant="ghost" className="world-action" aria-label="Pegar / colher" title="Pegar / colher · E" onClick={collectNearest}><Package /></Button>
-              <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
-              <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
-              <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
-              <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
-              <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
-            </div>
+            <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}
           </>)}
 
@@ -640,6 +647,7 @@ function Index() {
                   Beber agora
                 </Button>
               </div>
+              {!panel && <div className="world-actions world-actions--footer">{actionButtons}</div>}
             </div>
             <div className="hotbar-note">{hotbarItems[ui.selectedHotbar]?.name ?? 'Vazio'} <span className="text-primary">·</span> Guerreiro</div>
           </div>

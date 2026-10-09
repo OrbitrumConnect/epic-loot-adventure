@@ -255,6 +255,8 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .world-message time { opacity: .5; margin-right: 8px; font-size: 9px; }
 .world-message strong { color: var(--primary); font-weight: 500; }
 .world-actions { display: flex; gap: 8px; pointer-events: auto; }
+/* A versão rodapé (ao lado do AUTO ON) só aparece no mobile; desktop usa o overlay. */
+.world-actions--footer { display: none; }
 .world-action { border: 1px solid color-mix(in oklch,var(--foreground) 20%,transparent); background: var(--overlay); height: 43px; width: 43px; color: var(--world-ink); box-shadow: var(--panel-shadow); }
 .world-action[data-primary=true] { border-color: var(--primary); color: var(--primary); }
 .world-action[data-on=true] { border-color: var(--primary); color: var(--primary); background: color-mix(in oklch,var(--primary) 12%,var(--overlay)); }
@@ -582,9 +584,12 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   /* Card do piloto fora da tela do open world (toggle fica em Objetivos) */
   .pilot-strip { display: none; }
 
-  /* Fileira de triggers: com o botão do piloto são 7 — deixa QUEBRAR linha e
-     encolhe um pouco, alinhado à direita, pra NENHUM (ex.: casa) ficar fora. */
-  .world-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 72%; }
+  /* No mobile os triggers saem de cima do open world e vão pro rodapé, ao lado
+     do AUTO ON (no espaço vazio da barra de itens). Quebram linha e encolhem
+     um pouco pra caber todos — nenhum (ex.: casa) fica fora. */
+  .hotbar-row { flex-wrap: wrap; } /* triggers caem ao lado/embaixo do AUTO ON sem clipar */
+  .world-actions--overlay { display: none; }
+  .world-actions--footer { display: flex; flex-wrap: wrap; gap: 6px; max-width: 168px; align-content: center; }
   .world-action { width: 38px; height: 38px; }
   .world-message { font-size: 10px; line-height: 1.6; }
 }
