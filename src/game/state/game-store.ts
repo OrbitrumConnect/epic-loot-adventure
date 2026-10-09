@@ -27,8 +27,10 @@ import { CLAIM_SIZE } from '../data/base-pieces';
 import {
   advanceStage as advanceBaseStageOnce, advanceStageFully, canOpenCityView as cityViewOpen,
   claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
-  cellInSquare as cellInBaseSquare, worldToCell as worldToBaseCell,
+  cellInSquare as cellInBaseSquare, worldToCell as worldToBaseCell, cellKey as baseCellKey,
 } from '../systems/playerBaseSystem';
+import { baseLv1Layout, baseLv1Progress } from '../systems/baseLv1';
+import { pieceCost } from '../data/base-pieces';
 import {
   addObjective as addQueueObjective, clearObjectives as clearQueueObjectives, createQueue,
   findHealHotbarIndex, hasPendingObjective, removeObjective as removeQueueObjective,
@@ -119,6 +121,8 @@ type GameActions = {
   /** Reivindica o quadrado de `CLAIM_SIZE` com canto em `origin`. `heightAt` = terrainHeight do mundo. */
   claimBase: (origin: GridCell, heightAt?: (x: number, z: number) => number) => void;
   placeBasePieces: (preview: BuildPreview, tier?: 1 | 2 | 3) => void;
+  /** Entrega recursos da bolsa pra erguer a base até o Lv1 padrão (construção por %). */
+  deliverToBase: () => void;
   damageBasePiece: (pieceId: string, amount: number) => void;
   /** Sobe um estágio da base se a condição estiver cumprida. */
   advanceBaseStage: () => void;
@@ -892,6 +896,34 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       harvestNodes: cleared,
       ui: { ...state.ui, message: removed > 0 ? `${result.message} Terreno limpo.` : result.message },
     });
+  },
+
+  deliverToBase: () => {
+    const s = get();
+    const pb = s.playerBase;
+    if (!pb) { set({ ui: { ...s.ui, message: 'Reivindique um terreno primeiro (abra o Mapa e posicione a base).' } }); return; }
+    const layout = baseLv1Layout(pb.origin, pb.size);
+    const have = new Set(pb.pieces.map(p => baseCellKey(p.cell)));
+    let base = pb;
+    let inv = s.player.inventory;
+    let placed = 0;
+    // Entrega o que der: cada peça ainda não erguida é cobrada da bolsa e colocada.
+    for (const piece of layout) {
+      if (have.has(baseCellKey(piece.cell))) continue;
+      const preview: BuildPreview = { cells: [piece.cell], kind: piece.kind, cost: pieceCost(piece.kind, 1), blocked: [], affordable: true };
+      const res = placePlayerPieces(base, preview, inv, Date.now(), 1);
+      if (!res.ok) continue; // sem material pra esta peça; tenta as próximas
+      base = res.base;
+      inv = res.inventory;
+      have.add(baseCellKey(piece.cell));
+      placed += 1;
+    }
+    base = advanceStageFully(base);
+    const prog = baseLv1Progress(base);
+    const message = placed > 0
+      ? (prog.pct >= 100 ? 'Base Nível 1 concluída! 🏯 O Clash abriu.' : `Construção: ${prog.pct}% (+${placed} peças). Farme mais madeira/pedra.`)
+      : (prog.pct >= 100 ? 'A base já está no Nível 1.' : 'Sem material. Farme madeira/pedra e volte pra entregar.');
+    set({ playerBase: base, player: { ...s.player, inventory: inv }, ui: { ...s.ui, message } });
   },
 
   placeBasePieces: (preview, tier = 1) => {

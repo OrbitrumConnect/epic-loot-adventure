@@ -23,6 +23,7 @@ import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
+import { baseLv1Progress } from '@/game/systems/baseLv1';
 import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
@@ -151,6 +152,9 @@ function Index() {
   const deallocateSkill = useGameStore(s => s.deallocateSkill);
   const equipItem = useGameStore(s => s.equipItem);
   const unequipSlot = useGameStore(s => s.unequipSlot);
+  const playerBase = useGameStore(s => s.playerBase);
+  const deliverToBase = useGameStore(s => s.deliverToBase);
+  const baseProg = playerBase ? baseLv1Progress(playerBase) : null;
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);
@@ -279,6 +283,9 @@ function Index() {
       <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
       <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
+      {baseProg && baseProg.pct < 100 && (
+        <Button variant="ghost" className="world-action" data-on="true" aria-label="Construir base" title={`Construir base — entregar recursos (${baseProg.pct}%)`} onClick={deliverToBase}><Hammer /></Button>
+      )}
     </>
   );
 
