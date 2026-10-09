@@ -81,6 +81,19 @@ export function damageMultiplier(player: PlayerState): number {
   return 1 + effectiveAttributes(player).damage / 100;
 }
 
+/** Multiplicador de dano num acerto crítico. */
+export const CRIT_MULT = 1.6;
+
+/** Chance de crítico pela destreza (0 no dex 0 → ~40% no teto). */
+export function critChance(player: PlayerState): number {
+  return Math.min(0.4, effectiveAttributes(player).dexterity / 250);
+}
+
+/** Sorteia um crítico. No dex 0 nunca crita (zero regressão). */
+export function rollCrit(player: PlayerState, rng: () => number = Math.random): boolean {
+  return rng() < critChance(player);
+}
+
 /** Peso máximo efetivo da bolsa: base × (1 + carry%/100). */
 export function effectiveMaxWeight(player: PlayerState): number {
   return Math.round(BASE_MAX_WEIGHT * (1 + effectiveAttributes(player).carry / 100));

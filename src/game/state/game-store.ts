@@ -30,7 +30,7 @@ import {
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
-import { damageMultiplier, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
+import { damageMultiplier, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, rollCrit, CRIT_MULT, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
@@ -312,8 +312,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         ? base + TORCH_FIRE_BONUS
         : base + weaponPower;
 
-    // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
-    const finalPower = Math.round(totalPower * damageMultiplier(state.player));
+    // Dano (%) multiplica o poder; destreza pode CRITAR (×CRIT_MULT). Dex 0 = sem crit.
+    const crit = rollCrit(state.player);
+    const finalPower = Math.round(totalPower * damageMultiplier(state.player) * (crit ? CRIT_MULT : 1));
 
     const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
 
@@ -334,7 +335,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const stamp = Date.now();
     const drafts: FeedbackDraft[] = [
       damageEvent(creature.id, result.damage, creature.position, {
-        critical: isCriticalDamage(finalPower, creature.armor, result.damage),
+        critical: crit || isCriticalDamage(finalPower, creature.armor, result.damage),
         fire: usingTorch,
       }),
     ];
@@ -447,7 +448,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const dmgMult = damageMultiplier(state.player);
     // Jump: dano alto, raio menor. Spin: 360°, raio maior, dano menor.
     const radius = kind === 'spin' ? 3.8 : 3.2;
-    const power = Math.round(base * (kind === 'jump' ? 1.8 : 1.2) * dmgMult);
+    const crit = rollCrit(state.player); // destreza pode critar o especial inteiro
+    const power = Math.round(base * (kind === 'jump' ? 1.8 : 1.2) * dmgMult * (crit ? CRIT_MULT : 1));
 
     const pos = state.player.position;
     const drafts: FeedbackDraft[] = [];
@@ -461,7 +463,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       hits += 1;
       const result = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name);
       drafts.push(damageEvent(c.id, result.damage, c.position, {
-        critical: isCriticalDamage(power, c.armor, result.damage), fire: usingTorch,
+        critical: crit || isCriticalDamage(power, c.armor, result.damage), fire: usingTorch,
       }));
       if (result.targetDied) {
         const def = CREATURES[c.speciesId];
