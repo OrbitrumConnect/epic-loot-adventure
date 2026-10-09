@@ -8,13 +8,14 @@
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
-let muted = false;
+let muted = true; // MUDO por padrão (o Pedro achou o som chato); liga nas Preferências.
 let unlocked = false;
 
 const MUTE_KEY = 'tribos_muted';
 
 try {
-  if (typeof localStorage !== 'undefined') muted = localStorage.getItem(MUTE_KEY) === '1';
+  // Só fica com som quem ligou explicitamente (valor '0' = não-mudo).
+  if (typeof localStorage !== 'undefined') muted = localStorage.getItem(MUTE_KEY) !== '0';
 } catch { /* ignore */ }
 
 function ensure(): AudioContext | null {

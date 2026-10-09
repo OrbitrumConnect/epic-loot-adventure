@@ -195,7 +195,9 @@
    IGUAL, sem mudar tamanho — jogo e mapa ocupam a tela toda. O botão do header
    (sempre visível) traz de volta. Specificity (.game-shell.shell-collapsed) vence o
    grid-template das media queries, sem depender de ordem; vale no desktop e no mobile. */
-.game-shell.shell-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+/* Recolhido: UMA coluna só (o sidebar sai com display:none; se mantivéssemos duas
+   colunas "0 1fr", o main caía na 1ª coluna de 0px → jogo com largura 0 → tela preta). */
+.game-shell.shell-collapsed { grid-template-columns: minmax(0, 1fr); }
 .shell-collapsed .game-sidebar { display: none; }
 .brand { height: 100px; display: flex; align-items: center; padding: 0 25px; gap: 10px; color: var(--primary); }
 .brand-name { font-family: var(--font-display); font-size: 29px; font-weight: 700; }
