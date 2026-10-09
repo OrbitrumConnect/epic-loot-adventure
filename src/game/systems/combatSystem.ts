@@ -18,18 +18,27 @@ export function canAttack(
   return getDistance(attackerPos, targetPos) <= range;
 }
 
-export function calculateDamage(attackPower: number, targetArmor: number): number {
-  const baseDmg = attackPower * (0.85 + Math.random() * 0.3);
+export function calculateDamage(
+  attackPower: number,
+  targetArmor: number,
+  rng: () => number = Math.random,
+  critMultiplier = 1,
+): number {
+  const baseDmg = attackPower * (0.85 + rng() * 0.3) * critMultiplier;
   const reduction = targetArmor * 0.5;
   return Math.max(1, Math.round(baseDmg - reduction));
 }
+
+/** Crítico por destreza: chance (0–1) e multiplicador de dano (≥ 1). */
+export type CritStats = { chance: number; multiplier: number };
 
 /** Fração do ataque a partir da qual o golpe conta como crítico (faixa 1,10-1,15 do sorteio 0,85-1,15). */
 export const CRITICAL_ROLL = 1.1;
 
 /**
- * Golpe crítico: o dano bruto (antes da armadura) caiu na faixa alta do sorteio
- * de `calculateDamage`. Pura: deduz do dano já aplicado, sem outro sorteio.
+ * LEGADO: heurística de "faixa alta do sorteio". O crítico de verdade agora é o
+ * `critical` devolvido por `resolveAttack` (destreza); a store usa ele no visual.
+ * Mantido só para compatibilidade/testes. Pura: deduz do dano já aplicado.
  */
 export function isCriticalDamage(attackPower: number, targetArmor: number, damage: number): boolean {
   if (attackPower <= 0) return false;
@@ -42,8 +51,13 @@ export function resolveAttack(
   targetMaxHp: number,
   targetArmor: number,
   targetName: string,
+  crit?: CritStats,
+  rng: () => number = Math.random,
 ): AttackResult {
-  const damage = calculateDamage(attackPower, targetArmor);
+  // Sem `crit` (ou chance 0) não consome sorteio extra: comportamento idêntico ao de antes.
+  const variance = rng();
+  const critical = !!crit && crit.chance > 0 && rng() < crit.chance;
+  const damage = calculateDamage(attackPower, targetArmor, () => variance, critical ? crit!.multiplier : 1);
   const newHp = Math.max(0, targetHp - damage);
   const died = newHp <= 0;
 
@@ -52,8 +66,9 @@ export function resolveAttack(
     damage,
     targetHp: newHp,
     targetDied: died,
+    critical,
     message: died
-      ? `${targetName} derrotado! -${damage} de dano.`
-      : `${targetName}: ${newHp}/${targetMaxHp} HP. -${damage} de dano.`,
+      ? `${targetName} derrotado! -${damage} de dano.${critical ? ' Crítico!' : ''}`
+      : `${targetName}: ${newHp}/${targetMaxHp} HP. -${damage} de dano.${critical ? ' Crítico!' : ''}`,
   };
 }

@@ -15,4 +15,6 @@ export type AttackResult = {
   targetHp: number;
   targetDied: boolean;
   message: string;
+  /** Golpe crítico REAL (sorteado por destreza). Alimenta também o número laranja. */
+  critical?: boolean;
 };

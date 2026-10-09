@@ -16,8 +16,9 @@ import {
   makeInstanceFadeMaterial, registerInstancedFade, useFadeGroup, type FadeSphere,
 } from './world/occlusion';
 import { TargetRoute } from './world/target-route';
+import { PlayerBase } from './world/player-base';
+import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies } from './world/world-entities';
-import { PlayerBaseView } from './world/player-base';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
@@ -976,7 +977,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     };
 
     const onClick = () => {
-      if (cameraMode === 'third' && !pointerLocked.current && !props.paused) {
+      if (cameraMode === 'third' && !pointerLocked.current && !props.paused && !isBuildActive()) {
         canvas.requestPointerLock();
       }
     };
@@ -984,6 +985,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     const onMouseDown = (e: MouseEvent) => {
       // Clique já consumido por um inimigo / estrutura / recurso não ataca.
       if (wasPointerConsumed(e)) return;
+      // Modo de construção: o clique é do arrasto de muro, nunca ataque.
+      if (isBuildActive()) return;
       if (e.button === 0 && !props.paused && props.onAttack) {
         if (pointerLocked.current || e.target === canvas) {
           props.onAttack();
@@ -996,7 +999,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     // no start, só no move), então o clique sintetizado ainda dispara.
     let lastTX = 0, lastTY = 0, dragging = false;
     const onTouchStart = (e: TouchEvent) => {
-      if (cameraMode !== 'third' || props.paused || e.touches.length !== 1) return;
+      if (cameraMode !== 'third' || props.paused || e.touches.length !== 1 || isBuildActive()) return;
       lastTX = e.touches[0]!.clientX;
       lastTY = e.touches[0]!.clientY;
       dragging = true;
@@ -1351,8 +1354,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
       {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
       <HarvestNodes c={c} />
+      <PlayerBase c={c} playerRef={playerRef} paused={Boolean(props.paused)} />
       <Camps c={c} />
-      <PlayerBaseView c={c} />
       <Enemies c={c} playerRef={playerRef} />
 
       <TargetRoute playerRef={playerRef} />

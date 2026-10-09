@@ -62,18 +62,81 @@ export function weaponDamageBonus(inventory: InventoryState): number {
   return RARITY_DAMAGE[rarity] ?? 0;
 }
 
-/** Atributos efetivos do jogador: nível + equip + skill, travados em 0–100%. */
+/** Armadura equipada → CARGA (%) por raridade (alças/placas reforçadas aguentam mais peso). */
+const RARITY_ARMOR_CARRY: Record<string, number> = { common: 4, rare: 8, epic: 14, mythic: 22 };
+/** Acessório equipado → DESTREZA (%) por raridade. */
+const RARITY_ACCESSORY_DEX: Record<string, number> = { common: 3, rare: 8, epic: 14, mythic: 22 };
+/** Acessório equipado → VELOCIDADE (%) por raridade. */
+const RARITY_ACCESSORY_MOVE: Record<string, number> = { common: 1, rare: 3, epic: 6, mythic: 10 };
+
+/**
+ * Bônus de atributo (%) vindo da ARMADURA e do ACESSÓRIO equipados. Um `attrBonus`
+ * explícito no item tem prioridade sobre a tabela por raridade. Slot vazio = 0.
+ */
+export function gearAttributeBonus(inventory: InventoryState): PlayerAttributes {
+  const out: PlayerAttributes = { damage: 0, dexterity: 0, carry: 0, moveSpeed: 0 };
+  const armorId = inventory.equipment.armor;
+  const armor = armorId ? ITEMS[armorId] : undefined;
+  if (armor) {
+    const b = armor.attrBonus;
+    out.carry += RARITY_ARMOR_CARRY[armor.rarity] ?? 0;
+    if (b) {
+      out.damage += b.damage ?? 0;
+      out.dexterity += b.dexterity ?? 0;
+      out.moveSpeed += b.moveSpeed ?? 0;
+      if (b.carry !== undefined) out.carry = b.carry; // explícito substitui o padrão da raridade
+    }
+  }
+  const accId = inventory.equipment.accessory;
+  const acc = accId ? ITEMS[accId] : undefined;
+  if (acc) {
+    const b = acc.attrBonus;
+    out.dexterity += RARITY_ACCESSORY_DEX[acc.rarity] ?? 0;
+    out.moveSpeed += RARITY_ACCESSORY_MOVE[acc.rarity] ?? 0;
+    if (b) {
+      out.damage += b.damage ?? 0;
+      out.carry += b.carry ?? 0;
+      if (b.dexterity !== undefined) out.dexterity = out.dexterity - (RARITY_ACCESSORY_DEX[acc.rarity] ?? 0) + b.dexterity;
+      if (b.moveSpeed !== undefined) out.moveSpeed = out.moveSpeed - (RARITY_ACCESSORY_MOVE[acc.rarity] ?? 0) + b.moveSpeed;
+    }
+  }
+  return out;
+}
+
+/** Atributos efetivos do jogador: nível + equip (arma, armadura, acessório) + skill, travados em 0–100%. */
 export function effectiveAttributes(player: PlayerState): PlayerAttributes {
   const lv = levelAttributes(player.level);
   const stored = player.attributes ?? DEFAULT_ATTRIBUTES;
   const equipDamage = weaponDamageBonus(player.inventory);
+  const gear = gearAttributeBonus(player.inventory);
   const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
   return {
-    damage: clamp(lv.damage + stored.damage + equipDamage),
-    dexterity: clamp(lv.dexterity + stored.dexterity),
-    carry: clamp(lv.carry + stored.carry),
-    moveSpeed: clamp(lv.moveSpeed + stored.moveSpeed),
+    damage: clamp(lv.damage + stored.damage + equipDamage + gear.damage),
+    dexterity: clamp(lv.dexterity + stored.dexterity + gear.dexterity),
+    carry: clamp(lv.carry + stored.carry + gear.carry),
+    moveSpeed: clamp(lv.moveSpeed + stored.moveSpeed + gear.moveSpeed),
   };
+}
+
+/** Teto da chance de crítico (destreza 100 → 30%). */
+export const CRIT_CHANCE_MAX = 0.3;
+/** Multiplicador de crítico: 1,5× em destreza 0 → 2,0× em destreza 100. */
+export const CRIT_MULT_MIN = 1.5;
+export const CRIT_MULT_MAX = 2;
+
+/**
+ * Crítico a partir da destreza efetiva (0–100). Linear: chance = 30% × dex/100
+ * (dex 0 → exatamente 0, ou seja, nível 1 sem pontos nunca critica);
+ * multiplicador 1,5 → 2,0. No teto do nível (dex 50) = 15% e ×1,75.
+ */
+export function critFromDexterity(dexterity: number): { chance: number; multiplier: number } {
+  const d = Math.max(0, Math.min(100, dexterity)) / 100;
+  return { chance: CRIT_CHANCE_MAX * d, multiplier: CRIT_MULT_MIN + (CRIT_MULT_MAX - CRIT_MULT_MIN) * d };
+}
+
+/** Crítico do jogador (usa a destreza efetiva: nível + equip + skill). */
+export function playerCritStats(player: PlayerState): { chance: number; multiplier: number } {
+  return critFromDexterity(effectiveAttributes(player).dexterity);
 }
 
 /** Multiplicador de dano (1 + damage%/100). Usado no ataque normal e no especial. */
@@ -81,18 +144,6 @@ export function damageMultiplier(player: PlayerState): number {
   return 1 + effectiveAttributes(player).damage / 100;
 }
 
-/** Multiplicador de dano num acerto crítico. */
-export const CRIT_MULT = 1.6;
-
-/** Chance de crítico pela destreza (0 no dex 0 → ~40% no teto). */
-export function critChance(player: PlayerState): number {
-  return Math.min(0.4, effectiveAttributes(player).dexterity / 250);
-}
-
-/** Sorteia um crítico. No dex 0 nunca crita (zero regressão). */
-export function rollCrit(player: PlayerState, rng: () => number = Math.random): boolean {
-  return rng() < critChance(player);
-}
 
 /** Peso máximo efetivo da bolsa: base × (1 + carry%/100). */
 export function effectiveMaxWeight(player: PlayerState): number {

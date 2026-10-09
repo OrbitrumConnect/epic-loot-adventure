@@ -12,10 +12,9 @@ import { CAMPS, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
-import { resolveAttack, getDistance, isCriticalDamage } from '../systems/combatSystem';
+import { resolveAttack, getDistance } from '../systems/combatSystem';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
 import { rollBonusLoot } from '../systems/lootEconomySystem';
-import { findClaimSpot, upgradeCost, MAX_BASE_TIER, type PlayerBase } from '../systems/baseClaimSystem';
 import { canCraft, craft } from '../systems/craftSystem';
 import {
   createInitialBase, tickBase as resolveBase, placeBuilding as placeBaseBuilding, startUpgrade,
@@ -23,6 +22,12 @@ import {
   sendExpedition as sendBaseExpedition, depositFromInventory, collectTools,
 } from '../systems/baseSystem';
 import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
+import type { BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
+import { CLAIM_SIZE } from '../data/base-pieces';
+import {
+  advanceStage as advanceBaseStageOnce, advanceStageFully, canOpenCityView as cityViewOpen,
+  claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
+} from '../systems/playerBaseSystem';
 import {
   addObjective as addQueueObjective, clearObjectives as clearQueueObjectives, createQueue,
   findHealHotbarIndex, hasPendingObjective, removeObjective as removeQueueObjective,
@@ -31,7 +36,7 @@ import {
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
-import { damageMultiplier, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, rollCrit, CRIT_MULT, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
+import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
@@ -55,8 +60,8 @@ type GameState = {
   specialTick: number;
   specialKind: 'jump' | 'spin' | null;
   base: BaseState;
-  /** Base própria reivindicada no mundo aberto (Fase 3). null = ainda não reivindicou. */
-  playerBase: PlayerBase | null;
+  /** Base persistente no mundo (Fase 3). `null` = ainda não reivindicou terreno. */
+  playerBase: PlayerBaseState | null;
   camps: CampState[];
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
@@ -78,10 +83,6 @@ type GameActions = {
   collectNearest: () => void;
   /** Faz nascer o mini-boss (um por vez) perto do jogador. Chamado pelo timer. */
   spawnBoss: () => void;
-  /** Reivindica uma base própria num terreno livre perto do jogador (Fase 3). */
-  claimBase: () => void;
-  /** Sobe o tier da base (gasta madeira/pedra da bolsa). */
-  upgradeBase: () => void;
   /** Gasta 1 ponto de skill subindo um atributo (0–100%). */
   allocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Devolve 1 ponto, baixando um atributo alocado. */
@@ -114,6 +115,14 @@ type GameActions = {
   cancelQueueItem: (instanceId: string, itemId: string) => void;
   sendExpedition: (expeditionId: string, scouts: number) => void;
   depositToBase: () => void;
+  /** Reivindica o quadrado de `CLAIM_SIZE` com canto em `origin`. `heightAt` = terrainHeight do mundo. */
+  claimBase: (origin: GridCell, heightAt?: (x: number, z: number) => number) => void;
+  placeBasePieces: (preview: BuildPreview, tier?: 1 | 2 | 3) => void;
+  damageBasePiece: (pieceId: string, amount: number) => void;
+  /** Sobe um estágio da base se a condição estiver cumprida. */
+  advanceBaseStage: () => void;
+  /** A vista de cidade só abre com o perímetro fechado (`clash`). */
+  canOpenCityView: () => boolean;
   addObjective: (kind: ObjectiveKind, targetId: string | null) => void;
   removeObjective: (objectiveId: string) => void;
   clearObjectives: () => void;
@@ -320,11 +329,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         ? base + TORCH_FIRE_BONUS
         : base + weaponPower;
 
-    // Dano (%) multiplica o poder; destreza pode CRITAR (×CRIT_MULT). Dex 0 = sem crit.
-    const crit = rollCrit(state.player);
-    const finalPower = Math.round(totalPower * damageMultiplier(state.player) * (crit ? CRIT_MULT : 1));
+    // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
+    const finalPower = Math.round(totalPower * damageMultiplier(state.player));
 
-    const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name);
+    const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name, playerCritStats(state.player));
 
     const updatedCreatures = state.creatures.map(c => {
       if (c.id !== targetId) return c;
@@ -343,7 +351,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const stamp = Date.now();
     const drafts: FeedbackDraft[] = [
       damageEvent(creature.id, result.damage, creature.position, {
-        critical: crit || isCriticalDamage(finalPower, creature.armor, result.damage),
+        critical: !!result.critical,
         fire: usingTorch,
       }),
     ];
@@ -454,10 +462,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const weaponPower = equipped ? (ITEMS[equipped]?.attackPower ?? 0) : 0;
     const base = playerBaseAttack(state.player.level) + (usingTorch ? 9 : weaponPower);
     const dmgMult = damageMultiplier(state.player);
+    const critStats = playerCritStats(state.player);
     // Jump: dano alto, raio menor. Spin: 360°, raio maior, dano menor.
     const radius = kind === 'spin' ? 3.8 : 3.2;
-    const crit = rollCrit(state.player); // destreza pode critar o especial inteiro
-    const power = Math.round(base * (kind === 'jump' ? 1.8 : 1.2) * dmgMult * (crit ? CRIT_MULT : 1));
+    const power = Math.round(base * (kind === 'jump' ? 1.8 : 1.2) * dmgMult);
 
     const pos = state.player.position;
     const drafts: FeedbackDraft[] = [];
@@ -469,9 +477,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (c.behavior === 'dead') return c;
       if (getDistance(pos, c.position) > radius) return c;
       hits += 1;
-      const result = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name);
+      const result = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
       drafts.push(damageEvent(c.id, result.damage, c.position, {
-        critical: crit || isCriticalDamage(power, c.armor, result.damage), fire: usingTorch,
+        critical: !!result.critical, fire: usingTorch,
       }));
       if (result.targetDied) {
         const def = CREATURES[c.speciesId];
@@ -706,48 +714,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }));
   },
 
-  claimBase: () => {
-    const s = get();
-    if (s.playerBase) {
-      set({ ui: { ...s.ui, message: 'Você já tem uma base. Use Expandir pra evoluir.' } });
-      return;
-    }
-    const spot = findClaimSpot(s.player.position);
-    if (!spot) {
-      set({ ui: { ...s.ui, message: 'Sem espaço livre aqui. Afaste-se de água, ruínas e acampamentos.' } });
-      return;
-    }
-    const base: PlayerBase = { position: spot, tier: 1, claimedAt: Date.now() };
-    set({ playerBase: base, ui: { ...s.ui, message: 'Base reivindicada! Volte pra ela e expanda com recursos.' } });
-  },
-
-  upgradeBase: () => {
-    const s = get();
-    if (!s.playerBase) {
-      set({ ui: { ...s.ui, message: 'Reivindique uma base primeiro.' } });
-      return;
-    }
-    if (s.playerBase.tier >= MAX_BASE_TIER) {
-      set({ ui: { ...s.ui, message: 'Base já está no tier máximo.' } });
-      return;
-    }
-    const next = s.playerBase.tier + 1;
-    const cost = upgradeCost(next);
-    const haveWood = getItemCount(s.player.inventory, 'wood');
-    const haveStone = getItemCount(s.player.inventory, 'stone');
-    if (haveWood < cost.wood || haveStone < cost.stone) {
-      set({ ui: { ...s.ui, message: `Faltam recursos: ${cost.wood} madeira + ${cost.stone} pedra.` } });
-      return;
-    }
-    let inv = removeItem(s.player.inventory, 'wood', cost.wood);
-    inv = removeItem(inv, 'stone', cost.stone);
-    set({
-      player: { ...s.player, inventory: inv },
-      playerBase: { ...s.playerBase, tier: next },
-      ui: { ...s.ui, message: `Base evoluída para o tier ${next}!` },
-    });
-  },
-
   allocateSkill: (attr) => {
     const p = get().player;
     if ((p.skillPoints ?? 0) <= 0) return;
@@ -777,7 +743,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const item = ITEMS[itemId];
     if (!item || !item.equippable) return;
     // Roteia pelo tipo: armadura → armor, resto (arma/ferramenta) → primary.
-    const slot: 'primary' | 'armor' = item.category === 'armor' ? 'armor' : 'primary';
+    const slot: 'primary' | 'armor' | 'accessory' =
+      item.equipSlot === 'accessory' ? 'accessory' : item.category === 'armor' ? 'armor' : 'primary';
     set(s => {
       const inv = s.player.inventory;
       let hotbar = inv.hotbar;
@@ -792,10 +759,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         }
       }
       return {
-        player: {
+        // armadura/acessório mexem em carga% → peso máx acompanha.
+        player: syncCarry({
           ...s.player,
           inventory: { ...inv, hotbar, equipment: { ...inv.equipment, [slot]: itemId } },
-        },
+        }),
         ui: { ...s.ui, message: `${item.name} equipado.` },
       };
     });
@@ -807,10 +775,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (!current) return {};
       const name = ITEMS[current]?.name ?? 'Item';
       return {
-        player: {
+        player: syncCarry({
           ...s.player,
           inventory: { ...s.player.inventory, equipment: { ...s.player.inventory.equipment, [slot]: null } },
-        },
+        }),
         ui: { ...s.ui, message: `${name} desequipado.` },
       };
     });
@@ -902,6 +870,58 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const result = sendBaseExpedition(get().base, expeditionId, scouts, Date.now());
     applyBaseResult(set, result);
   },
+
+  claimBase: (origin, heightAt) => {
+    const state = get();
+    if (state.playerBase) {
+      set({ ui: { ...state.ui, message: 'Você já tem uma base.' } });
+      return;
+    }
+    const owner = { kind: 'player' as const, id: state.player.id, name: state.player.name };
+    const result = claimPlayerBase(origin, CLAIM_SIZE, owner, { bases: [], heightAt }, Date.now());
+    set({
+      playerBase: result.base,
+      ui: { ...state.ui, message: result.message },
+    });
+  },
+
+  placeBasePieces: (preview, tier = 1) => {
+    const state = get();
+    if (!state.playerBase) return;
+    const result = placePlayerPieces(state.playerBase, preview, state.player.inventory, Date.now(), tier);
+    if (!result.ok) {
+      set({ ui: { ...state.ui, message: result.message } });
+      return;
+    }
+    set({
+      playerBase: advanceStageFully(result.base),
+      player: { ...state.player, inventory: result.inventory },
+      ui: { ...state.ui, message: result.message },
+    });
+  },
+
+  damageBasePiece: (pieceId, amount) => {
+    const state = get();
+    if (!state.playerBase) return;
+    const result = damagePlayerPiece(state.playerBase, pieceId, amount, Date.now());
+    const message = result.wiped
+      ? 'Sua base foi destruída.'
+      : result.reopened
+        ? 'Brecha no muro! A base está aberta.'
+        : state.ui.message;
+    set({
+      playerBase: result.wiped ? null : result.base,
+      ui: { ...state.ui, message },
+    });
+  },
+
+  advanceBaseStage: () => {
+    const state = get();
+    if (!state.playerBase) return;
+    set({ playerBase: advanceBaseStageOnce(state.playerBase) });
+  },
+
+  canOpenCityView: () => cityViewOpen(get().playerBase),
 
   depositToBase: () => {
     const state = get();

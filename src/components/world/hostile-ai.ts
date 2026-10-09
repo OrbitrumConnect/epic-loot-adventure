@@ -20,6 +20,8 @@ import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight } from './world-kit';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
+import { BASE_PIECES } from '@/game/data/base-pieces';
+import { nearestBasePiece } from './base-targets';
 
 /**
  * Clique num inimigo: esquerdo seleciona, Shift+esquerdo enfileira uma caçada.
@@ -346,6 +348,24 @@ export function useHostileAI(opts: HostileOptions) {
               ui: { ...s.ui, message: `${creature.name} ${tuning.hitVerb}! -${dmg} HP (${hp}/${s.player.maxHp})` },
             };
           });
+        }
+      } else {
+        // Base do jogador: o jogador está fora de alcance, mas há uma peça
+        // encostada (muro, porta, torre, telhado) — a criatura descarrega nela.
+        // Quando o jogador também está ao alcance, ele continua sendo o alvo.
+        const hit = nearestBasePiece(wx, wz);
+        if (hit) {
+          attackCooldown.current -= dt;
+          if (attackCooldown.current <= 0) {
+            attackCooldown.current = creature.attackCooldown;
+            swing.current = 0.35;
+            const dmg = Math.max(1, creature.attackPower);
+            const kind = hit.kind;
+            reportDamageToStore(hit.id, dmg, { x: hit.x, z: hit.z }, false);
+            const st = useGameStore.getState();
+            st.damageBasePiece(hit.id, dmg);
+            st.setMessage(`${creature.name} ataca ${BASE_PIECES[kind].name.toLowerCase()} da base! -${dmg}`);
+          }
         }
       }
     } else {

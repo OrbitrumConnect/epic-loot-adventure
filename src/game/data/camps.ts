@@ -267,38 +267,70 @@ export function getCampDefinition(defId: string): CampDefinition | null {
   return CAMPS[defId] ?? null;
 }
 
-/** Lista de problemas das posições atuais. Vazia = tudo certo. */
-export function findPlacementIssues(placements: CampPlacement[] = CAMP_PLACEMENTS): string[] {
-  const issues: string[] = [];
+/** Água a menos de `margin` metros de (x, z): dentro de um lago ou sobre o córrego. */
+export function isOnWater(x: number, z: number, margin = 0): boolean {
+  for (const lake of LAKE_CENTERS) {
+    if ((x - lake.x) ** 2 + (z - lake.z) ** 2 < (lake.r + margin) ** 2) return true;
+  }
+  return riverDistance(x, z) < RIVER_HALF_WIDTH + margin;
+}
+
+/**
+ * Pegada circular de algo que NÃO é acampamento (hoje: o claim de uma base) e que
+ * precisa passar nas mesmas regras de ocupação do mapa que os acampamentos.
+ */
+export type PlacementFootprint = { id: string; position: Position; radius: number };
+
+export type PlacementProblemKind =
+  | 'fora-do-mapa'
+  | 'perto-do-nascedouro'
+  | 'sobre-ruinas'
+  | 'sobre-acampamento'
+  | 'definicao-ausente'
+  | 'posto-fora-do-raio';
+
+export type PlacementProblem = { id: string; kind: PlacementProblemKind; message: string };
+
+/**
+ * Mesma verificação de `findPlacementIssues`, mas com o tipo do problema.
+ * `footprints` são pegadas extras (claims) conferidas contra mapa, nascedouro,
+ * ruínas e os acampamentos de `placements`. Não conferem entre si.
+ */
+export function findPlacementProblems(
+  placements: CampPlacement[] = CAMP_PLACEMENTS,
+  footprints: PlacementFootprint[] = [],
+): PlacementProblem[] {
+  const problems: PlacementProblem[] = [];
+  const add = (id: string, kind: PlacementProblemKind, message: string) => {
+    problems.push({ id, kind, message });
+  };
+
+  const checkCircle = (id: string, position: Position, radius: number) => {
+    if (Math.abs(position.x) + radius > WORLD_HALF || Math.abs(position.z) + radius > WORLD_HALF) {
+      add(id, 'fora-do-mapa', `${id}: sai do mapa (raio ${radius}).`);
+    }
+    const fromSpawn = distance(position, PLAYER_SPAWN) - radius;
+    if (fromSpawn < SPAWN_SAFE_RADIUS) {
+      add(id, 'perto-do-nascedouro', `${id}: perto demais do nascedouro (${fromSpawn.toFixed(1)}m livres).`);
+    }
+    const fromRuins = distance(position, RUINS_POSITION) - radius - RUINS_RADIUS;
+    if (fromRuins < CAMP_MIN_GAP) {
+      add(id, 'sobre-ruinas', `${id}: sobrepõe as ruínas (${fromRuins.toFixed(1)}m livres).`);
+    }
+  };
 
   for (const placement of placements) {
     const def = CAMPS[placement.defId];
     if (!def) {
-      issues.push(`${placement.id}: definição "${placement.defId}" não existe.`);
+      add(placement.id, 'definicao-ausente', `${placement.id}: definição "${placement.defId}" não existe.`);
       continue;
     }
 
-    const { position } = placement;
-    if (
-      Math.abs(position.x) + def.radius > WORLD_HALF
-      || Math.abs(position.z) + def.radius > WORLD_HALF
-    ) {
-      issues.push(`${placement.id}: sai do mapa (raio ${def.radius}).`);
-    }
-
-    const fromSpawn = distance(position, PLAYER_SPAWN) - def.radius;
-    if (fromSpawn < SPAWN_SAFE_RADIUS) {
-      issues.push(`${placement.id}: perto demais do nascedouro (${fromSpawn.toFixed(1)}m livres).`);
-    }
-
-    const fromRuins = distance(position, RUINS_POSITION) - def.radius - RUINS_RADIUS;
-    if (fromRuins < CAMP_MIN_GAP) {
-      issues.push(`${placement.id}: sobrepõe as ruínas (${fromRuins.toFixed(1)}m livres).`);
-    }
+    checkCircle(placement.id, placement.position, def.radius);
 
     for (const spawn of def.spawns) {
       if (distance(spawn.offset, { x: 0, z: 0 }) > def.radius) {
-        issues.push(`${placement.id}: posto de ${spawn.speciesId} fora do raio do acampamento.`);
+        add(placement.id, 'posto-fora-do-raio', `${placement.id}: posto de ${spawn.speciesId} fora do raio do acampamento.`);
       }
     }
   }
@@ -312,10 +344,30 @@ export function findPlacementIssues(placements: CampPlacement[] = CAMP_PLACEMENT
       if (!defA || !defB) continue;
       const gap = distance(a.position, b.position) - defA.radius - defB.radius;
       if (gap < CAMP_MIN_GAP) {
-        issues.push(`${a.id} e ${b.id}: folga de apenas ${gap.toFixed(1)}m.`);
+        add(a.id, 'sobre-acampamento', `${a.id} e ${b.id}: folga de apenas ${gap.toFixed(1)}m.`);
       }
     }
   }
 
-  return issues;
+  for (const fp of footprints) {
+    checkCircle(fp.id, fp.position, fp.radius);
+    for (const camp of placements) {
+      const def = CAMPS[camp.defId];
+      if (!def) continue;
+      const gap = distance(fp.position, camp.position) - fp.radius - def.radius;
+      if (gap < CAMP_MIN_GAP) {
+        add(fp.id, 'sobre-acampamento', `${fp.id} e ${camp.id}: folga de apenas ${gap.toFixed(1)}m.`);
+      }
+    }
+  }
+
+  return problems;
+}
+
+/** Lista de problemas das posições atuais. Vazia = tudo certo. */
+export function findPlacementIssues(
+  placements: CampPlacement[] = CAMP_PLACEMENTS,
+  footprints: PlacementFootprint[] = [],
+): string[] {
+  return findPlacementProblems(placements, footprints).map(p => p.message);
 }
