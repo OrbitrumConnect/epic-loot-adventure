@@ -17,6 +17,7 @@ import {
 } from './world/occlusion';
 import { TargetRoute } from './world/target-route';
 import { PlayerBase } from './world/player-base';
+import { BaseFireFX } from './world/base-fire';
 import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies } from './world/world-entities';
 import {
@@ -1355,6 +1356,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
       <HarvestNodes c={c} />
       <PlayerBase c={c} playerRef={playerRef} paused={Boolean(props.paused)} />
+      <BaseFireFX />
       <Camps c={c} />
       <Enemies c={c} playerRef={playerRef} />
 
