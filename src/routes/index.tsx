@@ -226,6 +226,7 @@ function Index() {
       if (e.code === 'KeyG' && !inCity) toggleAutoMode();
       if (e.code === 'KeyB') { setPanel(null); setMode(inCity ? 'world' : 'city'); }
       if (e.code === 'KeyI') setPanel(ui.panel === 'inventory' ? null : 'inventory');
+      if (e.code === 'KeyM') setPanel(ui.panel === 'map' ? null : 'map');
       if (e.code === 'Escape') setPanel(null);
     };
     window.addEventListener('keydown', handler);

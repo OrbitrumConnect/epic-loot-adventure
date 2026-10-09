@@ -990,11 +990,39 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       }
     };
 
+    // Touch (mobile): arrastar 1 dedo gira a câmera no 3ª pessoa (yaw/pitch),
+    // igual ao mouse. Tap sem arrastar continua atacando (não damos preventDefault
+    // no start, só no move), então o clique sintetizado ainda dispara.
+    let lastTX = 0, lastTY = 0, dragging = false;
+    const onTouchStart = (e: TouchEvent) => {
+      if (cameraMode !== 'third' || props.paused || e.touches.length !== 1) return;
+      lastTX = e.touches[0]!.clientX;
+      lastTY = e.touches[0]!.clientY;
+      dragging = true;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!dragging || cameraMode !== 'third' || e.touches.length !== 1) return;
+      const t = e.touches[0]!;
+      const dx = t.clientX - lastTX;
+      const dy = t.clientY - lastTY;
+      lastTX = t.clientX;
+      lastTY = t.clientY;
+      const sensitivity = 0.005;
+      cameraYaw.current -= dx * sensitivity;
+      cameraPitch.current = THREE.MathUtils.clamp(cameraPitch.current - dy * sensitivity, -1.0, 0.65);
+      e.preventDefault(); // só enquanto gira: evita o scroll/zoom da página
+    };
+    const onTouchEnd = () => { dragging = false; };
+
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('pointerlockchange', onLockChange);
     canvas.addEventListener('click', onClick);
     canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('touchcancel', onTouchEnd);
 
     return () => {
       document.removeEventListener('mousemove', onMouseMove);
@@ -1002,6 +1030,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       document.removeEventListener('pointerlockchange', onLockChange);
       canvas.removeEventListener('click', onClick);
       canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('touchcancel', onTouchEnd);
       if (pointerLocked.current) document.exitPointerLock();
     };
   }, [gl, cameraMode, props.paused]);
