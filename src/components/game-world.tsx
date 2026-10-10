@@ -21,6 +21,7 @@ import { BaseFireFX } from './world/base-fire';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies } from './world/world-entities';
+import { Billboards, groundTexture } from './world/billboards';
 import { CelShade } from './world/cel-shade';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
@@ -622,7 +623,12 @@ function Character({
           </mesh>
           <mesh position={[0, -0.28, 0.07]} castShadow>
             <boxGeometry args={[0.18, 0.1, 0.3]} />
-            <meshStandardMaterial color={c.metal} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          {/* Cano da bota (couro médio) sobre a canela escura */}
+          <mesh position={[0, -0.1, 0.02]} castShadow>
+            <boxGeometry args={[0.185, 0.16, 0.2]} />
+            <meshStandardMaterial color="#6b5a40" />
           </mesh>
         </group>
       </group>
@@ -642,31 +648,76 @@ function Character({
           </mesh>
           <mesh position={[0, -0.28, 0.07]} castShadow>
             <boxGeometry args={[0.18, 0.1, 0.3]} />
-            <meshStandardMaterial color={c.metal} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          {/* Cano da bota (couro médio) sobre a canela escura */}
+          <mesh position={[0, -0.1, 0.02]} castShadow>
+            <boxGeometry args={[0.185, 0.16, 0.2]} />
+            <meshStandardMaterial color="#6b5a40" />
           </mesh>
         </group>
       </group>
 
-      {/* Body */}
+      {/* Torso — casaco de couro em tom médio-escuro (ancora a silhueta) */}
       <mesh position={[0, 0.9, 0]} castShadow>
         <boxGeometry args={[0.62, 0.67, 0.36]} />
+        <meshStandardMaterial color="#6b5a40" />
+      </mesh>
+      {/* Colete escuro sob o casaco, aparecendo na gola */}
+      <mesh position={[0, 1.05, 0.02]} castShadow>
+        <boxGeometry args={[0.44, 0.34, 0.37]} />
+        <meshStandardMaterial color={c.trunk} />
+      </mesh>
+      {/* Cinturão escuro na cintura */}
+      <mesh position={[0, 0.62, 0]} castShadow>
+        <boxGeometry args={[0.66, 0.14, 0.4]} />
+        <meshStandardMaterial color={c.dark} />
+      </mesh>
+      {/* Fivela */}
+      <mesh position={[0, 0.62, 0.205]}>
+        <boxGeometry args={[0.12, 0.1, 0.03]} />
+        <meshStandardMaterial color={c.gold} />
+      </mesh>
+
+      {/* Cabeça enfaixada (creme) + óculos de proteção escuros — como o sprite */}
+      <mesh position={[0, 1.48, 0]} castShadow>
+        <boxGeometry args={[0.42, 0.43, 0.4]} />
+        <meshStandardMaterial color={c.light} />
+      </mesh>
+      {/* Faixa dos óculos */}
+      <mesh position={[0, 1.55, 0.205]}>
+        <boxGeometry args={[0.44, 0.13, 0.04]} />
+        <meshStandardMaterial color={c.dark} />
+      </mesh>
+      {/* Lentes */}
+      {[-0.1, 0.1].map(lx => (
+        <mesh key={lx} position={[lx, 1.55, 0.228]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.055, 0.055, 0.03, 10]} />
+          <meshStandardMaterial color={c.metal} emissive={c.crystal} emissiveIntensity={0.12} />
+        </mesh>
+      ))}
+      {/* Cachecol enrolado no pescoço/rosto */}
+      <mesh position={[0, 1.26, 0.02]} castShadow>
+        <boxGeometry args={[0.46, 0.2, 0.44]} />
         <meshStandardMaterial color={c.armor} />
       </mesh>
 
-      {/* Head */}
-      <mesh position={[0, 1.48, 0]} castShadow>
-        <boxGeometry args={[0.42, 0.43, 0.4]} />
-        <meshStandardMaterial color={c.metal} />
-      </mesh>
-      <mesh position={[0, 1.47, 0.205]}>
-        <boxGeometry args={[0.29, 0.1, 0.03]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-
-      {/* Cloak */}
+      {/* Casaco remendado e esfarrapado (tom terra, não capa vermelha) */}
       <mesh position={[0, 0.91, -0.25]} rotation={[0.15, 0, 0]} castShadow>
         <boxGeometry args={[0.7, 0.93, 0.09]} />
-        <meshStandardMaterial color={c.cloak} />
+        <meshStandardMaterial color="#7e6a48" />
+      </mesh>
+      {/* Abas remendadas do casaco, caindo pela frente (claro × escuro) */}
+      {[-0.18, 0.18].map(fx => (
+        <mesh key={fx} position={[fx, 0.42, 0.2]} rotation={[0, 0, fx * 0.3]} castShadow>
+          <boxGeometry args={[0.2, 0.82, 0.07]} />
+          <meshStandardMaterial color={fx < 0 ? '#9c855a' : '#463a28'} />
+        </mesh>
+      ))}
+      {/* Correias cruzadas no peito */}
+      <mesh position={[0, 0.95, 0.19]} rotation={[0, 0, 0.5]}>
+        <boxGeometry args={[0.07, 0.9, 0.04]} />
+        <meshStandardMaterial color={c.trunk} />
       </mesh>
 
       {/* Braço esquerdo articulado + escudo no antebraço */}
@@ -674,6 +725,11 @@ function Character({
         <mesh castShadow>
           <sphereGeometry args={[0.1, 8, 6]} />
           <meshStandardMaterial color={c.armor} />
+        </mesh>
+        {/* Placa de ombro (osso), como no sprite */}
+        <mesh position={[-0.05, 0.06, 0]} rotation={[0, 0, 0.4]} castShadow>
+          <boxGeometry args={[0.26, 0.12, 0.3]} />
+          <meshStandardMaterial color={c.light} />
         </mesh>
         <mesh position={[0, -0.14, 0]} castShadow>
           <cylinderGeometry args={[0.09, 0.08, 0.28, 6]} />
@@ -705,6 +761,11 @@ function Character({
         <mesh castShadow>
           <sphereGeometry args={[0.1, 8, 6]} />
           <meshStandardMaterial color={c.armor} />
+        </mesh>
+        {/* Placa de ombro menor, lado direito — couro escuro (contrapeso ao osso) */}
+        <mesh position={[0.05, 0.05, 0]} rotation={[0, 0, -0.4]} castShadow>
+          <boxGeometry args={[0.2, 0.1, 0.26]} />
+          <meshStandardMaterial color={c.trunk} />
         </mesh>
         <mesh position={[0, -0.14, 0]} castShadow>
           <cylinderGeometry args={[0.09, 0.08, 0.28, 6]} />
@@ -908,8 +969,8 @@ function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
 }
 
 function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => void) | undefined; paused?: boolean | undefined }) {
+  const size = MAP_HALF * 2 + 40;
   const geo = useMemo(() => {
-    const size = MAP_HALF * 2 + 40;
     const segments = 200;
     const g = new THREE.PlaneGeometry(size, size, segments, segments);
     const pos = g.attributes['position'] as THREE.BufferAttribute;
@@ -939,6 +1000,11 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
     const nz = (x: number, z: number, s: number) =>
       Math.sin(x * s + 1.7) * Math.cos(z * s + 2.3) + Math.sin((x + z) * s * 0.7 + 0.5) * 0.5;
     const colors = new Float32Array(pos.count * 3);
+    // Mistura dirt↔grass: a MESMA placa de baixa frequência que escolhe a cor
+    // de vértice também decide onde entra a textura de grama seca. Crosta
+    // escura (scorch) fica terra pelada. Multiplica com a cor de vértice no
+    // shader, então a variação requeimada sobrevive.
+    const blend = new Float32Array(pos.count);
     const tmp = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
@@ -955,10 +1021,52 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
         tmp.lerp(burnt, 0.5);                                   // placa cinza-terra
       }
       colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
+      // Grama nas placas (patch alto), apagada na crosta escura.
+      let grassAmt = THREE.MathUtils.clamp((patch + 0.15) / 0.65, 0, 1);
+      if (n < -0.02) grassAmt *= 0.18;
+      blend[i] = grassAmt;
     }
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    g.setAttribute('aBlend', new THREE.BufferAttribute(blend, 1));
     return g;
-  }, [c]);
+  }, [c, size]);
+
+  // Material: dirt (base) × cor de vértice, com grass misturado por `aBlend`.
+  // Tile em espaço de mundo (~6 m) via repeat no UV do plano (0..1 → 0..N).
+  const mat = useMemo(() => {
+    const repeat = size / 6;
+    const dirt = groundTexture('/assets/style/ground/dirt.webp', repeat);
+    const grass = groundTexture('/assets/style/ground/grass.webp', repeat);
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: dirt });
+    m.onBeforeCompile = shader => {
+      shader.uniforms['uGrassMap'] = { value: grass };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aBlend;\nvarying float vBlend;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBlend = aBlend;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform sampler2D uGrassMap;\nvarying float vBlend;')
+        .replace('#include <map_fragment>', /* glsl */ `
+          #ifdef USE_MAP
+            // A textura entra só como DETALHE DE LUMINÂNCIA (rachaduras/grão),
+            // NÃO como cor. Multiplicar a textura quente cheia sobre as cores de
+            // vértice já quentes escurecia a cena (~-29% de brilho) e saturava
+            // (terra "de Marte"). Aqui a cor fica 100% nas cores de vértice
+            // (ocre dessaturado da referência); a textura só modula o brilho em
+            // torno de 1.0 (preserva a média, não injeta saturação).
+            vec4 _dirt = texture2D( map, vMapUv );
+            vec4 _grass = texture2D( uGrassMap, vMapUv );
+            vec3 _texCol = mix( _dirt.rgb, _grass.rgb, vBlend );
+            float _texL = dot( _texCol, vec3( 0.299, 0.587, 0.114 ) );
+            float _detail = 1.0 + ( _texL - 0.5 ) * 1.05;  // centrado em ~1 (mais contraste local)
+            diffuseColor.rgb *= clamp( _detail, 0.45, 1.6 );
+            // Dica leve de grama (olive dessaturado) só onde vBlend é alto.
+            diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.97, 1.0, 0.88 ), vBlend * 0.15 );
+          #endif
+        `);
+    };
+    m.customProgramCacheKey = () => 'ground-blend-v1';
+    return m;
+  }, [size]);
 
   // Sem handler de ponteiro aqui de propósito: o ataque por clique é tratado
   // uma única vez pelo listener de `mousedown` em `WorldScene`. Antes os dois
@@ -967,9 +1075,7 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
   void paused;
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow geometry={geo}>
-      <meshStandardMaterial vertexColors />
-    </mesh>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow geometry={geo} material={mat} />
   );
 }
 
@@ -1228,6 +1334,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     const curve = new THREE.CatmullRomCurve3(ROAD_POINTS.map(([x, z]) => new THREE.Vector3(x, 0.025, z)));
     const pts = curve.getPoints(100);
     const v: number[] = [];
+    const uv: number[] = [];
+    // UV planar em espaço de mundo (~3 m por tile) pra a textura da estrada
+    // repetir ao longo da fita sem esticar.
+    const TILE = 3;
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1];
       if (!a || !b) continue;
@@ -1240,13 +1350,17 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       q.forEach(n => {
         const ty = terrainHeight(n.x, n.z) + 0.03;
         v.push(n.x, ty, n.z);
+        uv.push(n.x / TILE, n.z / TILE);
       });
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.computeVertexNormals();
     return g;
   }, []);
+
+  const roadTex = useMemo(() => groundTexture('/assets/style/ground/road.webp', 1), []);
 
   // Luminárias ao longo da estrada, espaçadas ~14 m, deslocadas pra beira.
   const lamps = useMemo(() => {
@@ -1308,7 +1422,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
 
       <mesh geometry={path} receiveShadow>
-        <meshStandardMaterial color={c.path} side={THREE.DoubleSide} />
+        <meshStandardMaterial map={roadTex} side={THREE.DoubleSide} />
       </mesh>
 
       {/* Luminárias da estrada — acendem ao anoitecer */}
@@ -1367,9 +1481,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
         ))}
       </group>
 
-      {trees.map((p, i) => <Tree key={i} {...p} c={c} />)}
-      <RockInstances c={c} />
-      <GrassPatches c={c} count={900} />
+      <Billboards trees={trees} c={c} />
 
       <Ruins c={c} />
       <Campfire c={c} position={[-1, 0, 4]} />
