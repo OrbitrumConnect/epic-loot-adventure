@@ -94,6 +94,91 @@ export const CEL = {
   /** Vinheta e grão de filme (ambos discretos — não escurecer a cena). */
   vignette: { amount: 0.14, radius: 1.15, softness: 0.7 },
   grain: { amount: 0.028 },
+
+  /**
+   * Céu gradeado + banda de distância + sol (fase final — o ar e o céu).
+   *
+   * MEDIDO NO JOGO (3ª pessoa, 1250x691, 08:05, leitura por `gl.readPixels` no
+   * framebuffer da tela):
+   *  - 14.0% dos pixels do quadro são FUNDO (`rawDepth >= 0.9999`); no décimo
+   *    superior da tela são 94.5%. Ou seja: existe céu de verdade nesta câmera.
+   *  - o terreno vai só até ~100 unidades de olho (99% abaixo de 80, 85% abaixo
+   *    de 20) — o mapa é pequeno, então a linha do horizonte é fundo, não
+   *    terreno distante.
+   *
+   * Por isso a atmosfera entra por DOIS caminhos somados num peso só (`atm`):
+   *  a) pixel de fundo → peso cheio (é o céu);
+   *  b) terreno distante → peso parcial (`atmTerrain`) rampando de `atmStart`
+   *     a `atmEnd`, só pra matar a costura entre a última crista e o céu. Como
+   *     a rampa só começa em `atmStart`, o meio-campo (85% do terreno em quadro
+   *     está abaixo de 20 unidades) não é tocado e o contraste fica de pé.
+   *
+   * Erro da volta anterior (corrigido aqui): o gate tinha um `lum < sunKeep`
+   * pra preservar o disco do sol. A luminância do FUNDO já gradeado é ~1.18 em
+   * espaço de exibição (contraste 1.4 + ganho 1.32 estouram a faixa), muito
+   * acima de 0.72 — então o gate reprovava 13.2% dos 14.0% de fundo e o
+   * gradiente nunca pintava nada. Medido: só 0.73% do quadro passava.
+   * Agora o disco é preservado por GEOMETRIA (máscara de tela em volta da
+   * posição projetada do sol, e só onde o pixel é fundo), não por brilho.
+   *
+   * O disco do sol continua sendo MALHA na cena (`Sun`, game-world.tsx): o
+   * relevo o recorta (depthTest) e o bloom o acende. MEDIDO: com a câmera
+   * virada pro sol, o disco cai dentro do quadro em v=0.84 (h19), v=0.93 (h7)
+   * e v=0.73 (h17, olhando pra cima) — é alcançável pelo jogador no começo e
+   * no fim do dia. Ao meio-dia (elevação 71°) não cabe, e aí só o halo lê.
+   * Por isso o halo tem âncora CLAMPADA à borda da tela com queda por distância
+   * (`glowFalloff`, calculado em cel-shade.tsx): quando o sol sai do
+   * enquadramento o brilho encosta na borda e some conforme ele se afasta.
+   *
+   * Tudo escala por `uDayFactor` (= 1 - nightFactor): à noite o efeito some e
+   * o ciclo do Pedro (fundo + lua) assume sozinho. `enabled=false` desliga.
+   */
+  sky: {
+    enabled: true,
+    // O horizonte (baixo, hazy) fica pálido-cobre; o alto do céu, laranja mais
+    // saturado. O halo do sol devolve o pálido quente perto do disco.
+    // Valores escolhidos por VARREDURA medida (A/B no mesmo quadro, relógio
+    // travado em 17.6, 3ª pessoa, tela cheia). O cobre mais saturado que eu
+    // tinha antes (#e8b070/#c9793a) custava contraste -11.5 e saturação +0.034
+    // — estourava a barra. Este par: contraste -8.0, saturação +0.017
+    // (0.478 -> 0.495), e a banda de horizonte sai em RGB [202,150,116],
+    // R/B 1.75 contra 1.36 do creme de névoa — cobre de verdade, sem lavar.
+    horizonColor: '#f2cdaa',   // banda pálida de cobre no horizonte (haze)
+    highColor: '#d2996e',      // cobre mais fundo no alto do céu
+    strength: 0.78,            // quanto o gradiente domina o fundo (0..1)
+    horizonY: 0.42,            // v de tela (0 embaixo, 1 no topo) da linha do horizonte
+    // Banda de distância: rampa sobre o TERRENO longe (não o fundo), pra a
+    // última crista não bater no céu com uma costura dura. Começa bem depois
+    // do meio-campo (medição: 99% do terreno em quadro < 80 unidades).
+    atmStart: 72,
+    atmEnd: 115,
+    atmTerrain: 0.55,          // teto do peso no terreno (fundo sempre usa 1)
+    glowColor: '#ffe8c6',      // halo quente/pálido do sol NO ar
+    glowSize: 0.26,            // raio do halo (em alturas de tela)
+    glowStrength: 0.5,
+    // Queda do halo quando o sol sai do quadro: k em `exp(-k * dForaDaTela)`,
+    // com a distância medida em alturas de tela a partir da borda.
+    glowFalloffK: 1.6,
+    // Disco do sol (malha). A máscara de tela que o preserva usa o raio
+    // projetado + esta folga (em alturas de tela), pra pegar a borda serrilhada.
+    sunColor: '#fff6e8',
+    sunRadius: 7.5,            // raio em unidades de mundo
+    sunDistance: 220,          // distância do centro do mundo (dentro do far)
+    sunMaskPad: 0.012,
+  },
+
+  /**
+   * Bloom só na ponta clara, discreto. Bright-pass + blur separável em 1/4 de
+   * resolução (2 quads pequenos em `cel-shade.tsx`), somado no passe cheio. O
+   * limiar alto garante que SÓ o sol/emissivos acendem — os preenchimentos
+   * chapados não borram (o cel morre se o bloom esborrata tudo).
+   */
+  bloom: {
+    enabled: true,
+    threshold: 0.84,   // luminância (espaço de exibição) acima da qual acende
+    strength: 0.5,     // quanto o bloom soma de volta
+    radius: 2.0,       // espalhamento do blur (em texels de 1/4 de res)
+  },
 };
 
 /* ------------------------------------------------------------------ *
@@ -178,6 +263,8 @@ export function celFilterShader(): CelFilterShader {
   const o = CEL.outline;
   const h = CEL.haze;
   const v = CEL.vignette;
+  const sk = CEL.sky;
+  const bl = CEL.bloom;
   return {
     uniforms: {
       tDiffuse: { value: null },
@@ -187,6 +274,34 @@ export function celFilterShader(): CelFilterShader {
       uNear: { value: 0.1 },
       uFar: { value: 300 },
       uOrtho: { value: 0 },
+
+      uSkyEnabled: { value: sk.enabled ? 1 : 0 },
+      uSkyHorizonColor: { value: new THREE.Vector3(...linRGB(sk.horizonColor)) },
+      uSkyHighColor: { value: new THREE.Vector3(...linRGB(sk.highColor)) },
+      uSkyStrength: { value: sk.strength },
+      uSkyHorizonY: { value: sk.horizonY },
+      uSkyGlowColor: { value: new THREE.Vector3(...linRGB(sk.glowColor)) },
+      uSkyGlowSize: { value: sk.glowSize },
+      uSkyGlowStrength: { value: sk.glowStrength },
+      uAtmStart: { value: sk.atmStart },
+      uAtmEnd: { value: sk.atmEnd },
+      uAtmTerrain: { value: sk.atmTerrain },
+      // Posição de tela do disco do sol (0..1) e raio projetado, pro recorte
+      // que preserva a malha do Sol. `uSunVisible` = 1 só quando o disco cai
+      // dentro do quadro e é dia.
+      uSunScreen: { value: new THREE.Vector2(0.5, 0.8) },
+      uSunScreenR: { value: 0.03 },
+      uSunVisible: { value: 0 },
+      // Âncora do halo: a posição do sol CLAMPADA à borda da tela, e o quanto
+      // o halo ainda vale (cai conforme o sol se afasta do enquadramento).
+      uGlowScreen: { value: new THREE.Vector2(0.5, 1) },
+      uGlowFalloff: { value: 0 },
+      uDayFactor: { value: 1 },
+      uAspect: { value: 1 },
+
+      uBloomEnabled: { value: bl.enabled ? 1 : 0 },
+      uBloomTex: { value: null },
+      uBloomStrength: { value: bl.strength },
 
       uOutlineColor: { value: new THREE.Vector3(...linRGB(o.color)) },
       uOutlineThickness: { value: o.thickness },
@@ -237,6 +352,15 @@ export function celFilterShader(): CelFilterShader {
 
       uniform float uVigAmount, uVigRadius, uVigSoftness, uGrain;
 
+      uniform float uSkyEnabled, uSkyStrength, uSkyHorizonY, uSkyGlowSize, uSkyGlowStrength;
+      uniform float uAtmStart, uAtmEnd, uAtmTerrain;
+      uniform float uSunScreenR, uSunVisible, uGlowFalloff, uDayFactor, uAspect;
+      uniform vec3 uSkyHorizonColor, uSkyHighColor, uSkyGlowColor;
+      uniform vec2 uSunScreen, uGlowScreen;
+
+      uniform float uBloomEnabled, uBloomStrength;
+      uniform sampler2D uBloomTex;
+
       const vec3 LUMA = vec3( 0.2126, 0.7152, 0.0722 );
 
       // O sampler do tDiffuse (textura sRGB) decodifica pra LINEAR na leitura.
@@ -286,6 +410,38 @@ export function celFilterShader(): CelFilterShader {
         float fogT = 1.0 - exp( -max( 0.0, dc2 - uHazeStart ) * uHazeDensity );
         col = mix( col, uHazeColor, clamp( fogT, 0.0, 1.0 ) * uHazeStrength );
 
+        // --- Atmosfera: céu gradeado no FUNDO + banda quente no terreno longe,
+        // num peso só. Sem gate de luminância (ver nota em cel-style.ts: era ele
+        // que matava o efeito). O disco do sol é poupado por GEOMETRIA.
+        if ( uSkyEnabled > 0.5 && uDayFactor > 0.01 ) {
+          float rawDepth = texture2D( tDepth, vUv ).x;
+          float bg = step( 0.9999, rawDepth );                 // 1 = céu
+          // Rampa só na cauda longe do terreno; morre bem antes do meio-campo.
+          float far = smoothstep( uAtmStart, uAtmEnd, dc2 ) * uAtmTerrain;
+          float atm = max( bg, far * ( 1.0 - bg ) );
+
+          // Recorte do disco: pixel de fundo perto da posição projetada do sol
+          // fica intacto. Se o relevo cobre o sol, aquele pixel tem profundidade
+          // de terreno (bg = 0) e a máscara nem liga — a oclusão continua certa.
+          vec2 sd = vUv - uSunScreen; sd.x *= uAspect;
+          float sunMask = bg * uSunVisible *
+            ( 1.0 - smoothstep( uSunScreenR, uSunScreenR * 1.6, length( sd ) ) );
+
+          float w = clamp( atm, 0.0, 1.0 ) * ( 1.0 - sunMask ) * uSkyStrength * uDayFactor;
+          float up = smoothstep( uSkyHorizonY - 0.08, 1.0, vUv.y );
+          vec3 grad = mix( uSkyHorizonColor, uSkyHighColor, up );
+          col = mix( col, grad, w );
+
+          // Halo quente ancorado na direção do sol, CLAMPADA à borda da tela
+          // (uGlowScreen) e com queda por distância fora do quadro
+          // (uGlowFalloff). Só pinta onde já há atmosfera, pra não lavar o chão.
+          vec2 gd = vUv - uGlowScreen; gd.x *= uAspect;
+          float glow = exp( -dot( gd, gd ) / ( uSkyGlowSize * uSkyGlowSize ) );
+          col = mix( col, uSkyGlowColor,
+            clamp( glow, 0.0, 1.0 ) * uSkyGlowStrength * uDayFactor * uGlowFalloff
+            * clamp( atm, 0.0, 1.0 ) * ( 1.0 - sunMask ) );
+        }
+
         // --- Contorno: profundidade, amostra em 8 vizinhos num raio grosso
         // (visível a olho nu em tamanho real). Aplicado DEPOIS da gradação pra
         // a tinta sair preta de verdade.
@@ -305,6 +461,11 @@ export function celFilterShader(): CelFilterShader {
           col = mix( col, uOutlineColor, clamp( edge, 0.0, 1.0 ) );
         }
 
+        // --- Bloom (aditivo, só a ponta clara): soma o blur bright-passado.
+        if ( uBloomEnabled > 0.5 ) {
+          col += texture2D( uBloomTex, vUv ).rgb * uBloomStrength;
+        }
+
         // --- Grão de filme.
         float gnoise = hash( vUv * uResolution + uTime );
         col += ( gnoise - 0.5 ) * uGrain;
@@ -315,6 +476,74 @@ export function celFilterShader(): CelFilterShader {
         col *= mix( 1.0, vig, uVigAmount );
 
         gl_FragColor = vec4( clamp( col, 0.0, 1.0 ), 1.0 );
+      }
+    `,
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * 3. Bloom: bright-pass + blur gaussiano separável (1/4 de resolução).
+ *
+ * Um único material reusado em dois quads (H e V). `uBright > 0.5` liga o
+ * bright-pass (só no 1º passe, lendo a cena); o 2º passe só desfoca. 9 taps por
+ * eixo. A cena chega como textura sRGB (sampler decodifica p/ LINEAR), então
+ * convertemos p/ exibição (toSRGB) antes de medir luminância — mesmo espaço do
+ * filtro cheio. O alvo do bloom é LINEAR (sem recodificar), lido cru no filtro.
+ * ------------------------------------------------------------------ */
+export function bloomBlurShader(): CelFilterShader {
+  return {
+    uniforms: {
+      tInput: { value: null },
+      uTexel: { value: new THREE.Vector2(1, 1) },
+      uDir: { value: new THREE.Vector2(1, 0) },
+      uThreshold: { value: CEL.bloom.threshold },
+      uBright: { value: 1 },
+      uRadius: { value: CEL.bloom.radius },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv;
+      uniform sampler2D tInput;
+      uniform vec2 uTexel, uDir;
+      uniform float uThreshold, uBright, uRadius;
+      const vec3 LUMA = vec3( 0.2126, 0.7152, 0.0722 );
+
+      vec3 toSRGB( vec3 c ) {
+        c = max( c, vec3( 0.0 ) );
+        return mix( c * 12.92, 1.055 * pow( c, vec3( 1.0 / 2.4 ) ) - 0.055, step( 0.0031308, c ) );
+      }
+
+      // Lê a entrada já em espaço de exibição; se bright-pass, pesa pelo excesso
+      // acima do limiar (preserva a cor, acende só o que é claro de verdade).
+      vec3 tap( vec2 uv ) {
+        vec3 c = texture2D( tInput, uv ).rgb;
+        if ( uBright > 0.5 ) {
+          c = toSRGB( c );
+          float l = dot( c, LUMA );
+          c *= max( 0.0, l - uThreshold ) / max( 1.0 - uThreshold, 1e-3 );
+        }
+        return c;
+      }
+
+      void main() {
+        vec2 step1 = uDir * uTexel * uRadius;
+        // Pesos gaussianos (sigma ~2), 9 taps.
+        vec3 sum = tap( vUv ) * 0.2270;
+        sum += tap( vUv + step1 * 1.0 ) * 0.1945;
+        sum += tap( vUv - step1 * 1.0 ) * 0.1945;
+        sum += tap( vUv + step1 * 2.0 ) * 0.1216;
+        sum += tap( vUv - step1 * 2.0 ) * 0.1216;
+        sum += tap( vUv + step1 * 3.0 ) * 0.0540;
+        sum += tap( vUv - step1 * 3.0 ) * 0.0540;
+        sum += tap( vUv + step1 * 4.0 ) * 0.0162;
+        sum += tap( vUv - step1 * 4.0 ) * 0.0162;
+        gl_FragColor = vec4( sum, 1.0 );
       }
     `,
   };

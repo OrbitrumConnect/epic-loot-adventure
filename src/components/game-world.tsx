@@ -23,6 +23,7 @@ import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies } from './world/world-entities';
 import { Billboards, groundTexture } from './world/billboards';
 import { CelShade } from './world/cel-shade';
+import { CEL } from './world/cel-style';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
@@ -937,6 +938,51 @@ function Moon() {
   );
 }
 
+/**
+ * Sol: disco claro e chapado, baixo no céu, que nasce/cruza/se põe com o ciclo
+ * (`dayNight().sunPos`) e some à noite (a lua assume). É MALHA na cena (não um
+ * sprite no pós) de propósito: o bloom o acende de graça, o relevo o recorta no
+ * horizonte e ele concorda com a direção da luz direcional (mesma `sunPos`).
+ * Billboard: encara a câmera como a lua. `depthWrite=false` pra não ganhar
+ * contorno — e é justamente por não escrever profundidade que o filtro consegue
+ * poupá-lo: os pixels do disco continuam sendo "fundo", e a máscara de tela em
+ * volta da posição projetada do sol (`uSunScreen`/`uSunScreenR`, em
+ * cel-style.ts) os deixa intactos. Se o relevo cobre o sol, aquele pixel passa
+ * a ter profundidade de terreno e a máscara se desliga sozinha — a oclusão
+ * continua correta.
+ *
+ * MEDIDO em 3ª pessoa: virando a câmera pro sol, o disco entra no quadro
+ * (sunU 0.43 / sunV 0.62 às 17h36; sunU 0.66 / sunV 0.63 às 7h30) — o jogador
+ * alcança o sol de manhã e no fim da tarde. Ao meio-dia ele fica acima do
+ * quadro (sunV 1.53) e só o halo de horizonte lê. Em iso o sol nunca aparece
+ * (sunV -6.6 medido): lá o efeito inteiro é um no-op.
+ * Desliga junto com `CEL.sky.enabled`.
+ */
+function Sun() {
+  const grp = useRef<THREE.Group>(null);
+  const { camera } = useThree();
+  useFrame(() => {
+    const g = grp.current;
+    if (!g) return;
+    const day = 1 - nightFactor();
+    g.visible = CEL.sky.enabled && day > 0.02;
+    if (!g.visible) return;
+    const s = dayNight();
+    const len = Math.hypot(s.sunPos[0], s.sunPos[1], s.sunPos[2]) || 1;
+    const R = CEL.sky.sunDistance;
+    g.position.set((s.sunPos[0] / len) * R, (s.sunPos[1] / len) * R, (s.sunPos[2] / len) * R);
+    g.lookAt(camera.position);
+  });
+  return (
+    <group ref={grp}>
+      <mesh>
+        <circleGeometry args={[CEL.sky.sunRadius, 40]} />
+        <meshBasicMaterial color={CEL.sky.sunColor} depthWrite={false} fog={false} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
 // Pontos da estrada (coord. de mundo). Compartilhados entre o asfalto e as
 // luminárias, pra os postes ficarem exatamente na beira do caminho.
 const ROAD_POINTS: [number, number][] = [
@@ -1418,6 +1464,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     <>
       <DayNightLighting c={c} />
       <Moon />
+      <Sun />
 
       <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
 
