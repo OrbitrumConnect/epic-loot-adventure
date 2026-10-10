@@ -21,6 +21,7 @@ import { BaseFireFX } from './world/base-fire';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies } from './world/world-entities';
+import { CelShade } from './world/cel-shade';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
@@ -922,8 +923,42 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
       pos.setZ(i, terrainHeight(x, -y));
     }
     g.computeVertexNormals();
+
+    // Manchas de cor no chão (cores de vértice): o terreno chapado e uniforme
+    // lia como um banho sépia único — a referência tem terra requeimada com
+    // placas de terra clara, areia e crosta escura. Ruído de baixa frequência
+    // mistura ground → escuro (crosta) / claro (poeira+areia), dando famílias
+    // de cor separadas e o contraste de pôster (quebra a uniformidade do
+    // terminador plano). Puramente cor; não mexe no relevo nem na colisão.
+    const base = new THREE.Color(c.ground);
+    const scorch = new THREE.Color(c.dark).lerp(new THREE.Color(c.trunk), 0.45); // crosta quase preta
+    const dust = new THREE.Color(c['ground-light']);  // poeira
+    const sand = new THREE.Color(c.path);             // areia clara
+    const bone = new THREE.Color(c.light).lerp(new THREE.Color(c.path), 0.5);    // placa clara de pó
+    const burnt = new THREE.Color(c['rock']);         // placa cinza-terra
+    const nz = (x: number, z: number, s: number) =>
+      Math.sin(x * s + 1.7) * Math.cos(z * s + 2.3) + Math.sin((x + z) * s * 0.7 + 0.5) * 0.5;
+    const colors = new Float32Array(pos.count * 3);
+    const tmp = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = -pos.getY(i);
+      const n = nz(x, z, 0.09) * 0.55 + nz(x, z, 0.22) * 0.3 + nz(x, z, 0.5) * 0.18; // ~[-1.1,1.1]
+      const patch = nz(x, z, 0.035); // placas grandes (qual família de clara)
+      tmp.copy(base);
+      if (n < -0.04) {
+        tmp.lerp(scorch, Math.min(1, (-0.04 - n) / 0.7));       // crosta escura (funda)
+      } else if (n > 0.06) {
+        const t = Math.min(1, (n - 0.06) / 0.7);
+        tmp.lerp(patch > 0.25 ? bone : (patch > -0.2 ? sand : dust), t); // pó claro / areia / poeira
+      } else if (patch > 0.5) {
+        tmp.lerp(burnt, 0.5);                                   // placa cinza-terra
+      }
+      colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     return g;
-  }, []);
+  }, [c]);
 
   // Sem handler de ponteiro aqui de propósito: o ataque por clique é tratado
   // uma única vez pelo listener de `mousedown` em `WorldScene`. Antes os dois
@@ -933,7 +968,7 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow geometry={geo}>
-      <meshStandardMaterial color={c.ground} />
+      <meshStandardMaterial vertexColors />
     </mesh>
   );
 }
@@ -1390,6 +1425,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
       <AutoPilot playerRef={playerRef} movement={target} paused={props.paused} />
 
+      <CelShade />
+
       <Character c={c} attack={props.attack} movement={target} onPosition={props.onPosition} paused={props.paused} playerRef={playerRef} cameraYawRef={cameraYaw} cameraMode={cameraMode} />
     </>
   );
@@ -1400,7 +1437,7 @@ export default function GameWorld(props: WorldProps) {
   const cameraMode = props.cameraMode ?? 'iso';
 
   return (
-    <Canvas shadows dpr={[1, 1]} gl={{ antialias: false, powerPreference: 'high-performance' }} onContextMenu={e => e.preventDefault()}>
+    <Canvas shadows dpr={[1, 1]} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.NoToneMapping }} onContextMenu={e => e.preventDefault()}>
       {cameraMode === 'iso' ? (
         <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={200} />
       ) : (

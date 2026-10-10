@@ -1,0 +1,98 @@
+{
+  "style": "Art direction: graphic cel-shading for a post-apocalyptic survival game. Bold dark outlines (near-black #100c0a), hard two-step shadow terminator, flat colour fills, no gradients inside a shape, poster-like contrast. Palette locked to: burnt orange #f49959 and #f9b168, warm deep brown #2f231c and #433a33 and #6a3c26, dusty mid grey-brown #a58b70 and #857d6e and #60584c, sand #caaa83 and #e7c799, bone highlight #f6e6c1. Lit by a single warm key light low and to the left, with a cool bounce fill. Clean readable silhouette that survives being shrunk.",
+  "background": "Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadow cast on the background, no text, no numbers, no labels, no borders, no grid lines, no ground plane.",
+  "sheets": [
+    {
+      "id": "hero",
+      "out": "public/assets/style/hero",
+      "shared": "Character turnaround for a game hero: the same single character drawn four times from four angles, consistent proportions, costume and colours in all four. A lone survivor of the 3%: wrapped head and face against the sun, round goggles, a long patched coat over plated shoulders, a climbing harness of straps and pouches, heavy wrapped boots. Stocky readable game proportions, slightly large head and hands so it reads when small. Standing relaxed, arms at sides, full body, feet flat.",
+      "items": [
+        {
+          "id": "front",
+          "prompt": "seen from the FRONT, facing the viewer"
+        },
+        {
+          "id": "side",
+          "prompt": "seen from the exact SIDE, facing left"
+        },
+        {
+          "id": "back",
+          "prompt": "seen from the BACK"
+        },
+        {
+          "id": "three-quarter",
+          "prompt": "seen from a THREE-QUARTER front angle"
+        }
+      ]
+    },
+    {
+      "id": "flora",
+      "out": "public/assets/style/flora",
+      "shared": "Single isolated game prop, centered, seen from a slight three-quarter angle slightly above, standing upright as if rooted on invisible ground, full object in frame with a little margin.",
+      "items": [
+        {
+          "id": "tree-pine",
+          "prompt": "a tall conifer that came back wrong after the flare: bleached pale trunk, dark blue-green needle mass in two or three chunky tiers, a few dead branches"
+        },
+        {
+          "id": "tree-broad",
+          "prompt": "a broadleaf tree with a heavy rounded canopy in dusty olive, thick gnarled trunk, some bare branches poking out of the crown"
+        },
+        {
+          "id": "tree-dead",
+          "prompt": "a dead bare tree, pale bone-grey trunk, forked branches, no leaves, slightly leaning"
+        },
+        {
+          "id": "bush",
+          "prompt": "a low scrub bush, pale bleached foliage with a few rust-red leaves, sparse and dry"
+        }
+      ]
+    },
+    {
+      "id": "terrain-props",
+      "out": "public/assets/style/terrain",
+      "shared": "Single isolated game prop, centered, seen from a slight three-quarter angle slightly above, resting on invisible ground, full object in frame with a little margin.",
+      "items": [
+        {
+          "id": "rock-large",
+          "prompt": "a large angular boulder, faceted planes, warm grey stone with sand-coloured dust in the crevices"
+        },
+        {
+          "id": "rock-small",
+          "prompt": "a cluster of three small loose stones of different sizes"
+        },
+        {
+          "id": "grass-tuft",
+          "prompt": "a tuft of tall dry grass, pale straw colour, blades splaying outward"
+        },
+        {
+          "id": "debris",
+          "prompt": "a small pile of scavenged debris: a bent sheet of corrugated metal, a broken concrete chunk with rebar, a rusted drum on its side"
+        }
+      ]
+    },
+    {
+      "id": "ground-tiles",
+      "out": "public/assets/style/ground",
+      "shared": "A flat seamless TILEABLE texture swatch seen straight from directly above, perfectly flat with no perspective and no horizon. CRITICAL: the pattern must run all the way to the very edge of the quadrant and be CUT OFF square by it — a full-bleed square swatch. Absolutely NO torn, ragged, rounded or decorative border, NO frame, NO outline around the swatch itself, NO empty margin, NO drop shadow, and nothing may float on a background. The four swatches are four solid squares that touch the thin gutter between them. Features (stones, cracks, tufts) must be distributed evenly with none centred as a focal point, and any feature touching an edge is simply cut by it. Cel-shaded: flat colour areas with hard edges, dark outlines around the larger shapes, no soft gradients.",
+      "items": [
+        {
+          "id": "dirt",
+          "prompt": "cracked dry dirt, warm sand and brown tones, small stones and hairline cracks spread evenly"
+        },
+        {
+          "id": "grass",
+          "prompt": "dry bleached grassland, straw and olive tufts spread evenly across the whole square"
+        },
+        {
+          "id": "ash",
+          "prompt": "scorched ground, dark grey ash with burnt orange embers glowing in the cracks, spread evenly"
+        },
+        {
+          "id": "road",
+          "prompt": "broken asphalt, grey slabs split apart with dust and weeds in the gaps, spread evenly"
+        }
+      ]
+    }
+  ]
+}

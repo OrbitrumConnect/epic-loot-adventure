@@ -14,21 +14,41 @@ const names = [
 
 export type Palette = Record<(typeof names)[number], string>;
 
+/**
+ * Paleta "cel-shaded" extraída de `art/style/palette-c.json` (concept
+ * style-C). Substitui a paleta verdejante antiga por uma família única,
+ * terrosa e requeimada, pra o mundo 3D ler como UM filme. Os tokens CSS
+ * `--world-*` seguem existindo para a HUD; só o mundo 3D passou a usar estes
+ * valores fixos (antes `palette()` lia o CSS). Fonte de verdade: palette-c.
+ *
+ * Mapa semântico → hex (todos dentro/perto dos pesos dominantes da paleta):
+ *  burnt orange #f49959 · near-black #100c0a · browns #2f231c/#433a33/#6a3c26
+ *  dusty #a58b70/#857d6e · sand #caaa83/#e7c799 · bone #f6e6c1
+ */
+export const WORLD_PALETTE: Palette = {
+  ground: '#5b4a39',
+  'ground-light': '#7a6a52',
+  grass: '#9a8763',
+  pine: '#3d3a29',
+  leaf: '#6b6442',
+  'leaf-light': '#8a7f55',
+  trunk: '#433a33',
+  path: '#b3a081',
+  rock: '#7d756a',
+  'rock-light': '#9d9488',
+  water: '#4d7570',
+  'water-light': '#86a99a',
+  armor: '#d4bf98',
+  cloak: '#9e3b22',
+  metal: '#6b6760',
+  crystal: '#f2a24f',
+  gold: '#e2bd6e',
+  dark: '#17120f',
+  light: '#f3e3ba',
+};
+
 export function palette(): Palette {
-  const css = getComputedStyle(document.documentElement);
-  const canvas = document.createElement('canvas');
-  canvas.width = 1;
-  canvas.height = 1;
-  const ctx = canvas.getContext('2d');
-  return Object.fromEntries(
-    names.map(name => {
-      if (!ctx) return [name, css.getPropertyValue(`--world-${name}`).trim()];
-      ctx.fillStyle = css.getPropertyValue(`--world-${name}`).trim();
-      ctx.fillRect(0, 0, 1, 1);
-      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-      return [name, `rgb(${r},${g},${b})`];
-    }),
-  ) as Palette;
+  return WORLD_PALETTE;
 }
 
 export function rand(seed: number) {
