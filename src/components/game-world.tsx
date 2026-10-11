@@ -1125,8 +1125,79 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
   );
 }
 
+// WATER_MOTION — ajustes da água gráfica; distâncias em metros, tempo em segundos.
+const WATER_MOTION = {
+  riverSpeed: 0.85,
+  riverFrequency: 2.4,
+  riverCrossFrequency: 3.2,
+  riverBend: 0.45,
+  lakeFrequency: 2.1,
+  lakeCrossFrequency: 1.3,
+  lakeSpeed: 1.15,
+  lakeCrossWeight: 0.3,
+  darkThreshold: -0.25,
+  lightThreshold: 0.65,
+  darkTone: 0.78,
+  lightTone: 1.28,
+  lakeOpacity: 0.75,
+  riverOpacity: 0.82,
+};
+
+function WaterMaterial({ color, time, river = false }: {
+  color: string;
+  time: { value: number };
+  river?: boolean;
+}) {
+  const onBeforeCompile = useCallback<THREE.MeshLambertMaterial['onBeforeCompile']>((shader) => {
+    const w = WATER_MOTION;
+    const f = (n: number) => n.toFixed(5);
+    shader.uniforms['uWaterTime'] = time;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vWaterCoord;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vWaterCoord = ${river ? 'uv' : 'position.xy'};`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec2 vWaterCoord;
+        uniform float uWaterTime;`)
+      .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
+        ${river ? `
+          // Advecção no sentido crescente da curva, inclusive nas curvas fechadas.
+          float phase = (vWaterCoord.x - uWaterTime * ${f(w.riverSpeed)}) * ${f(w.riverFrequency)};
+          float crossWave = cos(vWaterCoord.y * ${f(w.riverCrossFrequency)});
+          float wave = sin(phase + crossWave * ${f(w.riverBend)});
+        ` : `
+          // Nós espaciais fixos: oscila no lugar, sem corrente nem translação.
+          float pulse = uWaterTime * ${f(w.lakeSpeed)};
+          float rings = cos(length(vWaterCoord) * ${f(w.lakeFrequency)});
+          float crossed = cos(vWaterCoord.x * ${f(w.lakeCrossFrequency)})
+                        * cos(vWaterCoord.y * ${f(w.lakeCrossFrequency)});
+          float wave = rings * cos(pulse)
+                     + crossed * sin(pulse) * ${f(w.lakeCrossWeight)};
+        `}
+        float waterTone = mix(${f(w.darkTone)}, 1.0, step(${f(w.darkThreshold)}, wave));
+        waterTone = mix(waterTone, ${f(w.lightTone)}, step(${f(w.lightThreshold)}, wave));
+        diffuseColor.rgb *= waterTone;
+      `);
+  }, [river, time]);
+  const cacheKey = useCallback(() => `water-motion-v1-${river ? 'river' : 'lake'}`, [river]);
+
+  return (
+    <meshLambertMaterial
+      color={color}
+      transparent
+      opacity={river ? WATER_MOTION.riverOpacity : WATER_MOTION.lakeOpacity}
+      depthWrite={false}
+      side={river ? THREE.DoubleSide : THREE.FrontSide}
+      onBeforeCompile={onBeforeCompile}
+      customProgramCacheKey={cacheKey}
+    />
+  );
+}
+
 function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third' }) {
   const { c, cameraMode } = props;
+  const waterTime = useRef({ value: 0 }).current;
   const target = useRef(new THREE.Vector3(0, 0, 1));
   const { camera, size, gl } = useThree();
   const camTarget = useRef(new THREE.Vector3(24, 29, 25));
@@ -1259,7 +1330,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     }
   }, [cameraMode]);
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
+    waterTime.value = clock.elapsedTime;
     const p = playerRef.current;
     if (!p) return;
 
@@ -1440,6 +1512,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       return inLake ? LAKE_WATER_Y + 0.03 : terrainHeight(x, z) + 0.07;
     };
     const v: number[] = [];
+    const uv: number[] = [];
+    let distance = 0;
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i]!, b = pts[i + 1]!;
       const dx = b.x - a.x, dz = b.z - a.z;
@@ -1452,9 +1526,15 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       const [aL, aR, bL, bR] = corners as [typeof corners[0], typeof corners[0], typeof corners[0], typeof corners[0]];
       v.push(aL.x, aL.y, aL.z, aR.x, aR.y, aR.z, bL.x, bL.y, bL.z);
       v.push(bL.x, bL.y, bL.z, aR.x, aR.y, aR.z, bR.x, bR.y, bR.z);
+      // Coordenadas contínuas: distância ao longo da curva e largura em metros.
+      const nextDistance = distance + Math.hypot(dx, dz);
+      uv.push(distance, -half, distance, half, nextDistance, -half);
+      uv.push(nextDistance, -half, distance, half, nextDistance, half);
+      distance = nextDistance;
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     g.computeVertexNormals();
     return g;
   }, []);
@@ -1479,13 +1559,13 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       {LAKE_CENTERS.map((lake, i) => (
         <mesh key={`lake${i}`} position={[lake.x, lakeWaterY(lake), lake.z]} rotation={[-Math.PI / 2, 0, 0]}>
           <circleGeometry args={[lake.r * 0.92, 32]} />
-          <meshStandardMaterial color={c.water} roughness={0.2} transparent opacity={0.75} depthWrite={false} />
+          <WaterMaterial color={c.water} time={waterTime} />
         </mesh>
       ))}
 
       {/* River — fita ondulada que desemboca no laginho */}
       <mesh geometry={river} receiveShadow>
-        <meshStandardMaterial color={c.water} roughness={0.25} transparent opacity={0.82} depthWrite={false} side={THREE.DoubleSide} />
+        <WaterMaterial color={c.water} time={waterTime} river />
       </mesh>
 
       {/* Bridge — tabuado elevado com vigas, pilares e guarda-corpo; leva a estrada por cima do córrego, na frente do nascedouro */}

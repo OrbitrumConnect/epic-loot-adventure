@@ -33,6 +33,23 @@ import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, type Palette } from './world-kit';
 
 /* ------------------------------------------------------------------ *
+ * Vento seco e discreto — ajuste amplitude e speed (radianos/segundo)
+ * aqui. Base fixa; deslocamento cresce até o topo.
+ * Perfis viram constantes GLSL, sem uniforms/atributos por instância.
+ *
+ * `amplitude` é FRAÇÃO DA ALTURA da instância, não unidade de mundo: as
+ * alturas variam de 0.45 (tufo de grama) a 6.2 (pinheiro), então um valor
+ * absoluto que lê bem na grama some na árvore. Com 0.025 absoluto o topo
+ * de um pinheiro de 6.2 andava 0.4% da própria altura — sub-pixel na tela.
+ * ------------------------------------------------------------------ */
+const WIND = {
+  grass: { amplitude: 0.1, speed: 1.6 },
+  bush: { amplitude: 0.045, speed: 1.2 },
+  tree: { amplitude: 0.018, speed: 0.65 },
+} as const;
+type WindProfile = keyof typeof WIND;
+
+/* ------------------------------------------------------------------ *
  * Texturas (cache por url; carrega assíncrono, o objeto existe já)
  * ------------------------------------------------------------------ */
 const _loader = new THREE.TextureLoader();
@@ -99,17 +116,25 @@ function baseQuad(): THREE.PlaneGeometry {
 /* ------------------------------------------------------------------ *
  * Material billboard: Y-lock no vertex shader + dither-fade opcional.
  * ------------------------------------------------------------------ */
-function makeBillboardMat(tex: THREE.Texture, withFade: boolean): THREE.MeshBasicMaterial {
+function makeBillboardMat(
+  tex: THREE.Texture,
+  withFade: boolean,
+  wind: WindProfile | null,
+  windTime: { value: number },
+): THREE.MeshBasicMaterial {
   const m = new THREE.MeshBasicMaterial({
     map: tex,
     alphaTest: 0.5,
     side: THREE.DoubleSide,
   });
   m.onBeforeCompile = shader => {
+    if (wind) shader.uniforms['uWindTime'] = windTime;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>' + (withFade ? '\nattribute float aFade;\nvarying float vFade;' : ''),
+        '#include <common>'
+          + (wind ? '\nuniform float uWindTime;' : '')
+          + (withFade ? '\nattribute float aFade;\nvarying float vFade;' : ''),
       )
       .replace(
         '#include <project_vertex>',
@@ -126,6 +151,11 @@ function makeBillboardMat(tex: THREE.Texture, withFade: boolean): THREE.MeshBasi
           vec3 bbWorld = bbCenter
             + (position.x * bbW) * bbRight
             + (position.y * bbH) * vec3(0.0, 1.0, 0.0);
+          ${wind ? /* glsl */ `
+            float bbPhase = fract(sin(dot(bbInst.xz, vec2(12.9898, 78.233))) * 43758.5453) * 6.283185;
+            float bbSway = sin(uWindTime * ${WIND[wind].speed.toFixed(4)} + bbPhase);
+            bbWorld += bbRight * (position.y * bbH * ${WIND[wind].amplitude.toFixed(4)} * bbSway);
+          ` : ''}
           vec4 mvPosition = viewMatrix * vec4(bbWorld, 1.0);
           gl_Position = projectionMatrix * mvPosition;
         ` + (withFade ? '\nvFade = aFade;' : ''),
@@ -143,7 +173,8 @@ function makeBillboardMat(tex: THREE.Texture, withFade: boolean): THREE.MeshBasi
         );
     }
   };
-  m.customProgramCacheKey = () => 'billboard-v1' + (withFade ? '-fade' : '');
+  m.customProgramCacheKey = () => `billboard-v2-${wind ? JSON.stringify(WIND[wind]) : 'static'}`
+    + (withFade ? '-fade' : '');
   return m;
 }
 
@@ -155,16 +186,21 @@ type Placement = { x: number; z: number; w: number; h: number; yaw: number };
 const dummy = new THREE.Object3D();
 
 function BillboardField({
-  tex, placements, fadeSpheres, registerMat,
+  tex, placements, fadeSpheres, registerMat, wind = null, windTime,
 }: {
   tex: THREE.Texture;
   placements: Placement[];
   fadeSpheres: FadeSphere[] | null;
   registerMat: (m: THREE.MeshBasicMaterial) => void;
+  wind?: WindProfile | null;
+  windTime: { value: number };
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const geo = useMemo(() => baseQuad(), []);
-  const mat = useMemo(() => makeBillboardMat(tex, !!fadeSpheres), [tex, !!fadeSpheres]);
+  const mat = useMemo(
+    () => makeBillboardMat(tex, !!fadeSpheres, wind, windTime),
+    [tex, !!fadeSpheres, wind, windTime],
+  );
   const cap = Math.max(1, placements.length);
 
   useLayoutEffect(() => {
@@ -233,6 +269,8 @@ function inLake(x: number, z: number, pad = 0): boolean {
  * Componente público — substitui Tree/RockInstances/GrassPatches.
  * ------------------------------------------------------------------ */
 export function Billboards({ trees }: { trees: TreePlacement[]; c: Palette }) {
+  // Um único relógio compartilhado por todos os materiais de vegetação.
+  const windTime = useMemo(() => ({ value: 0 }), []);
   // Materiais vivos pra o tint dia/noite (sem re-render).
   const matList = useMemo<THREE.MeshBasicMaterial[]>(() => [], []);
   const registerMat = useMemo(
@@ -295,7 +333,8 @@ export function Billboards({ trees }: { trees: TreePlacement[]; c: Palette }) {
     return out;
   }, []);
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
+    windTime.value = clock.elapsedTime;
     const b = 1 - 0.52 * nightFactor();
     for (let i = 0; i < matList.length; i++) matList[i]!.color.setRGB(b, b, b);
   });
@@ -309,29 +348,36 @@ export function Billboards({ trees }: { trees: TreePlacement[]; c: Palette }) {
           placements={flora[v]}
           fadeSpheres={FLORA_FADE[v]}
           registerMat={registerMat}
+          wind={v === 'bush' ? 'bush' : 'tree'}
+          windTime={windTime}
         />
       ))}
       <BillboardField
         tex={spriteTex(terrainUrl(TERRAIN.rockLarge))}
         placements={rocks.large}
+        windTime={windTime}
         fadeSpheres={[[0, 0.4, 0, 0.42]]}
         registerMat={registerMat}
       />
       <BillboardField
         tex={spriteTex(terrainUrl(TERRAIN.rockSmall))}
         placements={rocks.small}
+        windTime={windTime}
         fadeSpheres={[[0, 0.35, 0, 0.42]]}
         registerMat={registerMat}
       />
       <BillboardField
         tex={spriteTex(terrainUrl(TERRAIN.grass))}
         placements={grass}
+        wind="grass"
+        windTime={windTime}
         fadeSpheres={null}
         registerMat={registerMat}
       />
       <BillboardField
         tex={spriteTex(terrainUrl(TERRAIN.debris))}
         placements={debris}
+        windTime={windTime}
         fadeSpheres={null}
         registerMat={registerMat}
       />
