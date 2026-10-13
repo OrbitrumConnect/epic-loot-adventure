@@ -368,7 +368,7 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
         />
       </mesh>
 
-      {structures.map((s, i) => {
+      {(() => { let tw = 0; return structures.filter((s) => s.kind !== 'watchtower' || tw++ < 1); })().map((s, i) => {
         const wx = cx + s.offset.x;
         const wz = cz + s.offset.z;
         return (

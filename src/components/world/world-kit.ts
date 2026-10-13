@@ -155,7 +155,8 @@ export function snowMountainBump(x: number, z: number): number {
   if (h <= 0) return 0;
   // Erosão ROCHOSA em camadas, proporcional à altura (sopé liso, cume quebra a
   // forma redonda sem virar espinho). Mais oitavas no alto = cume menos "bola".
-  const rug = (noise2d(x, z, 0.05, 0.055) * 2.8 + noise2d(x, z, 0.12, 0.13) * 1.8 + noise2d(x, z, 0.22, 0.24) * 0.9) * Math.min(1, h / 5);
+  // Fator não-zero no PÉ (h~0 → ~0.45) pra o sopé subir DEFORME, não reto.
+  const rug = (noise2d(x, z, 0.05, 0.055) * 2.8 + noise2d(x, z, 0.12, 0.13) * 1.8 + noise2d(x, z, 0.22, 0.24) * 0.9) * Math.min(1, (h + 2.5) / 6);
   return h + rug;
 }
 

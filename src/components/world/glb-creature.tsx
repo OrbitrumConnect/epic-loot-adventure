@@ -31,6 +31,7 @@ export function GlbCreature({
   height = 1.4,
   yaw = Math.PI,
   tint,
+  groundBias = 0,
 }: {
   url: string;
   movingRef: React.MutableRefObject<boolean>;
@@ -38,6 +39,8 @@ export function GlbCreature({
   yaw?: number;
   /** Cor base (os GLB "demo" vêm sem baseColor → brancos; tinta dá cor natural). */
   tint?: string | undefined;
+  /** Ajuste fino de altura (o bind-pose de alguns skinned difere da anim → flutua). */
+  groundBias?: number;
 }) {
   const inner = useRef<THREE.Group>(null);
   const gltf = useGLTF(url) as unknown as { scene: THREE.Group; animations: THREE.AnimationClip[]; parser: { json: { textures?: unknown[]; materials?: { name?: string }[] }; getDependency: (t: string, i: number) => Promise<unknown> } };
@@ -134,7 +137,7 @@ export function GlbCreature({
   });
 
   return (
-    <group ref={inner} rotation={[0, yaw, 0]}>
+    <group ref={inner} rotation={[0, yaw, 0]} position={[0, groundBias, 0]}>
       <primitive object={model} />
     </group>
   );
