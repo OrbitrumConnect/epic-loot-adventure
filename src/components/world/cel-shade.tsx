@@ -49,10 +49,11 @@ function makeSceneRT(w: number, h: number): THREE.WebGLRenderTarget {
   const rt = new THREE.WebGLRenderTarget(w, h, {
     type: THREE.UnsignedByteType,
     depthBuffer: true,
+    samples: 4,
   });
   rt.texture.colorSpace = THREE.SRGBColorSpace; // cena já tonemapeada + sRGB
-  rt.texture.minFilter = THREE.NearestFilter;
-  rt.texture.magFilter = THREE.NearestFilter;
+  rt.texture.minFilter = THREE.LinearFilter;
+  rt.texture.magFilter = THREE.LinearFilter;
   const depth = new THREE.DepthTexture(w, h);
   depth.format = THREE.DepthFormat;
   depth.type = THREE.UnsignedIntType;

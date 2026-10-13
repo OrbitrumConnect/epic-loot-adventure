@@ -13,7 +13,7 @@ import { CREATURES } from '@/game/data/creatures';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING, type HostileTuning } from './hostile-ai';
-import { terrainHeight, type Palette } from './world-kit';
+import { mixColor, terrainHeight, type Palette } from './world-kit';
 
 type V3 = [number, number, number];
 
@@ -124,6 +124,15 @@ function boxGeo(w: number, h: number, d: number) {
   if (!g) { g = new THREE.BoxGeometry(w, h, d); geoCache.set(key, g); }
   return g;
 }
+function organicGeo(w: number, h: number, d: number) {
+  const key = `o${w},${h},${d}`;
+  let g = geoCache.get(key);
+  if (!g) {
+    g = new THREE.SphereGeometry(0.5, 10, 8).scale(w, h, d);
+    geoCache.set(key, g);
+  }
+  return g;
+}
 function coneGeo(r: number, h: number, seg: number) {
   const key = `c${r},${h},${seg}`;
   let g = geoCache.get(key);
@@ -133,7 +142,7 @@ function coneGeo(r: number, h: number, seg: number) {
 function ballGeo(r: number) {
   const key = `s${r}`;
   let g = geoCache.get(key);
-  if (!g) { g = new THREE.SphereGeometry(r, 5, 4); geoCache.set(key, g); }
+  if (!g) { g = new THREE.SphereGeometry(r, 8, 6); geoCache.set(key, g); }
   return g;
 }
 function matOf(color: string, emissive = false) {
@@ -141,7 +150,7 @@ function matOf(color: string, emissive = false) {
   let m = matCache.get(key);
   if (!m) {
     m = new THREE.MeshStandardMaterial(
-      emissive ? { color, emissive: color, emissiveIntensity: 0.5 } : { color },
+      emissive ? { color, emissive: color, emissiveIntensity: 0.5 } : { color, roughness: 0.94, flatShading: true },
     );
     matCache.set(key, m);
   }
@@ -212,6 +221,8 @@ export function Beast({
   const headY = bodyY + spec.headPos[1];
   const headZ = spec.headPos[2];
   const extras = spec.extras ?? [];
+  const coat = matOf(mixColor(spec.bodyColor, c.trunk, 0.2));
+  const face = matOf(mixColor(spec.headColor, c.rock, 0.15));
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
@@ -219,22 +230,26 @@ export function Beast({
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
       <group ref={inner}>
         {/* Corpo */}
-        <mesh position={[0, bodyY, 0]} castShadow geometry={boxGeo(bw, bh, bd)} material={matOf(spec.bodyColor)} />
+        <mesh position={[0, bodyY, 0]} castShadow geometry={organicGeo(bw, bh, bd)} material={coat} />
+        {/* Anatomical shoulder and haunch masses share cached geometry. */}
+        <mesh position={[0, bodyY + bh * 0.05, bd * 0.26]} castShadow geometry={organicGeo(bw * 1.02, bh * 1.05, bd * 0.48)} material={coat} />
+        <mesh position={[0, bodyY - bh * 0.06, -bd * 0.28]} castShadow geometry={organicGeo(bw * 0.92, bh * 0.95, bd * 0.42)} material={coat} />
+        <mesh position={[0, bodyY + spec.headPos[1] * 0.45, headZ * 0.68]} rotation={[-0.42, 0, 0]} castShadow geometry={organicGeo(hw * 0.94, Math.max(hh, spec.headPos[1] + hh * 0.5), hd * 0.9)} material={face} />
         {extras.includes('belly') && (
-          <mesh position={[0, bodyY - bh * 0.32, 0]} geometry={boxGeo(bw * 1.02, bh * 0.36, bd * 0.7)} material={matOf(spec.extraColor)} />
+          <mesh position={[0, bodyY - bh * 0.27, 0]} geometry={organicGeo(bw * 0.82, bh * 0.4, bd * 0.7)} material={matOf(c['rock-light'])} />
         )}
         {extras.includes('hump') && (
-          <mesh position={[0, bodyY + bh * 0.55, bd * 0.18]} castShadow geometry={boxGeo(bw * 0.8, bh * 0.4, bd * 0.4)} material={matOf(spec.extraColor)} />
+          <mesh position={[0, bodyY + bh * 0.34, bd * 0.18]} castShadow geometry={organicGeo(bw * 0.8, bh * 0.6, bd * 0.48)} material={coat} />
         )}
         {extras.includes('mane') && (
-          <mesh position={[0, bodyY + bh * 0.52, bd * 0.3]} rotation={[0.15, 0, 0]} geometry={boxGeo(0.1, 0.12, bd * 0.55)} material={matOf(spec.extraColor)} />
+          <mesh position={[0, bodyY + bh * 0.34, bd * 0.3]} rotation={[0.15, 0, 0]} geometry={organicGeo(bw * 0.7, bh * 0.7, bd * 0.6)} material={matOf(mixColor(spec.extraColor, c.rock, 0.35))} />
         )}
         {/* Cabeça */}
-        <mesh position={[0, headY, headZ]} castShadow geometry={boxGeo(hw, hh, hd)} material={matOf(spec.headColor)} />
+        <mesh position={[0, headY, headZ]} castShadow geometry={organicGeo(hw, hh, hd)} material={face} />
         {spec.snout && (
           <mesh
             position={[spec.snout.pos[0], bodyY + spec.snout.pos[1], spec.snout.pos[2]]}
-            geometry={boxGeo(spec.snout.size[0], spec.snout.size[1], spec.snout.size[2])}
+            geometry={organicGeo(spec.snout.size[0], spec.snout.size[1], spec.snout.size[2])}
             material={matOf(spec.snout.color)}
           />
         )}
@@ -290,9 +305,11 @@ export function Beast({
             ref={legRefs[i] as React.RefObject<THREE.Mesh>}
             position={[lx, legY, lz]}
             castShadow
-            geometry={boxGeo(spec.legThick, spec.legLen, spec.legThick * 1.2)}
+            geometry={organicGeo(spec.legThick * 1.3, spec.legLen * 1.08, spec.legThick * 1.5)}
             material={matOf(spec.legColor)}
-          />
+          >
+            <mesh position={[0, -legY * 0.82, spec.legThick * 0.25]} geometry={organicGeo(spec.legThick * 1.4, spec.legThick * 0.7, spec.legThick * 1.9)} material={matOf(c.dark)} castShadow />
+          </mesh>
         ))}
         {/* Cauda */}
         {spec.tail === 'long' && (

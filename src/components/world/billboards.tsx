@@ -26,11 +26,13 @@
  * shader em vez de blending, pra não quebrar a ordenação opaca.
  */
 import { useFrame } from '@react-three/fiber';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { Suspense, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, type Palette } from './world-kit';
+import { ForestRocks, ForestTrees } from './forest-models';
+import { LivingTrees } from './living-trees';
 
 /* ------------------------------------------------------------------ *
  * Vento seco e discreto — ajuste amplitude e speed (radianos/segundo)
@@ -268,7 +270,7 @@ function inLake(x: number, z: number, pad = 0): boolean {
 /* ------------------------------------------------------------------ *
  * Componente público — substitui Tree/RockInstances/GrassPatches.
  * ------------------------------------------------------------------ */
-export function Billboards({ trees }: { trees: TreePlacement[]; c: Palette }) {
+export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette }) {
   // Um único relógio compartilhado por todos os materiais de vegetação.
   const windTime = useMemo(() => ({ value: 0 }), []);
   // Materiais vivos pra o tint dia/noite (sem re-render).
@@ -289,6 +291,7 @@ export function Billboards({ trees }: { trees: TreePlacement[]; c: Palette }) {
     }
     return buckets;
   }, [trees]);
+
 
   // Pedras: 100 posições (mesmas sementes do RockInstances antigo).
   const rocks = useMemo(() => {
@@ -341,31 +344,31 @@ export function Billboards({ trees }: { trees: TreePlacement[]; c: Palette }) {
 
   return (
     <>
-      {(Object.keys(FLORA) as (keyof typeof FLORA)[]).map(v => (
+      <Suspense fallback={(['pine', 'broad', 'dead'] as const).map(v => (
         <BillboardField
           key={`flora-${v}`}
           tex={spriteTex(floraUrl(FLORA[v]))}
           placements={flora[v]}
           fadeSpheres={FLORA_FADE[v]}
           registerMat={registerMat}
-          wind={v === 'bush' ? 'bush' : 'tree'}
+          wind="tree"
           windTime={windTime}
         />
-      ))}
+      ))}>
+        <LivingTrees placements={flora.pine} species="pine" c={c} />
+        <LivingTrees placements={flora.broad} species="oak" c={c} />
+        <ForestTrees placements={flora.dead} c={c} />
+      </Suspense>
       <BillboardField
-        tex={spriteTex(terrainUrl(TERRAIN.rockLarge))}
-        placements={rocks.large}
+        tex={spriteTex(floraUrl(FLORA.bush))}
+        placements={flora.bush}
         windTime={windTime}
-        fadeSpheres={[[0, 0.4, 0, 0.42]]}
+        wind="bush"
+        fadeSpheres={FLORA_FADE.bush}
         registerMat={registerMat}
       />
-      <BillboardField
-        tex={spriteTex(terrainUrl(TERRAIN.rockSmall))}
-        placements={rocks.small}
-        windTime={windTime}
-        fadeSpheres={[[0, 0.35, 0, 0.42]]}
-        registerMat={registerMat}
-      />
+      <ForestRocks placements={rocks.large} c={c} />
+      <ForestRocks placements={rocks.small} c={c} />
       <BillboardField
         tex={spriteTex(terrainUrl(TERRAIN.grass))}
         placements={grass}

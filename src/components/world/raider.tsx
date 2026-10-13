@@ -8,6 +8,7 @@
  */
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
@@ -118,27 +119,66 @@ type Kit = {
 let kitCache: { key: string; kit: Kit } | null = null;
 
 function raiderKit(c: Palette): Kit {
-  const key = `${c.dark}|${c.cloak}|${c.trunk}`;
+  const key = JSON.stringify(c);
   if (kitCache && kitCache.key === key) return kitCache.kit;
   const std = (color: string, extra: THREE.MeshStandardMaterialParameters = {}) =>
     new THREE.MeshStandardMaterial({ color, flatShading: true, ...extra });
   const kit: Kit = {
     box: new THREE.BoxGeometry(1, 1, 1),
-    cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 6),
-    cone: new THREE.ConeGeometry(0.5, 1, 5),
-    sphere: new THREE.SphereGeometry(0.5, 6, 5),
+    cyl: new THREE.CylinderGeometry(0.44, 0.5, 1, 8),
+    cone: new THREE.ConeGeometry(0.5, 1, 8),
+    sphere: new THREE.SphereGeometry(0.5, 10, 8),
     hide: std(mixColor(c.trunk, c.dark, 0.35)),
     hideDark: std(c.dark),
     skin: std(mixColor(c.rock, c.trunk, 0.45)),
     paint: std(c.cloak),
     bone: std(c['rock-light']),
-    metal: std(c.metal),
+    metal: std(c.metal, { metalness: 0.78, roughness: 0.32 }),
     wood: std(c.trunk),
     charm: std(c.crystal, { emissive: new THREE.Color(c.crystal), emissiveIntensity: 0.5 }),
-    eye: std('#f0c45a', { emissive: new THREE.Color('#f0c45a'), emissiveIntensity: 0.6 }),
+    eye: std(c.crystal, { emissive: new THREE.Color(c.crystal), emissiveIntensity: 0.6 }),
   };
   kitCache = { key, kit };
   return kit;
+}
+
+// Static costume details are batched by material: three draws per costume,
+// regardless of the number of rivets and plates. Animation pivots stay intact.
+const costumeCache = new Map<string, THREE.BufferGeometry[]>();
+function costumeGeometry(spec: Species, kit: Kit) {
+  const key = `${spec.bodyWidth}|${spec.bodyDepth}|${spec.hood}|${spec.shoulders}|${spec.boss}`;
+  const cached = costumeCache.get(key);
+  if (cached) return cached;
+  const layers: THREE.BufferGeometry[][] = [[], [], []];
+  const add = (layer: number, source: THREE.BufferGeometry, p: [number, number, number], s: [number, number, number], rz = 0) => {
+    const g = source.clone();
+    g.scale(s[0], s[1], s[2]); g.rotateZ(rz); g.translate(p[0], p[1], p[2]);
+    layers[layer]!.push(g);
+  };
+  const w = spec.bodyWidth, d = spec.bodyDepth;
+  add(0, kit.sphere, [0, 1.02, 0.03], [w * 1.12, 0.48, d * 1.16]);
+  add(0, kit.box, [0, 0.66, 0], [w * 1.07, 0.1, d * 1.08]);
+  add(1, kit.box, [0, 0.66, d / 2 + 0.035], [0.14, 0.12, 0.07]);
+  add(2, kit.box, [0, 0.48, d / 2], [w * 0.38, 0.3, 0.06]);
+  add(2, kit.cone, [0, 0.84, -d * 0.64], [w * 1.12, 0.78, 0.12]);
+  for (const side of [-1, 1]) {
+    add(0, kit.box, [side * w * 0.3, 0.61, 0], [w * 0.36, 0.24, d * 1.12], side * 0.12);
+    add(1, kit.box, [side * 0.13, 1.47, 0.217], [0.12, 0.21, 0.035], side * 0.13);
+    if (spec.shoulders) {
+      add(0, kit.sphere, [side * (w / 2 + 0.04), 1.2, 0], [0.34, 0.22, 0.34]);
+      add(1, kit.cone, [side * (w / 2 + 0.06), 1.38, -0.02], [0.08, spec.boss ? 0.35 : 0.21, 0.08], -side * 0.3);
+    }
+    for (let i = 0; i < 3; i++) {
+      add(1, kit.sphere, [side * w * 0.33, 0.88 + i * 0.1, d / 2 + 0.04], [0.035, 0.035, 0.025]);
+    }
+  }
+  const result = layers.map(parts => {
+    const merged = mergeGeometries(parts)!;
+    parts.forEach(part => part.dispose());
+    return merged;
+  });
+  costumeCache.set(key, result);
+  return result;
 }
 
 function Weaponry({ weapon, kit }: { weapon: Weapon; kit: Kit }) {
@@ -198,6 +238,7 @@ export function Raider({
 }) {
   const kit = useMemo(() => raiderKit(c), [c]);
   const spec = RAIDER_SPECIES[speciesId] ?? RAIDER_SPECIES['raider_warrior']!;
+  const costume = useMemo(() => costumeGeometry(spec, kit), [spec, kit]);
 
   const ref = useRef<THREE.Group>(null);
   const leftLeg = useRef<THREE.Mesh>(null);
@@ -285,6 +326,9 @@ export function Raider({
 
       <group scale={s}>
         <group ref={torso}>
+          <mesh geometry={costume[0]!} material={kit.metal} castShadow />
+          <mesh geometry={costume[1]!} material={kit.bone} castShadow />
+          <mesh geometry={costume[2]!} material={kit.paint} castShadow />
           {/* Pernas */}
           <mesh ref={leftLeg} geometry={kit.box} material={kit.hideDark} position={[-0.14 * (w / 0.62), 0.3, 0]} scale={[0.2, 0.6, 0.22]} castShadow />
           <mesh ref={rightLeg} geometry={kit.box} material={kit.hideDark} position={[0.14 * (w / 0.62), 0.3, 0]} scale={[0.2, 0.6, 0.22]} castShadow />
@@ -300,7 +344,7 @@ export function Raider({
           ))}
 
           {/* Cabeça */}
-          <mesh geometry={kit.box} material={kit.skin} position={[0, 1.48, 0]} scale={[0.42, 0.43, 0.4]} castShadow />
+          <mesh geometry={kit.sphere} material={kit.skin} position={[0, 1.48, 0]} scale={[0.46, 0.48, 0.44]} castShadow />
           {/* Pintura de guerra */}
           <mesh geometry={kit.box} material={kit.paint} position={[0, 1.5, 0.205]} scale={[0.44, 0.09, 0.02]} />
           <mesh geometry={kit.box} material={kit.paint} position={[0, 1.36, 0.205]} scale={[0.12, 0.14, 0.02]} />

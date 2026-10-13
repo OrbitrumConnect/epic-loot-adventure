@@ -1,13 +1,25 @@
 /**
- * Lobo do Vale. Visual e números idênticos aos originais de `game-world.tsx`;
- * a IA agora vem de `useHostileAI` com `WOLF_TUNING` (mesmos valores).
+ * Lobo do Vale: anatomia facetada, pelagem em camadas e presas.
+ * IA e parâmetros originais preservados em `useHostileAI` / `WOLF_TUNING`.
  */
 import { useRef } from 'react';
 import * as THREE from 'three';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING } from './hostile-ai';
-import { terrainHeight, type Palette } from './world-kit';
+import { mixColor, terrainHeight, type Palette } from './world-kit';
+
+const furGeometry = new THREE.SphereGeometry(0.5, 10, 8);
+const earGeometry = new THREE.ConeGeometry(0.5, 1, 5);
+const furMaterials = new Map<string, THREE.MeshStandardMaterial>();
+function fur(color: string, glow = false) {
+  const key = `${color}:${glow}`;
+  if (!furMaterials.has(key)) furMaterials.set(key, new THREE.MeshStandardMaterial({
+    color, roughness: 0.94, flatShading: true,
+    emissive: glow ? color : 0, emissiveIntensity: glow ? 0.65 : 0,
+  }));
+  return furMaterials.get(key)!;
+}
 
 export function Wolf({
   c, creatureId, name, start, playerRef,
@@ -48,34 +60,36 @@ export function Wolf({
   });
 
   const y = terrainHeight(start.x, start.z);
+  const coat = fur(mixColor(c.rock, c.dark, 0.65));
+  const mane = fur(c.rock);
+  const pale = fur(c['rock-light']);
+  const dark = fur(c.dark);
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
       <SelectionRing ring={ring} radius={0.6} c={c} />
       <EnemyLabel name={name} height={1.5} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
       {/* Body */}
-      <mesh position={[0, 0.5, 0]} castShadow>
-        <boxGeometry args={[0.4, 0.45, 0.9]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
+      <mesh position={[0, 0.5, 0]} scale={[0.44, 0.5, 1.04]} geometry={furGeometry} material={coat} castShadow />
+      <mesh position={[0, 0.57, 0.28]} scale={[0.5, 0.61, 0.5]} rotation={[-0.3, 0, 0]} geometry={furGeometry} material={mane} castShadow />
+      <mesh position={[0, 0.51, -0.28]} scale={[0.39, 0.43, 0.44]} geometry={furGeometry} material={coat} castShadow />
       {/* Head */}
-      <mesh position={[0, 0.68, 0.48]} castShadow>
-        <boxGeometry args={[0.35, 0.36, 0.45]} />
-        <meshStandardMaterial color={c.rock} />
-      </mesh>
+      <mesh position={[0, 0.7, 0.48]} scale={[0.38, 0.4, 0.5]} geometry={furGeometry} material={mane} castShadow />
       {/* Snout */}
-      <mesh position={[0, 0.62, 0.75]}>
-        <boxGeometry args={[0.2, 0.15, 0.2]} />
-        <meshStandardMaterial color={c['rock-light']} />
-      </mesh>
+      <mesh position={[0, 0.64, 0.74]} scale={[0.21, 0.18, 0.32]} geometry={furGeometry} material={pale} />
+      <mesh position={[0, 0.67, 0.88]} scale={[0.14, 0.09, 0.07]} geometry={furGeometry} material={dark} />
+      {[-1, 1].map(side => <group key={side}>
+        <mesh position={[side * 0.18, 0.62, 0.45]} rotation={[0, 0, side * 0.6]} scale={[0.13, 0.27, 0.23]} geometry={earGeometry} material={mane} />
+        <mesh position={[side * 0.074, 0.57, 0.76]} rotation={[Math.PI, 0, 0]} scale={[0.035, 0.085, 0.035]} geometry={earGeometry} material={pale} />
+      </group>)}
       {/* Eyes */}
       <mesh position={[-0.12, 0.78, 0.65]}>
         <sphereGeometry args={[0.045, 4, 3]} />
-        <meshStandardMaterial color="#cc2200" emissive="#cc2200" emissiveIntensity={0.5} />
+        <primitive object={fur(c.cloak, true)} attach="material" />
       </mesh>
       <mesh position={[0.12, 0.78, 0.65]}>
         <sphereGeometry args={[0.045, 4, 3]} />
-        <meshStandardMaterial color="#cc2200" emissive="#cc2200" emissiveIntensity={0.5} />
+        <primitive object={fur(c.cloak, true)} attach="material" />
       </mesh>
       {/* Ears */}
       {[-0.12, 0.12].map(x => (
@@ -86,27 +100,28 @@ export function Wolf({
       ))}
       {/* Front legs */}
       <mesh ref={frontLeftLeg} position={[-0.14, 0.22, 0.25]} castShadow>
-        <boxGeometry args={[0.1, 0.45, 0.12]} />
-        <meshStandardMaterial color={c.dark} />
+        <cylinderGeometry args={[0.065, 0.045, 0.45, 6]} />
+        <primitive object={coat} attach="material" />
+        <mesh position={[0, -0.17, 0.035]} scale={[0.12, 0.1, 0.2]} geometry={furGeometry} material={dark} />
       </mesh>
       <mesh ref={frontRightLeg} position={[0.14, 0.22, 0.25]} castShadow>
-        <boxGeometry args={[0.1, 0.45, 0.12]} />
-        <meshStandardMaterial color={c.dark} />
+        <cylinderGeometry args={[0.065, 0.045, 0.45, 6]} />
+        <primitive object={coat} attach="material" />
+        <mesh position={[0, -0.17, 0.035]} scale={[0.12, 0.1, 0.2]} geometry={furGeometry} material={dark} />
       </mesh>
       {/* Back legs */}
       <mesh ref={backLeftLeg} position={[-0.14, 0.22, -0.3]} castShadow>
-        <boxGeometry args={[0.1, 0.45, 0.12]} />
-        <meshStandardMaterial color={c.dark} />
+        <cylinderGeometry args={[0.08, 0.04, 0.45, 6]} />
+        <primitive object={coat} attach="material" />
+        <mesh position={[0, -0.17, 0.035]} scale={[0.12, 0.1, 0.2]} geometry={furGeometry} material={dark} />
       </mesh>
       <mesh ref={backRightLeg} position={[0.14, 0.22, -0.3]} castShadow>
-        <boxGeometry args={[0.1, 0.45, 0.12]} />
-        <meshStandardMaterial color={c.dark} />
+        <cylinderGeometry args={[0.08, 0.04, 0.45, 6]} />
+        <primitive object={coat} attach="material" />
+        <mesh position={[0, -0.17, 0.035]} scale={[0.12, 0.1, 0.2]} geometry={furGeometry} material={dark} />
       </mesh>
       {/* Tail */}
-      <mesh position={[0, 0.6, -0.6]} rotation={[0.9, 0, 0]}>
-        <boxGeometry args={[0.1, 0.1, 0.5]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
+      <mesh position={[0, 0.48, -0.62]} rotation={[0.6, 0, 0]} scale={[0.18, 0.2, 0.58]} geometry={furGeometry} material={coat} castShadow />
     </group>
   );
 }

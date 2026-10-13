@@ -1,23 +1,7 @@
 /**
- * Direção de arte "cel-shaded" (fase 1 — filtro + materiais).
- *
- * Alvo visual: `art/concept/sheets/style-c-celshaded.png` — contornos escuros,
- * terminador de sombra em degraus duros, preenchimentos chapados, contraste de
- * pôster, paleta requeimada (`art/style/palette-c.json`).
- *
- * Este módulo é a ÚNICA fonte de ajuste do look. Tudo é aditivo e reversível:
- *  - `CEL.enabled = false` desliga o filtro inteiro (volta ao render padrão).
- *  - `CEL.toon.enabled = false` tira só o degrau de iluminação dos materiais.
- *
- * Duas peças:
- *  1. `celShadeMaterial(mat)` — injeta, EM LUGAR (sem trocar a identidade do
- *     material, então o sistema de fade/oclusão e o `vertexColors`/`flatShading`
- *     continuam valendo), uma rampa toon de 3 degraus na luz direta de qualquer
- *     material iluminado (Standard/Phong/Lambert). Compõe com o
- *     `onBeforeCompile` que o fade já usa, em vez de sobrescrever.
- *  2. `celFilterShader()` — passe de tela cheia (contorno por profundidade +
- *     gradação de cor + névoa de cobre no horizonte + grão + vinheta), montado
- *     em `cel-shade.tsx` via EffectComposer.
+ * Ajustes do acabamento visual Ashland: gradação suave, contorno discreto,
+ * atmosfera e bloom. ACES e reflexos PBR são configurados pelo mundo.
+ * O modo toon anterior permanece disponível, desativado por padrão.
  */
 import * as THREE from 'three';
 
@@ -35,7 +19,7 @@ export const CEL = {
    * senão a superfície iluminada ficaria presa no albedo (escuro).
    */
   toon: {
-    enabled: true,
+    enabled: false,
     // Brilho de cada degrau (multiplica o albedo). Sombra / meio / cheio.
     // Faixa larga (sombra funda, cheio bem claro) pra alimentar o contraste.
     band0: 0.3,
@@ -56,10 +40,10 @@ export const CEL = {
   outline: {
     enabled: true,
     color: '#100c0a',      // near-black da paleta
-    thickness: 2.2,        // raio da amostra, em pixels (grosso = visível a olho nu)
+    thickness: 1.0,        // raio da amostra, em pixels (grosso = visível a olho nu)
     threshold: 0.08,       // início da borda (diff de prof. relativa)
     rampEnd: 0.32,         // fim da borda (acima disso = contorno cheio)
-    strength: 1.15,
+    strength: 0.24,
   },
 
   /**
@@ -74,26 +58,26 @@ export const CEL = {
     // da cena (não re-posteriza pesado, que achatava ou esmagava). Contraste
     // suave em torno do pivô (≈ brilho médio da cena) alarga o desvio pra faixa
     // de pôster; a posterização por canal é fina (muitos níveis), só pra limpar.
-    posterSteps: 11,    // níveis POR CANAL (fino: limpa sem achatar)
-    contrast: 1.4,      // expande cada canal em torno do pivô (contraste de pôster)
+    posterSteps: 256,    // níveis POR CANAL (fino: limpa sem achatar)
+    contrast: 1.06,      // expande cada canal em torno do pivô (contraste de pôster)
     pivot: 0.46,        // ponto fixo da expansão de contraste (≈ média da cena)
-    saturation: 0.8,    // puxa a saturação pra perto da referência (~0.40)
+    saturation: 0.94,    // puxa a saturação pra perto da referência (~0.40)
     slope: [1.05, 1.01, 0.95] as [number, number, number],  // calor leve
     offset: [0.02, 0.012, 0.005] as [number, number, number],
-    gain: 1.32,         // ganho geral (acerta o brilho médio)
+    gain: 1.02,         // ganho geral (acerta o brilho médio)
   },
 
   /** Névoa de cobre: tinge SÓ o fundo distante (horizonte), leve. */
   haze: {
     color: '#edb067',
-    start: 60,     // distância (unidades de olho) onde começa
-    density: 0.008,
+    start: 38,     // distância (unidades de olho) onde começa
+    density: 0.012,
     strength: 0.3,
   },
 
   /** Vinheta e grão de filme (ambos discretos — não escurecer a cena). */
   vignette: { amount: 0.14, radius: 1.15, softness: 0.7 },
-  grain: { amount: 0.028 },
+  grain: { amount: 0.004 },
 
   /**
    * Céu gradeado + banda de distância + sol (fase final — o ar e o céu).
@@ -143,15 +127,15 @@ export const CEL = {
     // — estourava a barra. Este par: contraste -8.0, saturação +0.017
     // (0.478 -> 0.495), e a banda de horizonte sai em RGB [202,150,116],
     // R/B 1.75 contra 1.36 do creme de névoa — cobre de verdade, sem lavar.
-    horizonColor: '#f2cdaa',   // banda pálida de cobre no horizonte (haze)
-    highColor: '#d2996e',      // cobre mais fundo no alto do céu
+    horizonColor: '#dfc8ab',   // banda pálida de cobre no horizonte (haze)
+    highColor: '#819a9f',      // cobre mais fundo no alto do céu
     strength: 0.78,            // quanto o gradiente domina o fundo (0..1)
     horizonY: 0.42,            // v de tela (0 embaixo, 1 no topo) da linha do horizonte
     // Banda de distância: rampa sobre o TERRENO longe (não o fundo), pra a
     // última crista não bater no céu com uma costura dura. Começa bem depois
     // do meio-campo (medição: 99% do terreno em quadro < 80 unidades).
-    atmStart: 72,
-    atmEnd: 115,
+    atmStart: 48,
+    atmEnd: 108,
     atmTerrain: 0.55,          // teto do peso no terreno (fundo sempre usa 1)
     glowColor: '#ffe8c6',      // halo quente/pálido do sol NO ar
     glowSize: 0.26,            // raio do halo (em alturas de tela)
@@ -176,7 +160,7 @@ export const CEL = {
   bloom: {
     enabled: true,
     threshold: 0.84,   // luminância (espaço de exibição) acima da qual acende
-    strength: 0.5,     // quanto o bloom soma de volta
+    strength: 0.18,     // quanto o bloom soma de volta
     radius: 2.0,       // espalhamento do blur (em texels de 1/4 de res)
   },
 };

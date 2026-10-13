@@ -14,17 +14,7 @@ const names = [
 
 export type Palette = Record<(typeof names)[number], string>;
 
-/**
- * Paleta "cel-shaded" extraída de `art/style/palette-c.json` (concept
- * style-C). Substitui a paleta verdejante antiga por uma família única,
- * terrosa e requeimada, pra o mundo 3D ler como UM filme. Os tokens CSS
- * `--world-*` seguem existindo para a HUD; só o mundo 3D passou a usar estes
- * valores fixos (antes `palette()` lia o CSS). Fonte de verdade: palette-c.
- *
- * Mapa semântico → hex (todos dentro/perto dos pesos dominantes da paleta):
- *  burnt orange #f49959 · near-black #100c0a · browns #2f231c/#433a33/#6a3c26
- *  dusty #a58b70/#857d6e · sand #caaa83/#e7c799 · bone #f6e6c1
- */
+/** Fallback Ashland para SSR/testes. No navegador, palette() resolve os tokens --world-* do CSS. */
 export const WORLD_PALETTE: Palette = {
   ground: '#5b4a39',
   'ground-light': '#7a6a52',
@@ -48,7 +38,11 @@ export const WORLD_PALETTE: Palette = {
 };
 
 export function palette(): Palette {
-  return WORLD_PALETTE;
+  if (typeof document === 'undefined') return { ...WORLD_PALETTE };
+  const styles = getComputedStyle(document.documentElement);
+  return Object.fromEntries(names.map(name => [
+    name, styles.getPropertyValue(`--world-${name}`).trim() || WORLD_PALETTE[name],
+  ])) as Palette;
 }
 
 export function rand(seed: number) {

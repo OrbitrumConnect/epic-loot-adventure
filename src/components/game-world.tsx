@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
@@ -10,6 +10,7 @@ import { queueNearestNode } from './world/objective-bridge';
 import { CombatFeedback } from './world/combat-feedback';
 import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
+import { AdventurerDetails } from './world/adventurer-details';
 import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
@@ -22,7 +23,12 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies } from './world/world-entities';
 import { Billboards, groundTexture } from './world/billboards';
+import { AshlandPilot } from './world/ashland-glb-pilot';
 import { CelShade } from './world/cel-shade';
+import { Atmosphere } from './world/atmosphere';
+import { EnvironmentLight } from './world/environment-light';
+import { RuinMasonry } from './world/ruin-masonry';
+import { RiverBanks } from './world/river-banks';
 import { CEL } from './world/cel-style';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
@@ -201,6 +207,7 @@ function Ruins({ c }: { c: Palette }) {
   useFadeGroup(ref, RUIN_SPHERES);
   return (
     <group ref={ref} position={[7, y, -8]} rotation={[0, -0.2, 0]}>
+      <RuinMasonry c={c} />
       <mesh position={[0, 0.1, 0]} receiveShadow>
         <boxGeometry args={[7, 0.3, 5]} />
         <meshStandardMaterial color={c['rock-light']} />
@@ -610,148 +617,104 @@ function Character({
       {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
       <group ref={leftHip} position={[-0.14, 0.6, 0]}>
         <mesh position={[0, -0.15, 0]} castShadow>
-          <boxGeometry args={[0.19, 0.3, 0.21]} />
+          <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
           <meshStandardMaterial color={c.dark} />
         </mesh>
         <group ref={leftKnee} position={[0, -0.3, 0]}>
+          <AdventurerDetails c={c} part="shin" />
           <mesh castShadow>
-            <sphereGeometry args={[0.1, 8, 6]} />
+            <sphereGeometry args={[0.1, 24, 16]} />
             <meshStandardMaterial color={c.dark} />
           </mesh>
           <mesh position={[0, -0.15, 0.01]} castShadow>
-            <boxGeometry args={[0.16, 0.28, 0.18]} />
+            <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
             <meshStandardMaterial color={c.dark} />
           </mesh>
-          <mesh position={[0, -0.28, 0.07]} castShadow>
-            <boxGeometry args={[0.18, 0.1, 0.3]} />
+          <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
+            <sphereGeometry args={[1, 24, 16]} />
             <meshStandardMaterial color={c.dark} />
           </mesh>
           {/* Cano da bota (couro médio) sobre a canela escura */}
           <mesh position={[0, -0.1, 0.02]} castShadow>
-            <boxGeometry args={[0.185, 0.16, 0.2]} />
-            <meshStandardMaterial color="#6b5a40" />
+            <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
+            <meshStandardMaterial color={c.trunk} roughness={0.9} />
           </mesh>
         </group>
       </group>
       <group ref={rightHip} position={[0.14, 0.6, 0]}>
         <mesh position={[0, -0.15, 0]} castShadow>
-          <boxGeometry args={[0.19, 0.3, 0.21]} />
+          <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
           <meshStandardMaterial color={c.dark} />
         </mesh>
         <group ref={rightKnee} position={[0, -0.3, 0]}>
+          <AdventurerDetails c={c} part="shin" />
           <mesh castShadow>
-            <sphereGeometry args={[0.1, 8, 6]} />
+            <sphereGeometry args={[0.1, 24, 16]} />
             <meshStandardMaterial color={c.dark} />
           </mesh>
           <mesh position={[0, -0.15, 0.01]} castShadow>
-            <boxGeometry args={[0.16, 0.28, 0.18]} />
+            <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
             <meshStandardMaterial color={c.dark} />
           </mesh>
-          <mesh position={[0, -0.28, 0.07]} castShadow>
-            <boxGeometry args={[0.18, 0.1, 0.3]} />
+          <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
+            <sphereGeometry args={[1, 24, 16]} />
             <meshStandardMaterial color={c.dark} />
           </mesh>
           {/* Cano da bota (couro médio) sobre a canela escura */}
           <mesh position={[0, -0.1, 0.02]} castShadow>
-            <boxGeometry args={[0.185, 0.16, 0.2]} />
-            <meshStandardMaterial color="#6b5a40" />
+            <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
+            <meshStandardMaterial color={c.trunk} roughness={0.9} />
           </mesh>
         </group>
       </group>
 
-      {/* Torso — casaco de couro em tom médio-escuro (ancora a silhueta) */}
-      <mesh position={[0, 0.9, 0]} castShadow>
-        <boxGeometry args={[0.62, 0.67, 0.36]} />
-        <meshStandardMaterial color="#6b5a40" />
+      <AdventurerDetails c={c} part="body" />
+      <AdventurerDetails c={c} part="torso" />
+      <AdventurerDetails c={c} part="skull" />
+      <AdventurerDetails c={c} part="head" />
+      <AdventurerDetails c={c} part="coat" />
+      {/* Goggles follow the curved head; the leather strap wraps the skull. */}
+      <mesh position={[0, 1.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 0.92, 1]}>
+        <torusGeometry args={[0.184, 0.022, 10, 40]} />
+        <meshStandardMaterial color={c.dark} roughness={0.84} />
       </mesh>
-      {/* Colete escuro sob o casaco, aparecendo na gola */}
-      <mesh position={[0, 1.05, 0.02]} castShadow>
-        <boxGeometry args={[0.44, 0.34, 0.37]} />
-        <meshStandardMaterial color={c.trunk} />
-      </mesh>
-      {/* Cinturão escuro na cintura */}
-      <mesh position={[0, 0.62, 0]} castShadow>
-        <boxGeometry args={[0.66, 0.14, 0.4]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-      {/* Fivela */}
-      <mesh position={[0, 0.62, 0.205]}>
-        <boxGeometry args={[0.12, 0.1, 0.03]} />
-        <meshStandardMaterial color={c.gold} />
-      </mesh>
-
-      {/* Cabeça enfaixada (creme) + óculos de proteção escuros — como o sprite */}
-      <mesh position={[0, 1.48, 0]} castShadow>
-        <boxGeometry args={[0.42, 0.43, 0.4]} />
-        <meshStandardMaterial color={c.light} />
-      </mesh>
-      {/* Faixa dos óculos */}
-      <mesh position={[0, 1.55, 0.205]}>
-        <boxGeometry args={[0.44, 0.13, 0.04]} />
-        <meshStandardMaterial color={c.dark} />
-      </mesh>
-      {/* Lentes */}
-      {[-0.1, 0.1].map(lx => (
-        <mesh key={lx} position={[lx, 1.55, 0.228]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.055, 0.055, 0.03, 10]} />
-          <meshStandardMaterial color={c.metal} emissive={c.crystal} emissiveIntensity={0.12} />
+      {[-0.085, 0.085].map(lx => (
+        <mesh key={lx} position={[lx, 1.54, 0.182]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.048, 0.048, 0.022, 28]} />
+          <meshStandardMaterial color={c.metal} metalness={0.65} roughness={0.2} emissive={c.crystal} emissiveIntensity={0.12} />
         </mesh>
       ))}
-      {/* Cachecol enrolado no pescoço/rosto */}
-      <mesh position={[0, 1.26, 0.02]} castShadow>
-        <boxGeometry args={[0.46, 0.2, 0.44]} />
-        <meshStandardMaterial color={c.armor} />
-      </mesh>
-
-      {/* Casaco remendado e esfarrapado (tom terra, não capa vermelha) */}
-      <mesh position={[0, 0.91, -0.25]} rotation={[0.15, 0, 0]} castShadow>
-        <boxGeometry args={[0.7, 0.93, 0.09]} />
-        <meshStandardMaterial color="#7e6a48" />
-      </mesh>
-      {/* Abas remendadas do casaco, caindo pela frente (claro × escuro) */}
-      {[-0.18, 0.18].map(fx => (
-        <mesh key={fx} position={[fx, 0.42, 0.2]} rotation={[0, 0, fx * 0.3]} castShadow>
-          <boxGeometry args={[0.2, 0.82, 0.07]} />
-          <meshStandardMaterial color={fx < 0 ? '#9c855a' : '#463a28'} />
-        </mesh>
-      ))}
-      {/* Correias cruzadas no peito */}
-      <mesh position={[0, 0.95, 0.19]} rotation={[0, 0, 0.5]}>
-        <boxGeometry args={[0.07, 0.9, 0.04]} />
-        <meshStandardMaterial color={c.trunk} />
-      </mesh>
 
       {/* Braço esquerdo articulado + escudo no antebraço */}
       <group ref={leftShoulder} position={[-0.38, 1.12, 0.02]}>
+        <AdventurerDetails c={c} part="shoulder" />
         <mesh castShadow>
-          <sphereGeometry args={[0.1, 8, 6]} />
+          <sphereGeometry args={[0.1, 24, 16]} />
           <meshStandardMaterial color={c.armor} />
         </mesh>
         {/* Placa de ombro (osso), como no sprite */}
-        <mesh position={[-0.05, 0.06, 0]} rotation={[0, 0, 0.4]} castShadow>
-          <boxGeometry args={[0.26, 0.12, 0.3]} />
-          <meshStandardMaterial color={c.light} />
-        </mesh>
         <mesh position={[0, -0.14, 0]} castShadow>
-          <cylinderGeometry args={[0.09, 0.08, 0.28, 6]} />
+          <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
           <meshStandardMaterial color={c.armor} />
         </mesh>
         <group ref={leftElbow} position={[0, -0.28, 0]}>
+          <AdventurerDetails c={c} part="bracer" />
+          <AdventurerDetails c={c} part="shield" />
           <mesh castShadow>
-            <sphereGeometry args={[0.08, 8, 6]} />
+            <sphereGeometry args={[0.08, 24, 16]} />
             <meshStandardMaterial color={c.armor} />
           </mesh>
           <mesh position={[0, -0.13, 0.01]} castShadow>
-            <cylinderGeometry args={[0.08, 0.07, 0.26, 6]} />
+            <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
             <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.27, 0.02]} castShadow>
-            <boxGeometry args={[0.11, 0.11, 0.13]} />
+          <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
+            <sphereGeometry args={[1, 20, 14]} />
             <meshStandardMaterial color={c.dark} />
           </mesh>
           {/* Escudo preso ao antebraço */}
           <mesh position={[0, -0.14, 0.13]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <cylinderGeometry args={[0.3, 0.3, 0.08, 12]} />
+            <cylinderGeometry args={[0.287, 0.275, 0.065, 48]} />
             <meshStandardMaterial color={c.trunk} />
           </mesh>
         </group>
@@ -759,30 +722,28 @@ function Character({
 
       {/* Braço direito articulado — segura a arma na mão (socket hand_R) */}
       <group ref={rightShoulder} position={[0.38, 1.12, 0.02]}>
+        <AdventurerDetails c={c} part="shoulder" />
         <mesh castShadow>
-          <sphereGeometry args={[0.1, 8, 6]} />
+          <sphereGeometry args={[0.1, 24, 16]} />
           <meshStandardMaterial color={c.armor} />
         </mesh>
         {/* Placa de ombro menor, lado direito — couro escuro (contrapeso ao osso) */}
-        <mesh position={[0.05, 0.05, 0]} rotation={[0, 0, -0.4]} castShadow>
-          <boxGeometry args={[0.2, 0.1, 0.26]} />
-          <meshStandardMaterial color={c.trunk} />
-        </mesh>
         <mesh position={[0, -0.14, 0]} castShadow>
-          <cylinderGeometry args={[0.09, 0.08, 0.28, 6]} />
+          <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
           <meshStandardMaterial color={c.armor} />
         </mesh>
         <group ref={rightElbow} position={[0, -0.28, 0]}>
+          <AdventurerDetails c={c} part="bracer" />
           <mesh castShadow>
-            <sphereGeometry args={[0.08, 8, 6]} />
+            <sphereGeometry args={[0.08, 24, 16]} />
             <meshStandardMaterial color={c.armor} />
           </mesh>
           <mesh position={[0, -0.13, 0.01]} castShadow>
-            <cylinderGeometry args={[0.08, 0.07, 0.26, 6]} />
+            <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
             <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.27, 0.02]} castShadow>
-            <boxGeometry args={[0.11, 0.11, 0.13]} />
+          <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
+            <sphereGeometry args={[1, 20, 14]} />
             <meshStandardMaterial color={c.dark} />
           </mesh>
           {/* Pose-base da mão; o ataque gira o grupo interno `sword`. */}
@@ -894,12 +855,14 @@ function DayNightLighting({ c }: { c: Palette }) {
         intensity={2.8}
         color={c.light}
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-60}
         shadow-camera-right={60}
         shadow-camera-top={60}
         shadow-camera-bottom={-60}
         shadow-bias={-0.001}
+        shadow-normalBias={0.035}
+        shadow-camera-far={180}
       />
     </>
   );
@@ -1083,7 +1046,7 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
     const repeat = size / 6;
     const dirt = groundTexture('/assets/style/ground/dirt.webp', repeat);
     const grass = groundTexture('/assets/style/ground/grass.webp', repeat);
-    const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: dirt });
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: dirt, bumpMap: dirt, bumpScale: 0.09, roughness: 0.94 });
     m.onBeforeCompile = shader => {
       shader.uniforms['uGrassMap'] = { value: grass };
       shader.vertexShader = shader.vertexShader
@@ -1148,7 +1111,7 @@ function WaterMaterial({ color, time, river = false }: {
   time: { value: number };
   river?: boolean;
 }) {
-  const onBeforeCompile = useCallback<THREE.MeshLambertMaterial['onBeforeCompile']>((shader) => {
+  const onBeforeCompile = useCallback<THREE.MeshStandardMaterial['onBeforeCompile']>((shader) => {
     const w = WATER_MOTION;
     const f = (n: number) => n.toFixed(5);
     shader.uniforms['uWaterTime'] = time;
@@ -1175,16 +1138,18 @@ function WaterMaterial({ color, time, river = false }: {
           float wave = rings * cos(pulse)
                      + crossed * sin(pulse) * ${f(w.lakeCrossWeight)};
         `}
-        float waterTone = mix(${f(w.darkTone)}, 1.0, step(${f(w.darkThreshold)}, wave));
-        waterTone = mix(waterTone, ${f(w.lightTone)}, step(${f(w.lightThreshold)}, wave));
+        float waterTone = mix(${f(w.darkTone)}, 1.0, smoothstep(-0.7, 0.3, wave));
+        waterTone = mix(waterTone, ${f(w.lightTone)}, smoothstep(0.55, 1.0, wave));
         diffuseColor.rgb *= waterTone;
       `);
   }, [river, time]);
   const cacheKey = useCallback(() => `water-motion-v1-${river ? 'river' : 'lake'}`, [river]);
 
   return (
-    <meshLambertMaterial
+    <meshStandardMaterial
       color={color}
+      roughness={0.24}
+      metalness={0.25}
       transparent
       opacity={river ? WATER_MOTION.riverOpacity : WATER_MOTION.lakeOpacity}
       depthWrite={false}
@@ -1197,6 +1162,10 @@ function WaterMaterial({ color, time, river = false }: {
 
 function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third' }) {
   const { c, cameraMode } = props;
+  const [showAshlandPilot, setShowAshlandPilot] = useState(false);
+  useEffect(() => {
+    setShowAshlandPilot(new URLSearchParams(window.location.search).get('asset-pilot') === 'ashland');
+  }, []);
   const waterTime = useRef({ value: 0 }).current;
   const target = useRef(new THREE.Vector3(0, 0, 1));
   const { camera, size, gl } = useThree();
@@ -1543,13 +1512,15 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
   return (
     <>
       <DayNightLighting c={c} />
+      <EnvironmentLight c={c} />
       <Moon />
       <Sun />
+      <Atmosphere c={c} paused={props.paused} />
 
       <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
 
       <mesh geometry={path} receiveShadow>
-        <meshStandardMaterial map={roadTex} side={THREE.DoubleSide} />
+        <meshStandardMaterial map={roadTex} bumpMap={roadTex} bumpScale={0.045} roughness={0.92} side={THREE.DoubleSide} />
       </mesh>
 
       {/* Luminárias da estrada — acendem ao anoitecer */}
@@ -1567,6 +1538,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       <mesh geometry={river} receiveShadow>
         <WaterMaterial color={c.water} time={waterTime} river />
       </mesh>
+      <RiverBanks c={c} />
 
       {/* Bridge — tabuado elevado com vigas, pilares e guarda-corpo; leva a estrada por cima do córrego, na frente do nascedouro */}
       <group position={[-2, 0, 2.5]} rotation={[0, 0.64, 0]}>
@@ -1609,6 +1581,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       </group>
 
       <Billboards trees={trees} c={c} />
+      {showAshlandPilot && <AshlandPilot />}
 
       <Ruins c={c} />
       <Campfire c={c} position={[-1, 0, 4]} />
@@ -1676,7 +1649,7 @@ export default function GameWorld(props: WorldProps) {
   const cameraMode = props.cameraMode ?? 'iso';
 
   return (
-    <Canvas shadows dpr={[1, 1]} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.NoToneMapping }} onContextMenu={e => e.preventDefault()}>
+    <Canvas shadows="percentage" dpr={[1, 1.5]} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
       {cameraMode === 'iso' ? (
         <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={200} />
       ) : (
