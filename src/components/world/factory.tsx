@@ -10,7 +10,7 @@ import { FACTORY_SITES, terrainHeight } from './world-kit';
  * tem CHÃO RETO. Colisão por círculo em STATIC_COLLIDERS. Aditivo, só cenário.
  */
 const URL = '/models/factory/factory.glb';
-const TARGET_H = 11;
+const TARGET_H = 7.7; // -30% (porta proporcional ao boneco)
 /** Afunda 10 cm: o chão RETO do prédio fica logo abaixo do nosso → nossa terra
  *  cobre a emenda (o chão do GLB não casa 100% com o do jogo). */
 const FACTORY_SINK = 0.1;

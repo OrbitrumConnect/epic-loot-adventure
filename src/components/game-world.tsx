@@ -13,6 +13,7 @@ import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { Factory } from './world/factory';
+import { FactoryRubble } from './world/factory-rubble';
 import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
@@ -37,7 +38,7 @@ import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces } from './worl
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
-  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES,
+  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R,
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
@@ -1433,7 +1434,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
   const trees = useMemo(
     () =>
-      Array.from({ length: 400 }, (_, i) => ({
+      Array.from({ length: 340 }, (_, i) => ({
         x: (rand(i + 1) - 0.5) * MAP_HALF * 2,
         z: (rand(i + 301) - 0.5) * MAP_HALF * 2,
         size: 0.65 + rand(i + 701) * 0.7,
@@ -1452,7 +1453,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
           const dx = p.x - camp.position.x;
           const dz = p.z - camp.position.z;
           return Math.sqrt(dx * dx + dz * dz) > def.radius + 2;
-        })),
+        }))
+        // Fábrica é zona plana: árvore dentro do prédio atrapalha.
+        .filter(p => FACTORY_SITES.every(f => Math.hypot(p.x - f.x, p.z - f.z) > FACTORY_PAD_R)),
     [],
   );
 
@@ -1623,6 +1626,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       {showAshlandPilot && <AshlandPilot />}
 
       <Factory />
+      <FactoryRubble c={c} />
       <Campfire c={c} position={[-1, 0, 4]} />
       <Campfire c={c} position={[10, 0, -6]} />
       <Campfire c={c} position={[-15, 0, -12]} />

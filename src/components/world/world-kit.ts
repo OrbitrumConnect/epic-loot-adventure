@@ -128,15 +128,16 @@ export const SNOW_MOUNTAIN = { x: -74, z: 64, r: 38, peak: 34 };
  *  Vários prédios ESPALHADOS; é onde se consegue energia/fiação pra iluminar a base.
  *  O prédio GLB tem CHÃO RETO → o terreno é achatado numa ZONA PLANA (mesma altura
  *  pra todos, sem conflito de pads) que cobre TODA a faixa do prédio. */
-export const FACTORY_PAD_R = 13;        // cobre a faixa do prédio (footprint ~11 m)
-const FACTORY_PAD_CORE = 0.66;          // miolo 100% plano; só a borda externa mescla
-/** ESPALHADAS por regiões distintas (centro+cantos planos, longe de água). Uma no
- *  lugar da ruína tosca do meio (onde nasce). Cada uma achata no SEU nível. */
+export const FACTORY_PAD_R = 22;        // raio TOTAL com blend longo e suave (sem degrau)
+const FACTORY_PAD_CORE = 0.42;          // miolo plano (~9,2 m, cobre o prédio); resto mescla LONGO
+/** Em áreas naturalmente PLANAS (centro do spawn + perto das beiradas, onde o
+ *  relevo já é baixo) → o pad quase não mexe = sem platô/degrau. Longe de água.
+ *  Uma no lugar da ruína do meio. Cada uma achata no SEU nível; o rio é preservado. */
 const FACTORY_POS: { x: number; z: number; rot: number }[] = [
-  { x: 7, z: -8, rot: 0.4 },     // CENTRO (substitui a ruína do spawn)
-  { x: 72, z: 18, rot: 1.9 },    // leste
-  { x: -28, z: -55, rot: -0.8 }, // sudoeste
-  { x: 78, z: -68, rot: 2.6 },   // sudeste
+  { x: 7, z: -8, rot: 0.4 },     // CENTRO (clareira do spawn, plana)
+  { x: 78, z: 24, rot: 1.9 },    // beirada leste
+  { x: 26, z: -76, rot: -0.8 },  // beirada sul
+  { x: -80, z: -38, rot: 2.6 },  // beirada oeste
 ];
 /** padY = altura natural no centro; o footprint inteiro é achatado nela. */
 export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));
@@ -185,7 +186,13 @@ export function terrainHeight(x: number, z: number): number {
     else { const u = 1 - (d - inner) / (FACTORY_PAD_R - inner); t = u * u * (3 - 2 * u); }
     if (t > padT) { padT = t; padY = f.padY; } // sites espalhados: cada um no SEU nível
   }
-  if (padT > 0) h = h * (1 - padT) + padY * padT;
+  if (padT > 0) {
+    // Preserva o rio: o pad não aplaina o leito (senão a fábrica "passa por cima").
+    const rd = riverDistance(x, z);
+    const riverKeep = Math.max(0, Math.min(1, (rd - RIVER_HALF_WIDTH - 1) / 4));
+    padT *= riverKeep;
+    h = h * (1 - padT) + padY * padT;
+  }
 
   return h;
 }
