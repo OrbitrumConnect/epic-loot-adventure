@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
+import { startLocalPersistence } from '@/game/state/local-persistence';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
 import { ToolCrafting } from '@/components/hud/tool-crafting';
@@ -84,7 +85,11 @@ function Index() {
   const [cameraMode, setCameraMode] = useState<'iso' | 'third'>('iso');
   const [deathCountdown, setDeathCountdown] = useState(0);
   const toggleCamera = useCallback(() => setCameraMode(m => (m === 'iso' ? 'third' : 'iso')), []);
-  useEffect(() => setReady(true), []);
+  useEffect(() => {
+    const stop = startLocalPersistence();
+    setReady(true);
+    return stop;
+  }, []);
 
   // Level-up: destaque breve quando o nível sobe (sem sistema novo de mensagens).
   const [levelUpFlash, setLevelUpFlash] = useState(false);
