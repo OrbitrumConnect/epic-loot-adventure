@@ -19,7 +19,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight } from './world-kit';
-import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces } from './base-collision';
+import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece } from './base-targets';
@@ -391,6 +391,7 @@ export function useHostileAI(opts: HostileOptions) {
     // (nearestBasePiece acima), aí avança quando a peça cai. Sem reinventar.
     [targetX, targetZ] = pushOutBasePieces(targetX, targetZ, CREATURE_RADIUS);
     [targetX, targetZ] = pushOutHouseWalls(targetX, targetZ, CREATURE_RADIUS);
+    [targetX, targetZ] = pushOutFactoryWalls(targetX, targetZ, CREATURE_RADIUS);
     g.position.x = THREE.MathUtils.clamp(targetX, -MAP_HALF, MAP_HALF);
     g.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
     // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno.

@@ -34,7 +34,8 @@ import { RuinMasonry } from './world/ruin-masonry';
 import { RiverBanks } from './world/river-banks';
 import { CEL } from './world/cel-style';
 import { housePlayerInside } from './world/house-collider';
-import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces } from './world/base-collision';
+import { factoryClip } from './world/factory-collider';
+import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls, factoryRoofCutY } from './world/base-collision';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
@@ -100,7 +101,7 @@ const STRUCT_COLLIDER_R: Record<string, number> = {
 const STATIC_COLLIDERS: Collider[] = (() => {
   const list: Collider[] = [
     { x: RUINS_POSITION.x, z: RUINS_POSITION.z, r: 2.2 },
-    ...FACTORY_SITES.map((f) => ({ x: f.x, z: f.z, r: 5 })), // fábricas: bloqueiam o corpo
+    // fábrica NÃO é círculo sólido: tem colisão de PAREDE (entra pela abertura).
   ];
   for (const placement of CAMP_PLACEMENTS) {
     const def = CAMPS[placement.defId];
@@ -487,6 +488,8 @@ function Character({
     [nx, nz] = pushOutHouseWalls(nx, nz, PLAYER_RADIUS);
     // Cerca da base (muro + torre): sólida; entra pelo portão.
     [nx, nz] = pushOutBasePieces(nx, nz, PLAYER_RADIUS);
+    // Paredes das fábricas: sólidas (entra pela abertura).
+    [nx, nz] = pushOutFactoryWalls(nx, nz, PLAYER_RADIUS);
 
     body.current.position.x = THREE.MathUtils.clamp(nx, -MAP_HALF, MAP_HALF);
     body.current.position.z = THREE.MathUtils.clamp(nz, -MAP_HALF, MAP_HALF);
@@ -524,6 +527,9 @@ function Character({
     const houseFloor = houseFloorSurfaceY(body.current.position.x, body.current.position.z);
     // Teto some SÓ no top-down/moba (iso). No ombro (third) mantém o teto.
     housePlayerInside.current = houseFloor !== -Infinity && cameraMode === 'iso';
+    // Mesmo pra fábrica: dentro + iso → corta o teto; senão prédio inteiro.
+    const facCut = factoryRoofCutY(body.current.position.x, body.current.position.z);
+    factoryClip.constant = facCut !== null && cameraMode === 'iso' ? facCut : 1e9;
     const groundY = Math.max(
       terrainHeight(body.current.position.x, body.current.position.z),
       bridgeSurfaceY(body.current.position.x, body.current.position.z),
