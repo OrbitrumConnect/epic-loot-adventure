@@ -1,0 +1,28 @@
+{
+  "pack": "01-ashland-lowpoly",
+  "status": "blender-glb-pilot",
+  "activation": "Open game with ?asset-pilot=ashland",
+  "reference": "references/hero-turnaround.png",
+  "source": "build_blender_assets.py",
+  "runtime": "Four imported GLB assets rendered through React Three Fiber; concept PNGs are references only",
+  "exports": {
+    "editable_scene": "models/ashland-pack.blend",
+    "preview": "models/ashland-pack-preview.png",
+    "tree": "models/ashroot-tree.glb",
+    "weapon": "models/ash-cleaver.glb",
+    "hero": "models/ashland-survivor.glb",
+    "enemy": "models/ashland-stalker.glb"
+  },
+  "integration": "src/components/world/ashland-glb-pilot.tsx; activate with ?asset-pilot=ashland",
+  "assets": {
+    "tree": { "file": "models/ashroot-tree.glb", "parts": ["trunk", "branches", "roots", "emissive sap fissures"], "animation": "Ashroot | wind sway" },
+    "weapon": { "file": "models/ash-cleaver.glb", "parts": ["wrapped grip", "crossguard", "reclaimed cleaver head", "cyan reactor", "rivets"], "socket": "socket_weapon_grip" },
+    "hero": { "file": "models/ashland-survivor.glb", "parts": ["hood", "respirator", "cyan lenses", "scarf", "scrap chest armor", "paired reactor cells", "utility pouches", "segmented limbs", "boots"], "rig": "17-bone humanoid armature", "animations": ["Ashland Survivor | Idle", "Ashland Survivor | Walk"], "sockets": ["socket_hand_R", "socket_hand_L", "socket_head", "socket_back"] },
+    "enemy": { "file": "models/ashland-stalker.glb", "parts": ["quadruped body", "armored head", "cyan eyes", "back spikes", "four articulated legs", "tail"], "rig": "8-bone quadruped armature", "animations": ["Ashland Stalker | Idle", "Ashland Stalker | Walk"], "sockets": ["socket_core"] }
+  },
+  "limitations": [
+    "Stylized low-poly blockout uses separate authored meshes and palette materials; no hand-painted UV texture maps yet.",
+    "No collision meshes or production LOD variants yet.",
+    "Character mesh parts are rigid weighted to bones; production deformation/weight-paint polish still recommended."
+  ]
+}

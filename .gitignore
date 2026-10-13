@@ -37,3 +37,6 @@ art/items/sheets/
 art/concept/sheets/
 art/style/sheets/
 art/packs/01-ashland-lowpoly/.local-triposr/
+
+# Bytecode dos scripts de arte (regeneravel)
+art/**/__pycache__/
