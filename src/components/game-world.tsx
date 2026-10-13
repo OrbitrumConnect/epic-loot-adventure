@@ -13,6 +13,7 @@ import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { KenneyRuins } from './world/kenney-ruins';
+import { Factory } from './world/factory';
 import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
@@ -37,7 +38,7 @@ import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces } from './worl
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
-  SNOW_MOUNTAIN, snowMountainBump,
+  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES,
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
@@ -97,7 +98,10 @@ const STRUCT_COLLIDER_R: Record<string, number> = {
 
 // Colisores fixos (acampamentos + ruínas): dados estáticos, calculados uma vez.
 const STATIC_COLLIDERS: Collider[] = (() => {
-  const list: Collider[] = [{ x: RUINS_POSITION.x, z: RUINS_POSITION.z, r: 2.2 }];
+  const list: Collider[] = [
+    { x: RUINS_POSITION.x, z: RUINS_POSITION.z, r: 2.2 },
+    ...FACTORY_SITES.map((f) => ({ x: f.x, z: f.z, r: 5 })), // fábricas: bloqueiam o corpo
+  ];
   for (const placement of CAMP_PLACEMENTS) {
     const def = CAMPS[placement.defId];
     if (!def) continue;
@@ -1621,6 +1625,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
       <Ruins c={c} />
       <KenneyRuins />
+      <Factory />
       <Campfire c={c} position={[-1, 0, 4]} />
       <Campfire c={c} position={[10, 0, -6]} />
       <Campfire c={c} position={[-15, 0, -12]} />

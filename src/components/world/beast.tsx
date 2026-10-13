@@ -14,6 +14,14 @@ import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING, type HostileTuning } from './hostile-ai';
 import { mixColor, terrainHeight, type Palette } from './world-kit';
+import { GlbCreature } from './glb-creature';
+
+/** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
+ *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
+const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string }> = {
+  deer: { url: '/models/animals/deer.glb', height: 1.7, tint: '#a8743c' },
+  wolf_alpha: { url: '/models/animals/fox.glb', height: 1.35, tint: '#3f434b' },
+};
 
 type V3 = [number, number, number];
 
@@ -184,6 +192,8 @@ export function Beast({
   const label = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
   const ring = useRef<THREE.Object3D>(null);
+  const movingRef = useRef(false);
+  const glb = GLB_CREATURE[speciesId];
   const onClick = useEnemyClick(creatureId, name);
 
   useHostileAI({
@@ -196,6 +206,8 @@ export function Beast({
     hpGroup,
     ring,
     onAnimate: anim => {
+      movingRef.current = anim.moving; // dirige a animação do GLB (anda/para)
+      if (glb) return;                 // GLB anima sozinho; pula as pernas procedurais
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.5 : 0;
       if (spec.hop) {
         // Salto: o corpo todo quica em vez de balançar as pernas.
@@ -228,7 +240,8 @@ export function Beast({
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
       <SelectionRing ring={ring} radius={spec.ringRadius} c={c} />
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
-      <group ref={inner}>
+      {glb && <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} />}
+      <group ref={inner} visible={!glb}>
         {/* Corpo */}
         <mesh position={[0, bodyY, 0]} castShadow geometry={organicGeo(bw, bh, bd)} material={coat} />
         {/* Anatomical shoulder and haunch masses share cached geometry. */}

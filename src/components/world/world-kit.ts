@@ -78,6 +78,8 @@ function riverFlatten(x: number, z: number): number {
   return 1 - (d - RIVER_HALF_WIDTH) / RIVER_BLEND;
 }
 
+export const MAP_HALF = 90;
+
 function terrainHeightRaw(x: number, z: number): number {
   const broad  = noise2d(x, z, 0.015, 0.017) * 3.6;
   const hills  = noise2d(x, z, 0.04,  0.035) * 1.7;
@@ -114,13 +116,27 @@ export function lakeWaterY(_lake: { x: number; z: number; r: number }): number {
  */
 export const SNOW_MOUNTAIN = { x: -70, z: 65, r: 36, peak: 22 };
 
+/** Complexo industrial desativado (prédios GLB) — ÁREA DE ENERGIA da base, leste vazio.
+ *  Vários prédios distribuídos; é onde se consegue energia/fiação pra iluminar a base.
+ *  O prédio tem CHÃO RETO → o terreno é achatado num PAD sob cada um (senão flutua). */
+export const FACTORY_PAD_R = 9;
+const FACTORY_POS: { x: number; z: number; rot: number }[] = [
+  { x: 68, z: 15, rot: 0.3 },
+  { x: 78, z: 4, rot: 1.9 },
+  { x: 58, z: 26, rot: -0.8 },
+  { x: 81, z: 24, rot: 2.6 },
+];
+/** padY = altura natural no centro; o footprint inteiro é achatado nela. */
+export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));
+
 export function snowMountainBump(x: number, z: number): number {
   const d = Math.sqrt((x - SNOW_MOUNTAIN.x) ** 2 + (z - SNOW_MOUNTAIN.z) ** 2);
   if (d >= SNOW_MOUNTAIN.r) return 0;
   const t = 1 - d / SNOW_MOUNTAIN.r;                 // 1 no centro → 0 na borda
   const dome = SNOW_MOUNTAIN.peak * (t * t * (3 - 2 * t)); // smoothstep (assenta na borda)
-  // Rugosidade ROCHOSA (some na borda ×t pra não criar degrau; moderada p/ andar).
-  const rug = (noise2d(x, z, 0.11, 0.12) * 2.1 + noise2d(x, z, 0.27, 0.25) * 0.9) * t;
+  // Erosão natural: ONDULAÇÃO em camadas (baixa freq = encostas largas, média =
+  // relevo), fade ×t² pra assentar liso na borda. Baixa freq → sem pontudo/quebrado.
+  const rug = (noise2d(x, z, 0.045, 0.05) * 3.2 + noise2d(x, z, 0.1, 0.11) * 1.4) * t * t;
   return dome + rug;
 }
 
@@ -137,10 +153,18 @@ export function terrainHeight(x: number, z: number): number {
 
   h += snowMountainBump(x, z); // relevo climável no canto NO
 
+  // Pad PLANO sob cada fábrica (o prédio tem chão reto; relevo faria flutuar).
+  for (const f of FACTORY_SITES) {
+    const d = Math.sqrt((x - f.x) ** 2 + (z - f.z) ** 2);
+    if (d < FACTORY_PAD_R) {
+      const u = 1 - d / FACTORY_PAD_R;
+      const t = u * u * (3 - 2 * u); // smoothstep: reto no centro, mescla na borda
+      h = h * (1 - t) + f.padY * t;
+    }
+  }
+
   return h;
 }
-
-export const MAP_HALF = 90;
 
 /** Hash estável de um id para alimentar `rand` sem guardar estado. */
 export function hashId(id: string): number {
