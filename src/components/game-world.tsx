@@ -309,6 +309,7 @@ function Character({
   const sword = useRef<THREE.Group>(null);
   // Rig articulado (grupos de junta, pivô no quadril/joelho/ombro/cotovelo).
   const heroAction = useRef<HeroAction>('idle');
+  const heroSpeed = useRef(0);
   const leftHip = useRef<THREE.Group>(null);
   const rightHip = useRef<THREE.Group>(null);
   const leftKnee = useRef<THREE.Group>(null);
@@ -461,6 +462,7 @@ function Character({
 
     const moving = velocity.current.length() > 0.1;
     heroAction.current = attackPhase.current !== 'idle' ? 'attack' : moving ? 'walk' : 'idle';
+    heroSpeed.current = velocity.current.length();
 
     let nx = body.current.position.x + velocity.current.x * dt;
     let nz = body.current.position.z + velocity.current.y * dt;
@@ -620,7 +622,7 @@ function Character({
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
 
-      {USE_GLB_HERO && <GlbHero actionRef={heroAction} />}
+      {USE_GLB_HERO && <GlbHero actionRef={heroAction} speedRef={heroSpeed} weapon={<HeldItem c={c} />} />}
 
       <group visible={!USE_GLB_HERO}>
       {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
