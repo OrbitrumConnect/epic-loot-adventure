@@ -20,7 +20,20 @@ await page.screenshot({ path: new URL('isometric.png', output).pathname.replace(
 await page.getByRole('button', { name: 'Câmera', exact: true }).click();
 await page.waitForTimeout(2500);
 await page.screenshot({ path: new URL('third-person.png', output).pathname.replace(/^\/(\w:)/, '$1') });
-await writeFile(new URL('report.json', output), JSON.stringify({ errors, text: await page.locator('body').innerText(), buttons: await page.getByRole('button').allTextContents() }, null, 2));
+const performanceSample = await page.evaluate(async () => {
+  const samples = [];
+  let previous = performance.now();
+  for (let i = 0; i < 90; i++) {
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    const now = performance.now();
+    samples.push(now - previous);
+    previous = now;
+  }
+  samples.sort((a, b) => a - b);
+  return { frameMedianMs: samples[45], frameP95Ms: samples[85], frames: samples.length,
+    renderer: window.__celStats || null, note: 'Local headless Chrome sample; CPU/GPU/load dependent, not a target-hardware FPS guarantee.' };
+});
+await writeFile(new URL('report.json', output), JSON.stringify({ errors, performanceSample, text: await page.locator('body').innerText(), buttons: await page.getByRole('button').allTextContents() }, null, 2));
 console.log(JSON.stringify({ errors, title: await page.title(), output: output.pathname }));
 } catch (error) {
   await page.screenshot({ path: new URL('failure.png', output).pathname.replace(/^\/(\w:)/, '$1'), timeout: 10000 }).catch(() => {});

@@ -38,7 +38,7 @@ export const CEL = {
 
   /** Contorno escuro por descontinuidade de profundidade (tela cheia). */
   outline: {
-    enabled: true,
+    enabled: false,
     color: '#100c0a',      // near-black da paleta
     thickness: 1.0,        // raio da amostra, em pixels (grosso = visível a olho nu)
     threshold: 0.08,       // início da borda (diff de prof. relativa)

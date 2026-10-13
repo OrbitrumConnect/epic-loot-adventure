@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { LAKE_CENTERS, RIVER_POINTS, rand, terrainHeight, type Palette } from './world-kit';
+import { pbrMaps } from './pbr-materials';
 
 type Placement = { matrix: THREE.Matrix4; shade: number };
 const noRaycast = () => {};
@@ -140,7 +141,7 @@ function BankInstances({ geometry, items, color, roughness, shadow = false }: {
     ref.current.computeBoundingSphere();
   }, [items]);
   return <instancedMesh ref={ref} args={[geometry, undefined, items.length]} castShadow={shadow} receiveShadow raycast={noRaycast}>
-    <meshStandardMaterial color={color} roughness={roughness} metalness={0} />
+    <meshStandardMaterial {...(shadow ? pbrMaps('worn_rock_natural_01') : {})} color={shadow ? '#ffffff' : color} roughness={shadow ? 1 : roughness} metalness={0} />
   </instancedMesh>;
 }
 

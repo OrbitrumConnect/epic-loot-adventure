@@ -22,6 +22,7 @@ import { ITEMS } from '@/game/data/items';
 import { useGameStore } from '@/game/state/game-store';
 import type { HarvestNodeKind, HarvestNodeState } from '@/game/types';
 import { addObjective } from './objective-bridge';
+import { harvestTreeGeometry } from './harvest-tree-geometry';
 import { makeInstanceFadeMaterial, registerInstancedFade, type FadeSphere } from './occlusion';
 import {
   labelTexture, markPointerConsumed, mixColor, rand, terrainHeight, type Palette,
@@ -109,7 +110,6 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
   const rockDark = mixColor(c.rock, c.dark, 0.35);
   const rubble = mixColor(c.rock, c.ground, 0.45);
   const ironBody = mixColor(c.rock, c.dark, 0.55);
-  const crown = mixColor(c['leaf-light'], c.gold, 0.4);
 
   const mat = (emissive?: string, intensity = 0) =>
     new THREE.MeshStandardMaterial({
@@ -129,22 +129,14 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
   ];
 
   const tree: KindAssets = {
-    live: bake([
-      { g: cyl(0.14, 0.26, 3.6, 6), color: c.trunk, pos: [0, 1.8, 0] },
-      // Raízes e talho de machado em cor clara: lê "árvore de corte".
-      { g: cyl(0.3, 0.4, 0.25, 6), color: mixColor(c.trunk, c.dark, 0.3), pos: [0, 0.12, 0] },
-      { g: box(0.34, 0.16, 0.34), color: c.light, pos: [0, 1.2, 0.1], rot: [0, 0.4, 0] },
-      { g: new THREE.IcosahedronGeometry(1.3, 0), color: crown, pos: [0, 3.9, 0], scale: [1.15, 0.95, 1.1] },
-      { g: new THREE.IcosahedronGeometry(0.85, 0), color: c['leaf-light'], pos: [0.85, 3.3, 0.3] },
-      { g: new THREE.IcosahedronGeometry(0.75, 0), color: c.leaf, pos: [-0.8, 3.45, -0.35] },
-    ]),
+    live: harvestTreeGeometry(c),
     dead: bake([
       { g: cyl(0.3, 0.4, 0.5, 7), color: c.trunk, pos: [0, 0.25, 0] },
       { g: cyl(0.26, 0.26, 0.05, 7), color: c['ground-light'], pos: [0, 0.52, 0] },
       { g: box(0.3, 0.08, 0.14), color: c.trunk, pos: [0.55, 0.05, 0.1], rot: [0, 0.6, 0] },
       { g: box(0.22, 0.07, 0.1), color: c.trunk, pos: [-0.5, 0.04, -0.2], rot: [0, -0.4, 0] },
     ]),
-    liveMat: fadeMat(mat()),
+    liveMat: fadeMat(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 })),
     labelY: 4.9,
     castShadow: true,
     fade: [[0, 3.7, 0, 1.5], [0, 1.4, 0, 0.5]],

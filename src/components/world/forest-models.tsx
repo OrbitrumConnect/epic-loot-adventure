@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import treeUrl from '../../../art/packs/01-ashland-lowpoly/models/ashroot-tree.glb?url';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { rand, terrainHeight, type Palette } from './world-kit';
+import { pbrMaps } from './pbr-materials';
 
 export type ForestPlacement = { x: number; z: number; w: number; h: number; yaw: number };
 const treeSpheres: FadeSphere[] = [[0, 0.25, 0, 0.2], [0, 0.65, 0, 0.34]];
@@ -135,7 +136,7 @@ export function ForestRocks({ placements, c }: { placements: ForestPlacement[]; 
     return geo;
   }, [c.rock, c['rock-light']]);
   const material = useMemo(() => {
-    const source = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, flatShading: true });
+    const source = new THREE.MeshStandardMaterial({ ...pbrMaps('worn_rock_natural_01'), roughness: 1, normalScale: new THREE.Vector2(0.8, 0.8) });
     const result = fadeMaterial(source);
     source.dispose();
     return result;

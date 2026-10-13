@@ -42,6 +42,7 @@ import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
  */
 export const celStats = {
   composerMs: 0, postMs: 0, converted: 0,
+  sceneDrawCalls: 0, sceneTriangles: 0,
   sunU: 0, sunV: 0, sunVis: 0, glowU: 0, glowV: 0, glowFall: 0, day: 1,
 };
 
@@ -216,6 +217,8 @@ export function CelShade() {
     gl.render(scene, camera);
 
     const cam = state.camera as THREE.PerspectiveCamera & THREE.OrthographicCamera;
+    celStats.sceneDrawCalls = gl.info.render.calls;
+    celStats.sceneTriangles = gl.info.render.triangles;
 
     // 1b) Sol/céu. Mesma fonte (`dayNight`) que a malha do Sol usa, então o
     // recorte do disco e o halo concordam sempre com o que está desenhado.

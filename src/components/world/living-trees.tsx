@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { ForestBatch, fadeMaterial, type ForestPlacement } from './forest-models';
 import { rand, type Palette } from './world-kit';
 import type { FadeSphere } from './occlusion';
+import { pbrMaps } from './pbr-materials';
 
 const spheres: FadeSphere[] = [[0, 0.3, 0, 0.16], [0, 0.72, 0, 0.48]];
 type Species = 'oak' | 'pine';
@@ -31,7 +32,6 @@ function treeGeometry(species: Species, seed: number, c: Palette) {
     }
     tube.computeVertexNormals();
     const nonIndexed = tube.toNonIndexed();
-    nonIndexed.deleteAttribute('uv');
     wood.push(nonIndexed);
     tube.dispose();
   };
@@ -84,7 +84,7 @@ function treeGeometry(species: Species, seed: number, c: Palette) {
 export function LivingTrees({ placements, species, c }: { placements: ForestPlacement[]; species: Species; c: Palette }) {
   const assets = useMemo(() => {
     const geometries = treeGeometry(species, species === 'oak' ? 441 : 887, c);
-    const barkSource = new THREE.MeshStandardMaterial({ color: c.trunk, roughness: 0.93 });
+    const barkSource = new THREE.MeshStandardMaterial({ ...pbrMaps('bark_brown_02', 1, 3), color: new THREE.Color(c.trunk).lerp(new THREE.Color('white'), 0.82), roughness: 1, normalScale: new THREE.Vector2(0.7, 0.7) });
     const barkMaterial = fadeMaterial(barkSource);
     const compile = barkMaterial.onBeforeCompile;
     barkMaterial.onBeforeCompile = (shader, renderer) => {

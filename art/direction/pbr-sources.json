@@ -1,0 +1,219 @@
+﻿{
+    "schemaVersion":  1,
+    "retrievedAt":  "2026-10-13T03:57:55.1930309Z",
+    "provider":  "Poly Haven",
+    "license":  "CC0-1.0",
+    "licenseUrl":  "https://polyhaven.com/license",
+    "licenseDeedUrl":  "https://creativecommons.org/publicdomain/zero/1.0/",
+    "totalBytes":  6839837,
+    "downloadBudgetBytes":  35000000,
+    "notes":  [
+                  "Official surface maps only; no preview renders or scenes.",
+                  "Diffuse maps: sRGB; normal and roughness: linear data.",
+                  "Tile dimensions converted from official millimeter metadata.",
+                  "forest_ground_04 evaluated but not downloaded; forrest_ground_01 matches leaf litter and moss."
+              ],
+    "materials":  [
+                      {
+                          "id":  "forrest_ground_01",
+                          "name":  "Forest Ground 01",
+                          "assetUrl":  "https://polyhaven.com/a/forrest_ground_01",
+                          "apiUrl":  "https://api.polyhaven.com/files/forrest_ground_01",
+                          "infoApiUrl":  "https://api.polyhaven.com/info/forrest_ground_01",
+                          "license":  "CC0-1.0",
+                          "sourceDimensionsMillimeters":  [
+                                                              2000,
+                                                              2000
+                                                          ],
+                          "recommendedTileMeters":  [
+                                                        2,
+                                                        2
+                                                    ],
+                          "normalConvention":  "OpenGL +Y",
+                          "files":  [
+                                        {
+                                            "map":  "Diffuse",
+                                            "path":  "public/assets/pbr/forrest_ground_01/forrest_ground_01_diff_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/forrest_ground_01/forrest_ground_01_diff_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_diff_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  833711,
+                                            "md5":  "236e7d928f5e357a194fd92de189cbe4",
+                                            "sha256":  "3dd6875cb3908e022a3c45ebbffa5e84c670ff2691fbbb6dc9ea4bff88523800",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "sRGB",
+                                            "officialHashVerified":  true
+                                        },
+                                        {
+                                            "map":  "nor_gl",
+                                            "path":  "public/assets/pbr/forrest_ground_01/forrest_ground_01_nor_gl_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/forrest_ground_01/forrest_ground_01_nor_gl_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_nor_gl_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  1428763,
+                                            "md5":  "ba4265df25aea293913d004b69ef9ab0",
+                                            "sha256":  "32528a7cdee962cc0b248ee4023a74d0df175737ea90e1eb425122351e0bdab4",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "linear",
+                                            "officialHashVerified":  true
+                                        },
+                                        {
+                                            "map":  "Rough",
+                                            "path":  "public/assets/pbr/forrest_ground_01/forrest_ground_01_rough_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/forrest_ground_01/forrest_ground_01_rough_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forrest_ground_01/forrest_ground_01_rough_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  257165,
+                                            "md5":  "72dacf5b829cafc025f08ca64e92e5eb",
+                                            "sha256":  "30d8b56a03d7b12da16f58011b675662a40e58e1cdc768119a5f03968140058c",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "linear",
+                                            "officialHashVerified":  true
+                                        }
+                                    ]
+                      },
+                      {
+                          "id":  "bark_brown_02",
+                          "name":  "Bark Brown 02",
+                          "assetUrl":  "https://polyhaven.com/a/bark_brown_02",
+                          "apiUrl":  "https://api.polyhaven.com/files/bark_brown_02",
+                          "infoApiUrl":  "https://api.polyhaven.com/info/bark_brown_02",
+                          "license":  "CC0-1.0",
+                          "sourceDimensionsMillimeters":  [
+                                                              999.9990463256836,
+                                                              999.998927116394
+                                                          ],
+                          "recommendedTileMeters":  [
+                                                        1.000,
+                                                        1.000
+                                                    ],
+                          "normalConvention":  "OpenGL +Y",
+                          "files":  [
+                                        {
+                                            "map":  "Diffuse",
+                                            "path":  "public/assets/pbr/bark_brown_02/bark_brown_02_diff_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/bark_brown_02/bark_brown_02_diff_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_diff_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  659592,
+                                            "md5":  "6669cca520594bdca19f94084984ab72",
+                                            "sha256":  "920fa0bed0c9d78c1d530e99795113afd532d7db746de440f4a85d7c83ed0f1a",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "sRGB",
+                                            "officialHashVerified":  true
+                                        },
+                                        {
+                                            "map":  "nor_gl",
+                                            "path":  "public/assets/pbr/bark_brown_02/bark_brown_02_nor_gl_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/bark_brown_02/bark_brown_02_nor_gl_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_nor_gl_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  1015623,
+                                            "md5":  "1cad3fe0349a44df2d4d1c2859c79920",
+                                            "sha256":  "0d5e691e8ad8bcd093a3587887fda2a6b4a948b5708a4f256f7919584c6eb857",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "linear",
+                                            "officialHashVerified":  true
+                                        },
+                                        {
+                                            "map":  "Rough",
+                                            "path":  "public/assets/pbr/bark_brown_02/bark_brown_02_rough_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/bark_brown_02/bark_brown_02_rough_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_rough_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  337946,
+                                            "md5":  "bbcde696e5b9418cdcb2abe638965417",
+                                            "sha256":  "68125592de36e15bae7aa6db85c4d135aeb7e5653199ba226483a70f6d69837d",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "linear",
+                                            "officialHashVerified":  true
+                                        }
+                                    ]
+                      },
+                      {
+                          "id":  "worn_rock_natural_01",
+                          "name":  "Worn Rock Natural 01",
+                          "assetUrl":  "https://polyhaven.com/a/worn_rock_natural_01",
+                          "apiUrl":  "https://api.polyhaven.com/files/worn_rock_natural_01",
+                          "infoApiUrl":  "https://api.polyhaven.com/info/worn_rock_natural_01",
+                          "license":  "CC0-1.0",
+                          "sourceDimensionsMillimeters":  [
+                                                              2000,
+                                                              2000
+                                                          ],
+                          "recommendedTileMeters":  [
+                                                        2,
+                                                        2
+                                                    ],
+                          "normalConvention":  "OpenGL +Y",
+                          "files":  [
+                                        {
+                                            "map":  "Diffuse",
+                                            "path":  "public/assets/pbr/worn_rock_natural_01/worn_rock_natural_01_diff_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/worn_rock_natural_01/worn_rock_natural_01_diff_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/worn_rock_natural_01/worn_rock_natural_01_diff_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  854615,
+                                            "md5":  "f410522eec19eb12e2b96ad4386b8493",
+                                            "sha256":  "ef6c74732c61974c5df7f0f7185e7d6a97308198bf10aec7a0e95e953a617d9e",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "sRGB",
+                                            "officialHashVerified":  true
+                                        },
+                                        {
+                                            "map":  "nor_gl",
+                                            "path":  "public/assets/pbr/worn_rock_natural_01/worn_rock_natural_01_nor_gl_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/worn_rock_natural_01/worn_rock_natural_01_nor_gl_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/worn_rock_natural_01/worn_rock_natural_01_nor_gl_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  910654,
+                                            "md5":  "8645b86f5cb360b626086a4dc286340a",
+                                            "sha256":  "77a5d3f833aa9613581a5c6ef11422923c04b529f893a16d25704529be7386dc",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "linear",
+                                            "officialHashVerified":  true
+                                        },
+                                        {
+                                            "map":  "Rough",
+                                            "path":  "public/assets/pbr/worn_rock_natural_01/worn_rock_natural_01_rough_1k.jpg",
+                                            "runtimeUrl":  "/assets/pbr/worn_rock_natural_01/worn_rock_natural_01_rough_1k.jpg",
+                                            "url":  "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/worn_rock_natural_01/worn_rock_natural_01_rough_1k.jpg",
+                                            "license":  "CC0-1.0",
+                                            "bytes":  541768,
+                                            "md5":  "d8f4508262dcf919d3fe6ce97ae30f98",
+                                            "sha256":  "6a96e1a9a86942d3a19fc332e1c0050390a34e7814ce20865a44c3916bd9b428",
+                                            "resolution":  [
+                                                               1024,
+                                                               1024
+                                                           ],
+                                            "colorSpace":  "linear",
+                                            "officialHashVerified":  true
+                                        }
+                                    ]
+                      }
+                  ]
+}

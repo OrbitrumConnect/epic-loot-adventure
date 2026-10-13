@@ -33,6 +33,7 @@ import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, type Palette } from './world-kit';
 import { ForestRocks, ForestTrees } from './forest-models';
 import { LivingTrees } from './living-trees';
+import { GroundCover } from './ground-cover';
 
 /* ------------------------------------------------------------------ *
  * Vento seco e discreto — ajuste amplitude e speed (radianos/segundo)
@@ -369,14 +370,7 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
       />
       <ForestRocks placements={rocks.large} c={c} />
       <ForestRocks placements={rocks.small} c={c} />
-      <BillboardField
-        tex={spriteTex(terrainUrl(TERRAIN.grass))}
-        placements={grass}
-        wind="grass"
-        windTime={windTime}
-        fadeSpheres={null}
-        registerMat={registerMat}
-      />
+      <GroundCover placements={grass} c={c} />
       <BillboardField
         tex={spriteTex(terrainUrl(TERRAIN.debris))}
         placements={debris}

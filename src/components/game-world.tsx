@@ -29,6 +29,8 @@ import { Atmosphere } from './world/atmosphere';
 import { EnvironmentLight } from './world/environment-light';
 import { RuinMasonry } from './world/ruin-masonry';
 import { RiverBanks } from './world/river-banks';
+import { pbrMaps } from './world/pbr-materials';
+import { DistantLandscape } from './world/distant-landscape';
 import { CEL } from './world/cel-style';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
@@ -1040,40 +1042,26 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
     return g;
   }, [c, size]);
 
-  // Material: dirt (base) × cor de vértice, com grass misturado por `aBlend`.
-  // Tile em espaço de mundo (~6 m) via repeat no UV do plano (0..1 → 0..N).
+  // Photographic PBR surface at a 3 m tile; macro vegetation tint stays subtle.
   const mat = useMemo(() => {
-    const repeat = size / 6;
-    const dirt = groundTexture('/assets/style/ground/dirt.webp', repeat);
-    const grass = groundTexture('/assets/style/ground/grass.webp', repeat);
-    const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: dirt, bumpMap: dirt, bumpScale: 0.09, roughness: 0.94 });
+    const repeat = size / 3;
+    const groundMaps = pbrMaps('forrest_ground_01', repeat);
+    const m = new THREE.MeshStandardMaterial({ ...groundMaps, roughness: 1, normalScale: new THREE.Vector2(0.75, 0.75) });
     m.onBeforeCompile = shader => {
-      shader.uniforms['uGrassMap'] = { value: grass };
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nattribute float aBlend;\nvarying float vBlend;')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBlend = aBlend;');
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform sampler2D uGrassMap;\nvarying float vBlend;')
+        .replace('#include <common>', '#include <common>\nvarying float vBlend;')
         .replace('#include <map_fragment>', /* glsl */ `
           #ifdef USE_MAP
-            // A textura entra só como DETALHE DE LUMINÂNCIA (rachaduras/grão),
-            // NÃO como cor. Multiplicar a textura quente cheia sobre as cores de
-            // vértice já quentes escurecia a cena (~-29% de brilho) e saturava
-            // (terra "de Marte"). Aqui a cor fica 100% nas cores de vértice
-            // (ocre dessaturado da referência); a textura só modula o brilho em
-            // torno de 1.0 (preserva a média, não injeta saturação).
-            vec4 _dirt = texture2D( map, vMapUv );
-            vec4 _grass = texture2D( uGrassMap, vMapUv );
-            vec3 _texCol = mix( _dirt.rgb, _grass.rgb, vBlend );
-            float _texL = dot( _texCol, vec3( 0.299, 0.587, 0.114 ) );
-            float _detail = 1.0 + ( _texL - 0.5 ) * 1.05;  // centrado em ~1 (mais contraste local)
-            diffuseColor.rgb *= clamp( _detail, 0.45, 1.6 );
+            diffuseColor.rgb *= texture2D(map, vMapUv).rgb;
             // Dica leve de grama (olive dessaturado) só onde vBlend é alto.
             diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.97, 1.0, 0.88 ), vBlend * 0.15 );
           #endif
         `);
     };
-    m.customProgramCacheKey = () => 'ground-blend-v1';
+    m.customProgramCacheKey = () => 'ground-pbr-v2';
     return m;
   }, [size]);
 
@@ -1100,8 +1088,8 @@ const WATER_MOTION = {
   lakeCrossWeight: 0.3,
   darkThreshold: -0.25,
   lightThreshold: 0.65,
-  darkTone: 0.78,
-  lightTone: 1.28,
+  darkTone: 0.95,
+  lightTone: 1.035,
   lakeOpacity: 0.75,
   riverOpacity: 0.82,
 };
@@ -1122,7 +1110,14 @@ function WaterMaterial({ color, time, river = false }: {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         varying vec2 vWaterCoord;
-        uniform float uWaterTime;`)
+        uniform float uWaterTime;
+        float waterHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float waterNoise(vec2 p) {
+          vec2 cell = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(waterHash(cell), waterHash(cell + vec2(1.0, 0.0)), f.x),
+            mix(waterHash(cell + vec2(0.0, 1.0)), waterHash(cell + vec2(1.0)), f.x), f.y);
+        }`)
       .replace('#include <color_fragment>', /* glsl */ `#include <color_fragment>
         ${river ? `
           // Advecção no sentido crescente da curva, inclusive nas curvas fechadas.
@@ -1141,15 +1136,27 @@ function WaterMaterial({ color, time, river = false }: {
         float waterTone = mix(${f(w.darkTone)}, 1.0, smoothstep(-0.7, 0.3, wave));
         waterTone = mix(waterTone, ${f(w.lightTone)}, smoothstep(0.55, 1.0, wave));
         diffuseColor.rgb *= waterTone;
+      `)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        vec2 rippleCoord = vWaterCoord * vec2(1.0, ${river ? '2.0' : '1.0'});
+        vec2 flow = rippleCoord + vec2(-uWaterTime * 0.23, uWaterTime * 0.037);
+        float detailVisibility = 1.0 - smoothstep(0.2, 0.8, length(fwidth(rippleCoord * 9.0)));
+        float ripple = waterNoise(flow * 3.1) * 0.025
+          + waterNoise(flow * 7.7 + vec2(19.2, uWaterTime * 0.08)) * 0.006 * detailVisibility;
+        vec3 waterDx = dFdx(-vViewPosition), waterDy = dFdy(-vViewPosition);
+        vec3 waterR1 = cross(waterDy, normal), waterR2 = cross(normal, waterDx);
+        float waterDet = dot(waterDx, waterR1);
+        vec3 waterGradient = sign(waterDet) * (dFdx(ripple) * waterR1 + dFdy(ripple) * waterR2);
+        normal = normalize(abs(waterDet) * normal - waterGradient);
       `);
   }, [river, time]);
-  const cacheKey = useCallback(() => `water-motion-v1-${river ? 'river' : 'lake'}`, [river]);
+  const cacheKey = useCallback(() => `water-ripple-pbr-v2-${river ? 'river' : 'lake'}`, [river]);
 
   return (
     <meshStandardMaterial
       color={color}
-      roughness={0.24}
-      metalness={0.25}
+      roughness={0.3}
+      metalness={0}
       transparent
       opacity={river ? WATER_MOTION.riverOpacity : WATER_MOTION.lakeOpacity}
       depthWrite={false}
@@ -1539,6 +1546,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
         <WaterMaterial color={c.water} time={waterTime} river />
       </mesh>
       <RiverBanks c={c} />
+      <DistantLandscape c={c} />
 
       {/* Bridge — tabuado elevado com vigas, pilares e guarda-corpo; leva a estrada por cima do córrego, na frente do nascedouro */}
       <group position={[-2, 0, 2.5]} rotation={[0, 0.64, 0]}>
