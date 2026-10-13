@@ -338,11 +338,12 @@ export function placePieces(
   for (const c of cost) inv = removeItem(inv, c.itemId, c.quantity);
 
   const vertical = cells.length > 1 && cells[0]!.gx === cells[1]!.gx;
+  const rotation = preview.rotation !== undefined ? preview.rotation : (vertical ? 90 : 0);
   const placed: BasePiece[] = cells.map(cell => ({
     id: pieceId(state.id, preview.kind, cell),
     kind: preview.kind,
     cell,
-    rotation: vertical ? 90 : 0,
+    rotation,
     hp: pieceMaxHp(preview.kind, tier),
     maxHp: pieceMaxHp(preview.kind, tier),
     tier,

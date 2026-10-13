@@ -21,7 +21,7 @@ import { HuntBanner } from '@/components/hud/hunt-banner';
 import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
-import { gameClock } from '@/game/systems/dayNightSystem';
+import { gameClock, WORLD_EPOCH } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
 import { baseLv1Progress } from '@/game/systems/baseLv1';
 import { weaponFor } from '@/game/data/weapons';
@@ -110,9 +110,12 @@ function Index() {
     return () => clearInterval(id);
   }, []);
 
-  // Relógio do jogo (ciclo dia/noite de 30 min). Atualiza a cada segundo.
-  const [clock, setClock] = useState(() => gameClock());
+  // Relógio do jogo (ciclo dia/noite). Inicial determinístico (início do ciclo) para
+  // SSR e cliente renderizarem igual — WORLD_EPOCH difere entre server e cliente, então
+  // gameClock() inicial causaria hydration mismatch. O tempo real entra após o mount.
+  const [clock, setClock] = useState(() => gameClock(WORLD_EPOCH));
   useEffect(() => {
+    setClock(gameClock());
     const id = setInterval(() => setClock(gameClock()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -230,7 +233,19 @@ function Index() {
       if (e.target instanceof HTMLInputElement) return;
       // 1–9 → slots 0–8; 0 → slot 9. Demais slots (ex.: rifle) por clique.
       if (/^[0-9]$/.test(e.key)) useHotbarSlot(e.key === '0' ? 9 : Number(e.key) - 1);
-      if (e.code === 'KeyE' && !inCity) collectNearest();
+      if (e.code === 'KeyE' && !inCity) {
+        const state = useGameStore.getState();
+        const pb = state.playerBase;
+        if (pb) {
+          const dx = state.player.position.x - pb.worldPosition.x;
+          const dz = state.player.position.z - pb.worldPosition.z;
+          if (Math.sqrt(dx * dx + dz * dz) < 15 && baseLv1Progress(pb).pct < 100) {
+            state.deliverToBase();
+            return;
+          }
+        }
+        collectNearest();
+      }
       if (e.code === 'KeyQ' && !inCity) specialAttack('jump');
       if (e.code === 'KeyR' && !inCity) specialAttack('spin');
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }

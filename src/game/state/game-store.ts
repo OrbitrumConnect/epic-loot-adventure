@@ -887,13 +887,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const base = result.base;
     if (!base) { set({ ui: { ...state.ui, message: result.message } }); return; }
     // Limpa o terreno reivindicado: tira madeira/pedra/árvore dentro do quadrado da base.
-    const cleared = state.harvestNodes.filter(
+    const clearedHarvest = state.harvestNodes.filter(
       n => !cellInBaseSquare(worldToBaseCell(n.position), base.origin, base.size),
     );
-    const removed = state.harvestNodes.length - cleared.length;
+    const clearedResources = state.resources.filter(
+      r => !cellInBaseSquare(worldToBaseCell(r.position), base.origin, base.size),
+    );
+    const removed = (state.harvestNodes.length - clearedHarvest.length) + (state.resources.length - clearedResources.length);
     set({
       playerBase: base,
-      harvestNodes: cleared,
+      harvestNodes: clearedHarvest,
+      resources: clearedResources,
       ui: { ...state.ui, message: removed > 0 ? `${result.message} Terreno limpo.` : result.message },
     });
   },
@@ -910,7 +914,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // Entrega o que der: cada peça ainda não erguida é cobrada da bolsa e colocada.
     for (const piece of layout) {
       if (have.has(baseCellKey(piece.cell))) continue;
-      const preview: BuildPreview = { cells: [piece.cell], kind: piece.kind, cost: pieceCost(piece.kind, 1), blocked: [], affordable: true };
+      const preview: BuildPreview = { cells: [piece.cell], kind: piece.kind, rotation: piece.rotation, cost: pieceCost(piece.kind, 1), blocked: [], affordable: true };
       const res = placePlayerPieces(base, preview, inv, Date.now(), 1);
       if (!res.ok) continue; // sem material pra esta peça; tenta as próximas
       base = res.base;

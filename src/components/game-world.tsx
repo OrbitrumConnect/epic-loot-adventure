@@ -11,6 +11,7 @@ import { CombatFeedback } from './world/combat-feedback';
 import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
+import { GlbHero, type HeroAction } from './world/glb-hero';
 import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
@@ -291,6 +292,9 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
   );
 }
 
+/** Liga o herói GLB (Quaternius) no lugar do boneco de blocos. Reversível pela flag. */
+const USE_GLB_HERO = true;
+
 function Character({
   c, attack, movement, onPosition, paused, playerRef, cameraYawRef, cameraMode,
 }: {
@@ -306,6 +310,7 @@ function Character({
   const body = useRef<THREE.Group>(null);
   const sword = useRef<THREE.Group>(null);
   // Rig articulado (grupos de junta, pivô no quadril/joelho/ombro/cotovelo).
+  const heroAction = useRef<HeroAction>('idle');
   const leftHip = useRef<THREE.Group>(null);
   const rightHip = useRef<THREE.Group>(null);
   const leftKnee = useRef<THREE.Group>(null);
@@ -457,6 +462,7 @@ function Character({
     }
 
     const moving = velocity.current.length() > 0.1;
+    heroAction.current = attackPhase.current !== 'idle' ? 'attack' : moving ? 'walk' : 'idle';
 
     let nx = body.current.position.x + velocity.current.x * dt;
     let nz = body.current.position.z + velocity.current.y * dt;
@@ -616,6 +622,9 @@ function Character({
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
 
+      {USE_GLB_HERO && <GlbHero actionRef={heroAction} />}
+
+      <group visible={!USE_GLB_HERO}>
       {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
       <group ref={leftHip} position={[-0.14, 0.6, 0]}>
         <mesh position={[0, -0.15, 0]} castShadow>
@@ -673,6 +682,7 @@ function Character({
       <AdventurerDetails c={c} part="body" />
       <AdventurerDetails c={c} part="torso" />
       <AdventurerDetails c={c} part="skull" />
+      <AdventurerDetails c={c} part="hair" />
       <AdventurerDetails c={c} part="head" />
       <AdventurerDetails c={c} part="coat" />
       {/* Goggles follow the curved head; the leather strap wraps the skull. */}
@@ -755,6 +765,7 @@ function Character({
             </group>
           </group>
         </group>
+      </group>
       </group>
     </group>
   );
@@ -857,7 +868,7 @@ function DayNightLighting({ c }: { c: Palette }) {
         intensity={2.8}
         color={c.light}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
         shadow-camera-left={-60}
         shadow-camera-right={60}
         shadow-camera-top={60}
@@ -1647,6 +1658,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
       <CelShade />
 
+
       <Character c={c} attack={props.attack} movement={target} onPosition={props.onPosition} paused={props.paused} playerRef={playerRef} cameraYawRef={cameraYaw} cameraMode={cameraMode} />
     </>
   );
@@ -1657,7 +1669,7 @@ export default function GameWorld(props: WorldProps) {
   const cameraMode = props.cameraMode ?? 'iso';
 
   return (
-    <Canvas shadows="percentage" dpr={[1, 1.5]} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
+    <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
       {cameraMode === 'iso' ? (
         <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={200} />
       ) : (
