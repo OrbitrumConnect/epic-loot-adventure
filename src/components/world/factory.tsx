@@ -11,6 +11,9 @@ import { FACTORY_SITES, terrainHeight } from './world-kit';
  */
 const URL = '/models/factory/factory.glb';
 const TARGET_H = 11;
+/** Afunda 10 cm: o chão RETO do prédio fica logo abaixo do nosso → nossa terra
+ *  cobre a emenda (o chão do GLB não casa 100% com o do jogo). */
+const FACTORY_SINK = 0.1;
 
 export function Factory() {
   const { scene } = useGLTF(URL);
@@ -36,7 +39,7 @@ export function Factory() {
         <primitive
           key={i}
           object={proto.clone()}
-          position={[f.x, terrainHeight(f.x, f.z), f.z]}
+          position={[f.x, terrainHeight(f.x, f.z) - FACTORY_SINK, f.z]}
           rotation={[0, f.rot, 0]}
         />
       ))}

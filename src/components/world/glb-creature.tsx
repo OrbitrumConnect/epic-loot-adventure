@@ -4,6 +4,21 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
+/** Bounding box a partir das GEOMETRIAS (independe de pose/skin/timing). */
+function measureGeo(root: THREE.Object3D): THREE.Box3 {
+  const box = new THREE.Box3();
+  const tmp = new THREE.Box3();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.geometry) {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      if (m.geometry.boundingBox) { tmp.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld); box.union(tmp); }
+    }
+  });
+  if (box.isEmpty()) box.set(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5));
+  return box;
+}
+
 /**
  * Criatura GLB com rig/animação PRÓPRIOS (quadrúpede: deer, fox...), em vez do
  * bloco procedural. Mesmo espírito do `glb-hero`, mas usa os clips EMBUTIDOS do
@@ -66,11 +81,15 @@ export function GlbCreature({
 
   // Escala pra `height` e põe os pés em y=0 (o Beast posiciona no terreno).
   const model = useMemo(() => {
-    const box = new THREE.Box3().setFromObject(cloned);
+    // Mede pela GEOMETRIA (estável; não depende de pose/timing do skinned mesh —
+    // em produção/mobile o Box3.setFromObject dava box minúsculo → escala gigante).
+    cloned.updateMatrixWorld(true);
+    const box = measureGeo(cloned);
     const h = box.max.y - box.min.y || 1;
     const s = height / h;
     cloned.scale.setScalar(s);
-    const b2 = new THREE.Box3().setFromObject(cloned);
+    cloned.updateMatrixWorld(true);
+    const b2 = measureGeo(cloned);
     cloned.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
     cloned.traverse((o) => {
       const m = o as THREE.Mesh;
