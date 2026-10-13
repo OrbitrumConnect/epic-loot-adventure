@@ -24,9 +24,8 @@ import { useGameStore } from '@/game/state/game-store';
 import { cellCenter, checkClaim, previewLine, worldToCell } from '@/game/systems/playerBaseSystem';
 import { GlbBaseCastle } from './glb-base-castle';
 
-/** Base GLB (Kenney). DESLIGADO: tema errado (Clash é tribal, não medieval) + sem textura.
- *  Volta pro procedural. Reativar só com asset TRIBAL (tenda/acampamento) que bate com o Clash. */
-const USE_GLB_BASE = false;
+/** Base vira forte Kenney (GLB texturizado — colormap em public/models/castle/Textures). */
+const USE_GLB_BASE = true;
 import {
   BASE_GRID, type BasePiece, type BasePieceKind, type BuildPreview, type ClaimCheck, type GridCell,
 } from '@/game/types/playerbase';

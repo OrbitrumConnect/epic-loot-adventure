@@ -67,7 +67,6 @@ export function GlbHero({
         m.frustumCulled = false;
       }
     });
-    if (import.meta.env.DEV) console.info('[GlbHero] clips:', names);
   }, [cloned, names]);
 
   useFrame(() => {
