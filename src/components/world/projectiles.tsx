@@ -38,7 +38,7 @@ export function Projectiles() {
     next.current = (i + 1) % POOL;
     const s = shots.current[i]!;
     const m = meshes.current[i];
-    s.from.set(ev.position.x, terrainHeight(ev.position.x, ev.position.z) + 1.1, ev.position.z);
+    s.from.set(ev.position.x, terrainHeight(ev.position.x, ev.position.z) + (ev.sourceHeight ?? 1.1), ev.position.z);
     s.to.set(ev.to.x, terrainHeight(ev.to.x, ev.to.z) + 0.8, ev.to.z);
     s.dur = Math.max(0.05, s.from.distanceTo(s.to) / SPEED);
     s.t = 0;

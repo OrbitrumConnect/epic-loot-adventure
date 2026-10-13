@@ -24,6 +24,10 @@ export const TOWERS_MIN = 1;
 
 export type BaseCost = { itemId: string; quantity: number };
 
+export type TowerCombat = { range: number; damage: number; cooldownMs: number };
+/** Altura do GLB compartilhada com a origem dos disparos. */
+export const BASE_TOWER_HEIGHT = 6;
+
 export type BasePieceDefinition = {
   kind: BasePieceKind;
   name: string;
@@ -33,6 +37,7 @@ export type BasePieceDefinition = {
   hp: [number, number, number];
   /** Bloqueia passagem no teste de cerco (porta conta como muro). */
   solid: boolean;
+  combat?: [TowerCombat, TowerCombat, TowerCombat];
 };
 
 export const BASE_PIECES: Record<BasePieceKind, BasePieceDefinition> = {
@@ -74,6 +79,11 @@ export const BASE_PIECES: Record<BasePieceKind, BasePieceDefinition> = {
       [{ itemId: 'iron_ore', quantity: 6 }, { itemId: 'stone', quantity: 8 }],
     ],
     hp: [200, 450, 900],
+    combat: [
+      { range: 12, damage: 18, cooldownMs: 1400 },
+      { range: 15, damage: 30, cooldownMs: 1100 },
+      { range: 18, damage: 46, cooldownMs: 800 },
+    ],
     solid: true,
   },
   roof: {

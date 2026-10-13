@@ -71,12 +71,13 @@ export function damageEvent(
   };
 }
 
-export function shotEvent(from: Position, to: Position, projectile: 'arrow' | 'bullet'): FeedbackDraft {
+export function shotEvent(from: Position, to: Position, projectile: 'arrow' | 'bullet', sourceHeight?: number): FeedbackDraft {
   return {
     kind: 'shot',
     position: { ...from },
     to: { ...to },
     projectile,
+    sourceHeight: sourceHeight ?? 1.1,
     targetId: '',
     label: '',
     amount: 0,

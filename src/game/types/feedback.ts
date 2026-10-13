@@ -41,6 +41,8 @@ export type FeedbackEvent = {
   to?: Position;
   /** `shot`: tipo do projétil visual. */
   projectile?: 'arrow' | 'bullet';
+  /** Altura da origem sobre o terreno; ausente mantém arma do jogador. */
+  sourceHeight?: number;
   createdAt: number;
   /** Duração em milissegundos antes de sumir. */
   ttl: number;

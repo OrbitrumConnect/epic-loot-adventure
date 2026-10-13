@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { terrainHeight } from './world-kit';
+import { BASE_TOWER_HEIGHT } from '@/game/data/base-pieces';
 
 /**
  * Torre watchtower (GLB, PBR embutido) reutilizável:
@@ -13,7 +14,6 @@ import { terrainHeight } from './world-kit';
  */
 const WATCH_URL = '/models/watchtower/watchtower.glb';        // acampamentos + topo da montanha
 const LOUD_URL = '/models/watchtower/loudspeaker_tower.glb';  // 4 pontas da base (alarme/defesa que atira)
-const BASE_TOWER_H = 6.0; // torre da base (loudspeaker)
 
 /** Clona o GLB, escala pra `height`, centra em XZ e põe a base em y=0. */
 function buildTower(scene: THREE.Object3D, height: number): THREE.Group {
@@ -43,7 +43,7 @@ export function WatchtowerModel({ height = 5.3 }: { height?: number }) {
 export function GlbWatchTowers() {
   const pieces = useGameStore((s) => s.playerBase?.pieces);
   const { scene } = useGLTF(LOUD_URL);
-  const proto = useMemo(() => buildTower(scene, BASE_TOWER_H), [scene]);
+  const proto = useMemo(() => buildTower(scene, BASE_TOWER_HEIGHT), [scene]);
   const towers = useMemo(() => (pieces ?? []).filter((p) => p.kind === 'tower'), [pieces]);
   if (towers.length === 0) return null;
   return (

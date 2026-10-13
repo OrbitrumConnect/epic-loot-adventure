@@ -23,7 +23,8 @@ import {
 } from '../systems/baseSystem';
 import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
 import type { BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
-import { CLAIM_SIZE } from '../data/base-pieces';
+import { BASE_TOWER_HEIGHT, CLAIM_SIZE } from '../data/base-pieces';
+import { selectTowerTarget, towerDamage, type TowerSource } from '../systems/towerSystem';
 import {
   advanceStage as advanceBaseStageOnce, advanceStageFully, canOpenCityView as cityViewOpen,
   claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
@@ -65,6 +66,8 @@ type GameState = {
   base: BaseState;
   /** Base persistente no mundo (Fase 3). `null` = ainda não reivindicou terreno. */
   playerBase: PlayerBaseState | null;
+  /** Milissegundos por torre; separado das peças para não reconstruir malhas por tiro. */
+  towerLastShotAt: Record<string, number>;
   camps: CampState[];
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
@@ -80,6 +83,7 @@ type GameState = {
 };
 
 type GameActions = {
+  tickTowers: (towers: readonly TowerSource[], now: number, rng?: () => number) => void;
   attack: (targetId: string) => void;
   specialAttack: (kind: 'jump' | 'spin') => void;
   collect: (nodeId: string) => void;
@@ -156,6 +160,35 @@ function syncCarry(player: PlayerState): PlayerState {
   const maxWeight = effectiveMaxWeight(player);
   if (player.inventory.maxWeight === maxWeight) return player;
   return { ...player, inventory: { ...player.inventory, maxWeight } };
+}
+
+/** Caminho comum de morte para armas, especiais e defesa da base. */
+function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
+  const respawnAt = c.speciesId === 'raider_warlord'
+    ? null
+    : now + Math.round((180_000 + rng() * 120_000) * ENEMY_RESPAWN_MULT);
+  return { ...c, hp: 0, behavior: 'dead', respawnAt };
+}
+
+/** Loot/XP seguem o mesmo caminho dos especiais, inclusive bônus de caça. */
+function rewardCreatureDeath(c: CreatureState, player: PlayerState, bags: DeathBag[], drafts: FeedbackDraft[], rng: () => number) {
+  const def = CREATURES[c.speciesId];
+  if (def) {
+    const loot = rollCreatureLoot(def, rng);
+    const newHunt = (player.huntValue ?? 0) + creatureXp(def);
+    const seen = player.huntSeen?.[c.speciesId] ?? 0;
+    const bonus = rollBonusLoot(def, newHunt, seen, rng);
+    player = { ...player, huntValue: newHunt, huntSeen: { ...(player.huntSeen ?? {}), [c.speciesId]: seen + 1 } };
+    if (bonus) loot.push(bonus);
+    for (const drop of loot) if (drop.itemId) drafts.push(lootEvent(drop.itemId, drop.quantity, c.position));
+    if (loot.length) bags = [...bags, createDeathBag(c.id, c.name, c.position, loot)];
+  }
+  const xpGain = creatureXp(def ?? c);
+  const granted = grantXp({ ...player, gold: player.gold + 15 }, xpGain);
+  player = syncCarry(granted.player);
+  drafts.push(deathEvent(c.id, c.name, c.position), xpEvent(xpGain, player.position));
+  if (granted.result.levelsGained > 0) drafts.push(levelUpEvent(granted.result.newLevel, player.position));
+  return { player, bags };
 }
 
 function createInitialPlayer(): PlayerState {
@@ -280,6 +313,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   specialKind: null,
   base: createInitialBase(Date.now()),
   playerBase: null,
+  towerLastShotAt: {},
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
   targetId: null,
@@ -300,6 +334,33 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   getWeight: () => getWeight(get().player.inventory),
   getUsedSlots: () => getUsedSlots(get().player.inventory),
   getItemCount: (itemId: string) => getItemCount(get().player.inventory, itemId),
+
+  tickTowers: (towers, now, rng = Math.random) => {
+    // Nenhuma escrita/alocação nos quadros sem disparo. Cada torre lê o resultado
+    // da anterior, portanto duas torres não premiam a mesma morte.
+    for (const tower of towers) {
+      const state = get();
+      const index = selectTowerTarget(tower, state.creatures, state.towerLastShotAt[tower.id], now);
+      if (index < 0) continue;
+      const c = state.creatures[index]!;
+      const damage = towerDamage(tower, c, rng);
+      const hp = Math.max(0, c.hp - damage);
+      const drafts = [shotEvent(tower, c.position, 'arrow', BASE_TOWER_HEIGHT), damageEvent(c.id, damage, c.position)];
+      let player = state.player;
+      let deathBags = state.deathBags;
+      if (hp === 0) {
+        const reward = rewardCreatureDeath(c, player, deathBags, drafts, rng);
+        player = reward.player;
+        deathBags = reward.bags;
+      }
+      const creatures = state.creatures.slice();
+      creatures[index] = hp === 0 ? deadCreature(c, now, rng) : { ...c, hp };
+      set({ creatures, player, deathBags,
+        towerLastShotAt: { ...state.towerLastShotAt, [tower.id]: now },
+        feedback: pushEvents(state.feedback, drafts, now),
+      });
+    }
+  },
 
   attack: (targetId: string) => {
     const state = get();
@@ -342,10 +403,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const updatedCreatures = state.creatures.map(c => {
       if (c.id !== targetId) return c;
       if (result.targetDied) {
-        const respawnAt = c.speciesId === 'raider_warlord'
-          ? null // o mini-boss só volta pelo timer (BossSpawner), não renasce sozinho.
-          : Date.now() + Math.round((180_000 + Math.random() * 120_000) * ENEMY_RESPAWN_MULT);
-        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt };
+        return deadCreature(c, Date.now(), Math.random);
       }
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
@@ -487,31 +545,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         critical: !!result.critical, fire: usingTorch,
       }));
       if (result.targetDied) {
-        const def = CREATURES[c.speciesId];
-        if (def) {
-          const loot = rollCreatureLoot(def);
-          const newHunt = (updatedPlayer.huntValue ?? 0) + creatureXp(def);
-          const seen = updatedPlayer.huntSeen?.[c.speciesId] ?? 0;
-          const bonus = rollBonusLoot(def, newHunt, seen);
-          updatedPlayer = {
-            ...updatedPlayer,
-            huntValue: newHunt,
-            huntSeen: { ...(updatedPlayer.huntSeen ?? {}), [c.speciesId]: seen + 1 },
-          };
-          if (bonus) loot.push(bonus);
-          for (const d of loot) if (d.itemId) drafts.push(lootEvent(d.itemId, d.quantity, c.position));
-          if (loot.length > 0) updatedBags = [...updatedBags, createDeathBag(c.id, c.name, c.position, loot)];
-        }
-        const xpGain = creatureXp(def ?? c);
-        const g = grantXp({ ...updatedPlayer, gold: updatedPlayer.gold + 15 }, xpGain);
-        updatedPlayer = syncCarry(g.player);
-        drafts.push(deathEvent(c.id, c.name, c.position));
-        drafts.push(xpEvent(xpGain, pos));
-        if (g.result.levelsGained > 0) drafts.push(levelUpEvent(g.result.newLevel, pos));
-        const respawnAt = c.speciesId === 'raider_warlord'
-          ? null // o mini-boss só volta pelo timer (BossSpawner), não renasce sozinho.
-          : Date.now() + Math.round((180_000 + Math.random() * 120_000) * ENEMY_RESPAWN_MULT);
-        return { ...c, hp: 0, behavior: 'dead' as const, respawnAt };
+        const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);
+        updatedPlayer = reward.player;
+        updatedBags = reward.bags;
+        return deadCreature(c, Date.now(), Math.random);
       }
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
