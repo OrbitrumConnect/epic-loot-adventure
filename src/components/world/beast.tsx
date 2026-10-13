@@ -19,8 +19,8 @@ import { GlbCreature } from './glb-creature';
 /** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
  *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
 const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string }> = {
-  deer: { url: '/models/animals/deer.glb', height: 1.7, tint: '#a8743c' },
-  wolf_alpha: { url: '/models/animals/fox.glb', height: 1.35, tint: '#3f434b' },
+  deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c' },
+  wolf_alpha: { url: '/models/animals/fox.glb', height: 1.35, yaw: 0, tint: '#3f434b' },
 };
 
 type V3 = [number, number, number];

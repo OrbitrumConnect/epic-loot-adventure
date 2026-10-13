@@ -25,10 +25,44 @@ export function GlbCreature({
   tint?: string | undefined;
 }) {
   const inner = useRef<THREE.Group>(null);
-  const { scene, animations } = useGLTF(url);
+  const gltf = useGLTF(url) as unknown as { scene: THREE.Group; animations: THREE.AnimationClip[]; parser: { json: { textures?: unknown[]; materials?: { name?: string }[] }; getDependency: (t: string, i: number) => Promise<unknown> } };
+  const { scene, animations } = gltf;
   const cloned = useMemo(() => skeletonClone(scene), [scene]);
   const { actions, names } = useAnimations(animations, inner);
   const current = useRef<string | null>(null);
+
+  // Modelos "demo" trazem textura EMBUTIDA mas não a ligam no material (ficam
+  // brancos/amarelos). Liga a baseColor via parser do glTF (material i → textura i).
+  useEffect(() => {
+    const texCount = gltf.parser.json.textures?.length ?? 0;
+    if (texCount === 0) return;
+    const jsonMats = gltf.parser.json.materials ?? [];
+    let alive = true;
+    const meshes: THREE.Mesh[] = [];
+    cloned.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+    (async () => {
+      for (const mesh of meshes) {
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const mm of mats) {
+          const sm = mm as THREE.MeshStandardMaterial;
+          if (!sm || sm.map) continue;
+          const mi = jsonMats.findIndex((m) => m.name === sm.name);
+          const ti = Math.max(0, Math.min(texCount - 1, mi < 0 ? 0 : mi));
+          try {
+            const tex = (await gltf.parser.getDependency('texture', ti)) as THREE.Texture;
+            if (!alive) return;
+            tex.colorSpace = THREE.SRGBColorSpace;
+            sm.map = tex;
+            sm.color.set('#ffffff'); // deixa a textura aparecer (sem multiplicar cor)
+            sm.metalness = 0;
+            sm.roughness = 0.85;
+            sm.needsUpdate = true;
+          } catch { /* sem textura utilizável: fica o tint */ }
+        }
+      }
+    })();
+    return () => { alive = false; };
+  }, [gltf, cloned]);
 
   // Escala pra `height` e põe os pés em y=0 (o Beast posiciona no terreno).
   const model = useMemo(() => {

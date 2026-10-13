@@ -109,35 +109,53 @@ export function lakeWaterY(_lake: { x: number; z: number; r: number }): number {
 }
 
 /**
- * Montanha de neve no canto noroeste (vazio: longe de spawn/lago/camps). Domo
- * radial com topo PLANO pequeno — relevo CLIMÁVEL (o player/criatura sobem porque
- * amostram terrainHeight). A GLB `snowy_mountain` é posta por cima (snow-mountain.tsx)
- * só como visual. Borda cai suave (cosseno) pra mesclar no terreno sem degrau.
+ * CADEIA MONTANHOSA no canto noroeste (vazio: longe de spawn/lago/camps).
+ * Vários picos de altura/raio diferentes, conectados por MAX → sopé → subida →
+ * picos nevados, com vales entre eles (dá pra iniciar a subida e ir ganhando
+ * altura). Relevo CLIMÁVEL (player/criatura sobem porque amostram terrainHeight).
+ * A cor (neve/rocha) é pintada no terreno (game-world), então mescla de verdade.
  */
-export const SNOW_MOUNTAIN = { x: -70, z: 65, r: 36, peak: 22 };
+const SNOW_PEAKS = [
+  { x: -72, z: 62, r: 28, h: 34 }, // pico principal (alto, nevado)
+  { x: -56, z: 73, r: 22, h: 20 }, // ombro nordeste
+  { x: -85, z: 47, r: 26, h: 26 }, // segundo pico sudoeste
+  { x: -62, z: 50, r: 20, h: 14 }, // morro de entrada (início da subida)
+] as const;
+/** Referência pra cor da neve/rocha (pico mais alto da cadeia). */
+export const SNOW_MOUNTAIN = { x: -72, z: 62, r: 28, peak: 34 };
 
 /** Complexo industrial desativado (prédios GLB) — ÁREA DE ENERGIA da base, leste vazio.
- *  Vários prédios distribuídos; é onde se consegue energia/fiação pra iluminar a base.
- *  O prédio tem CHÃO RETO → o terreno é achatado num PAD sob cada um (senão flutua). */
-export const FACTORY_PAD_R = 9;
+ *  Vários prédios ESPALHADOS; é onde se consegue energia/fiação pra iluminar a base.
+ *  O prédio GLB tem CHÃO RETO → o terreno é achatado numa ZONA PLANA (mesma altura
+ *  pra todos, sem conflito de pads) que cobre TODA a faixa do prédio. */
+export const FACTORY_PAD_R = 15;        // cobre a faixa inteira do prédio
+const FACTORY_PAD_CORE = 0.68;          // miolo 100% plano; só a borda externa mescla
 const FACTORY_POS: { x: number; z: number; rot: number }[] = [
-  { x: 68, z: 15, rot: 0.3 },
-  { x: 78, z: 4, rot: 1.9 },
-  { x: 58, z: 26, rot: -0.8 },
-  { x: 81, z: 24, rot: 2.6 },
+  { x: 60, z: 0, rot: 0.3 },    // leste plano, longe de água/camps
+  { x: 88, z: -4, rot: 1.9 },
+  { x: 60, z: -30, rot: -0.8 },
+  { x: 88, z: -34, rot: 2.6 },
 ];
+/** Altura ÚNICA da zona industrial (todos os prédios no mesmo chão plano). */
+const FACTORY_PAD_Y = terrainHeightRaw(74, -17);
 /** padY = altura natural no centro; o footprint inteiro é achatado nela. */
-export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));
+export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: FACTORY_PAD_Y }));
 
 export function snowMountainBump(x: number, z: number): number {
-  const d = Math.sqrt((x - SNOW_MOUNTAIN.x) ** 2 + (z - SNOW_MOUNTAIN.z) ** 2);
-  if (d >= SNOW_MOUNTAIN.r) return 0;
-  const t = 1 - d / SNOW_MOUNTAIN.r;                 // 1 no centro → 0 na borda
-  const dome = SNOW_MOUNTAIN.peak * (t * t * (3 - 2 * t)); // smoothstep (assenta na borda)
-  // Erosão natural: ONDULAÇÃO em camadas (baixa freq = encostas largas, média =
-  // relevo), fade ×t² pra assentar liso na borda. Baixa freq → sem pontudo/quebrado.
-  const rug = (noise2d(x, z, 0.045, 0.05) * 3.2 + noise2d(x, z, 0.1, 0.11) * 1.4) * t * t;
-  return dome + rug;
+  // MAX dos domos (cadeia conectada; vales entre picos ficam mais baixos).
+  let h = 0;
+  for (const p of SNOW_PEAKS) {
+    const d = Math.sqrt((x - p.x) ** 2 + (z - p.z) ** 2);
+    if (d >= p.r) continue;
+    const t = 1 - d / p.r;
+    const dome = p.h * (t * t * (3 - 2 * t)); // smoothstep (assenta liso na borda)
+    if (dome > h) h = dome;
+  }
+  if (h <= 0) return 0;
+  // Erosão ROCHOSA em camadas, proporcional à altura (sopé liso, cume quebra a
+  // forma redonda sem virar espinho). Mais oitavas no alto = cume menos "bola".
+  const rug = (noise2d(x, z, 0.05, 0.055) * 2.8 + noise2d(x, z, 0.12, 0.13) * 1.8 + noise2d(x, z, 0.22, 0.24) * 0.9) * Math.min(1, h / 5);
+  return h + rug;
 }
 
 export function terrainHeight(x: number, z: number): number {
@@ -153,15 +171,20 @@ export function terrainHeight(x: number, z: number): number {
 
   h += snowMountainBump(x, z); // relevo climável no canto NO
 
-  // Pad PLANO sob cada fábrica (o prédio tem chão reto; relevo faria flutuar).
+  // Zona industrial PLANA (prédio tem chão reto; relevo faria flutuar). Miolo
+  // 100% plano cobrindo a faixa do prédio; só a borda externa mescla no terreno.
+  // padY é o mesmo pra todos → pads vizinhos se fundem sem degrau.
+  let padT = 0;
   for (const f of FACTORY_SITES) {
     const d = Math.sqrt((x - f.x) ** 2 + (z - f.z) ** 2);
-    if (d < FACTORY_PAD_R) {
-      const u = 1 - d / FACTORY_PAD_R;
-      const t = u * u * (3 - 2 * u); // smoothstep: reto no centro, mescla na borda
-      h = h * (1 - t) + f.padY * t;
-    }
+    if (d >= FACTORY_PAD_R) continue;
+    const inner = FACTORY_PAD_R * FACTORY_PAD_CORE;
+    let t: number;
+    if (d <= inner) t = 1;
+    else { const u = 1 - (d - inner) / (FACTORY_PAD_R - inner); t = u * u * (3 - 2 * u); }
+    if (t > padT) padT = t;
   }
+  if (padT > 0) h = h * (1 - padT) + FACTORY_PAD_Y * padT;
 
   return h;
 }

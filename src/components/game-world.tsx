@@ -12,7 +12,6 @@ import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
-import { KenneyRuins } from './world/kenney-ruins';
 import { Factory } from './world/factory';
 import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
@@ -1624,7 +1623,6 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       {showAshlandPilot && <AshlandPilot />}
 
       <Ruins c={c} />
-      <KenneyRuins />
       <Factory />
       <Campfire c={c} position={[-1, 0, 4]} />
       <Campfire c={c} position={[10, 0, -6]} />
