@@ -11,8 +11,9 @@ import { terrainHeight } from './world-kit';
  *   player-base por `USE_GLB_TOWER`; a COLISÃO da peça continua).
  * - `WatchtowerModel`: 1 instância solta (usada tbm no acampamento inimigo).
  */
-const URL = '/models/watchtower/watchtower.glb';
-const BASE_TOWER_H = 5.3; // base (as 4 estavam "grandonas"); ajustável
+const WATCH_URL = '/models/watchtower/watchtower.glb';        // acampamentos + topo da montanha
+const LOUD_URL = '/models/watchtower/loudspeaker_tower.glb';  // 4 pontas da base (alarme/defesa que atira)
+const BASE_TOWER_H = 6.0; // torre da base (loudspeaker)
 
 /** Clona o GLB, escala pra `height`, centra em XZ e põe a base em y=0. */
 function buildTower(scene: THREE.Object3D, height: number): THREE.Group {
@@ -31,16 +32,17 @@ function buildTower(scene: THREE.Object3D, height: number): THREE.Group {
   return wrap;
 }
 
-/** Uma torre solta, base em y=0 (quem posiciona é o pai). */
-export function WatchtowerModel({ height = BASE_TOWER_H }: { height?: number }) {
-  const { scene } = useGLTF(URL);
+/** Atalaia solta (watchtower) — acampamentos/montanha. Base em y=0 (o pai posiciona). */
+export function WatchtowerModel({ height = 5.3 }: { height?: number }) {
+  const { scene } = useGLTF(WATCH_URL);
   const model = useMemo(() => buildTower(scene, height), [scene, height]);
   return <primitive object={model} />;
 }
 
+/** Torres das 4 pontas da BASE = loudspeaker (torre de alarme/defesa que atira). */
 export function GlbWatchTowers() {
   const pieces = useGameStore((s) => s.playerBase?.pieces);
-  const { scene } = useGLTF(URL);
+  const { scene } = useGLTF(LOUD_URL);
   const proto = useMemo(() => buildTower(scene, BASE_TOWER_H), [scene]);
   const towers = useMemo(() => (pieces ?? []).filter((p) => p.kind === 'tower'), [pieces]);
   if (towers.length === 0) return null;
@@ -61,4 +63,5 @@ export function GlbWatchTowers() {
   );
 }
 
-useGLTF.preload(URL);
+useGLTF.preload(WATCH_URL);
+useGLTF.preload(LOUD_URL);
