@@ -72,10 +72,13 @@ export function GlbHero({
   useFrame(() => {
     const want = actionRef.current;
     if (want !== current.current) {
-      const prevName = current.current ? pickClip(names, current.current) : undefined;
       const nextName = pickClip(names, want);
-      if (prevName && actions[prevName]) actions[prevName]!.fadeOut(0.18);
+      // SÓ troca de estado quando o clip existe E toca. Se as animações ainda
+      // não carregaram (actions vazio no 1º frame), NÃO marca como tocado →
+      // tenta de novo no próximo frame (senão o boneco fica em T-pose eterno).
       if (nextName && actions[nextName]) {
+        const prevName = current.current ? pickClip(names, current.current) : undefined;
+        if (prevName && actions[prevName]) actions[prevName]!.fadeOut(0.18);
         const loop = want !== 'attack';
         const a = actions[nextName]!;
         a.reset();
@@ -83,8 +86,8 @@ export function GlbHero({
         a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
         a.clampWhenFinished = !loop;
         a.fadeIn(0.15).play();
+        current.current = want;
       }
-      current.current = want;
     }
     // Sincroniza a cadência do walk com a velocidade real → anti foot-sliding.
     if (current.current === 'walk' && speedRef) {
