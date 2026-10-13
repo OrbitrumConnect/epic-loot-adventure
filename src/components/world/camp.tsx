@@ -19,6 +19,11 @@ import { addObjective, campDefinition } from './objective-bridge';
 import { useFadeGroup, type FadeSphere } from './occlusion';
 import { hashId, markPointerConsumed, mixColor, rand, terrainHeight, type Palette } from './world-kit';
 import { nightFactor } from '@/game/systems/dayNightSystem';
+import { WatchtowerModel } from './glb-watchtower';
+
+/** Watchtower do acampamento inimigo = GLB (mesma torre da base, estilo raider outpost). */
+const USE_GLB_CAMP_TOWER = true;
+const CAMP_TOWER_H = 5.5;
 
 /* ------------------------------------------------------------------ *
  * Layout procedural (fallback)
@@ -277,7 +282,9 @@ function Structure({ s, kit, cleared, flameRef, bannerRef }: {
 }) {
   switch (s.kind) {
     case 'tent': return <Tent kit={kit} />;
-    case 'watchtower': return <Watchtower kit={kit} cleared={cleared} bannerRef={bannerRef} />;
+    case 'watchtower': return USE_GLB_CAMP_TOWER
+      ? <WatchtowerModel height={CAMP_TOWER_H} />
+      : <Watchtower kit={kit} cleared={cleared} bannerRef={bannerRef} />;
     case 'palisade': return <Palisade kit={kit} />;
     case 'bonfire': return <Bonfire kit={kit} cleared={cleared} flameRef={flameRef} />;
     case 'totem': return <Totem kit={kit} />;

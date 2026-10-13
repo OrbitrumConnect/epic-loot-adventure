@@ -37,6 +37,7 @@ import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces } from './worl
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
+  SNOW_MOUNTAIN, snowMountainBump,
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
@@ -1030,6 +1031,8 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
     const sand = new THREE.Color(c.path);             // areia clara
     const bone = new THREE.Color(c.light).lerp(new THREE.Color(c.path), 0.5);    // placa clara de pó
     const burnt = new THREE.Color(c['rock']);         // placa cinza-terra
+    const rockCol = new THREE.Color('#8b877f');       // pedra da montanha
+    const snowCol = new THREE.Color('#eef2f7');       // neve do topo
     const nz = (x: number, z: number, s: number) =>
       Math.sin(x * s + 1.7) * Math.cos(z * s + 2.3) + Math.sin((x + z) * s * 0.7 + 0.5) * 0.5;
     const colors = new Float32Array(pos.count * 3);
@@ -1053,11 +1056,20 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
       } else if (patch > 0.5) {
         tmp.lerp(burnt, 0.5);                                   // placa cinza-terra
       }
+      // Montanha pedrosa: rocha subindo e NEVE no topo (mescla na cor do terreno).
+      const mh = snowMountainBump(x, z);
+      let snowGrass = 1;
+      if (mh > 1) {
+        tmp.lerp(rockCol, Math.min(1, (mh - 1) / 5) * 0.9);
+        const snowT = Math.min(1, Math.max(0, (mh - SNOW_MOUNTAIN.peak * 0.5) / (SNOW_MOUNTAIN.peak * 0.4)));
+        tmp.lerp(snowCol, snowT);
+        snowGrass = Math.max(0, 1 - mh / 3); // sem grama na rocha/neve
+      }
       colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
       // Grama nas placas (patch alto), apagada na crosta escura.
       let grassAmt = THREE.MathUtils.clamp((patch + 0.15) / 0.65, 0, 1);
       if (n < -0.02) grassAmt *= 0.18;
-      blend[i] = grassAmt;
+      blend[i] = grassAmt * snowGrass;
     }
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     g.setAttribute('aBlend', new THREE.BufferAttribute(blend, 1));

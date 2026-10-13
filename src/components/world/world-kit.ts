@@ -106,6 +106,24 @@ export function lakeWaterY(_lake: { x: number; z: number; r: number }): number {
   return LAKE_WATER_Y;
 }
 
+/**
+ * Montanha de neve no canto noroeste (vazio: longe de spawn/lago/camps). Domo
+ * radial com topo PLANO pequeno — relevo CLIMÁVEL (o player/criatura sobem porque
+ * amostram terrainHeight). A GLB `snowy_mountain` é posta por cima (snow-mountain.tsx)
+ * só como visual. Borda cai suave (cosseno) pra mesclar no terreno sem degrau.
+ */
+export const SNOW_MOUNTAIN = { x: -70, z: 65, r: 36, peak: 22 };
+
+export function snowMountainBump(x: number, z: number): number {
+  const d = Math.sqrt((x - SNOW_MOUNTAIN.x) ** 2 + (z - SNOW_MOUNTAIN.z) ** 2);
+  if (d >= SNOW_MOUNTAIN.r) return 0;
+  const t = 1 - d / SNOW_MOUNTAIN.r;                 // 1 no centro → 0 na borda
+  const dome = SNOW_MOUNTAIN.peak * (t * t * (3 - 2 * t)); // smoothstep (assenta na borda)
+  // Rugosidade ROCHOSA (some na borda ×t pra não criar degrau; moderada p/ andar).
+  const rug = (noise2d(x, z, 0.11, 0.12) * 2.1 + noise2d(x, z, 0.27, 0.25) * 0.9) * t;
+  return dome + rug;
+}
+
 export function terrainHeight(x: number, z: number): number {
   let h = terrainHeightRaw(x, z);
 
@@ -116,6 +134,8 @@ export function terrainHeight(x: number, z: number): number {
       h = Math.min(h, LAKE_WATER_Y - 0.05 - t * t * LAKE_DEPTH);
     }
   }
+
+  h += snowMountainBump(x, z); // relevo climável no canto NO
 
   return h;
 }
