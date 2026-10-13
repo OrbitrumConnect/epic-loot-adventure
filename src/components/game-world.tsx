@@ -1622,7 +1622,6 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       <Billboards trees={trees} c={c} />
       {showAshlandPilot && <AshlandPilot />}
 
-      <Ruins c={c} />
       <Factory />
       <Campfire c={c} position={[-1, 0, 4]} />
       <Campfire c={c} position={[10, 0, -6]} />

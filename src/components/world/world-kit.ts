@@ -116,30 +116,30 @@ export function lakeWaterY(_lake: { x: number; z: number; r: number }): number {
  * A cor (neve/rocha) é pintada no terreno (game-world), então mescla de verdade.
  */
 const SNOW_PEAKS = [
-  { x: -72, z: 62, r: 28, h: 34 }, // pico principal (alto, nevado)
-  { x: -56, z: 73, r: 22, h: 20 }, // ombro nordeste
-  { x: -85, z: 47, r: 26, h: 26 }, // segundo pico sudoeste
-  { x: -62, z: 50, r: 20, h: 14 }, // morro de entrada (início da subida)
+  { x: -74, z: 64, r: 38, h: 34 }, // pico principal (alto, nevado, GORDO)
+  { x: -58, z: 76, r: 28, h: 22 }, // ombro nordeste
+  { x: -88, z: 48, r: 34, h: 28 }, // segundo pico sudoeste (maciço)
+  { x: -64, z: 52, r: 22, h: 15 }, // morro de entrada (início da subida)
 ] as const;
 /** Referência pra cor da neve/rocha (pico mais alto da cadeia). */
-export const SNOW_MOUNTAIN = { x: -72, z: 62, r: 28, peak: 34 };
+export const SNOW_MOUNTAIN = { x: -74, z: 64, r: 38, peak: 34 };
 
 /** Complexo industrial desativado (prédios GLB) — ÁREA DE ENERGIA da base, leste vazio.
  *  Vários prédios ESPALHADOS; é onde se consegue energia/fiação pra iluminar a base.
  *  O prédio GLB tem CHÃO RETO → o terreno é achatado numa ZONA PLANA (mesma altura
  *  pra todos, sem conflito de pads) que cobre TODA a faixa do prédio. */
-export const FACTORY_PAD_R = 15;        // cobre a faixa inteira do prédio
-const FACTORY_PAD_CORE = 0.68;          // miolo 100% plano; só a borda externa mescla
+export const FACTORY_PAD_R = 13;        // cobre a faixa do prédio (footprint ~11 m)
+const FACTORY_PAD_CORE = 0.66;          // miolo 100% plano; só a borda externa mescla
+/** ESPALHADAS por regiões distintas (centro+cantos planos, longe de água). Uma no
+ *  lugar da ruína tosca do meio (onde nasce). Cada uma achata no SEU nível. */
 const FACTORY_POS: { x: number; z: number; rot: number }[] = [
-  { x: 60, z: 0, rot: 0.3 },    // leste plano, longe de água/camps
-  { x: 88, z: -4, rot: 1.9 },
-  { x: 60, z: -30, rot: -0.8 },
-  { x: 88, z: -34, rot: 2.6 },
+  { x: 7, z: -8, rot: 0.4 },     // CENTRO (substitui a ruína do spawn)
+  { x: 72, z: 18, rot: 1.9 },    // leste
+  { x: -28, z: -55, rot: -0.8 }, // sudoeste
+  { x: 78, z: -68, rot: 2.6 },   // sudeste
 ];
-/** Altura ÚNICA da zona industrial (todos os prédios no mesmo chão plano). */
-const FACTORY_PAD_Y = terrainHeightRaw(74, -17);
 /** padY = altura natural no centro; o footprint inteiro é achatado nela. */
-export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: FACTORY_PAD_Y }));
+export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));
 
 export function snowMountainBump(x: number, z: number): number {
   // MAX dos domos (cadeia conectada; vales entre picos ficam mais baixos).
@@ -175,6 +175,7 @@ export function terrainHeight(x: number, z: number): number {
   // 100% plano cobrindo a faixa do prédio; só a borda externa mescla no terreno.
   // padY é o mesmo pra todos → pads vizinhos se fundem sem degrau.
   let padT = 0;
+  let padY = 0;
   for (const f of FACTORY_SITES) {
     const d = Math.sqrt((x - f.x) ** 2 + (z - f.z) ** 2);
     if (d >= FACTORY_PAD_R) continue;
@@ -182,9 +183,9 @@ export function terrainHeight(x: number, z: number): number {
     let t: number;
     if (d <= inner) t = 1;
     else { const u = 1 - (d - inner) / (FACTORY_PAD_R - inner); t = u * u * (3 - 2 * u); }
-    if (t > padT) padT = t;
+    if (t > padT) { padT = t; padY = f.padY; } // sites espalhados: cada um no SEU nível
   }
-  if (padT > 0) h = h * (1 - padT) + FACTORY_PAD_Y * padT;
+  if (padT > 0) h = h * (1 - padT) + padY * padT;
 
   return h;
 }
