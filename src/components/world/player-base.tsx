@@ -22,6 +22,12 @@ import { BASE_PIECES, CLAIM_SIZE } from '@/game/data/base-pieces';
 import { ITEMS } from '@/game/data/items';
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter, checkClaim, previewLine, worldToCell } from '@/game/systems/playerBaseSystem';
+import { GlbBaseCastle } from './glb-base-castle';
+import { BaseTribalHall } from './tribal-hall';
+
+/** Base GLB (Kenney). DESLIGADO: tema errado (Clash é tribal, não medieval) + sem textura.
+ *  Volta pro procedural. Reativar só com asset TRIBAL (tenda/acampamento) que bate com o Clash. */
+const USE_GLB_BASE = false;
 import {
   BASE_GRID, type BasePiece, type BasePieceKind, type BuildPreview, type ClaimCheck, type GridCell,
 } from '@/game/types/playerbase';
@@ -763,7 +769,8 @@ export function PlayerBase({
 }: { c: Palette; playerRef: React.RefObject<THREE.Group | null>; paused: boolean }) {
   return (
     <>
-      <BaseStructures c={c} />
+      {USE_GLB_BASE ? <GlbBaseCastle /> : <BaseStructures c={c} />}
+      <BaseTribalHall />
       <BuildLayer c={c} playerRef={playerRef} paused={paused} />
     </>
   );

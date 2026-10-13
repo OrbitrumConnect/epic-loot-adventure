@@ -20,11 +20,13 @@ const IMP_URL = '/models/Imp.glb';
 const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
 const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
-/** Modelo GLB por espécie (todos rig Universal → animam com a UAL, igual o Kael). */
+/** Modelo GLB por espécie. Male_Ranger é EXCLUSIVO do player — raiders usam outros.
+ *  (todos rig Universal → animam com a UAL, igual o Kael). */
 const RAIDER_GLB: Record<string, string> = {
   raider_warlord: IMP_URL,
-  raider_warrior: '/models/raiders/Male_Ranger.gltf',
   raider_scout: '/models/raiders/Male_Peasant.gltf',
+  raider_warrior: '/models/raiders/Female_Peasant.gltf',
+  raider_shaman: '/models/raiders/Female_Ranger.gltf',
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
