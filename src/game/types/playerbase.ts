@@ -81,6 +81,7 @@ export type PlayerBaseState = {
 export type BuildPreview = {
   cells: GridCell[];
   kind: BasePieceKind;
+  rotation?: 0 | 90 | 180 | 270;
   /** Custo somado de tudo que seria construído. */
   cost: { itemId: string; quantity: number }[];
   /** Células recusadas, com o motivo, para pintar de vermelho. */

@@ -19,10 +19,10 @@ function treeGeometry(species: Species, seed: number, c: Palette) {
   const color = new THREE.Color();
   const branch = (points: THREE.Vector3[], radius: number) => {
     const curve = new THREE.CatmullRomCurve3(points);
-    const tube = new THREE.TubeGeometry(curve, 9, radius, 7, false);
+    const tube = new THREE.TubeGeometry(curve, 6, radius, 7, false);
     const p = tube.getAttribute('position');
     for (let i = 0; i < p.count; i++) {
-      const t = Math.floor(i / 8) / 9;
+      const t = Math.floor(i / 8) / 6;
       const center = curve.getPointAt(t);
       const taper = 1 - t * 0.91;
       p.setXYZ(i, center.x + (p.getX(i) - center.x) * taper,
@@ -40,7 +40,7 @@ function treeGeometry(species: Species, seed: number, c: Palette) {
     const a = i * Math.PI * 2 / 7;
     branch([new THREE.Vector3(Math.cos(a) * 0.13, 0.002, Math.sin(a) * 0.13), new THREE.Vector3(Math.cos(a) * 0.05, 0.025, Math.sin(a) * 0.05), new THREE.Vector3(0, 0.17, 0)], 0.023);
   }
-  const count = species === 'oak' ? 19 : 36;
+  const count = species === 'oak' ? 14 : 24;
   for (let i = 0; i < count; i++) {
     const s = seed + i * 97;
     const a = i * 2.39996 + rand(s) * 0.4;
@@ -48,7 +48,7 @@ function treeGeometry(species: Species, seed: number, c: Palette) {
     const reach = species === 'oak' ? 0.22 + rand(s + 2) * 0.2 : (1 - h) * 0.56;
     const end = new THREE.Vector3(Math.cos(a) * reach, h + (species === 'oak' ? 0.12 : -0.035), Math.sin(a) * reach);
     branch([new THREE.Vector3(0, h - 0.12, 0), new THREE.Vector3(end.x * 0.45, h - 0.02, end.z * 0.45), end], species === 'oak' ? 0.018 : 0.01);
-    for (let j = 0; j < (species === 'oak' ? 90 : 65); j++) {
+    for (let j = 0; j < (species === 'oak' ? 36 : 28); j++) {
       const k = s + j * 7.137;
       const theta = rand(k + 3) * Math.PI * 2;
       const spread = Math.sqrt(rand(k + 4));

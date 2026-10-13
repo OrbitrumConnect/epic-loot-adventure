@@ -8,7 +8,7 @@
 import type { GridCell, PlayerBaseState } from '../types/playerbase';
 import { squareCells, cellKey } from './playerBaseSystem';
 
-export type Lv1Piece = { kind: 'wall' | 'door' | 'tower'; cell: GridCell; tier: 1 };
+export type Lv1Piece = { kind: 'wall' | 'door' | 'tower'; cell: GridCell; tier: 1; rotation: 0 | 90 | 180 | 270 };
 
 /** Peças do Lv1 padrão: TORRES nos 4 cantos + 1 porta ao sul + muros no resto do
  *  perímetro. As torres são obrigatórias pro estágio `towers` → `clash` abrir. */
@@ -28,11 +28,17 @@ export function baseLv1Layout(origin: GridCell, size: number): Lv1Piece[] {
   let best = Infinity;
   for (const c of south) { const d = Math.abs(c.gx - midGx); if (d < best) { best = d; doorCell = c; } }
 
-  return border.map(c => ({
-    kind: (isCorner(c) ? 'tower' : (c.gx === doorCell.gx && c.gz === doorCell.gz ? 'door' : 'wall')) as 'wall' | 'door' | 'tower',
-    cell: c,
-    tier: 1 as const,
-  }));
+  return border.map(c => {
+    const kind = (isCorner(c) ? 'tower' : (c.gx === doorCell.gx && c.gz === doorCell.gz ? 'door' : 'wall')) as 'wall' | 'door' | 'tower';
+    const vertical = c.gx === origin.gx || c.gx === maxGx;
+    const rotation = (vertical && (kind === 'wall' || kind === 'door')) ? 90 : 0;
+    return {
+      kind,
+      cell: c,
+      tier: 1 as const,
+      rotation,
+    };
+  });
 }
 
 /** Progresso do Lv1: peças do layout já presentes na base / total. */

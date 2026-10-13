@@ -671,6 +671,7 @@ function Character({
       <AdventurerDetails c={c} part="body" />
       <AdventurerDetails c={c} part="torso" />
       <AdventurerDetails c={c} part="skull" />
+      <AdventurerDetails c={c} part="hair" />
       <AdventurerDetails c={c} part="head" />
       <AdventurerDetails c={c} part="coat" />
       {/* Goggles follow the curved head; the leather strap wraps the skull. */}
@@ -855,7 +856,7 @@ function DayNightLighting({ c }: { c: Palette }) {
         intensity={2.8}
         color={c.light}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
         shadow-camera-left={-60}
         shadow-camera-right={60}
         shadow-camera-top={60}
@@ -1639,6 +1640,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
       <CelShade />
 
+
       <Character c={c} attack={props.attack} movement={target} onPosition={props.onPosition} paused={props.paused} playerRef={playerRef} cameraYawRef={cameraYaw} cameraMode={cameraMode} />
     </>
   );
@@ -1649,7 +1651,7 @@ export default function GameWorld(props: WorldProps) {
   const cameraMode = props.cameraMode ?? 'iso';
 
   return (
-    <Canvas shadows="percentage" dpr={[1, 1.5]} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
+    <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
       {cameraMode === 'iso' ? (
         <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={200} />
       ) : (

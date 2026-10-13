@@ -2,7 +2,7 @@
 import { BufferGeometry, CatmullRomCurve3, DoubleSide, Float32BufferAttribute, Vector3 } from 'three';
 import { mixColor, type Palette } from './world-kit';
 
-type Part = 'torso' | 'shin' | 'shoulder' | 'bracer' | 'shield' | 'head' | 'body' | 'skull' | 'coat';
+type Part = 'torso' | 'shin' | 'shoulder' | 'bracer' | 'shield' | 'head' | 'body' | 'skull' | 'coat' | 'hair';
 
 /** Continuous elliptical sections form a fitted silhouette, rather than stacked boxes. */
 function fittedGeometry(profile: number[][]) {
@@ -64,13 +64,38 @@ function TailoredSurface({ kind, color }: { kind: 'body' | 'skull' | 'cape' | 'c
 }
 
 /** All cosmetic parts retain the existing animated joint and equipment sockets. */
+// Tom de pele quente (fácil de afinar mais claro/escuro). Antes o rosto era c.light (creme pálido).
+const SKIN = '#c58a5b';
+
 export function AdventurerDetails({ c, part }: { c: Palette; part: Part }) {
   const steel = mixColor(c.metal, c.light, 0.28);
   const metal = <meshStandardMaterial color={steel} metalness={0.78} roughness={0.36} />;
   const gold = <meshStandardMaterial color={c.gold} metalness={0.72} roughness={0.38} />;
   if (part === 'body') return <TailoredSurface kind="body" color={c.trunk} />;
-  if (part === 'skull') return <TailoredSurface kind="skull" color={c.light} />;
+  if (part === 'skull') return <TailoredSurface kind="skull" color={SKIN} />;
   if (part === 'coat') return <TailoredSurface kind="coat" color={c.trunk} />;
+  if (part === 'hair') {
+    // Cabelo low-poly no topo/nuca, acima da faixa do elmo; não cobre o rosto/óculos (frente).
+    const hair = <meshStandardMaterial color={mixColor(c.trunk, c.dark, 0.42)} roughness={0.97} />;
+    return <group>
+      {/* calota da coroa (topo e trás) */}
+      <mesh position={[0, 1.6, -0.03]} scale={[0.235, 0.2, 0.238]} castShadow><sphereGeometry args={[1, 22, 18]} />{hair}</mesh>
+      {/* volume superior levemente mais alto (dá "topete") */}
+      <mesh position={[0, 1.675, -0.01]} scale={[0.185, 0.12, 0.16]} castShadow><sphereGeometry args={[1, 18, 14]} />{hair}</mesh>
+      {/* mechas caindo na nuca */}
+      {[-0.1, -0.034, 0.034, 0.1].map((x, i) => (
+        <mesh key={i} position={[x, 1.41, -0.165]} scale={[0.044, 0.135, 0.05]} rotation={[0.42, 0, x * 1.6]} castShadow>
+          <sphereGeometry args={[1, 10, 10]} />{hair}
+        </mesh>
+      ))}
+      {/* tufos laterais (atrás das têmporas) */}
+      {[-1, 1].map(side => (
+        <mesh key={side} position={[side * 0.178, 1.49, -0.03]} scale={[0.05, 0.11, 0.08]} rotation={[0, 0, side * 0.33]} castShadow>
+          <sphereGeometry args={[1, 10, 10]} />{hair}
+        </mesh>
+      ))}
+    </group>;
+  }
   if (part === 'torso') return <>
     <TailoredSurface kind="cape" color={c.cloak} />
     <mesh position={[0, 1.015, 0.13]} scale={[0.267, 0.235, 0.107]} castShadow><sphereGeometry args={[1, 32, 24]} />{metal}</mesh>
