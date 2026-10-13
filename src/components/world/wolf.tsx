@@ -8,6 +8,10 @@ import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING } from './hostile-ai';
 import { mixColor, terrainHeight, type Palette } from './world-kit';
+import { GlbCreature } from './glb-creature';
+
+/** Lobo do Vale = GLB (fox, anim própria, tint cinza). Visual troca; IA/HP ficam. */
+const USE_GLB_WOLF = true;
 
 const furGeometry = new THREE.SphereGeometry(0.5, 10, 8);
 const earGeometry = new THREE.ConeGeometry(0.5, 1, 5);
@@ -39,6 +43,7 @@ export function Wolf({
   const label = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
   const ring = useRef<THREE.Object3D>(null);
+  const movingRef = useRef(false);
   const onClick = useEnemyClick(creatureId, name);
 
   useHostileAI({
@@ -51,6 +56,8 @@ export function Wolf({
     hpGroup,
     ring,
     onAnimate: anim => {
+      movingRef.current = anim.moving; // dirige a anim do GLB
+      if (USE_GLB_WOLF) return;        // GLB anima sozinho; pula pernas procedurais
       const swingAmount = anim.moving ? Math.sin(anim.walkCycle) * 0.5 : 0;
       if (frontLeftLeg.current) frontLeftLeg.current.rotation.x = swingAmount;
       if (frontRightLeg.current) frontRightLeg.current.rotation.x = -swingAmount;
@@ -69,6 +76,8 @@ export function Wolf({
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
       <SelectionRing ring={ring} radius={0.6} c={c} />
       <EnemyLabel name={name} height={1.5} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
+      {USE_GLB_WOLF && <GlbCreature url="/models/animals/fox.glb" movingRef={movingRef} height={1.2} yaw={0} tint="#3f434b" />}
+      <group visible={!USE_GLB_WOLF}>
       {/* Body */}
       <mesh position={[0, 0.5, 0]} scale={[0.44, 0.5, 1.04]} geometry={furGeometry} material={coat} castShadow />
       <mesh position={[0, 0.57, 0.28]} scale={[0.5, 0.61, 0.5]} rotation={[-0.3, 0, 0]} geometry={furGeometry} material={mane} castShadow />
@@ -122,6 +131,7 @@ export function Wolf({
       </mesh>
       {/* Tail */}
       <mesh position={[0, 0.48, -0.62]} rotation={[0.6, 0, 0]} scale={[0.18, 0.2, 0.58]} geometry={furGeometry} material={coat} castShadow />
+      </group>
     </group>
   );
 }

@@ -14,6 +14,17 @@ import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING, type HostileTuning } from './hostile-ai';
 import { mixColor, terrainHeight, type Palette } from './world-kit';
+import { GlbCreature } from './glb-creature';
+
+/** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
+ *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
+const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
+  rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a' },
+  deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c' },
+  boar: { url: '/models/animals/alligator.glb', height: 0.7, yaw: 0, tint: '#5a6b4a', groundBias: -1.15 },
+  bear: { url: '/models/animals/buffalo.glb', height: 2.0, yaw: 0, tint: '#4b3a2a' },
+  wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.3, yaw: 0, tint: '#c49a5e' },
+};
 
 type V3 = [number, number, number];
 
@@ -184,6 +195,8 @@ export function Beast({
   const label = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
   const ring = useRef<THREE.Object3D>(null);
+  const movingRef = useRef(false);
+  const glb = GLB_CREATURE[speciesId];
   const onClick = useEnemyClick(creatureId, name);
 
   useHostileAI({
@@ -196,6 +209,8 @@ export function Beast({
     hpGroup,
     ring,
     onAnimate: anim => {
+      movingRef.current = anim.moving; // dirige a animação do GLB (anda/para)
+      if (glb) return;                 // GLB anima sozinho; pula as pernas procedurais
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.5 : 0;
       if (spec.hop) {
         // Salto: o corpo todo quica em vez de balançar as pernas.
@@ -228,7 +243,8 @@ export function Beast({
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
       <SelectionRing ring={ring} radius={spec.ringRadius} c={c} />
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
-      <group ref={inner}>
+      {glb && <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} />}
+      <group ref={inner} visible={!glb}>
         {/* Corpo */}
         <mesh position={[0, bodyY, 0]} castShadow geometry={organicGeo(bw, bh, bd)} material={coat} />
         {/* Anatomical shoulder and haunch masses share cached geometry. */}

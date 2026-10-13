@@ -22,6 +22,14 @@ import { BASE_PIECES, CLAIM_SIZE } from '@/game/data/base-pieces';
 import { ITEMS } from '@/game/data/items';
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter, checkClaim, previewLine, worldToCell } from '@/game/systems/playerBaseSystem';
+import { GlbBaseCastle } from './glb-base-castle';
+import { BaseHouse } from './base-house';
+import { GlbWatchTowers } from './glb-watchtower';
+
+/** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
+const USE_GLB_BASE = false;
+/** Torre da base = GLB watchtower (esconde a procedural; colisão da peça mantém). */
+const USE_GLB_TOWER = true;
 import {
   BASE_GRID, type BasePiece, type BasePieceKind, type BuildPreview, type ClaimCheck, type GridCell,
 } from '@/game/types/playerbase';
@@ -138,6 +146,7 @@ function BaseStructures({ c }: { c: Palette }) {
 
     if (pieces) {
       for (const p of pieces) {
+        if (USE_GLB_TOWER && p.kind === 'tower') continue; // torre vira GLB (GlbWatchTowers)
         const batch = built.batches[KINDS.indexOf(p.kind) * 3 + (p.tier - 1)];
         if (!batch || batch.mesh.count >= CAP) continue;
         const ctr = cellCenter(p.cell);
@@ -146,7 +155,10 @@ function BaseStructures({ c }: { c: Palette }) {
         const lean = p.kind === 'core' ? 0 : hurt * 0.2 * pieceSign(p.id);
         dummy.position.set(ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z);
         dummy.rotation.set(lean, (p.rotation * Math.PI) / 180, lean * 0.35);
-        dummy.scale.set(1, 1 - hurt * 0.1, 1);
+        // Muro/portão e torre mais altos (+~1.5–2 m): estica em Y a partir do chão
+        // (a base fica no terreno, o topo sobe). Core/telhado ficam como são.
+        const tall = p.kind === 'tower' ? 1.4 : p.kind === 'wall' || p.kind === 'door' ? 1.8 : 1;
+        dummy.scale.set(1, (1 - hurt * 0.1) * tall, 1);
         dummy.updateMatrix();
         const i = batch.mesh.count++;
         batch.mesh.setMatrixAt(i, dummy.matrix);
@@ -763,7 +775,9 @@ export function PlayerBase({
 }: { c: Palette; playerRef: React.RefObject<THREE.Group | null>; paused: boolean }) {
   return (
     <>
-      <BaseStructures c={c} />
+      {USE_GLB_BASE ? <GlbBaseCastle /> : <BaseStructures c={c} />}
+      {USE_GLB_TOWER && <GlbWatchTowers />}
+      <BaseHouse />
       <BuildLayer c={c} playerRef={playerRef} paused={paused} />
     </>
   );

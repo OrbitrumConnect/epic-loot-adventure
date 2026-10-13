@@ -12,6 +12,22 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
+import { GlbHero, type HeroAction } from './glb-hero';
+
+/** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
+const USE_GLB_BOSS = true;
+const IMP_URL = '/models/Imp.glb';
+const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
+const BOSS_GLB_YAW = 0;
+const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
+/** Modelo GLB por espécie. Male_Ranger é EXCLUSIVO do player — raiders usam outros.
+ *  (todos rig Universal → animam com a UAL, igual o Kael). */
+const RAIDER_GLB: Record<string, string> = {
+  raider_warlord: IMP_URL,
+  raider_scout: '/models/raiders/Male_Peasant.gltf',
+  raider_warrior: '/models/raiders/Female_Peasant.gltf',
+  raider_shaman: '/models/raiders/Female_Ranger.gltf',
+};
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
 type Weapon = 'dagger' | 'axe' | 'club' | 'staff';
@@ -241,6 +257,7 @@ export function Raider({
   const costume = useMemo(() => costumeGeometry(spec, kit), [spec, kit]);
 
   const ref = useRef<THREE.Group>(null);
+  const bossAction = useRef<HeroAction>('idle');
   const leftLeg = useRef<THREE.Mesh>(null);
   const rightLeg = useRef<THREE.Mesh>(null);
   const leftArm = useRef<THREE.Mesh>(null);
@@ -265,6 +282,7 @@ export function Raider({
     hpGroup,
     ring,
     onAnimate: (anim, dt) => {
+      bossAction.current = (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? 'walk' : 'idle';
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.6 : 0;
       if (leftLeg.current) leftLeg.current.rotation.x = swing;
       if (rightLeg.current) rightLeg.current.rotation.x = -swing;
@@ -324,7 +342,11 @@ export function Raider({
       <SelectionRing ring={ring} radius={0.55 * s} c={c} />
       <EnemyLabel name={name} height={2.15 * s} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
 
-      <group scale={s}>
+      {USE_GLB_BOSS && (
+        <GlbHero charUrl={RAIDER_GLB[speciesId] ?? DEFAULT_RAIDER_GLB} actionRef={bossAction} scale={spec.boss ? BOSS_GLB_SCALE : spec.scale} yaw={BOSS_GLB_YAW} />
+      )}
+
+      <group scale={s} visible={!USE_GLB_BOSS}>
         <group ref={torso}>
           <mesh geometry={costume[0]!} material={kit.metal} castShadow />
           <mesh geometry={costume[1]!} material={kit.bone} castShadow />

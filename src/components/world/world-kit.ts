@@ -78,6 +78,8 @@ function riverFlatten(x: number, z: number): number {
   return 1 - (d - RIVER_HALF_WIDTH) / RIVER_BLEND;
 }
 
+export const MAP_HALF = 90;
+
 function terrainHeightRaw(x: number, z: number): number {
   const broad  = noise2d(x, z, 0.015, 0.017) * 3.6;
   const hills  = noise2d(x, z, 0.04,  0.035) * 1.7;
@@ -106,6 +108,58 @@ export function lakeWaterY(_lake: { x: number; z: number; r: number }): number {
   return LAKE_WATER_Y;
 }
 
+/**
+ * CADEIA MONTANHOSA no canto noroeste (vazio: longe de spawn/lago/camps).
+ * Vários picos de altura/raio diferentes, conectados por MAX → sopé → subida →
+ * picos nevados, com vales entre eles (dá pra iniciar a subida e ir ganhando
+ * altura). Relevo CLIMÁVEL (player/criatura sobem porque amostram terrainHeight).
+ * A cor (neve/rocha) é pintada no terreno (game-world), então mescla de verdade.
+ */
+const SNOW_PEAKS = [
+  { x: -74, z: 64, r: 38, h: 34 }, // pico principal (alto, nevado, GORDO)
+  { x: -58, z: 76, r: 28, h: 22 }, // ombro nordeste
+  { x: -88, z: 48, r: 34, h: 28 }, // segundo pico sudoeste (maciço)
+  { x: -64, z: 52, r: 22, h: 15 }, // morro de entrada (início da subida)
+] as const;
+/** Referência pra cor da neve/rocha (pico mais alto da cadeia). */
+export const SNOW_MOUNTAIN = { x: -74, z: 64, r: 38, peak: 34 };
+
+/** Complexo industrial desativado (prédios GLB) — ÁREA DE ENERGIA da base, leste vazio.
+ *  Vários prédios ESPALHADOS; é onde se consegue energia/fiação pra iluminar a base.
+ *  O prédio GLB tem CHÃO RETO → o terreno é achatado numa ZONA PLANA (mesma altura
+ *  pra todos, sem conflito de pads) que cobre TODA a faixa do prédio. */
+export const FACTORY_PAD_R = 22;        // raio TOTAL com blend longo e suave (sem degrau)
+const FACTORY_PAD_CORE = 0.42;          // miolo plano (~9,2 m, cobre o prédio); resto mescla LONGO
+/** Em áreas naturalmente PLANAS (centro do spawn + perto das beiradas, onde o
+ *  relevo já é baixo) → o pad quase não mexe = sem platô/degrau. Longe de água.
+ *  Uma no lugar da ruína do meio. Cada uma achata no SEU nível; o rio é preservado. */
+const FACTORY_POS: { x: number; z: number; rot: number }[] = [
+  { x: 7, z: -8, rot: 0.4 },     // CENTRO (clareira do spawn, plana)
+  { x: 78, z: 24, rot: 1.9 },    // beirada leste
+  { x: 26, z: -76, rot: -0.8 },  // beirada sul
+  { x: -80, z: -38, rot: 2.6 },  // beirada oeste
+];
+/** padY = altura natural no centro; o footprint inteiro é achatado nela. */
+export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));
+
+export function snowMountainBump(x: number, z: number): number {
+  // MAX dos domos (cadeia conectada; vales entre picos ficam mais baixos).
+  let h = 0;
+  for (const p of SNOW_PEAKS) {
+    const d = Math.sqrt((x - p.x) ** 2 + (z - p.z) ** 2);
+    if (d >= p.r) continue;
+    const t = 1 - d / p.r;
+    const dome = p.h * (t * t * (3 - 2 * t)); // smoothstep (assenta liso na borda)
+    if (dome > h) h = dome;
+  }
+  if (h <= 0) return 0;
+  // Erosão ROCHOSA em camadas, proporcional à altura (sopé liso, cume quebra a
+  // forma redonda sem virar espinho). Mais oitavas no alto = cume menos "bola".
+  // Fator não-zero no PÉ (h~0 → ~0.45) pra o sopé subir DEFORME, não reto.
+  const rug = (noise2d(x, z, 0.05, 0.055) * 2.8 + noise2d(x, z, 0.12, 0.13) * 1.8 + noise2d(x, z, 0.22, 0.24) * 0.9) * Math.min(1, (h + 2.5) / 6);
+  return h + rug;
+}
+
 export function terrainHeight(x: number, z: number): number {
   let h = terrainHeightRaw(x, z);
 
@@ -117,10 +171,32 @@ export function terrainHeight(x: number, z: number): number {
     }
   }
 
+  h += snowMountainBump(x, z); // relevo climável no canto NO
+
+  // Zona industrial PLANA (prédio tem chão reto; relevo faria flutuar). Miolo
+  // 100% plano cobrindo a faixa do prédio; só a borda externa mescla no terreno.
+  // padY é o mesmo pra todos → pads vizinhos se fundem sem degrau.
+  let padT = 0;
+  let padY = 0;
+  for (const f of FACTORY_SITES) {
+    const d = Math.sqrt((x - f.x) ** 2 + (z - f.z) ** 2);
+    if (d >= FACTORY_PAD_R) continue;
+    const inner = FACTORY_PAD_R * FACTORY_PAD_CORE;
+    let t: number;
+    if (d <= inner) t = 1;
+    else { const u = 1 - (d - inner) / (FACTORY_PAD_R - inner); t = u * u * (3 - 2 * u); }
+    if (t > padT) { padT = t; padY = f.padY; } // sites espalhados: cada um no SEU nível
+  }
+  if (padT > 0) {
+    // Preserva o rio: o pad não aplaina o leito (senão a fábrica "passa por cima").
+    const rd = riverDistance(x, z);
+    const riverKeep = Math.max(0, Math.min(1, (rd - RIVER_HALF_WIDTH - 1) / 4));
+    padT *= riverKeep;
+    h = h * (1 - padT) + padY * padT;
+  }
+
   return h;
 }
-
-export const MAP_HALF = 90;
 
 /** Hash estável de um id para alimentar `rand` sem guardar estado. */
 export function hashId(id: string): number {

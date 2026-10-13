@@ -12,6 +12,9 @@ import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
+import { Factory } from './world/factory';
+import { FactoryRubble } from './world/factory-rubble';
+import { WatchtowerModel } from './world/glb-watchtower';
 import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
@@ -33,9 +36,13 @@ import { RiverBanks } from './world/river-banks';
 import { pbrMaps } from './world/pbr-materials';
 import { DistantLandscape } from './world/distant-landscape';
 import { CEL } from './world/cel-style';
+import { housePlayerInside } from './world/house-collider';
+import { factoryClip } from './world/factory-collider';
+import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls, factoryRoofCutY } from './world/base-collision';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
+  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R,
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
@@ -95,7 +102,10 @@ const STRUCT_COLLIDER_R: Record<string, number> = {
 
 // Colisores fixos (acampamentos + ruínas): dados estáticos, calculados uma vez.
 const STATIC_COLLIDERS: Collider[] = (() => {
-  const list: Collider[] = [{ x: RUINS_POSITION.x, z: RUINS_POSITION.z, r: 2.2 }];
+  const list: Collider[] = [
+    { x: RUINS_POSITION.x, z: RUINS_POSITION.z, r: 2.2 },
+    // fábrica NÃO é círculo sólido: tem colisão de PAREDE (entra pela abertura).
+  ];
   for (const placement of CAMP_PLACEMENTS) {
     const def = CAMPS[placement.defId];
     if (!def) continue;
@@ -311,6 +321,7 @@ function Character({
   const sword = useRef<THREE.Group>(null);
   // Rig articulado (grupos de junta, pivô no quadril/joelho/ombro/cotovelo).
   const heroAction = useRef<HeroAction>('idle');
+  const heroSpeed = useRef(0);
   const leftHip = useRef<THREE.Group>(null);
   const rightHip = useRef<THREE.Group>(null);
   const leftKnee = useRef<THREE.Group>(null);
@@ -463,6 +474,7 @@ function Character({
 
     const moving = velocity.current.length() > 0.1;
     heroAction.current = attackPhase.current !== 'idle' ? 'attack' : moving ? 'walk' : 'idle';
+    heroSpeed.current = velocity.current.length();
 
     let nx = body.current.position.x + velocity.current.x * dt;
     let nz = body.current.position.z + velocity.current.y * dt;
@@ -475,6 +487,12 @@ function Character({
       if (r == null) continue;
       [nx, nz] = pushOut(nx, nz, node.position.x, node.position.z, r);
     }
+    // Paredes da casa da base: sólidas (entra só pela porta).
+    [nx, nz] = pushOutHouseWalls(nx, nz, PLAYER_RADIUS);
+    // Cerca da base (muro + torre): sólida; entra pelo portão.
+    [nx, nz] = pushOutBasePieces(nx, nz, PLAYER_RADIUS);
+    // Paredes das fábricas: sólidas (entra pela abertura).
+    [nx, nz] = pushOutFactoryWalls(nx, nz, PLAYER_RADIUS);
 
     body.current.position.x = THREE.MathUtils.clamp(nx, -MAP_HALF, MAP_HALF);
     body.current.position.z = THREE.MathUtils.clamp(nz, -MAP_HALF, MAP_HALF);
@@ -509,9 +527,16 @@ function Character({
       k.delete('Space');
     }
 
+    const houseFloor = houseFloorSurfaceY(body.current.position.x, body.current.position.z);
+    // Teto some SÓ no top-down/moba (iso). No ombro (third) mantém o teto.
+    housePlayerInside.current = houseFloor !== -Infinity && cameraMode === 'iso';
+    // Mesmo pra fábrica: dentro + iso → corta o teto; senão prédio inteiro.
+    const facCut = factoryRoofCutY(body.current.position.x, body.current.position.z);
+    factoryClip.constant = facCut !== null && cameraMode === 'iso' ? facCut : 1e9;
     const groundY = Math.max(
       terrainHeight(body.current.position.x, body.current.position.z),
       bridgeSurfaceY(body.current.position.x, body.current.position.z),
+      houseFloor,
     );
 
     if (!isGrounded.current) {
@@ -622,7 +647,7 @@ function Character({
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
 
-      {USE_GLB_HERO && <GlbHero actionRef={heroAction} />}
+      {USE_GLB_HERO && <GlbHero actionRef={heroAction} speedRef={heroSpeed} weapon={<HeldItem c={c} />} />}
 
       <group visible={!USE_GLB_HERO}>
       {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
@@ -1019,6 +1044,8 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
     const sand = new THREE.Color(c.path);             // areia clara
     const bone = new THREE.Color(c.light).lerp(new THREE.Color(c.path), 0.5);    // placa clara de pó
     const burnt = new THREE.Color(c['rock']);         // placa cinza-terra
+    const rockCol = new THREE.Color('#8b877f');       // pedra da montanha
+    const snowCol = new THREE.Color('#eef2f7');       // neve do topo
     const nz = (x: number, z: number, s: number) =>
       Math.sin(x * s + 1.7) * Math.cos(z * s + 2.3) + Math.sin((x + z) * s * 0.7 + 0.5) * 0.5;
     const colors = new Float32Array(pos.count * 3);
@@ -1042,11 +1069,20 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
       } else if (patch > 0.5) {
         tmp.lerp(burnt, 0.5);                                   // placa cinza-terra
       }
+      // Montanha pedrosa: rocha subindo e NEVE no topo (mescla na cor do terreno).
+      const mh = snowMountainBump(x, z);
+      let snowGrass = 1;
+      if (mh > 1) {
+        tmp.lerp(rockCol, Math.min(1, (mh - 1) / 5) * 0.9);
+        const snowT = Math.min(1, Math.max(0, (mh - SNOW_MOUNTAIN.peak * 0.5) / (SNOW_MOUNTAIN.peak * 0.4)));
+        tmp.lerp(snowCol, snowT);
+        snowGrass = Math.max(0, 1 - mh / 3); // sem grama na rocha/neve
+      }
       colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
       // Grama nas placas (patch alto), apagada na crosta escura.
       let grassAmt = THREE.MathUtils.clamp((patch + 0.15) / 0.65, 0, 1);
       if (n < -0.02) grassAmt *= 0.18;
-      blend[i] = grassAmt;
+      blend[i] = grassAmt * snowGrass;
     }
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     g.setAttribute('aBlend', new THREE.BufferAttribute(blend, 1));
@@ -1412,7 +1448,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
   const trees = useMemo(
     () =>
-      Array.from({ length: 400 }, (_, i) => ({
+      Array.from({ length: 340 }, (_, i) => ({
         x: (rand(i + 1) - 0.5) * MAP_HALF * 2,
         z: (rand(i + 301) - 0.5) * MAP_HALF * 2,
         size: 0.65 + rand(i + 701) * 0.7,
@@ -1431,7 +1467,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
           const dx = p.x - camp.position.x;
           const dz = p.z - camp.position.z;
           return Math.sqrt(dx * dx + dz * dz) > def.radius + 2;
-        })),
+        }))
+        // Fábrica é zona plana: árvore dentro do prédio atrapalha.
+        .filter(p => FACTORY_SITES.every(f => Math.hypot(p.x - f.x, p.z - f.z) > FACTORY_PAD_R)),
     [],
   );
 
@@ -1602,7 +1640,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       <Billboards trees={trees} c={c} />
       {showAshlandPilot && <AshlandPilot />}
 
-      <Ruins c={c} />
+      <Factory />
+      <FactoryRubble c={c} />
+      {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
+      <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
+        <WatchtowerModel height={6} />
+      </group>
       <Campfire c={c} position={[-1, 0, 4]} />
       <Campfire c={c} position={[10, 0, -6]} />
       <Campfire c={c} position={[-15, 0, -12]} />
