@@ -26,8 +26,11 @@ import { makeInstanceFadeMaterial, registerInstancedFade, type FadeSphere } from
 import {
   labelTexture, markPointerConsumed, mixColor, rand, terrainHeight, type Palette,
 } from './world-kit';
+import { GlbCrystals } from './glb-crystals';
 
 const KINDS: HarvestNodeKind[] = ['tree', 'pebble', 'rock', 'iron_vein', 'gold_vein', 'crystal'];
+/** Cristal da Essência = GLB (esconde o procedural, mantém clique). */
+const USE_GLB_CRYSTAL = true;
 
 /* ------------------------------------------------------------------ *
  * Busca de nó com cache por identidade do array (igual a `creatureById`)
@@ -215,6 +218,10 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
     fade: [[0, 0.6, 0, 1.0]],
   };
 
+  // Cristal vivo vira GLB (GlbCrystals); o procedural fica INVISÍVEL mas ainda
+  // clicável (colorWrite/depthWrite off = sem cor nem oclusão, raycast mantém).
+  const crystalLiveMat = fadeMat(mat(c.crystal, 0.22));
+  if (USE_GLB_CRYSTAL) { crystalLiveMat.colorWrite = false; crystalLiveMat.depthWrite = false; }
   const crystal: KindAssets = {
     live: bake([
       { g: dodeca(0.8), color: c.rock, pos: [0, 0.4, 0], scale: [1.1, 0.7, 0.9] },
@@ -227,7 +234,7 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
       { g: cone(0.1, 0.22, 5), color: mixColor(c.crystal, c.dark, 0.5), pos: [0.15, 0.3, 0.05], rot: [0, 0, 0.4] },
       { g: cone(0.08, 0.16, 5), color: mixColor(c.crystal, c.dark, 0.5), pos: [-0.2, 0.26, -0.1], rot: [0.3, 0, -0.3] },
     ]),
-    liveMat: fadeMat(mat(c.crystal, 0.22)),
+    liveMat: crystalLiveMat,
     labelY: 2.4,
     castShadow: true,
     fade: [[0, 0.8, 0, 1.0]],
@@ -450,6 +457,7 @@ export function HarvestNodes({ c }: { c: Palette }) {
           hover={hover}
         />
       ))}
+      {USE_GLB_CRYSTAL && <GlbCrystals />}
       <HarvestLabel c={c} hover={hover} assets={built.assets} />
     </>
   );

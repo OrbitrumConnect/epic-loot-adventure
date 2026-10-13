@@ -19,6 +19,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight } from './world-kit';
+import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece } from './base-targets';
@@ -91,6 +92,8 @@ export function labelScaleFor(camera: THREE.Camera, viewportHeight: number, dist
  * barras. Ferido ou marcado como alvo continua aparecendo a qualquer distância.
  */
 const LABEL_RANGE = 12;
+/** Raio do corpo da criatura para a colisão com a base (aprox., igual ao player). */
+const CREATURE_RADIUS = 0.5;
 /** Largura-alvo da barra em pixels, para ser legível nas duas câmeras. */
 const BAR_PIXELS = 84;
 
@@ -383,9 +386,15 @@ export function useHostileAI(opts: HostileOptions) {
       moving = true;
     }
 
+    // Colisão da base (mesma do player): cerca + paredes da casa bloqueiam a
+    // criatura; o portão/vão da porta deixa passar. Ela encosta e ATACA o muro
+    // (nearestBasePiece acima), aí avança quando a peça cai. Sem reinventar.
+    [targetX, targetZ] = pushOutBasePieces(targetX, targetZ, CREATURE_RADIUS);
+    [targetX, targetZ] = pushOutHouseWalls(targetX, targetZ, CREATURE_RADIUS);
     g.position.x = THREE.MathUtils.clamp(targetX, -MAP_HALF, MAP_HALF);
     g.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
-    g.position.y = terrainHeight(g.position.x, g.position.z);
+    // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno.
+    g.position.y = Math.max(terrainHeight(g.position.x, g.position.z), houseFloorSurfaceY(g.position.x, g.position.z));
 
     const behavior: CreatureBehavior = flee
       ? 'flee'

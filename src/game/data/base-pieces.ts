@@ -6,8 +6,8 @@ import type { BasePieceKind } from '../types/playerbase';
  * Custos usam itens que já existem na bolsa (madeira, pedra, minério de ferro).
  */
 
-/** Lado do quadrado do claim, em quadrículas (8 x 2 m = 16 m). */
-export const CLAIM_SIZE = 8;
+/** Lado do quadrado do claim, em quadrículas (11 x 2 m = 22 m — +3 m/lado p/ a casa grande). */
+export const CLAIM_SIZE = 11;
 /** Folga mínima entre dois claims, em quadrículas (distância real entre as bordas). */
 export const MIN_BASE_DISTANCE = 4;
 /** Desnível máximo (m) entre o ponto mais alto e o mais baixo do claim. */

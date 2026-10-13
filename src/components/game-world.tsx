@@ -32,6 +32,8 @@ import { EnvironmentLight } from './world/environment-light';
 import { RuinMasonry } from './world/ruin-masonry';
 import { RiverBanks } from './world/river-banks';
 import { CEL } from './world/cel-style';
+import { housePlayerInside } from './world/house-collider';
+import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces } from './world/base-collision';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
@@ -476,6 +478,10 @@ function Character({
       if (r == null) continue;
       [nx, nz] = pushOut(nx, nz, node.position.x, node.position.z, r);
     }
+    // Paredes da casa da base: sólidas (entra só pela porta).
+    [nx, nz] = pushOutHouseWalls(nx, nz, PLAYER_RADIUS);
+    // Cerca da base (muro + torre): sólida; entra pelo portão.
+    [nx, nz] = pushOutBasePieces(nx, nz, PLAYER_RADIUS);
 
     body.current.position.x = THREE.MathUtils.clamp(nx, -MAP_HALF, MAP_HALF);
     body.current.position.z = THREE.MathUtils.clamp(nz, -MAP_HALF, MAP_HALF);
@@ -510,9 +516,13 @@ function Character({
       k.delete('Space');
     }
 
+    const houseFloor = houseFloorSurfaceY(body.current.position.x, body.current.position.z);
+    // Teto some SÓ no top-down/moba (iso). No ombro (third) mantém o teto.
+    housePlayerInside.current = houseFloor !== -Infinity && cameraMode === 'iso';
     const groundY = Math.max(
       terrainHeight(body.current.position.x, body.current.position.z),
       bridgeSurfaceY(body.current.position.x, body.current.position.z),
+      houseFloor,
     );
 
     if (!isGrounded.current) {

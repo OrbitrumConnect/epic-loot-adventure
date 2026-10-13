@@ -48,7 +48,7 @@ function build(base: PlayerBaseState, a: [number, number], b: [number, number], 
   return res.base;
 }
 
-/** Anel completo do quadrado (28 células para size 8). */
+/** Anel completo do quadrado (perímetro = 4·(size−1); 40 células para size 11). */
 function ring(base: PlayerBaseState, skip: [number, number][] = []): PlayerBaseState {
   const n = base.size - 1;
   let b = base;
@@ -159,7 +159,7 @@ describe('playerBase · construção', () => {
   });
 
   it('recusa células fora do claim e já ocupadas, e não cobra por elas', () => {
-    const out = previewLine(at(base, 6, 0), at(base, 10, 0), 'wall', base, RICH);
+    const out = previewLine(at(base, 9, 0), at(base, 13, 0), 'wall', base, RICH);
     expect(out.cells).toHaveLength(2);
     expect(out.blocked).toHaveLength(3);
     const core = base.pieces[0]!.cell;
@@ -195,12 +195,12 @@ describe('playerBase · cerco', () => {
     expect(isEnclosed(base)).toBe(false);
 
     const closed = ring(base);
-    expect(closed.pieces.filter(p => p.kind === 'wall')).toHaveLength(28);
+    expect(closed.pieces.filter(p => p.kind === 'wall')).toHaveLength(40);
     expect(closed.enclosed).toBe(true);
     expect(isEnclosed(closed)).toBe(true);
 
     const gap = ring(base, [[3, 0]]);
-    expect(gap.pieces.filter(p => p.kind === 'wall')).toHaveLength(27);
+    expect(gap.pieces.filter(p => p.kind === 'wall')).toHaveLength(39);
     expect(gap.enclosed).toBe(false);
 
     const door = build(gap, [3, 0], [3, 0], 'door');

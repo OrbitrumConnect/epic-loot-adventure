@@ -6,9 +6,10 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { terrainHeight } from './world-kit';
 
 /**
- * Base como forte Kenney (Castle Kit, texturizado via colormap). 1 clone por peça
- * da `playerBase`: muro→wall, porta→gate, TORRE→base+mid+roof empilhados (torre
- * completa). wall.glb é 2×2 = BASE_GRID(2m) → escala 1. Reversível (USE_GLB_BASE).
+ * Base como forte Kenney (Castle Kit, texturizado via colormap). 1 peça por célula:
+ * muro→wall, porta→gate, TORRE→base+mid+roof empilhados. Cada peça é CENTRALIZADA
+ * em XZ (origem no centro) antes de rotacionar — gira no próprio eixo e encaixa na
+ * vizinha (sem buracos). wall ~2×2 = BASE_GRID(2m). Reversível (USE_GLB_BASE).
  */
 const U = {
   wall: '/models/castle/wall.glb',
@@ -18,15 +19,11 @@ const U = {
   gate: '/models/castle/gate.glb',
 } as const;
 
-function groundOffset(s: THREE.Object3D) {
-  return -new THREE.Box3().setFromObject(s).min.y;
-}
-function spanY(s: THREE.Object3D) {
-  const b = new THREE.Box3().setFromObject(s);
-  return b.max.y - b.min.y;
-}
+const WALL_H = 2.6; // muros/portão mais altos
+const WALL_W = 1.5; // alarga pra encostar na vizinha (muro era mais estreito que o grid)
+const TOWER_H = 1.5;
 
-export function GlbBaseCastle({ scale = 1, yawOffset = 0 }: { scale?: number; yawOffset?: number }) {
+export function GlbBaseCastle({ scale = 1, yawOffset = Math.PI / 2 }: { scale?: number; yawOffset?: number }) {
   const pieces = useGameStore((s) => s.playerBase?.pieces);
   const wall = useGLTF(U.wall);
   const tbase = useGLTF(U.tbase);
@@ -34,54 +31,53 @@ export function GlbBaseCastle({ scale = 1, yawOffset = 0 }: { scale?: number; ya
   const troof = useGLTF(U.troof);
   const gate = useGLTF(U.gate);
 
-  // Torre completa pré-montada (base+mid+roof), base no y=0.
+  // Torre completa (base+mid+roof), base no y=0.
   const towerProto = useMemo(() => {
     const g = new THREE.Group();
     let y = 0;
     for (const src of [tbase.scene, tmid.scene, troof.scene]) {
       const o = src.clone(true);
-      o.position.y = y + groundOffset(o);
+      const b = new THREE.Box3().setFromObject(o);
+      o.position.y = y - b.min.y;
       g.add(o);
-      y += spanY(o);
+      y += b.max.y - b.min.y;
     }
     return g;
   }, [tbase.scene, tmid.scene, troof.scene]);
 
-  const offWall = useMemo(() => groundOffset(wall.scene), [wall.scene]);
-  const offGate = useMemo(() => groundOffset(gate.scene), [gate.scene]);
-
   const nodes = useMemo(() => {
     if (!pieces) return [];
-    const out: THREE.Object3D[] = [];
-    for (const p of pieces) {
-      let obj: THREE.Object3D | null = null;
-      let yoff = 0;
-      if (p.kind === 'wall') {
-        obj = wall.scene.clone(true);
-        yoff = offWall;
-      } else if (p.kind === 'door') {
-        obj = gate.scene.clone(true);
-        yoff = offGate;
-      } else if (p.kind === 'tower') {
-        obj = towerProto.clone(true);
-        yoff = 0; // proto já tem a base em y=0
-      }
-      if (!obj) continue;
-      obj.traverse((m) => {
+    // Clona a peça, centraliza XZ na origem e põe a base em y=0 → gira/escala no eixo.
+    const make = (src: THREE.Object3D, sxz: number, sy: number) => {
+      const o = src.clone(true);
+      o.traverse((m) => {
         const mesh = m as THREE.Mesh;
         if (mesh.isMesh) {
           mesh.castShadow = true;
           mesh.receiveShadow = true;
         }
       });
+      const b = new THREE.Box3().setFromObject(o);
+      o.position.set(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
+      const wrap = new THREE.Group();
+      wrap.add(o);
+      wrap.scale.set(sxz, sy, sxz);
+      return wrap;
+    };
+    const out: THREE.Object3D[] = [];
+    for (const p of pieces) {
+      let w: THREE.Object3D | null = null;
+      if (p.kind === 'wall') w = make(wall.scene, scale * WALL_W, scale * WALL_H);
+      else if (p.kind === 'door') w = make(gate.scene, scale * WALL_W, scale * WALL_H);
+      else if (p.kind === 'tower') w = make(towerProto, scale * 1.1, scale * TOWER_H);
+      if (!w) continue;
       const ctr = cellCenter(p.cell);
-      obj.position.set(ctr.x, terrainHeight(ctr.x, ctr.z) + yoff * scale, ctr.z);
-      obj.rotation.set(0, (p.rotation * Math.PI) / 180 + yawOffset, 0);
-      obj.scale.setScalar(scale);
-      out.push(obj);
+      w.position.set(ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z);
+      w.rotation.y = (p.rotation * Math.PI) / 180 + yawOffset;
+      out.push(w);
     }
     return out;
-  }, [pieces, wall.scene, gate.scene, towerProto, offWall, offGate, scale, yawOffset]);
+  }, [pieces, wall.scene, gate.scene, towerProto, scale, yawOffset]);
 
   return <>{nodes.map((o, i) => <primitive key={i} object={o} />)}</>;
 }
