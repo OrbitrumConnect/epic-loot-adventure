@@ -300,9 +300,22 @@ function createInitialCreatures(): CreatureState[] {
 
 const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_brute', 'raider_shaman'] as const;
 
-/** Nº de bosses (warlord) na onda — cresce com as ondas (teto 5). */
+/** Nº de bosses na onda — cresce com as ondas (teto 5). */
 function waveBossCount(wave: number): number {
   return Math.min(5, Math.ceil(wave / 2)); // onda 1-2:1, 3-4:2, 5-6:3...
+}
+
+/**
+ * Qual boss nasce. Ondas maiores liberam bosses MAIORES; o 1º boss da onda é o
+ * mais forte disponível, o resto varia pra horda ficar mista.
+ *  - onda <5: só Colosso (warlord)
+ *  - onda 5-9: Fúngico aparece (1,5× maior)
+ *  - onda 10+: Kaiju aparece (o gigante)
+ */
+function waveBossSpecies(wave: number, index: number): string {
+  if (wave >= 10) return index === 0 ? 'raider_kaiju' : index % 2 === 0 ? 'raider_mushroom' : 'raider_warlord';
+  if (wave >= 5) return index === 0 ? 'raider_mushroom' : 'raider_warlord';
+  return 'raider_warlord';
 }
 
 /** Centro (core) da base, pra as hordas mirarem. null se não houver base. */
@@ -342,7 +355,7 @@ function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: n
   const count = waveEnemyCount(wave);
   for (let i = 0; i < count; i++) mk(WAVE_SPECIES[i % WAVE_SPECIES.length]!, i, '', 1);
   const bosses = waveBossCount(wave);
-  for (let b = 0; b < bosses; b++) mk('raider_warlord', count + b, 'boss', 1.2); // bosses da onda
+  for (let b = 0; b < bosses; b++) mk(waveBossSpecies(wave, b), count + b, 'boss', 1.2); // bosses da onda
   return out;
 }
 

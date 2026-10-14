@@ -24,6 +24,8 @@ const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
  *  (todos rig Universal → animam com a UAL, igual o Kael). */
 const RAIDER_GLB: Record<string, string> = {
   raider_warlord: IMP_URL,
+  raider_mushroom: IMP_URL, // boss maior — mesmo rig que já temos, só escala
+  raider_kaiju: IMP_URL,    // boss gigante — idem
   raider_scout: '/models/raiders/Male_Peasant.gltf',
   raider_warrior: '/models/raiders/Female_Peasant.gltf',
   raider_shaman: '/models/raiders/Female_Ranger.gltf',
@@ -42,6 +44,8 @@ type Species = {
   charm: boolean;
   /** Mini-boss: gira o torso (redemoinho) como o especial do herói. */
   boss?: boolean;
+  /** Escala do GLB quando boss (sobrepõe BOSS_GLB_SCALE). */
+  bossScale?: number;
   tuning: HostileTuning;
 };
 
@@ -98,12 +102,32 @@ export const RAIDER_SPECIES: Record<string, Species> = {
   // reage de longe e gira num redemoinho ao golpear.
   raider_warlord: {
     scale: 3.3, bodyWidth: 0.95, bodyDepth: 0.55, weapon: 'club',
-    hood: false, shoulders: true, charm: false, boss: true,
+    hood: false, shoulders: true, charm: false, boss: true, bossScale: 2.5,
     tuning: {
       // Caçador implacável: aggro largo, NÃO desiste (timeout enorme) e rápido o
       // bastante pra alcançar e bater como os outros — com o giro por cima.
       ...base, speed: 3.9, aggroRange: 30, attackRange: 4.5, leashRange: 400,
       chaseTimeout: 600, provokeRange: 45, walkSpeedChase: 13, walkSpeedIdle: 5,
+      hitVerb: 'esmagou',
+    },
+  },
+  // Boss MAIOR (~1,5× o Colosso): mesmo rig/giro, mais lento, alcance maior.
+  raider_mushroom: {
+    scale: 3.3, bodyWidth: 0.95, bodyDepth: 0.55, weapon: 'club',
+    hood: false, shoulders: true, charm: false, boss: true, bossScale: 3.75,
+    tuning: {
+      ...base, speed: 3.4, aggroRange: 34, attackRange: 6, leashRange: 400,
+      chaseTimeout: 600, provokeRange: 50, walkSpeedChase: 11, walkSpeedIdle: 4,
+      hitVerb: 'esmagou',
+    },
+  },
+  // Boss GIGANTE (~1,5× o Fúngico): o maior da horda.
+  raider_kaiju: {
+    scale: 3.3, bodyWidth: 0.95, bodyDepth: 0.55, weapon: 'club',
+    hood: false, shoulders: true, charm: false, boss: true, bossScale: 5.6,
+    tuning: {
+      ...base, speed: 3.0, aggroRange: 40, attackRange: 8, leashRange: 400,
+      chaseTimeout: 600, provokeRange: 60, walkSpeedChase: 9, walkSpeedIdle: 3.5,
       hitVerb: 'esmagou',
     },
   },
@@ -333,7 +357,8 @@ export function Raider({
   });
 
   const y = terrainHeight(start.x, start.z);
-  const s = spec.scale;
+  // escala VISUAL (bosses GLB usam bossScale; o resto, a escala da espécie).
+  const s = spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale;
   const w = spec.bodyWidth;
   const d = spec.bodyDepth;
 
@@ -343,7 +368,7 @@ export function Raider({
       <EnemyLabel name={name} height={2.15 * s} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
 
       {USE_GLB_BOSS && (
-        <GlbHero charUrl={RAIDER_GLB[speciesId] ?? DEFAULT_RAIDER_GLB} actionRef={bossAction} scale={spec.boss ? BOSS_GLB_SCALE : spec.scale} yaw={BOSS_GLB_YAW} />
+        <GlbHero charUrl={RAIDER_GLB[speciesId] ?? DEFAULT_RAIDER_GLB} actionRef={bossAction} scale={spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale} yaw={BOSS_GLB_YAW} />
       )}
 
       <group scale={s} visible={!USE_GLB_BOSS}>
