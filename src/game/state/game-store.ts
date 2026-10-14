@@ -297,6 +297,11 @@ function createInitialCreatures(): CreatureState[] {
 
 const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_brute', 'raider_shaman'] as const;
 
+/** Nº de bosses (warlord) na onda — cresce com as ondas (teto 5). */
+function waveBossCount(wave: number): number {
+  return Math.min(5, Math.ceil(wave / 2)); // onda 1-2:1, 3-4:2, 5-6:3...
+}
+
 /** Centro (core) da base, pra as hordas mirarem. null se não houver base. */
 function baseCenter(base: PlayerBaseState | null): { x: number; z: number } | null {
   if (!base) return null;
@@ -306,19 +311,18 @@ function baseCenter(base: PlayerBaseState | null): { x: number; z: number } | nu
 
 /** Cria os raiders de uma onda ao redor da base (eles marcham até ela — ver hostile-ai). */
 function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: number): CreatureState[] {
-  const count = waveEnemyCount(wave);
   const hpScale = waveHpScale(wave);
   const clamp = (v: number) => Math.max(-WORLD_HALF + 2, Math.min(WORLD_HALF - 2, v));
   const out: CreatureState[] = [];
-  for (let i = 0; i < count; i++) {
-    const sp = WAVE_SPECIES[i % WAVE_SPECIES.length]!;
+  const mk = (sp: string, i: number, tag: string, hpMul = 1) => {
     const def = CREATURES[sp];
-    if (!def) continue;
-    const ang = (i / count) * Math.PI * 2 + Math.random() * 0.4;
-    const r = 20 + Math.random() * 10; // nascem fora da vista, em volta da base
-    const hp = Math.round(scaleEnemyHp(def.maxHp) * hpScale);
+    if (!def) return;
+    const total = waveEnemyCount(wave) + waveBossCount(wave);
+    const ang = (i / Math.max(1, total)) * Math.PI * 2 + Math.random() * 0.5;
+    const r = 34 + Math.random() * 14; // nascem BEM fora da vista, marcham até a base
+    const hp = Math.round(scaleEnemyHp(def.maxHp) * hpScale * hpMul);
     out.push({
-      id: `wave${wave}_${i}_${now}`,
+      id: `wave${wave}_${tag}${i}_${now}`,
       speciesId: sp,
       name: def.name,
       hp, maxHp: hp,
@@ -331,7 +335,11 @@ function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: n
       lootTable: [],
       respawnAt: null,
     });
-  }
+  };
+  const count = waveEnemyCount(wave);
+  for (let i = 0; i < count; i++) mk(WAVE_SPECIES[i % WAVE_SPECIES.length]!, i, '', 1);
+  const bosses = waveBossCount(wave);
+  for (let b = 0; b < bosses; b++) mk('raider_warlord', count + b, 'boss', 1.2); // bosses da onda
   return out;
 }
 

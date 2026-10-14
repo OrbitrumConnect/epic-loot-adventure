@@ -80,9 +80,9 @@ export const BASE_PIECES: Record<BasePieceKind, BasePieceDefinition> = {
     ],
     hp: [200, 450, 900],
     combat: [
-      { range: 12, damage: 18, cooldownMs: 1400 },
-      { range: 15, damage: 30, cooldownMs: 1100 },
-      { range: 18, damage: 46, cooldownMs: 800 },
+      { range: 17, damage: 18, cooldownMs: 1400 },
+      { range: 21, damage: 30, cooldownMs: 1100 },
+      { range: 25, damage: 46, cooldownMs: 800 },
     ],
     solid: true,
   },
