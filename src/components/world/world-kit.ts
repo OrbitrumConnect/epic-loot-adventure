@@ -148,15 +148,29 @@ export function snowMountainBump(x: number, z: number): number {
   for (const p of SNOW_PEAKS) {
     const d = Math.sqrt((x - p.x) ** 2 + (z - p.z) ** 2);
     if (d >= p.r) continue;
-    const t = 1 - d / p.r;
-    const dome = p.h * (t * t * (3 - 2 * t)); // smoothstep (assenta liso na borda)
+    let t = 1 - d / p.r;
+    // Pico principal ganha PLATÔ no topo: a partir do miolo (~7 m) a altura trava
+    // num teto plano → mesa limpa pra a torre assentar reta (não na ponta/curva).
+    if (p === SNOW_PEAKS[0]) t = Math.min(t, 0.82);
+    // Encosta RETA (pow ~1 = cone, não bolha redonda), topo plano pelo clamp acima.
+    const dome = p.h * Math.pow(t, 1.04);
     if (dome > h) h = dome;
   }
   if (h <= 0) return 0;
-  // Erosão ROCHOSA em camadas, proporcional à altura (sopé liso, cume quebra a
-  // forma redonda sem virar espinho). Mais oitavas no alto = cume menos "bola".
-  // Fator não-zero no PÉ (h~0 → ~0.45) pra o sopé subir DEFORME, não reto.
-  const rug = (noise2d(x, z, 0.05, 0.055) * 2.8 + noise2d(x, z, 0.12, 0.13) * 1.8 + noise2d(x, z, 0.22, 0.24) * 0.9) * Math.min(1, (h + 2.5) / 6);
+  // Relevo ROCHOSO moderado: ondulações em camadas + leve crista (quebra a forma
+  // redonda sem espetar). Cresce com a altura — sopé liso, encosta com textura.
+  const hf = Math.min(1, (h + 3) / 8);
+  const ridge = 1 - Math.abs(noise2d(x, z, 0.055, 0.065) / 1.5); // 0..1, crista suave
+  // TOPO achatado: perto do cume principal (onde fica a torre) o relevo some, pra
+  // a torre assentar numa base limpa e plana (0 no centro → 1 a partir de ~12 m).
+  const dSummit = Math.sqrt((x - SNOW_PEAKS[0]!.x) ** 2 + (z - SNOW_PEAKS[0]!.z) ** 2);
+  const summitFlat = Math.min(1, Math.max(0, (dSummit - 6) / 8));
+  const rug = (
+    noise2d(x, z, 0.04, 0.045) * 2.8 +   // grandes contrafortes
+    noise2d(x, z, 0.11, 0.12) * 1.6 +    // média
+    noise2d(x, z, 0.23, 0.25) * 0.8 +    // pedregosa fina
+    ridge * 1.6                          // crista leve
+  ) * hf * summitFlat;
   return h + rug;
 }
 

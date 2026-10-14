@@ -1077,11 +1077,11 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
       const mh = snowMountainBump(x, z);
       let snowGrass = 1;
       if (mh > 0.5) {
-        tmp.lerp(mossCol, Math.min(1, mh / 3) * 0.55);                         // verdinho no sopé
-        tmp.lerp(stoneCol, Math.min(1, Math.max(0, (mh - 3) / 6)) * 0.95);     // rocha subindo
-        const snowT = Math.min(1, Math.max(0, (mh - SNOW_MOUNTAIN.peak * 0.45) / (SNOW_MOUNTAIN.peak * 0.4)));
+        tmp.lerp(mossCol, Math.min(1, mh / 2) * 0.35);                         // verdinho SÓ no pezinho (fraco)
+        tmp.lerp(stoneCol, Math.min(1, Math.max(0, (mh - 1.5) / 5)));          // ROCHA cedo e forte (realista)
+        const snowT = Math.min(1, Math.max(0, (mh - SNOW_MOUNTAIN.peak * 0.38) / (SNOW_MOUNTAIN.peak * 0.35)));
         tmp.lerp(snowCol, snowT);                                              // neve no alto
-        snowGrass = Math.max(0, 1 - mh / 4); // sem grama na rocha/neve
+        snowGrass = Math.max(0, 1 - mh / 3); // sem grama já na rocha baixa
       }
       colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
       // Grama nas placas (patch alto), apagada na crosta escura.
