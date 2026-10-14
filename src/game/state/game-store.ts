@@ -1122,6 +1122,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const message = placed > 0
       ? (prog.pct >= 100 ? 'Base Nível 1 concluída! 🏯 O Clash abriu.' : `Construção: ${prog.pct}% (+${placed} peças). Farme mais madeira/pedra.`)
       : (prog.pct >= 100 ? 'A base já está no Nível 1.' : 'Sem material. Farme madeira/pedra e volte pra entregar.');
+    console.log('[BASE] construir (martelo): +' + placed + ' peças · progresso ' + prog.pct + '% · ' + message);
     set({ playerBase: base, player: { ...s.player, inventory: inv }, ui: { ...s.ui, message } });
   },
 
