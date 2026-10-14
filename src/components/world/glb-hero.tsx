@@ -155,23 +155,23 @@ export function GlbHero({
 
   useFrame(() => {
     const want = actionRef.current;
-    if (want !== current.current) {
-      const nextName = pickClip(names, want);
-      // SÓ troca de estado quando o clip existe E toca. Se as animações ainda
-      // não carregaram (actions vazio no 1º frame), NÃO marca como tocado →
-      // tenta de novo no próximo frame (senão o boneco fica em T-pose eterno).
-      if (nextName && actions[nextName]) {
-        const prevName = current.current ? pickClip(names, current.current) : undefined;
-        if (prevName && actions[prevName]) actions[prevName]!.fadeOut(0.18);
-        const loop = want !== 'attack';
-        const a = actions[nextName]!;
-        a.reset();
-        a.timeScale = 1;
-        a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
-        a.clampWhenFinished = !loop;
-        a.fadeIn(0.15).play();
-        current.current = want;
-      }
+    const nextName = pickClip(names, want) ?? names[0];
+    const curName = current.current ? (pickClip(names, current.current) ?? '') : '';
+    const curRunning = curName ? !!actions[curName]?.isRunning() : false;
+    // Re-dispara quando MUDA de estado OU quando um estado que deveria LOOPAR
+    // (idle/walk) parou (anti T-pose ETERNO — garante que algo sempre toca). O
+    // ataque (LoopOnce) NÃO se re-dispara sozinho; volta pro idle pela máquina.
+    const stalledLoop = want !== 'attack' && !curRunning;
+    if (nextName && actions[nextName] && (want !== current.current || stalledLoop)) {
+      if (curName && curName !== nextName && actions[curName]) actions[curName]!.fadeOut(0.18);
+      const loop = want !== 'attack';
+      const a = actions[nextName]!;
+      a.reset();
+      a.timeScale = 1;
+      a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+      a.clampWhenFinished = !loop;
+      a.fadeIn(0.15).play();
+      current.current = want;
     }
     // Sincroniza a cadência do walk com a velocidade real → anti foot-sliding.
     if (current.current === 'walk' && speedRef) {
