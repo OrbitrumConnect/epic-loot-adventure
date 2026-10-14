@@ -242,6 +242,7 @@ export function useHostileAI(opts: HostileOptions) {
   const prevHp = useRef<number | null>(null);
   const hitTime = useRef(-Infinity);
   const baseScale = useRef<THREE.Vector3 | null>(null);
+  const death = useRef({ startedAt: -Infinity, y: 0 });
 
   useEffect(() => () => { creatureAnchors.delete(creatureId); anchor.current = null; }, [creatureId]);
 
@@ -258,9 +259,21 @@ export function useHostileAI(opts: HostileOptions) {
     const creature = creatureById(creatureId);
     if (!creature) { g.visible = false; anc.alive = false; return; }
 
+    if (!baseScale.current) baseScale.current = g.scale.clone();
     if (creature.behavior === 'dead') {
-      g.visible = false;
       anc.alive = false;
+      if (opts.hpGroup.current) opts.hpGroup.current.visible = false;
+      if (opts.label.current) opts.label.current.visible = false;
+      if (opts.ring.current) opts.ring.current.visible = false;
+      if (death.current.startedAt === -Infinity) {
+        death.current.startedAt = state.clock.elapsedTime;
+        death.current.y = g.position.y;
+      }
+      // Tempo absoluto: termina mesmo fora da câmera ou após um quadro longo.
+      const progress = Math.min(1, Math.max(0, (state.clock.elapsedTime - death.current.startedAt) / 0.4));
+      g.visible = progress < 1;
+      g.scale.copy(baseScale.current).multiplyScalar(1 - progress);
+      g.position.y = death.current.y - 0.5 * progress;
       if (creature.respawnAt && Date.now() >= creature.respawnAt) {
         const home = homePos.current ?? creature.position;
         useGameStore.setState(s => ({
@@ -271,14 +284,25 @@ export function useHostileAI(opts: HostileOptions) {
           ),
         }));
         g.position.set(home.x, terrainHeight(home.x, home.z), home.z);
+        g.scale.copy(baseScale.current);
+        death.current.startedAt = -Infinity;
+        hitTime.current = -Infinity;
+        prevHp.current = creature.maxHp;
       }
       return;
     }
+    // Também restaura se outra ação da store reviver a criatura.
+    if (death.current.startedAt !== -Infinity) {
+      g.position.y = death.current.y;
+      g.scale.copy(baseScale.current);
+      death.current.startedAt = -Infinity;
+      hitTime.current = -Infinity;
+    }
     g.visible = true;
     anc.alive = true;
+    if (opts.label.current) opts.label.current.visible = true;
 
     // Guarda a escala base uma vez e marca o instante do golpe quando o HP cai.
-    if (!baseScale.current) baseScale.current = g.scale.clone();
     if (prevHp.current !== null && creature.hp < prevHp.current) hitTime.current = state.clock.elapsedTime;
     prevHp.current = creature.hp;
 

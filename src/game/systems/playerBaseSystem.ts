@@ -2,16 +2,19 @@ import type { InventoryState, Position } from '../types';
 import {
   BASE_GRID,
   type BasePiece, type BasePieceKind, type BaseStage, type BuildPreview, type ClaimCheck,
-  type ClaimIssue, type GridCell, type PlayerBaseState,
+  type ClaimIssue, type GridCell, type PlayerBaseState, type BaseType,
 } from '../types/playerbase';
 import {
   BASE_PIECES, CLAIM_SIZE, CLAIM_WATER_MARGIN, FOUNDATION_MIN_WALLS, MAX_CLAIM_RELIEF,
-  MIN_BASE_DISTANCE, TOWERS_MIN, WALLS_MIN, pieceCost, pieceMaxHp, type BaseCost,
+  MIN_BASE_DISTANCE, TOWERS_MIN, WALLS_MIN, type BaseCost,
 } from '../data/base-pieces';
 import {
   CAMPS, CAMP_PLACEMENTS, PLAYER_SPAWN, findPlacementProblems, isOnWater, type PlacementProblemKind,
 } from '../data/camps';
 import { getItemCount, removeItem } from './inventorySystem';
+import { basePieceCost, basePieceMaxHp } from './baseTypeSystem';
+import { BASE_TYPES } from '../data/base-types';
+import { MAX_TOWER_LEVEL, resolveTowerLevel, towerLevelStats, towerUpgradeCost } from './towerLevelSystem';
 
 // ---------------------------------------------------------------------------
 // Grade (UM lugar só: mundo 3D e HUD importam daqui)
@@ -197,6 +200,7 @@ export function claimBase(
   owner: PlayerBaseState['owner'],
   world: ClaimWorld,
   now: number,
+  baseType?: BaseType,
 ): ClaimResult {
   const check = checkClaim(origin, size, world, now);
   if (!check.ok) return { ok: false, check, base: null, message: check.message };
@@ -208,11 +212,12 @@ export function claimBase(
     kind: 'core',
     cell: coreCell,
     rotation: 0,
-    hp: pieceMaxHp('core', 1),
-    maxHp: pieceMaxHp('core', 1),
+    hp: basePieceMaxHp('core', 1, baseType),
+    maxHp: basePieceMaxHp('core', 1, baseType),
     tier: 1,
   };
   const base: PlayerBaseState = {
+    ...(baseType ? { baseType } : {}),
     id,
     owner,
     worldPosition: squareCenter(origin, size),
@@ -248,6 +253,30 @@ function costToList(m: Map<string, number>): BaseCost[] {
 
 function canPay(inventory: InventoryState, cost: BaseCost[]): boolean {
   return cost.every(c => getItemCount(inventory, c.itemId) >= c.quantity);
+}
+
+/** Cobrança atômica compartilhada por construção e melhoria. */
+function payCost(inventory: InventoryState, cost: BaseCost[]): InventoryState | null {
+  if (!canPay(inventory, cost)) return null;
+  let next = inventory;
+  for (const c of cost) next = removeItem(next, c.itemId, c.quantity);
+  return next;
+}
+
+export function upgradeTower(state: PlayerBaseState, id: string, inventory: InventoryState) {
+  const fail = (message: string) => ({ ok: false, base: state, inventory, message });
+  const piece = state.pieces.find(p => p.id === id);
+  if (!piece || piece.kind !== 'tower' || piece.hp <= 0) return fail('Torre indisponível.');
+  const level = resolveTowerLevel(piece.tier, piece.level);
+  if (level === MAX_TOWER_LEVEL) return fail('Torre no nível máximo.');
+  const paid = payCost(inventory, towerUpgradeCost(piece.tier, level, state.baseType));
+  if (!paid) return fail('Material insuficiente.');
+  const maxHp = Math.round(towerLevelStats(piece.tier, level + 1).hp * (state.baseType ? BASE_TYPES[state.baseType].hp : 1));
+  const upgraded: BasePiece = { ...piece, level: level + 1, maxHp,
+    hp: Math.max(0, maxHp - (piece.maxHp - piece.hp)) };
+  return { ok: true, inventory: paid,
+    base: { ...state, pieces: state.pieces.map(p => p.id === id ? upgraded : p) },
+    message: `Torre melhorada para o nível ${level + 1}.` };
 }
 
 /** Células de uma reta presa à grade, do ponto `from` ao `to` (eixo dominante vence). */
@@ -298,7 +327,7 @@ export function previewLine(
       blocked.push({ cell, reason: 'Já tem uma peça aqui.' });
     } else {
       cells.push(cell);
-      mergeCost(total, pieceCost(kind, tier));
+      mergeCost(total, basePieceCost(kind, tier, state.baseType));
     }
   }
 
@@ -330,12 +359,10 @@ export function placePieces(
   if (cells.length === 0) return fail('Nada para construir aí.');
 
   const total = new Map<string, number>();
-  for (let i = 0; i < cells.length; i++) mergeCost(total, pieceCost(preview.kind, tier));
+  for (let i = 0; i < cells.length; i++) mergeCost(total, basePieceCost(preview.kind, tier, state.baseType));
   const cost = costToList(total);
-  if (!canPay(inventory, cost)) return fail('Material insuficiente.');
-
-  let inv = inventory;
-  for (const c of cost) inv = removeItem(inv, c.itemId, c.quantity);
+  const inv = payCost(inventory, cost);
+  if (!inv) return fail('Material insuficiente.');
 
   const vertical = cells.length > 1 && cells[0]!.gx === cells[1]!.gx;
   const rotation = preview.rotation !== undefined ? preview.rotation : (vertical ? 90 : 0);
@@ -344,9 +371,10 @@ export function placePieces(
     kind: preview.kind,
     cell,
     rotation,
-    hp: pieceMaxHp(preview.kind, tier),
-    maxHp: pieceMaxHp(preview.kind, tier),
+    hp: basePieceMaxHp(preview.kind, tier, state.baseType),
+    maxHp: basePieceMaxHp(preview.kind, tier, state.baseType),
     tier,
+    ...(preview.kind === 'tower' ? { level: resolveTowerLevel(tier) } : {}),
   }));
 
   const next: PlayerBaseState = { ...state, pieces: [...state.pieces, ...placed] };

@@ -1,10 +1,11 @@
 import { useGLTF } from '@react-three/drei';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
-import { terrainHeight } from './world-kit';
-import { BASE_TOWER_HEIGHT } from '@/game/data/base-pieces';
+import { palette, terrainHeight } from './world-kit';
+import { resolveTowerLevel, towerHeight } from '@/game/systems/towerLevelSystem';
+import type { BasePiece } from '@/game/types/playerbase';
 
 /**
  * Torre watchtower (GLB, PBR embutido) reutilizável:
@@ -14,6 +15,11 @@ import { BASE_TOWER_HEIGHT } from '@/game/data/base-pieces';
  */
 const WATCH_URL = '/models/watchtower/watchtower.glb';        // acampamentos + topo da montanha
 const LOUD_URL = '/models/watchtower/loudspeaker_tower.glb';  // 4 pontas da base (alarme/defesa que atira)
+const ORNAMENT_URLS = [
+  '/models/castle/tower-square-base.glb',
+  '/models/castle/tower-square-mid.glb',
+  '/models/castle/tower-square-top-roof.glb',
+];
 
 /** Clona o GLB, escala pra `height`, centra em XZ e põe a base em y=0. */
 function buildTower(scene: THREE.Object3D, height: number): THREE.Group {
@@ -39,29 +45,78 @@ export function WatchtowerModel({ height = 5.3 }: { height?: number }) {
   return <primitive object={model} />;
 }
 
+/** Uma instância estável por peça: dano/recarga não recriam GLBs nem materiais. */
+function LeveledTower({ piece }: { piece: BasePiece }) {
+  const { scene } = useGLTF(LOUD_URL);
+  const ornaments = useGLTF(ORNAMENT_URLS);
+  const baseScene = ornaments[0]!.scene;
+  const midScene = ornaments[1]!.scene;
+  const roofScene = ornaments[2]!.scene;
+  const level = resolveTowerLevel(piece.tier, piece.level);
+  const height = towerHeight(piece.tier, level);
+  const { model, materials } = useMemo(() => {
+    const colors = palette();
+    const tint = level < 8 ? colors.trunk : level < 15 ? colors['rock-light'] : colors.metal;
+    const owned: THREE.Material[] = [];
+    const paint = (object: THREE.Object3D, color: string, metalness: number) => {
+      const clones = new Map<THREE.Material, THREE.Material>();
+      object.traverse(node => {
+        const mesh = node as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const clone = (source: THREE.Material) => {
+          if (clones.has(source)) return clones.get(source)!;
+          const material = source.clone();
+          if (material instanceof THREE.MeshStandardMaterial) {
+            material.color.set(color);
+            material.metalness = metalness;
+            material.roughness = metalness > 0 ? 0.4 : 0.85;
+          }
+          clones.set(source, material);
+          owned.push(material);
+          return material;
+        };
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(clone) : clone(mesh.material);
+      });
+    };
+    const model = buildTower(scene, height);
+    paint(model, tint, level >= 15 ? 0.65 : 0);
+    const adorn = (source: THREE.Object3D, width: number, tall: number, y: number, color = tint, x = 0) => {
+      const part = buildTower(source, 1);
+      const size = new THREE.Box3().setFromObject(part).getSize(new THREE.Vector3());
+      part.scale.set(width / (size.x || 1), tall, width / (size.z || 1));
+      part.position.set(x, y, 0);
+      paint(part, color, level >= 15 ? 0.65 : 0);
+      model.add(part);
+    };
+    // Quatro marcos cumulativos: pedestal, plataforma, cobertura e coroas douradas.
+    if (level >= 5) adorn(baseScene, 2.8, 0.8, 0);
+    if (level >= 10) adorn(midScene, 2.5, 0.65, height * 0.45);
+    if (level >= 15) adorn(roofScene, 2.8, 0.9, height * 0.72);
+    if (level >= 20) {
+      adorn(roofScene, 0.7, 0.65, height - 0.3, colors.gold, -0.85);
+      adorn(roofScene, 0.7, 0.65, height - 0.3, colors.gold, 0.85);
+    }
+    return { model, materials: owned };
+  }, [scene, baseScene, midScene, roofScene, level, height]);
+  useEffect(() => () => { materials.forEach(material => material.dispose()); }, [materials]);
+  const ctr = cellCenter(piece.cell);
+  return <primitive object={model} dispose={null}
+    position={[ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z]}
+    rotation={[0, (piece.rotation * Math.PI) / 180, 0]} />;
+}
+
 /** Torres das 4 pontas da BASE = loudspeaker (torre de alarme/defesa que atira). */
 export function GlbWatchTowers() {
   const pieces = useGameStore((s) => s.playerBase?.pieces);
-  const { scene } = useGLTF(LOUD_URL);
-  const proto = useMemo(() => buildTower(scene, BASE_TOWER_HEIGHT), [scene]);
   const towers = useMemo(() => (pieces ?? []).filter((p) => p.kind === 'tower'), [pieces]);
   if (towers.length === 0) return null;
   return (
     <>
-      {towers.map((p) => {
-        const ctr = cellCenter(p.cell);
-        return (
-          <primitive
-            key={p.id}
-            object={proto.clone()}
-            position={[ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z]}
-            rotation={[0, (p.rotation * Math.PI) / 180, 0]}
-          />
-        );
-      })}
+      {towers.map(p => <LeveledTower key={p.id} piece={p} />)}
     </>
   );
 }
 
 useGLTF.preload(WATCH_URL);
 useGLTF.preload(LOUD_URL);
+ORNAMENT_URLS.forEach(url => useGLTF.preload(url));

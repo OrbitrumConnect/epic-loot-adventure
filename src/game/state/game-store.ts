@@ -22,17 +22,20 @@ import {
   sendExpedition as sendBaseExpedition, depositFromInventory, collectTools,
 } from '../systems/baseSystem';
 import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
-import type { BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
-import { BASE_TOWER_HEIGHT, CLAIM_SIZE } from '../data/base-pieces';
+import type { BaseType, BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
+import { BASE_TYPES, DEFAULT_BASE_TYPE } from '../data/base-types';
+import { basePieceCost } from '../systems/baseTypeSystem';
+import { CLAIM_SIZE } from '../data/base-pieces';
+import { towerHeight } from '../systems/towerLevelSystem';
 import { selectTowerTarget, towerDamage, type TowerSource } from '../systems/towerSystem';
 import {
   advanceStage as advanceBaseStageOnce, advanceStageFully, canOpenCityView as cityViewOpen,
   claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
   cellInSquare as cellInBaseSquare, worldToCell as worldToBaseCell, cellKey as baseCellKey,
   cellCenter as baseCellCenter,
+  upgradeTower as upgradePlayerTower,
 } from '../systems/playerBaseSystem';
 import { baseLv1Layout, baseLv1Progress } from '../systems/baseLv1';
-import { pieceCost } from '../data/base-pieces';
 import {
   addObjective as addQueueObjective, clearObjectives as clearQueueObjectives, createQueue,
   findHealHotbarIndex, hasPendingObjective, removeObjective as removeQueueObjective,
@@ -71,6 +74,7 @@ type GameState = {
   base: BaseState;
   /** Base persistente no mundo (Fase 3). `null` = ainda não reivindicou terreno. */
   playerBase: PlayerBaseState | null;
+  selectedBaseType: BaseType;
   /** Milissegundos por torre; separado das peças para não reconstruir malhas por tiro. */
   towerLastShotAt: Record<string, number>;
   /** Último tick dos powers orbitais (throttle do dano). */
@@ -102,7 +106,9 @@ type GameState = {
 };
 
 type GameActions = {
+  selectBaseType: (type: BaseType) => void;
   tickTowers: (towers: readonly TowerSource[], now: number, rng?: () => number) => void;
+  upgradeTower: (pieceId: string) => void;
   /** Aplica o dano dos powers orbitais (bumerangues) na horda. Throttled. */
   tickPowers: (now: number) => void;
   attack: (targetId: string) => void;
@@ -408,6 +414,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   specialKind: null,
   base: createInitialBase(Date.now()),
   playerBase: null,
+  selectedBaseType: DEFAULT_BASE_TYPE,
   towerLastShotAt: {},
   powerLastTickAt: 0,
   wave: INITIAL_WAVE,
@@ -437,6 +444,14 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   getUsedSlots: () => getUsedSlots(get().player.inventory),
   getItemCount: (itemId: string) => getItemCount(get().player.inventory, itemId),
 
+  upgradeTower: (pieceId) => {
+    const state = get();
+    if (!state.playerBase) return;
+    const result = upgradePlayerTower(state.playerBase, pieceId, state.player.inventory);
+    set({ playerBase: result.base, player: result.ok ? { ...state.player, inventory: result.inventory } : state.player,
+      ui: { ...state.ui, message: result.message } });
+  },
+
   tickTowers: (towers, now, rng = Math.random) => {
     // Nenhuma escrita/alocação nos quadros sem disparo. Cada torre lê o resultado
     // da anterior, portanto duas torres não premiam a mesma morte.
@@ -448,7 +463,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Dano base da torre (Caio) × multiplicador das cartas de evolução (hordas).
       const damage = towerDamage(tower, c, rng) * towerDamageMult(state.baseUpgrades.tower_damage);
       const hp = Math.max(0, c.hp - damage);
-      const drafts = [shotEvent(tower, c.position, 'arrow', BASE_TOWER_HEIGHT), damageEvent(c.id, damage, c.position)];
+      const drafts = [shotEvent(tower, c.position, 'arrow', towerHeight(tower.tier, tower.level)), damageEvent(c.id, damage, c.position)];
       let player = state.player;
       let deathBags = state.deathBags;
       if (hp === 0) {
@@ -1095,6 +1110,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     applyBaseResult(set, result);
   },
 
+  selectBaseType: type => {
+    if (!get().playerBase && Object.hasOwn(BASE_TYPES, type)) set({ selectedBaseType: type });
+  },
+
   claimBase: (origin, heightAt) => {
     const state = get();
     if (state.playerBase) {
@@ -1102,7 +1121,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
     const owner = { kind: 'player' as const, id: state.player.id, name: state.player.name };
-    const result = claimPlayerBase(origin, CLAIM_SIZE, owner, { bases: [], heightAt }, Date.now());
+    const result = claimPlayerBase(origin, CLAIM_SIZE, owner, { bases: [], heightAt }, Date.now(), state.selectedBaseType);
     const base = result.base;
     if (!base) { set({ ui: { ...state.ui, message: result.message } }); return; }
     // Limpa o terreno reivindicado: tira madeira/pedra/árvore dentro do quadrado da base.
@@ -1133,7 +1152,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // Entrega o que der: cada peça ainda não erguida é cobrada da bolsa e colocada.
     for (const piece of layout) {
       if (have.has(baseCellKey(piece.cell))) continue;
-      const preview: BuildPreview = { cells: [piece.cell], kind: piece.kind, rotation: piece.rotation, cost: pieceCost(piece.kind, 1), blocked: [], affordable: true };
+      const preview: BuildPreview = { cells: [piece.cell], kind: piece.kind, rotation: piece.rotation, cost: basePieceCost(piece.kind, 1, pb.baseType), blocked: [], affordable: true };
       const res = placePlayerPieces(base, preview, inv, Date.now(), 1);
       if (!res.ok) continue; // sem material pra esta peça; tenta as próximas
       base = res.base;

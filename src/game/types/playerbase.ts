@@ -15,6 +15,7 @@ import type { Position } from './player';
 export const BASE_GRID = 2;
 
 export type BasePieceKind = 'core' | 'wall' | 'door' | 'tower' | 'roof';
+export type BaseType = 'fortress' | 'watchpost' | 'workshop';
 
 /** Coordenada em quadrículas, não em metros. Converter sempre pelos helpers do sistema. */
 export type GridCell = { gx: number; gz: number };
@@ -29,6 +30,8 @@ export type BasePiece = {
   maxHp: number;
   /** Nível da peça: sobe o material (madeira → pedra → ferro) e o HP. */
   tier: 1 | 2 | 3;
+  /** Progressão da torre (1–20). Ausente em saves antigos: derivada do tier. */
+  level?: number | undefined;
 };
 
 /**
@@ -59,6 +62,8 @@ export type ClaimCheck = {
 };
 
 export type PlayerBaseState = {
+  /** Ausente em saves v1 antigos: preserva os atributos originais, sem bônus. */
+  baseType?: BaseType | undefined;
   id: string;
   /** Jogador sozinho ou tribo — a mesma entidade nos dois casos. */
   owner: { kind: 'player' | 'tribe'; id: string; name: string };

@@ -661,6 +661,10 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .base-empty kbd { padding: 1px 6px; border: 1px solid var(--border); border-radius: 3px; color: var(--primary); font-size: 10px; }
 
 .base-stage { padding: 4px 0 14px; }
+.base-tower-upgrade { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.base-tower-upgrade > div { flex: 1 1 200px; min-width: 0; }
+.base-tower-upgrade strong { font-size: 12px; }
+.base-tower-upgrade small { display: block; margin-top: 4px; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .base-stage-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
 .base-stage-head > span:first-child { margin-right: auto; }
 .base-stage-head small { display: block; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted-foreground); }

@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bed, BrickWall, Castle, DoorOpen, Hammer, Landmark, Lock, LockOpen, ShieldAlert, ShieldCheck, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
+import { BASE_TYPES } from '@/game/data/base-types';
+import { ITEMS } from '@/game/data/items';
+import { getItemCount } from '@/game/systems/inventorySystem';
+import { MAX_TOWER_LEVEL, resolveTowerLevel, towerUpgradeCost } from '@/game/systems/towerLevelSystem';
+import { BaseTypePicker } from './base-type-picker';
 import type { BaseStage, BasePieceKind, PlayerBaseState } from '@/game/types/playerbase';
 import {
   canOpenCityView, claimLandQuality, stageProgress, STAGE_ORDER, type LandQuality,
@@ -62,6 +67,8 @@ function useNow(enabled: boolean): number {
 export function BasePanel({ onClose }: { onClose: () => void }) {
   // Assinaturas estreitas: a referência de `playerBase` só muda quando a base muda.
   const base = useGameStore(s => s.playerBase);
+  const inventory = useGameStore(s => s.player.inventory);
+  const upgradeTower = useGameStore(s => s.upgradeTower);
   const setMode = useGameStore(s => s.setMode);
   const inCity = useGameStore(s => s.ui.mode === 'city');
   const build = useBuildSelection();
@@ -100,6 +107,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
         <div className="base-lock" data-locked="true" role="status">
           <Lock aria-hidden="true" /><span>{cityLockReason(null)}</span>
         </div>
+        <BaseTypePicker />
         <div className="panel-actions">
           <Button onClick={enterBuild} title={`Entrar no modo de construção${key ? ` · ${key}` : ''}`}
             aria-label="Entrar no modo de construção">
@@ -133,6 +141,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="base-stage">
+        <p className="base-next">{base.baseType ? `${BASE_TYPES[base.baseType].name} · ${BASE_TYPES[base.baseType].description}` : 'Base original · atributos preservados.'}</p>
         <div className="base-stage-head">
           <span><small>Estágio</small><strong>{STAGE_LABEL[base.stage]}</strong></span>
           <span className="base-chip" data-quality={quality} title={land.hint}><Landmark aria-hidden="true" />{land.name}</span>
@@ -162,6 +171,32 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
           </span>
         ))}
       </div>
+
+      {counts.tower > 0 && (
+        <section className="base-stage" aria-label="Melhorias das torres">
+          <strong>Torres · evolução local</strong>
+          {base.pieces.filter(piece => piece.kind === 'tower').map((piece, index) => {
+            const level = resolveTowerLevel(piece.tier, piece.level);
+            const maxed = level >= MAX_TOWER_LEVEL;
+            const cost = towerUpgradeCost(piece.tier, level, base.baseType);
+            const affordable = cost.every(c => getItemCount(inventory, c.itemId) >= c.quantity);
+            const reason = piece.hp <= 0 ? 'Torre destruída' : maxed ? 'Nível máximo' : !affordable ? 'Recursos insuficientes' : `Melhorar para nível ${level + 1}`;
+            return (
+              <div key={piece.id} className="base-tower-upgrade">
+                <div>
+                  <strong>Torre {index + 1} · nível {level}/{MAX_TOWER_LEVEL}</strong>
+                  <small>Célula {piece.cell.gx}, {piece.cell.gz} · HP {Math.ceil(piece.hp)}/{Math.ceil(piece.maxHp)}</small>
+                  <small>{maxed ? 'Evolução completa' : `Próximo nível: ${cost.map(c => `${c.quantity} ${ITEMS[c.itemId]?.name ?? c.itemId} (${getItemCount(inventory, c.itemId)} disponível)`).join(' + ')}`}</small>
+                </div>
+                <Button size="sm" variant="outline" disabled={piece.hp <= 0 || maxed || !affordable}
+                  title={reason} aria-label={`Torre ${index + 1}: ${reason}`} onClick={() => upgradeTower(piece.id)}>
+                  {maxed ? 'Máximo' : piece.hp <= 0 ? 'Destruída' : 'Melhorar'}
+                </Button>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       <div className="panel-actions">
         <Button variant="outline" onClick={() => { setBuildMode(!build.active); if (!build.active) { if (inCity) setMode('world'); onClose(); } }}
