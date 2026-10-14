@@ -74,10 +74,10 @@ export function GlbHero({
         m.castShadow = true;
         // Culling LIGADO (fora da tela não renderiza = horda barata). Infla o
         // bounding (bind-pose) p/ cobrir a animação e não sumir na borda.
-        if (m.geometry && !m.geometry.userData._inflated) {
+        if (m.geometry && !m.geometry.userData['_inflated']) {
           if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
           if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
-          m.geometry.userData._inflated = true;
+          m.geometry.userData['_inflated'] = true;
         }
       }
     });
