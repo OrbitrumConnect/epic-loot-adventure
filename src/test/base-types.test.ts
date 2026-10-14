@@ -3,6 +3,7 @@ import { useGameStore } from '../game/state/game-store';
 import { claimBase, checkClaim, cellCenter, placePieces, previewLine } from '../game/systems/playerBaseSystem';
 import { createInventory, getItemCount } from '../game/systems/inventorySystem';
 import { basePieceCost } from '../game/systems/baseTypeSystem';
+import { BASE_PIECES, pieceMaxHp } from '../game/data/base-pieces';
 import { baseLv1Layout } from '../game/systems/baseLv1';
 import { selectTowerTarget } from '../game/systems/towerSystem';
 import { createLocalSave, parseLocalSave, restoreLocalSave } from '../game/systems/persistenceSystem';
@@ -23,7 +24,9 @@ afterEach(() => useGameStore.setState(initial, true));
 describe('tipos de base', () => {
   it('Fortaleza fortalece cama e peças construídas em 25%', () => {
     const base = freshBase('fortress');
-    expect(base.pieces[0]!.hp).toBe(75);
+    // Derivado da tabela: o Pedro reequilibra esses numeros, e o teste
+    // precisa provar o bonus de 25%, nao decorar o HP da peca.
+    expect(base.pieces[0]!.hp).toBe(Math.round(pieceMaxHp('core', 1) * 1.25));
     const at = cellCenter(origin);
     const result = placePieces(base, previewLine(at, at, 'tower', base, rich()), rich(), 0);
     expect(result.placed[0]!.hp).toBe(250);
@@ -43,9 +46,12 @@ describe('tipos de base', () => {
     expect(placePieces(freshBase(), preview, inv, 0).ok).toBe(false);
     expect(basePieceCost('door', 1, 'workshop')[0]!.quantity).toBe(2);
   });
-  it('Atalaia realmente alcança hostil a 14 m, enquanto torre original não alcança', () => {
+  it('Atalaia alcança hostil que a torre comum não alcança', () => {
+    // Alcance comum do tier 1, lido da tabela. O inimigo fica 1 m alem dele:
+    // fora para a torre comum, dentro para a Atalaia (+20%).
+    const PLAIN_RANGE = BASE_PIECES.tower.combat![0]!.range;
     const enemy: CreatureState = { id: 'wolf', speciesId: 'wolf', name: 'Lobo', hp: 80, maxHp: 80,
-      armor: 2, attackPower: 8, attackCooldown: 1, lastAttackAt: 0, position: { x: 14, z: 0 },
+      armor: 2, attackPower: 8, attackCooldown: 1, lastAttackAt: 0, position: { x: PLAIN_RANGE + 1, z: 0 },
       behavior: 'idle', lootTable: [], respawnAt: null };
     const tower = { id: 'tower', x: 0, z: 0, tier: 1 as const, hp: 200 };
     expect(selectTowerTarget(tower, [enemy], undefined, 0)).toBe(-1);
