@@ -16,9 +16,9 @@ import { GlbHero, type HeroAction } from './glb-hero';
 
 /** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
 const USE_GLB_BOSS = true;
-/** Gasmask (rig ValveBiped remapeado p/ UAL) como o batedor. Flag reversível —
- *  se a anim sair torta (pose base difere), só por false que volta ao Quaternius. */
-const USE_GLB_GASMASK = true;
+/** Gasmask REVERTIDO (Pedro: tosco, vinha com uma TV junto + rig Valve torto).
+ *  Batedor volta pro Quaternius que anima bem. Mantido OFF por segurança. */
+const USE_GLB_GASMASK = false;
 const GASMASK_URL = '/models/raiders/gasmask.glb';
 const IMP_URL = '/models/Imp.glb';
 const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
