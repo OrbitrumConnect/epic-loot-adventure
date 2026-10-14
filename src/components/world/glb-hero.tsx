@@ -69,6 +69,17 @@ export function GlbHero({
     });
   }, [cloned, names]);
 
+  // Belt-and-suspenders: assim que as animações carregam, GARANTE que algo esteja
+  // tocando (senão o boneco fica em T-pose se nasceu parado antes do clip existir).
+  useEffect(() => {
+    if (current.current) return;
+    const n = pickClip(names, actionRef.current);
+    if (n && actions[n]) {
+      actions[n]!.reset().setLoop(THREE.LoopRepeat, Infinity).fadeIn(0.2).play();
+      current.current = actionRef.current;
+    }
+  }, [actions, names, actionRef]);
+
   useFrame(() => {
     const want = actionRef.current;
     if (want !== current.current) {
