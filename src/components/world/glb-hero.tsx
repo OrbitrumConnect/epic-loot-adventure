@@ -50,11 +50,14 @@ export function GlbHero({
   const { scene } = useGLTF(charUrl);
   const { animations } = useGLTF(ANIM_URL);
   const cloned = useMemo(() => skeletonClone(scene), [scene]);
-  // CLONA os clips por instância: a UAL vem cacheada (mesmos objetos p/ todos os
-  // bonecos) e compartilhar o mesmo AnimationClip entre vários mixers deixava
-  // alguns saqueadores presos no bind-pose (braços abertos). Clips próprios = cada
-  // um anima independente.
-  const clips = useMemo(() => animations.map((a) => a.clone()), [animations]);
+  // CLONA (só os clips usados: idle/walk/sword) por instância: a UAL vem cacheada
+  // (mesmos objetos p/ todos os bonecos) e compartilhar o mesmo AnimationClip
+  // entre vários mixers deixava alguns saqueadores presos no bind-pose (braços
+  // abertos). Clips próprios = cada um anima independente; filtrar poupa memória.
+  const clips = useMemo(
+    () => animations.filter((a) => /walk|sword|idle/i.test(a.name)).map((a) => a.clone()),
+    [animations],
+  );
   const { actions, names } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
   // osso da mão direita (rig Unreal) pra anexar a arma; segue a animação
