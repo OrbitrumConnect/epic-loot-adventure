@@ -29,6 +29,7 @@ import {
   advanceStage as advanceBaseStageOnce, advanceStageFully, canOpenCityView as cityViewOpen,
   claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
   cellInSquare as cellInBaseSquare, worldToCell as worldToBaseCell, cellKey as baseCellKey,
+  cellCenter as baseCellCenter,
 } from '../systems/playerBaseSystem';
 import { baseLv1Layout, baseLv1Progress } from '../systems/baseLv1';
 import { pieceCost } from '../data/base-pieces';
@@ -44,6 +45,7 @@ import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecial
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
+import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
   pushEvents, shotEvent, xpEvent,
@@ -68,6 +70,8 @@ type GameState = {
   playerBase: PlayerBaseState | null;
   /** Milissegundos por torre; separado das peças para não reconstruir malhas por tiro. */
   towerLastShotAt: Record<string, number>;
+  /** Ciclo de HORDAS (Fase 5): paz ↔ combate, ondas cada vez mais difíceis. */
+  wave: WaveState;
   camps: CampState[];
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
@@ -291,6 +295,46 @@ function createInitialCreatures(): CreatureState[] {
   ];
 }
 
+const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_brute', 'raider_shaman'] as const;
+
+/** Centro (core) da base, pra as hordas mirarem. null se não houver base. */
+function baseCenter(base: PlayerBaseState | null): { x: number; z: number } | null {
+  if (!base) return null;
+  const core = base.pieces.find((p) => p.kind === 'core');
+  return core ? baseCellCenter(core.cell) : null;
+}
+
+/** Cria os raiders de uma onda ao redor da base (eles marcham até ela — ver hostile-ai). */
+function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: number): CreatureState[] {
+  const count = waveEnemyCount(wave);
+  const hpScale = waveHpScale(wave);
+  const clamp = (v: number) => Math.max(-WORLD_HALF + 2, Math.min(WORLD_HALF - 2, v));
+  const out: CreatureState[] = [];
+  for (let i = 0; i < count; i++) {
+    const sp = WAVE_SPECIES[i % WAVE_SPECIES.length]!;
+    const def = CREATURES[sp];
+    if (!def) continue;
+    const ang = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+    const r = 20 + Math.random() * 10; // nascem fora da vista, em volta da base
+    const hp = Math.round(scaleEnemyHp(def.maxHp) * hpScale);
+    out.push({
+      id: `wave${wave}_${i}_${now}`,
+      speciesId: sp,
+      name: def.name,
+      hp, maxHp: hp,
+      attackPower: def.attackPower,
+      armor: def.armor,
+      attackCooldown: def.attackCooldown,
+      lastAttackAt: 0,
+      position: { x: clamp(center.x + Math.sin(ang) * r), z: clamp(center.z + Math.cos(ang) * r) },
+      behavior: 'patrol',
+      lootTable: [],
+      respawnAt: null,
+    });
+  }
+  return out;
+}
+
 function createInitialResources(): ResourceNode[] {
   return [
     createResourceNode('arcane_essence', { x: -3, z: -2 }, 5),
@@ -314,6 +358,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   base: createInitialBase(Date.now()),
   playerBase: null,
   towerLastShotAt: {},
+  wave: INITIAL_WAVE,
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
   targetId: null,
@@ -1203,6 +1248,24 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let player = state.player;
     const messages: string[] = [];
 
+    // HORDAS (Fase 5): ciclo paz↔combate; spawna a onda ao redor da base.
+    let waveState = state.wave;
+    let waveCreatures = ticked.creatures;
+    {
+      const center = baseCenter(state.playerBase);
+      const aliveWave = ticked.creatures.filter(
+        (c) => c.id.startsWith('wave') && c.hp > 0 && c.behavior !== 'dead',
+      ).length;
+      const wt = tickWaves(state.wave, now, center != null, aliveWave);
+      waveState = wt.state;
+      if (wt.startedWave && center) {
+        const spawned = spawnWaveRaiders(wt.startedWave, center, now);
+        waveCreatures = [...ticked.creatures, ...spawned];
+        waveState = markSpawned(waveState, spawned.length);
+      }
+      if (wt.message) messages.push(wt.message);
+    }
+
     for (const camp of discovery.newlyDiscovered) {
       messages.push(`Você avistou o ${camp.name}.`);
     }
@@ -1253,7 +1316,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       && feedback === state.feedback
       && harvestNodes === state.harvestNodes
       && ticked.camps === state.camps
-      && ticked.creatures === state.creatures
+      && waveCreatures === state.creatures
+      && waveState === state.wave
       && objectiveResult.queue === state.objectives
       && messages.length === 0;
     if (nothingChanged) return;
@@ -1265,7 +1329,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     set(current => ({
       player,
       camps: ticked.camps,
-      creatures: ticked.creatures,
+      creatures: waveCreatures,
+      wave: waveState,
       harvestNodes,
       feedback: pruneEvents(current.feedback, now),
       objectives: objectiveResult.queue,

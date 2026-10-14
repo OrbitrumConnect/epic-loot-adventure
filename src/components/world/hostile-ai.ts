@@ -23,6 +23,7 @@ import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactor
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece } from './base-targets';
+import { cellCenter } from '@/game/systems/playerBaseSystem';
 
 /**
  * Clique num inimigo: esquerdo seleciona, Shift+esquerdo enfileira uma caçada.
@@ -368,6 +369,35 @@ export function useHostileAI(opts: HostileOptions) {
             const st = useGameStore.getState();
             st.damageBasePiece(hit.id, dmg);
             st.setMessage(`${creature.name} ataca ${BASE_PIECES[kind].name.toLowerCase()} da base! -${dmg}`);
+          }
+        }
+      }
+    } else if (creatureId.startsWith('wave')) {
+      // Inimigo de ONDA: marcha até a base e descarrega na peça mais próxima,
+      // mesmo com o player longe (é o cerco da horda). Se o player chegar perto,
+      // o ramo de cima (chase) já o prioriza.
+      chaseTimer.current = 0;
+      const base = useGameStore.getState().playerBase;
+      const core = base?.pieces.find((p) => p.kind === 'core');
+      if (core) {
+        const ctr = cellCenter(core.cell);
+        const distToBase = Math.sqrt((ctr.x - wx) ** 2 + (ctr.z - wz) ** 2);
+        if (distToBase > 3) {
+          const ang = Math.atan2(ctr.x - wx, ctr.z - wz);
+          targetX = wx + Math.sin(ang) * tuning.speed * dt;
+          targetZ = wz + Math.cos(ang) * tuning.speed * dt;
+          moving = true;
+        }
+        const hit = nearestBasePiece(wx, wz);
+        if (hit) {
+          attackCooldown.current -= dt;
+          if (attackCooldown.current <= 0) {
+            attackCooldown.current = creature.attackCooldown;
+            swing.current = 0.35;
+            const dmg = Math.max(1, creature.attackPower);
+            reportDamageToStore(hit.id, dmg, { x: hit.x, z: hit.z }, false);
+            const st = useGameStore.getState();
+            st.damageBasePiece(hit.id, dmg);
           }
         }
       }
