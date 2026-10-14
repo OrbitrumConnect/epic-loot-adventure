@@ -6,7 +6,7 @@
  * BASE — o personagem já sobe de nível sozinho (pedido do Pedro). Dados puros:
  * o store aplica o efeito, o HUD desenha as cartas.
  */
-export type UpgradeId = 'tower_damage' | 'wall_hp' | 'base_repair' | 'core_hp';
+export type UpgradeId = 'tower_damage' | 'wall_hp' | 'base_repair' | 'core_hp' | 'orbit_boomerang';
 
 export type UpgradeCard = {
   id: UpgradeId;
@@ -21,9 +21,10 @@ export const UPGRADE_CARDS: Record<UpgradeId, UpgradeCard> = {
   wall_hp: { id: 'wall_hp', name: 'Muralha Reforçada', description: '+25% de vida das estruturas + reparo total', icon: 'BrickWall' },
   base_repair: { id: 'base_repair', name: 'Reparo de Campo', description: 'Repara 100% da base agora', icon: 'Wrench' },
   core_hp: { id: 'core_hp', name: 'Núcleo Blindado', description: '+60% de vida do núcleo', icon: 'ShieldPlus' },
+  orbit_boomerang: { id: 'orbit_boomerang', name: 'Bumerangues Orbitais', description: 'Lâminas giram em volta da base e cortam a horda', icon: 'Disc' },
 };
 
-const POOL: UpgradeId[] = ['tower_damage', 'wall_hp', 'base_repair', 'core_hp'];
+const POOL: UpgradeId[] = ['tower_damage', 'wall_hp', 'base_repair', 'core_hp', 'orbit_boomerang'];
 
 /** Sorteia 3 cartas DISTINTAS do baralho (determinístico com `rng`). */
 export function rollUpgradeChoices(rng: () => number): UpgradeId[] {

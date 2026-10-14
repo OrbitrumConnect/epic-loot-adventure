@@ -47,6 +47,7 @@ import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
+import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, dist2 } from '../systems/powerSystem';
 import { SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
@@ -72,6 +73,8 @@ type GameState = {
   playerBase: PlayerBaseState | null;
   /** Milissegundos por torre; separado das peças para não reconstruir malhas por tiro. */
   towerLastShotAt: Record<string, number>;
+  /** Último tick dos powers orbitais (throttle do dano). */
+  powerLastTickAt: number;
   /** Ciclo de HORDAS (Fase 5): paz ↔ combate, ondas cada vez mais difíceis. */
   wave: WaveState;
   /** Nível da base: sobe 1 a cada onda repelida (evolução por cartas). */
@@ -96,6 +99,8 @@ type GameState = {
 
 type GameActions = {
   tickTowers: (towers: readonly TowerSource[], now: number, rng?: () => number) => void;
+  /** Aplica o dano dos powers orbitais (bumerangues) na horda. Throttled. */
+  tickPowers: (now: number) => void;
   attack: (targetId: string) => void;
   specialAttack: (kind: 'jump' | 'spin') => void;
   collect: (nodeId: string) => void;
@@ -391,9 +396,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   base: createInitialBase(Date.now()),
   playerBase: null,
   towerLastShotAt: {},
+  powerLastTickAt: 0,
   wave: INITIAL_WAVE,
   baseLevel: 1,
-  baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0 },
+  baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
   upgradeChoices: null,
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
@@ -442,6 +448,46 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         feedback: pushEvents(state.feedback, drafts, now),
       });
     }
+  },
+
+  tickPowers: (now) => {
+    const state = get();
+    const stacks = state.baseUpgrades.orbit_boomerang;
+    if (stacks <= 0 || !state.playerBase) return;
+    if (now - state.powerLastTickAt < ORBIT_TICK_MS) return;
+    const core = state.playerBase.pieces.find((p) => p.kind === 'core');
+    if (!core) return;
+    const center = baseCellCenter(core.cell);
+    const positions = boomerangPositions(center, orbitCount(stacks), now);
+    const dmg = orbitDamage(stacks);
+    const r2 = ORBIT_HIT_RADIUS * ORBIT_HIT_RADIUS;
+    let player = state.player;
+    let deathBags = state.deathBags;
+    const drafts: ReturnType<typeof damageEvent>[] = [];
+    const next = state.creatures.slice();
+    let changed = false;
+    for (let i = 0; i < next.length; i++) {
+      const c = next[i]!;
+      if (c.hp <= 0 || c.behavior === 'dead') continue;
+      if (CREATURES[c.speciesId]?.peaceful) continue; // lâmina não corta bicho pacífico
+      if (!positions.some((p) => dist2(p, c.position) <= r2)) continue;
+      const hp = Math.max(0, c.hp - dmg);
+      drafts.push(damageEvent(c.id, dmg, c.position));
+      if (hp === 0) {
+        const reward = rewardCreatureDeath(c, player, deathBags, drafts, Math.random);
+        player = reward.player;
+        deathBags = reward.bags;
+        next[i] = deadCreature(c, now, Math.random);
+      } else {
+        next[i] = { ...c, hp };
+      }
+      changed = true;
+    }
+    if (!changed) { set({ powerLastTickAt: now }); return; }
+    set({
+      creatures: next, player, deathBags, powerLastTickAt: now,
+      feedback: pushEvents(state.feedback, drafts, now),
+    });
   },
 
   attack: (targetId: string) => {
@@ -1079,7 +1125,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         playerBase: null,
         wave: INITIAL_WAVE,
         baseLevel: 1,
-        baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0 },
+        baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
         upgradeChoices: null,
         creatures: state.creatures.filter((c) => !c.id.startsWith('wave')),
         ui: { ...state.ui, message, baseFell: true },
@@ -1105,7 +1151,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       towerLastShotAt: {},
       wave: INITIAL_WAVE,
       baseLevel: 1,
-      baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0 },
+      baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
       upgradeChoices: null,
       objectives: createQueue(),
       ui: { ...s.ui, baseFell: false, message: '🔥 Nova sobrevivência! Colete, construa a base e prepare as defesas.' },

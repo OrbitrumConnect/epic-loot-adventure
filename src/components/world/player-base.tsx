@@ -26,6 +26,7 @@ import { GlbBaseCastle } from './glb-base-castle';
 import { BaseHouse } from './base-house';
 import { GlbWatchTowers } from './glb-watchtower';
 import { TowerRuntime } from './tower-runtime';
+import { PowerOrbit } from './power-orbit';
 
 /** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
 const USE_GLB_BASE = false;
@@ -779,6 +780,7 @@ export function PlayerBase({
       {USE_GLB_BASE ? <GlbBaseCastle /> : <BaseStructures c={c} />}
       {USE_GLB_TOWER && <GlbWatchTowers />}
       <TowerRuntime paused={paused} />
+      <PowerOrbit paused={paused} />
       <BaseHouse />
       <BuildLayer c={c} playerRef={playerRef} paused={paused} />
     </>
