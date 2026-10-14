@@ -15,13 +15,13 @@ import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
 import { GlbHero, type HeroAction } from './glb-hero';
 import { GlbStaticBoss } from './glb-static-boss';
 
-/** Bosses de modelo SEM osso (kaiju/samurai) — movimento PROCEDURAL (glb-static-boss).
- *  `height` em metros (escala absoluta). Leves o bastante p/ web (kaiju 14MB, samurai 1MB). */
-const STATIC_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
-  raider_kaiju: { url: '/models/bosses/kaiju.glb', height: 8.5, yaw: 0 }, // o MAIOR de todos
-  raider_samurai: { url: '/models/bosses/samurai.glb', height: 3.4, yaw: 0 }, // boss, maior que raider
-  // warlord (Colosso) e mushroom (Fúngico) CONTINUAM no Imp — nada removido.
-};
+/** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
+ *  VAZIO: kaiju/samurai voltaram pro caminho ANIMADO (rig Universal + UAL, igual
+ *  o Kael). Os placeholders estáticos (kaiju.glb 14,5MB / samurai.glb) ficavam
+ *  invisível/sem animação e pesavam. Kaiju = Imp (demônio animado), samurai =
+ *  humanoide animado — ambos escalados por `bossScale`. Re-adicionar aqui só se
+ *  um dia houver um modelo estático de propósito. */
+const STATIC_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {};
 
 /** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
 const USE_GLB_BOSS = true;
@@ -38,7 +38,8 @@ const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
 const RAIDER_GLB: Record<string, string> = {
   raider_warlord: IMP_URL,
   raider_mushroom: IMP_URL, // boss maior — mesmo rig que já temos, só escala
-  raider_kaiju: IMP_URL,    // boss gigante — idem
+  raider_kaiju: IMP_URL,    // boss gigante — demônio animado (bossScale 5.6)
+  raider_samurai: '/models/raiders/Male_Peasant.gltf', // humanoide animado (bossScale 1.7)
   raider_scout: '/models/raiders/Male_Peasant.gltf',
   raider_warrior: '/models/raiders/Female_Peasant.gltf',
   raider_shaman: '/models/raiders/Female_Ranger.gltf',
