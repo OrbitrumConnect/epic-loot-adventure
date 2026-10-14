@@ -29,6 +29,7 @@ import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
 import { MusicPlayer } from '@/components/MusicPlayer';
+import { audioManager } from '@/game/audio/audio-manager';
 import { setBuildActive } from '@/components/world/build-mode';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
 import {
@@ -91,6 +92,7 @@ function Index() {
   useEffect(() => {
     const stop = startLocalPersistence();
     setReady(true);
+    audioManager.armAutoplay(); // música liga no 1º clique/tecla ao entrar
     return stop;
   }, []);
 

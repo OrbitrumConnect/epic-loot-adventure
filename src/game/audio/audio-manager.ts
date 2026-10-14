@@ -31,6 +31,9 @@ class AudioManager {
   private combatUntil = 0;
   private raf = 0;
   private listeners = new Set<Listener>();
+  /** O usuário parou a música de propósito → o autoplay não a liga de novo. */
+  private userStopped = false;
+  private autoplayArmed = false;
 
   private ensure() {
     if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
@@ -52,6 +55,7 @@ class AudioManager {
   play() {
     this.ensure();
     if (!this.ambient || !this.combat) return;
+    this.userStopped = false;
     this.playing = true;
     void this.ambient.play().catch(() => {});
     void this.combat.play().catch(() => {});
@@ -59,7 +63,28 @@ class AudioManager {
     this.emit();
   }
 
+  /**
+   * "Música toca ao entrar no jogo" (pedido do Pedro). O browser só deixa áudio
+   * tocar após um gesto do usuário, então aqui a gente ARMA: no primeiro
+   * clique/tecla, liga a música — a menos que o usuário já tenha parado de
+   * propósito. Idempotente: chamar várias vezes não empilha listeners.
+   */
+  armAutoplay() {
+    if (typeof window === 'undefined') return;
+    if (this.playing || this.autoplayArmed || this.userStopped) return;
+    this.autoplayArmed = true;
+    const start = () => {
+      window.removeEventListener('pointerdown', start);
+      window.removeEventListener('keydown', start);
+      this.autoplayArmed = false;
+      if (!this.playing && !this.userStopped) this.play();
+    };
+    window.addEventListener('pointerdown', start);
+    window.addEventListener('keydown', start);
+  }
+
   stop() {
+    this.userStopped = true;
     this.playing = false;
     this.ambient?.pause();
     this.combat?.pause();

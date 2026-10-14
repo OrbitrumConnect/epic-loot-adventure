@@ -80,6 +80,25 @@ function riverFlatten(x: number, z: number): number {
 
 export const MAP_HALF = 90;
 
+/**
+ * ZONA SEGURA do sobrevivente: círculo no spawn (origem) onde o jogador renasce
+ * e para onde NENHUM inimigo nem boss entra — um respiro. Marcada no chão por um
+ * anel (igual o círculo dos acampamentos). Mesma ideia de `pushOut*` da base:
+ * empurra qualquer corpo hostil para a borda do círculo.
+ */
+export const SAFE_ZONE = { x: 0, z: 0, radius: 7 } as const;
+
+/** Empurra (x,z) para fora da zona segura, somando o raio do corpo. Fora dela, nada muda. */
+export function pushOutSafeZone(x: number, z: number, bodyRadius = 0): [number, number] {
+  const dx = x - SAFE_ZONE.x;
+  const dz = z - SAFE_ZONE.z;
+  const r = SAFE_ZONE.radius + bodyRadius;
+  const d2 = dx * dx + dz * dz;
+  if (d2 >= r * r || d2 === 0) return [x, z];
+  const d = Math.sqrt(d2);
+  return [SAFE_ZONE.x + (dx / d) * r, SAFE_ZONE.z + (dz / d) * r];
+}
+
 function terrainHeightRaw(x: number, z: number): number {
   const broad  = noise2d(x, z, 0.015, 0.017) * 3.6;
   const hills  = noise2d(x, z, 0.04,  0.035) * 1.7;

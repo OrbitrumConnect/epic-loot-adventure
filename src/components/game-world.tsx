@@ -24,6 +24,7 @@ import {
 import { TargetRoute } from './world/target-route';
 import { PlayerBase } from './world/player-base';
 import { BaseFireFX } from './world/base-fire';
+import { BaseNightLights } from './world/base-night-lights';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies } from './world/world-entities';
@@ -43,7 +44,7 @@ import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactor
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
-  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R,
+  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R, SAFE_ZONE,
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
@@ -283,8 +284,13 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
   const ref = useRef<THREE.PointLight>(null);
   const y = terrainHeight(pos[0], pos[2]);
   useFrame(({ clock }) => {
+    const l = ref.current;
+    if (!l) return;
+    // Culling por distância: longe do jogador a luz sai do shader (o fogo visual fica).
+    const p = useGameStore.getState().player.position;
+    l.visible = (p.x - pos[0]) * (p.x - pos[0]) + (p.z - pos[2]) * (p.z - pos[2]) < LIGHT_CULL_D2;
     // Acende forte à noite, discreta de dia (consistente com as luminárias). +20%.
-    if (ref.current) ref.current.intensity = (2.4 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 8) * 0.8;
+    if (l.visible) l.intensity = (2.4 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 8) * 0.8;
   });
   return (
     <group position={[pos[0], y, pos[2]]}>
@@ -349,6 +355,17 @@ function Character({
   useEffect(() => {
     if (body.current && playerRef) (playerRef as any).current = body.current;
   });
+
+  // Ao (re)montar o mundo — inclusive voltando da aba Cidade — retoma a última
+  // posição salva na store, em vez de resetar no spawn ([0,0,1]). A store é
+  // atualizada a cada quadro (onPosition), então aqui está sempre fresca.
+  useEffect(() => {
+    const b = body.current;
+    if (!b) return;
+    const pos = useGameStore.getState().player.position;
+    b.position.set(pos.x, terrainHeight(pos.x, pos.z), pos.z);
+    velocity.current.set(0, 0);
+  }, []);
 
   useEffect(() => {
     if (attackPhase.current === 'idle') {
@@ -942,6 +959,27 @@ function Moon() {
 }
 
 /**
+ * Marco da ZONA SEGURA no chão (no spawn): anel verde + preenchimento suave,
+ * igual ao círculo dos acampamentos. Aqui nenhum inimigo/boss entra
+ * (a barreira vive em `pushOutSafeZone`, na IA hostil). Só visual, sem custo.
+ */
+function SafeZoneMarker() {
+  const y = terrainHeight(SAFE_ZONE.x, SAFE_ZONE.z) + 0.05;
+  return (
+    <group position={[SAFE_ZONE.x, y, SAFE_ZONE.z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[SAFE_ZONE.radius - 0.6, SAFE_ZONE.radius, 56]} />
+        <meshBasicMaterial color="#6fe3b0" transparent opacity={0.5} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
+        <circleGeometry args={[SAFE_ZONE.radius, 56]} />
+        <meshBasicMaterial color="#2fa877" transparent opacity={0.12} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
  * Sol: disco claro e chapado, baixo no céu, que nasce/cruza/se põe com o ciclo
  * (`dayNight().sunPos`) e some à noite (a lua assume). É MALHA na cena (não um
  * sprite no pós) de propósito: o bloom o acende de graça, o relevo o recorta no
@@ -993,14 +1031,26 @@ const ROAD_POINTS: [number, number][] = [
 ];
 
 /** Poste de luz da estrada: apaga de dia, acende (tremeluzindo) ao anoitecer. */
+/** Distância² (m²) além da qual uma luz de cenário é desligada (sai do shader).
+ *  Alcance das luzes é ~9-13 m, então ~24 m já não ilumina nada perto do jogador. */
+const LIGHT_CULL_D2 = 24 * 24;
+
 function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
   const bulb = useRef<THREE.MeshStandardMaterial>(null);
   useFrame(() => {
     const nf = nightFactor();
     const flick = 0.9 + Math.sin(performance.now() * 0.006 + x * 1.3) * 0.1;
-    if (light.current) light.current.intensity = nf * 6.6 * flick;
     if (bulb.current) bulb.current.emissiveIntensity = nf * 2.4 * flick;
+    const l = light.current;
+    if (!l) return;
+    // Culling de luz: de dia (nf~0) ou longe do jogador, a luz SAI do shader
+    // (visible=false). O alcance é 13 m, então acima de ~22 m ela não ilumina
+    // nada perto — cortar é invisível e tira ~90% das luzes do custo por frame.
+    const p = useGameStore.getState().player.position;
+    const near = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < LIGHT_CULL_D2;
+    l.visible = nf > 0.04 && near;
+    if (l.visible) l.intensity = nf * 6.6 * flick;
   });
   return (
     <group position={[x, y, z]}>
@@ -1699,6 +1749,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       <HarvestNodes c={c} />
       <PlayerBase c={c} playerRef={playerRef} paused={Boolean(props.paused)} />
       <BaseFireFX />
+      <BaseNightLights />
+      <SafeZoneMarker />
       <Camps c={c} />
       <Enemies c={c} playerRef={playerRef} />
 
