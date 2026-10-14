@@ -20,6 +20,7 @@ import { GlbCreature } from './glb-creature';
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
 const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
   raider_kaiju: { url: '/models/bosses/insectoid.glb', height: 6.5, yaw: Math.PI },
+  raider_mushroom: { url: '/models/bosses/tribal-bug.glb', height: 4.5, yaw: Math.PI }, // monstro skinned (bind-pose + move)
 };
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
@@ -425,7 +426,10 @@ export function Raider({
         );
       })()}
 
-      <group scale={s} visible={!USE_GLB_BOSS}>
+      {/* Procedural só é MONTADO quando o GLB está OFF (perf — GPT: antes ficava
+          invisível porém montado, dezenas de meshes à toa por raider). */}
+      {!USE_GLB_BOSS && (
+      <group scale={s}>
         <group ref={torso}>
           <mesh geometry={costume[0]!} material={kit.metal} castShadow />
           <mesh geometry={costume[1]!} material={kit.bone} castShadow />
@@ -474,6 +478,7 @@ export function Raider({
           </group>
         </group>
       </group>
+      )}
     </group>
   );
 }
