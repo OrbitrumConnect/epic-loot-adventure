@@ -12,7 +12,7 @@ import { getDistance } from './combatSystem';
 /** Abaixo desta fração da vida máxima o piloto cura ou recua. */
 export const RETREAT_HP_RATIO = 0.35;
 /** Perseguidor dentro deste raio vira alvo imediato, antes da fila. */
-export const SELF_DEFENSE_RADIUS = 7;
+export const SELF_DEFENSE_RADIUS = 10;
 /** Alcance usado para decidir atacar em vez de andar (a loja exige <= 4). */
 export const ATTACK_RANGE = 3.2;
 /** Alcance usado para decidir coletar em vez de andar (a loja exige <= 4). */
@@ -21,9 +21,9 @@ export const GATHER_RANGE = 3.2;
 export const ARRIVAL_RADIUS = 2.5;
 /** Raio padrão de uma área de caça. */
 export const HUNT_AREA_RADIUS = 14;
-/** Raio em que o piloto SEMPRE engaja o inimigo mais próximo (defesa da base),
- *  mesmo com `autoHuntRadius` 0 — senão larga a base sob ataque e vai farmar. */
-export const AUTO_ENGAGE_RADIUS = 24;
+/** Regra do Pedro: o piloto só larga o farm pra lutar se um INIMIGO chegar
+ *  pertinho (~10m). Bate nele e VOLTA a farmar. Sem sair caçando longe. */
+export const AUTO_ENGAGE_RADIUS = 10;
 
 /** O que `tickObjectives` precisa ler. `AutoSnapshot` satisfaz este formato. */
 export type ObjectiveWorld = {
@@ -294,6 +294,22 @@ function nearestCreatureWithin(snapshot: AutoSnapshot, radius: number): AutoSnap
   return best;
 }
 
+/** Inimigo (hostil) vivo mais próximo dentro de `radius` — pra DEFESA (ignora pacífico). */
+function nearestHostileWithin(snapshot: AutoSnapshot, radius: number): AutoSnapshot['creatures'][number] | null {
+  let best: AutoSnapshot['creatures'][number] | null = null;
+  let bestDist = Infinity;
+  for (const creature of snapshot.creatures) {
+    if (!isCreatureAlive(creature)) continue;
+    if (creature.hostile === false) continue; // pacífico (cervo/coelho) não defende
+    const dist = getDistance(snapshot.playerPosition, creature.position);
+    if (dist <= radius && dist < bestDist) {
+      bestDist = dist;
+      best = creature;
+    }
+  }
+  return best;
+}
+
 /** Recurso vivo (não esgotado) mais próximo do jogador — pro farm automático. */
 function nearestNode(snapshot: AutoSnapshot): AutoSnapshot['resources'][number] | null {
   let best: AutoSnapshot['resources'][number] | null = null;
@@ -360,21 +376,27 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   // 5
   const active = getActiveObjective(snapshot.objectives);
   if (!active) {
-    // 6. Ocioso: engaja o inimigo mais próximo SEMPRE num raio de defesa (24m),
-    // mesmo com `autoHuntRadius` 0 — assim defende a base sob ataque (os raiders
-    // da onda miram a BASE, não o jogador, então o passo 4 não os pega). Se o
-    // jogador aumentou o raio de caça, usa o maior (caça mais longe).
-    const engageRadius = Math.max(AUTO_ENGAGE_RADIUS, snapshot.autoHuntRadius ?? 0, snapshot.attackRange ?? 0);
-    const prey = nearestCreatureWithin(snapshot, engageRadius);
-    if (prey) return engage(snapshot, prey, 'Defendendo a base');
-    // 6b. Nada pra lutar perto → FARM: colhe o recurso mais próximo (loop idle =
-    // luta↔farma). Se aparecer bicho perto, volta a lutar na hora.
+    // 6a. DEFESA: inimigo (raider/lobo/boss) perto → ataca. SÓ hostil — bicho
+    // pacífico (cervo/coelho) NÃO entra aqui, senão o piloto persegue sem parar
+    // e nunca farma. Raio de defesa cobre a base (os raiders miram a BASE, então
+    // o passo 4 — 7m, só quem persegue o player — não os pega).
+    const foe = nearestHostileWithin(snapshot, AUTO_ENGAGE_RADIUS);
+    if (foe) return engage(snapshot, foe, 'Defendendo a base');
+    // 6b. FARM: sem inimigo perto → coleta o recurso mais próximo (madeira/pedra/
+    // cristal). É a prioridade do loop ocioso quando não há ameaça.
     const node = nearestNode(snapshot);
     if (node) {
       if (getDistance(snapshot.playerPosition, node.position) <= GATHER_RANGE) {
         return { kind: 'gather', nodeId: node.id, to: { ...node.position } };
       }
       return { kind: 'move', to: { ...node.position }, reason: 'Farmando recurso' };
+    }
+    // 6c. Caça PACÍFICA (comida) só se o jogador ligou o raio de caça e não há
+    // recurso pra colher. Fica por último pra não atrapalhar o farm.
+    const huntBase = snapshot.autoHuntRadius ?? 0;
+    if (huntBase > 0) {
+      const prey = nearestCreatureWithin(snapshot, Math.max(huntBase, snapshot.attackRange ?? 0));
+      if (prey) return engage(snapshot, prey, 'Caçando por perto');
     }
     return { kind: 'idle', reason: 'Nenhum objetivo ativo.' };
   }

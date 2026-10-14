@@ -214,6 +214,18 @@ export const ITEMS: Record<string, Item> = {
     equippable: false,
     icon: 'Mountain',
   },
+  ammo: {
+    id: 'ammo',
+    name: 'Munição',
+    category: 'resource',
+    rarity: 'common',
+    weight: 0.02,
+    maxStack: 300,
+    dropOnDeath: true,
+    usable: false,
+    equippable: false,
+    icon: 'CircleDot',
+  },
   leather_armor: {
     id: 'leather_armor',
     name: 'Armadura de Couro',

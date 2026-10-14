@@ -52,7 +52,7 @@ export type AutoSnapshot = {
   playerDead: boolean;
   /** Índice da hotbar com uma cura utilizável, ou null. */
   healSlot: number | null;
-  creatures: { id: string; position: Position; behavior: string; hp: number }[];
+  creatures: { id: string; position: Position; behavior: string; hp: number; hostile?: boolean }[];
   camps: { id: string; position: Position; radius: number; creatureIds: string[]; cleared: boolean }[];
   resources: { id: string; position: Position; depleted: boolean }[];
   objectives: ObjectiveQueueState;

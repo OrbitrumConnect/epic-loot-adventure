@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
-  Circle, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
+  Circle, CircleDot, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
   Heart, Home, Landmark, Leaf, ListChecks, Lock, Map, Menu, MessageSquare, Mountain, Package,
   PanelLeftClose, Pickaxe, Repeat, Settings, Shield, ShieldCheck, Skull,
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Users, Utensils, Wind, X, Zap,
@@ -20,7 +20,7 @@ import { canOpenCityView } from '@/game/systems/playerBaseSystem';
 import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
 import { HuntBanner } from '@/components/hud/hunt-banner';
 import { ITEMS } from '@/game/data/items';
-import { getWeight, getUsedSlots } from '@/game/systems/inventorySystem';
+import { getWeight, getUsedSlots, getItemCount } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock, WORLD_EPOCH } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
@@ -151,6 +151,7 @@ function Index() {
   const wave = useGameStore(s => s.wave);
   const upgradeChoices = useGameStore(s => s.upgradeChoices);
   const baseLevel = useGameStore(s => s.baseLevel);
+  const ammo = useGameStore(s => getItemCount(s.player.inventory, 'ammo'));
   const autoPotion = useGameStore(s => s.autoPotion);
   const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
   const autoHuntRadius = useGameStore(s => s.autoHuntRadius);
@@ -402,6 +403,7 @@ function Index() {
             }}>{waveLabel}</div>
           )}
           <div className="header-currency"><Coins />{player.gold}</div>
+          <div className="header-currency" title="Munição (pistola/rifle)" style={{ color: ammo > 0 ? undefined : '#ef4444' }}><CircleDot />{ammo}</div>
           <MusicPlayer />
           <Button variant="ghost" size="icon" className="icon-control" aria-label="Preferências" title="Preferências" onClick={() => open('settings')}><Settings /></Button>
         </header>

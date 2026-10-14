@@ -239,6 +239,7 @@ function createInitialPlayer(): PlayerState {
     { itemId: 'bow', quantity: 1 },
     { itemId: 'pistol', quantity: 1 },
     { itemId: 'rifle', quantity: 1 },
+    { itemId: 'ammo', quantity: 60 }, // munição inicial p/ pistola/rifle
   ]);
   // Hotbar estendida: 8 slots originais INTACTOS + arco/pistola/rifle no fim.
   inventory.hotbar.slots = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
@@ -558,6 +559,14 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
 
+    // Munição: armas de BALA (pistola/rifle) gastam 1 por tiro. Sem bala, não
+    // atira (arco usa flecha, é livre). Pega bala dos saqueadores/acampamentos.
+    const usesBullet = prof.projectile === 'bullet';
+    if (usesBullet && getItemCount(state.player.inventory, 'ammo') <= 0) {
+      set(s => ({ ui: { ...s.ui, message: 'Sem munição! Pegue balas dos saqueadores ou limpe um acampamento.' } }));
+      return;
+    }
+
     const equippedWeapon = state.player.inventory.equipment.primary;
     const weaponPower = equippedWeapon ? (ITEMS[equippedWeapon]?.attackPower ?? 0) : 0;
     const TORCH_FIRE_BONUS = 9;
@@ -581,7 +590,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
 
-    let updatedPlayer = { ...state.player, lastAttackAt: now };
+    let updatedPlayer = {
+      ...state.player, lastAttackAt: now,
+      inventory: usesBullet ? removeItem(state.player.inventory, 'ammo', 1) : state.player.inventory,
+    };
     let updatedBags = state.deathBags;
     let msg = result.message;
     const stamp = Date.now();
@@ -1596,6 +1608,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         position: c.position,
         behavior: c.behavior,
         hp: c.hp,
+        // Inimigo (raider/lobo/boss) vs pacífico (cervo/coelho): o piloto defende
+        // dos inimigos, mas NÃO persegue pacífico — senão nunca farma.
+        hostile: !(CREATURES[c.speciesId]?.peaceful ?? false),
       })),
       camps: state.camps.map(c => ({
         id: c.id,
