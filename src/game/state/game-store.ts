@@ -47,7 +47,7 @@ import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
-import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, dist2 } from '../systems/powerSystem';
+import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, tornadoPositions, tornadoCount, tornadoDamage, TORNADO_HIT_RADIUS, TORNADO_PUSH, TORNADO_BASE_WAVES, TORNADO_EXTEND_WAVES, dist2, type Vec2 } from '../systems/powerSystem';
 import { SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
@@ -85,6 +85,8 @@ type GameState = {
   upgradeChoices: UpgradeId[] | null;
   /** Onda até a qual os bumerangues duram (0 = inativo). Renovar estende. */
   orbitExpiresWave: number;
+  /** Onda até a qual os tornados duram (0 = inativo). Renovar estende. */
+  tornadoExpiresWave: number;
   camps: CampState[];
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
@@ -401,9 +403,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   powerLastTickAt: 0,
   wave: INITIAL_WAVE,
   baseLevel: 1,
-  baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
+  baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
   upgradeChoices: null,
   orbitExpiresWave: 0,
+  tornadoExpiresWave: 0,
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
   targetId: null,
@@ -455,16 +458,27 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   tickPowers: (now) => {
     const state = get();
-    const stacks = state.baseUpgrades.orbit_boomerang;
-    if (stacks <= 0 || !state.playerBase) return;
-    if (state.wave.wave > state.orbitExpiresWave) return; // poder temporário expirou
-    if (now - state.powerLastTickAt < ORBIT_TICK_MS) return;
+    if (!state.playerBase) return;
     const core = state.playerBase.pieces.find((p) => p.kind === 'core');
     if (!core) return;
+    if (now - state.powerLastTickAt < ORBIT_TICK_MS) return; // tick comum dos powers
     const center = baseCellCenter(core.cell);
-    const positions = boomerangPositions(center, orbitCount(stacks), now);
-    const dmg = orbitDamage(stacks);
-    const r2 = ORBIT_HIT_RADIUS * ORBIT_HIT_RADIUS;
+    const wave = state.wave.wave;
+
+    // Campos de dano ATIVOS (bumerangue + tornado), cada um com suas posições,
+    // dano, raio² e empurrão. Power temporário: só entra dentro da duração.
+    type Field = { positions: Vec2[]; r2: number; dmg: number; push: number };
+    const fields: Field[] = [];
+    const orb = state.baseUpgrades.orbit_boomerang;
+    if (orb > 0 && wave <= state.orbitExpiresWave) {
+      fields.push({ positions: boomerangPositions(center, orbitCount(orb), now), r2: ORBIT_HIT_RADIUS * ORBIT_HIT_RADIUS, dmg: orbitDamage(orb), push: ORBIT_PUSH });
+    }
+    const tor = state.baseUpgrades.tornado;
+    if (tor > 0 && wave <= state.tornadoExpiresWave) {
+      fields.push({ positions: tornadoPositions(center, tornadoCount(tor), now), r2: TORNADO_HIT_RADIUS * TORNADO_HIT_RADIUS, dmg: tornadoDamage(tor), push: TORNADO_PUSH });
+    }
+    if (fields.length === 0) return;
+
     let player = state.player;
     let deathBags = state.deathBags;
     const drafts: ReturnType<typeof damageEvent>[] = [];
@@ -473,8 +487,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     for (let i = 0; i < next.length; i++) {
       const c = next[i]!;
       if (c.hp <= 0 || c.behavior === 'dead') continue;
-      if (CREATURES[c.speciesId]?.peaceful) continue; // lâmina não corta bicho pacífico
-      if (!positions.some((p) => dist2(p, c.position) <= r2)) continue;
+      if (CREATURES[c.speciesId]?.peaceful) continue; // power não corta bicho pacífico
+      let dmg = 0;
+      let push = 0;
+      for (const f of fields) {
+        if (f.positions.some((p) => dist2(p, c.position) <= f.r2)) {
+          if (f.dmg > dmg) dmg = f.dmg;
+          if (f.push > push) push = f.push;
+        }
+      }
+      if (dmg <= 0) continue;
       const hp = Math.max(0, c.hp - dmg);
       drafts.push(damageEvent(c.id, dmg, c.position));
       if (hp === 0) {
@@ -483,13 +505,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         deathBags = reward.bags;
         next[i] = deadCreature(c, now, Math.random);
       } else {
-        // Empurrão LEVE pra FORA da base (a lâmina bate e afasta, não só corta).
+        // Empurrão pra FORA da base (a lâmina/vendaval bate e afasta).
         const dx = c.position.x - center.x;
         const dz = c.position.z - center.z;
         const len = Math.hypot(dx, dz) || 1;
-        const px = c.position.x + (dx / len) * ORBIT_PUSH;
-        const pz = c.position.z + (dz / len) * ORBIT_PUSH;
-        next[i] = { ...c, hp, position: { x: px, z: pz } };
+        next[i] = { ...c, hp, position: { x: c.position.x + (dx / len) * push, z: c.position.z + (dz / len) * push } };
       }
       changed = true;
     }
@@ -1135,9 +1155,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         playerBase: null,
         wave: INITIAL_WAVE,
         baseLevel: 1,
-        baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
+        baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
         upgradeChoices: null,
         orbitExpiresWave: 0,
+        tornadoExpiresWave: 0,
         creatures: state.creatures.filter((c) => !c.id.startsWith('wave')),
         ui: { ...state.ui, message, baseFell: true },
       });
@@ -1162,9 +1183,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       towerLastShotAt: {},
       wave: INITIAL_WAVE,
       baseLevel: 1,
-      baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
+      baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
       upgradeChoices: null,
       orbitExpiresWave: 0,
+      tornadoExpiresWave: 0,
       objectives: createQueue(),
       ui: { ...s.ui, baseFell: false, message: '🔥 Nova sobrevivência! Colete, construa a base e prepare as defesas.' },
     }));
@@ -1173,14 +1195,19 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   pickUpgrade: (id) => {
     set((state) => {
       if (!state.upgradeChoices || !state.upgradeChoices.includes(id)) return {};
-      // Bumerangues = poder TEMPORÁRIO: ativo → renova (+1 lâmina, +2 ondas);
-      // do zero/expirado → recomeça (3 lâminas, dura 5 ondas).
+      // Powers TEMPORÁRIOS (bumerangue/tornado): ativo → renova (+1 e +2 ondas);
+      // do zero/expirado → recomeça (duração base). Os demais só acumulam stack.
       let orbitExpiresWave = state.orbitExpiresWave;
+      let tornadoExpiresWave = state.tornadoExpiresWave;
       let stacks: number;
       if (id === 'orbit_boomerang') {
         const active = (state.baseUpgrades.orbit_boomerang ?? 0) > 0 && state.wave.wave <= state.orbitExpiresWave;
         stacks = active ? state.baseUpgrades.orbit_boomerang + 1 : 1;
         orbitExpiresWave = (active ? state.orbitExpiresWave : state.wave.wave) + (active ? ORBIT_EXTEND_WAVES : ORBIT_BASE_WAVES);
+      } else if (id === 'tornado') {
+        const active = (state.baseUpgrades.tornado ?? 0) > 0 && state.wave.wave <= state.tornadoExpiresWave;
+        stacks = active ? state.baseUpgrades.tornado + 1 : 1;
+        tornadoExpiresWave = (active ? state.tornadoExpiresWave : state.wave.wave) + (active ? TORNADO_EXTEND_WAVES : TORNADO_BASE_WAVES);
       } else {
         stacks = (state.baseUpgrades[id] ?? 0) + 1;
       }
@@ -1209,6 +1236,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         baseLevel: state.baseLevel + 1,
         upgradeChoices: null,
         orbitExpiresWave,
+        tornadoExpiresWave,
         ui: { ...state.ui, message: `🏛️ Base nível ${state.baseLevel + 1}: ${card.name}!` },
       };
     });

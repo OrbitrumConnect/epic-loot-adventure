@@ -6,7 +6,7 @@
  * BASE — o personagem já sobe de nível sozinho (pedido do Pedro). Dados puros:
  * o store aplica o efeito, o HUD desenha as cartas.
  */
-export type UpgradeId = 'tower_damage' | 'wall_hp' | 'base_repair' | 'core_hp' | 'orbit_boomerang';
+export type UpgradeId = 'tower_damage' | 'wall_hp' | 'base_repair' | 'core_hp' | 'orbit_boomerang' | 'tornado';
 
 export type UpgradeCard = {
   id: UpgradeId;
@@ -22,9 +22,10 @@ export const UPGRADE_CARDS: Record<UpgradeId, UpgradeCard> = {
   base_repair: { id: 'base_repair', name: 'Reparo de Campo', description: 'Repara 100% da base agora', icon: 'Wrench' },
   core_hp: { id: 'core_hp', name: 'Núcleo Blindado', description: '+60% de vida do núcleo', icon: 'ShieldPlus' },
   orbit_boomerang: { id: 'orbit_boomerang', name: 'Bumerangues Orbitais', description: 'Lâminas giram fora do muro e empurram a horda · dura 5 ondas (renove: +1 lâmina, +2 ondas)', icon: 'Disc' },
+  tornado: { id: 'tornado', name: 'Tornados', description: 'Redemoinhos patrulham lá fora e varrem a horda chegando · dura 4 ondas (renove: +1 tornado, +2 ondas)', icon: 'Wind' },
 };
 
-const POOL: UpgradeId[] = ['tower_damage', 'wall_hp', 'base_repair', 'core_hp', 'orbit_boomerang'];
+const POOL: UpgradeId[] = ['tower_damage', 'wall_hp', 'base_repair', 'core_hp', 'orbit_boomerang', 'tornado'];
 
 /** Sorteia 3 cartas DISTINTAS do baralho (determinístico com `rng`). */
 export function rollUpgradeChoices(rng: () => number): UpgradeId[] {
