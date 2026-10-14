@@ -151,6 +151,15 @@ export function flushPositions() {
 /* ------------------------------------------------------------------ *
  * Tuning por espécie
  * ------------------------------------------------------------------ */
+
+/**
+ * CONTROLE GERAL de velocidade de TODAS as criaturas (animais + inimigos +
+ * bosses). Um só número ajusta o mundo inteiro sem mexer espécie por espécie
+ * (pedido do Pedro: "um controle geral que você ajusta, não eu"). 1 = normal,
+ * 0.9 = 10% mais devagar, 1.1 = 10% mais rápido.
+ */
+export const CREATURE_SPEED_SCALE = 1;
+
 export type HostileTuning = {
   speed: number;
   wanderSpeed: number;
@@ -318,8 +327,8 @@ export function useHostileAI(opts: HostileOptions) {
       if (Math.abs(wx) > edge) ax -= Math.sign(wx) * 1.2;
       if (Math.abs(wz) > edge) az -= Math.sign(wz) * 1.2;
       const l2 = Math.sqrt(ax * ax + az * az) || 1;
-      targetX = wx + (ax / l2) * tuning.speed * dt;
-      targetZ = wz + (az / l2) * tuning.speed * dt;
+      targetX = wx + (ax / l2) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+      targetZ = wz + (az / l2) * tuning.speed * CREATURE_SPEED_SCALE * dt;
       moving = true;
     } else if (!tuning.peaceful && distToPlayer < aggroRange && distToHome < tuning.leashRange && chaseTimer.current < tuning.chaseTimeout) {
       chasing = true;
@@ -327,8 +336,8 @@ export function useHostileAI(opts: HostileOptions) {
       if (distToPlayer <= tuning.attackRange) chaseTimer.current = 0;
       const angle = Math.atan2(px - wx, pz - wz);
       if (distToPlayer > tuning.attackRange * 0.6) {
-        targetX = wx + Math.sin(angle) * tuning.speed * dt;
-        targetZ = wz + Math.cos(angle) * tuning.speed * dt;
+        targetX = wx + Math.sin(angle) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+        targetZ = wz + Math.cos(angle) * tuning.speed * CREATURE_SPEED_SCALE * dt;
         moving = true;
       }
       if (distToPlayer <= tuning.attackRange) {
@@ -384,8 +393,8 @@ export function useHostileAI(opts: HostileOptions) {
         const distToBase = Math.sqrt((ctr.x - wx) ** 2 + (ctr.z - wz) ** 2);
         if (distToBase > 3) {
           const ang = Math.atan2(ctr.x - wx, ctr.z - wz);
-          targetX = wx + Math.sin(ang) * tuning.speed * dt;
-          targetZ = wz + Math.cos(ang) * tuning.speed * dt;
+          targetX = wx + Math.sin(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+          targetZ = wz + Math.cos(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
           moving = true;
         }
         const hit = nearestBasePiece(wx, wz);
