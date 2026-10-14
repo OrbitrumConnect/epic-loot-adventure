@@ -22,4 +22,10 @@ export const factoryClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e9);
 /** Altura (acima da base) onde o teto é cortado ao entrar. */
 export const FACTORY_ROOF_CUT = 3.6;
 
-export const FACTORY_WALLS_SOLID = true;
+/**
+ * Parede da fábrica sólida? OFF: o modelo industrial é complexo e NÃO tem porta
+ * limpa detectável → a colisão prendia o player dentro (entrava por brecha, não
+ * saía). Atravessável por ora (sem trap); o teto ainda some no iso. Religar só
+ * quando houver um vão de porta confiável.
+ */
+export const FACTORY_WALLS_SOLID = false;
