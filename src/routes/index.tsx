@@ -27,6 +27,7 @@ import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/at
 import { baseLv1Progress } from '@/game/systems/baseLv1';
 import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
+import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
 import {
   clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
@@ -147,6 +148,8 @@ function Index() {
   // Boolean estreito: só muda quando a base entra/sai do estágio Clash.
   const cityUnlocked = useGameStore(s => canOpenCityView(s.playerBase));
   const wave = useGameStore(s => s.wave);
+  const upgradeChoices = useGameStore(s => s.upgradeChoices);
+  const baseLevel = useGameStore(s => s.baseLevel);
   const autoPotion = useGameStore(s => s.autoPotion);
   const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
   const autoHuntRadius = useGameStore(s => s.autoHuntRadius);
@@ -450,6 +453,42 @@ function Index() {
               >
                 🔥 Sobreviver de novo
               </button>
+            </div>
+          )}
+          {upgradeChoices && !inCity && !ui.baseFell && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 58,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'radial-gradient(ellipse at center, rgba(10,20,40,0.78) 0%, rgba(0,0,0,0.90) 100%)',
+              color: '#fff', padding: 16,
+            }}>
+              <h2 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#60a5fa', textShadow: '0 0 18px rgba(96,165,250,0.5)' }}>
+                🏛️ Base nível {baseLevel} — escolha uma evolução
+              </h2>
+              <p style={{ fontSize: 14, marginTop: 8, marginBottom: 20, opacity: 0.8 }}>Onda repelida! Reforce a base antes da próxima horda.</p>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 760 }}>
+                {upgradeChoices.map((id) => {
+                  const card = UPGRADE_CARDS[id];
+                  const emoji = id === 'tower_damage' ? '🎯' : id === 'wall_hp' ? '🧱' : id === 'base_repair' ? '🔧' : '🛡️';
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => useGameStore.getState().pickUpgrade(id)}
+                      style={{
+                        width: 200, minHeight: 170, padding: '20px 16px', textAlign: 'center',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                        color: '#fff', background: 'linear-gradient(180deg, rgba(30,58,95,0.95) 0%, rgba(12,24,44,0.95) 100%)',
+                        border: '2px solid rgba(96,165,250,0.5)', borderRadius: 12, cursor: 'pointer',
+                        boxShadow: '0 0 20px rgba(96,165,250,0.25)',
+                      }}
+                    >
+                      <span style={{ fontSize: 40 }}>{emoji}</span>
+                      <span style={{ fontSize: 17, fontWeight: 700, color: '#93c5fd' }}>{card.name}</span>
+                      <span style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.35 }}>{card.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
           {!inCity && (<>

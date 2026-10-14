@@ -46,6 +46,7 @@ import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes }
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
+import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
 import { SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
@@ -73,6 +74,12 @@ type GameState = {
   towerLastShotAt: Record<string, number>;
   /** Ciclo de HORDAS (Fase 5): paz ↔ combate, ondas cada vez mais difíceis. */
   wave: WaveState;
+  /** Nível da base: sobe 1 a cada onda repelida (evolução por cartas). */
+  baseLevel: number;
+  /** Quantas vezes cada evolução foi escolhida (stacks). */
+  baseUpgrades: Record<UpgradeId, number>;
+  /** 3 cartas oferecidas após repelir uma onda; null = sem escolha pendente. */
+  upgradeChoices: UpgradeId[] | null;
   camps: CampState[];
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
@@ -137,6 +144,8 @@ type GameActions = {
   advanceBaseStage: () => void;
   /** GAME OVER: recomeça a sobrevivência do zero (sem base/recurso). */
   restartSurvival: () => void;
+  /** Escolhe uma das 3 cartas de evolução da base (entre ondas). */
+  pickUpgrade: (id: UpgradeId) => void;
   /** A vista de cidade só abre com o perímetro fechado (`clash`). */
   canOpenCityView: () => boolean;
   addObjective: (kind: ObjectiveKind, targetId: string | null) => void;
@@ -383,6 +392,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   playerBase: null,
   towerLastShotAt: {},
   wave: INITIAL_WAVE,
+  baseLevel: 1,
+  baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0 },
+  upgradeChoices: null,
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
   targetId: null,
@@ -412,7 +424,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const index = selectTowerTarget(tower, state.creatures, state.towerLastShotAt[tower.id], now);
       if (index < 0) continue;
       const c = state.creatures[index]!;
-      const damage = towerDamage(tower, c, rng);
+      // Dano base da torre (Caio) × multiplicador das cartas de evolução (hordas).
+      const damage = towerDamage(tower, c, rng) * towerDamageMult(state.baseUpgrades.tower_damage);
       const hp = Math.max(0, c.hp - damage);
       const drafts = [shotEvent(tower, c.position, 'arrow', BASE_TOWER_HEIGHT), damageEvent(c.id, damage, c.position)];
       let player = state.player;
@@ -1065,6 +1078,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       set({
         playerBase: null,
         wave: INITIAL_WAVE,
+        baseLevel: 1,
+        baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0 },
+        upgradeChoices: null,
         creatures: state.creatures.filter((c) => !c.id.startsWith('wave')),
         ui: { ...state.ui, message, baseFell: true },
       });
@@ -1088,9 +1104,45 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       playerBase: null,
       towerLastShotAt: {},
       wave: INITIAL_WAVE,
+      baseLevel: 1,
+      baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0 },
+      upgradeChoices: null,
       objectives: createQueue(),
       ui: { ...s.ui, baseFell: false, message: '🔥 Nova sobrevivência! Colete, construa a base e prepare as defesas.' },
     }));
+  },
+
+  pickUpgrade: (id) => {
+    set((state) => {
+      if (!state.upgradeChoices || !state.upgradeChoices.includes(id)) return {};
+      const stacks = (state.baseUpgrades[id] ?? 0) + 1;
+      const baseUpgrades = { ...state.baseUpgrades, [id]: stacks };
+      // Efeito nas peças da base (torre é multiplicador no tiro, não mexe em peça).
+      let playerBase = state.playerBase;
+      if (playerBase) {
+        const pieces = playerBase.pieces.map((p) => {
+          if (id === 'wall_hp') {
+            const maxHp = Math.round(p.maxHp * wallHpMult());
+            return { ...p, maxHp, hp: maxHp };
+          }
+          if (id === 'base_repair') return { ...p, hp: p.maxHp };
+          if (id === 'core_hp' && p.kind === 'core') {
+            const maxHp = Math.round(p.maxHp * coreHpMult());
+            return { ...p, maxHp, hp: maxHp };
+          }
+          return p;
+        });
+        playerBase = { ...playerBase, pieces };
+      }
+      const card = UPGRADE_CARDS[id];
+      return {
+        baseUpgrades,
+        playerBase,
+        baseLevel: state.baseLevel + 1,
+        upgradeChoices: null,
+        ui: { ...state.ui, message: `🏛️ Base nível ${state.baseLevel + 1}: ${card.name}!` },
+      };
+    });
   },
 
   advanceBaseStage: () => {
@@ -1302,6 +1354,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // HORDAS (Fase 5): ciclo paz↔combate; spawna a onda ao redor da base.
     let waveState = state.wave;
     let waveCreatures = ticked.creatures;
+    let upgradeChoices = state.upgradeChoices;
     {
       const center = baseCenter(state.playerBase);
       const aliveWave = ticked.creatures.filter(
@@ -1313,6 +1366,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         const spawned = spawnWaveRaiders(wt.startedWave, center, now);
         waveCreatures = [...ticked.creatures, ...spawned];
         waveState = markSpawned(waveState, spawned.length);
+      }
+      // Onda repelida → oferece 3 cartas de evolução da base (draft do Pedro).
+      if (wt.repelledWave && !upgradeChoices) {
+        upgradeChoices = rollUpgradeChoices(Math.random);
       }
       if (wt.message) messages.push(wt.message);
     }
@@ -1369,6 +1426,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       && ticked.camps === state.camps
       && waveCreatures === state.creatures
       && waveState === state.wave
+      && upgradeChoices === state.upgradeChoices
       && objectiveResult.queue === state.objectives
       && messages.length === 0;
     if (nothingChanged) return;
@@ -1382,6 +1440,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       camps: ticked.camps,
       creatures: waveCreatures,
       wave: waveState,
+      upgradeChoices,
       harvestNodes,
       feedback: pruneEvents(current.feedback, now),
       objectives: objectiveResult.queue,

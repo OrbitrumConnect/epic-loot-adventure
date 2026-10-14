@@ -44,6 +44,7 @@ export function waveHpScale(wave: number): number {
 export type WaveTick = {
   state: WaveState;
   startedWave: number | null; // nº da onda que ACABOU de começar (pra spawnar)
+  repelledWave: number | null; // nº da onda que ACABOU de ser repelida (→ cartas de evolução)
   message: string | null;     // aviso pro HUD (null = nada)
 };
 
@@ -58,7 +59,7 @@ export function tickWaves(
   baseExists: boolean,
   aliveWaveEnemies: number,
 ): WaveTick {
-  if (!baseExists) return { state: INITIAL_WAVE, startedWave: null, message: null };
+  if (!baseExists) return { state: INITIAL_WAVE, startedWave: null, repelledWave: null, message: null };
 
   switch (state.phase) {
     case 'idle':
@@ -66,6 +67,7 @@ export function tickWaves(
       return {
         state: { phase: 'peace', wave: 0, phaseEndsAt: now + PEACE_MS, spawnPending: 0 },
         startedWave: null,
+        repelledWave: null,
         message: '🛡️ Base assentada! A primeira horda vem em 1 min — prepare as defesas.',
       };
 
@@ -76,23 +78,25 @@ export function tickWaves(
         return {
           state: { phase: 'combat', wave, phaseEndsAt: 0, spawnPending: count },
           startedWave: wave,
+          repelledWave: null,
           message: `⚔️ Onda ${wave}! ${count} inimigos avançando pra base.`,
         };
       }
-      return { state, startedWave: null, message: null };
+      return { state, startedWave: null, repelledWave: null, message: null };
 
     case 'combat':
       if (state.spawnPending <= 0 && aliveWaveEnemies <= 0) {
         return {
           state: { phase: 'peace', wave: state.wave, phaseEndsAt: now + PEACE_MS, spawnPending: 0 },
           startedWave: null,
-          message: `✅ Onda ${state.wave} repelida! Reforce a base — a próxima vem em 1 min.`,
+          repelledWave: state.wave, // onda vencida → oferece as cartas de evolução
+          message: `✅ Onda ${state.wave} repelida! Escolha uma evolução pra base.`,
         };
       }
-      return { state, startedWave: null, message: null };
+      return { state, startedWave: null, repelledWave: null, message: null };
 
     default:
-      return { state, startedWave: null, message: null };
+      return { state, startedWave: null, repelledWave: null, message: null };
   }
 }
 
