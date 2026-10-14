@@ -265,18 +265,18 @@ export const CREATURES: Record<string, CreatureDefinition> = {
 
   pigeon: {
     id: 'pigeon',
-    name: 'Pombo',
+    name: 'Pombo Bravo',
     maxHp: 10,
-    attackPower: 1,
+    attackPower: 2,
     armor: 0,
-    attackCooldown: 2,
-    attackRange: 1,
-    aggroRange: 7,
+    attackCooldown: 1.5,
+    attackRange: 1.8,
+    aggroRange: 9,
     lootTable: [
       { itemId: 'raw_meat', quantity: 1, chance: 0.6 },
     ],
     icon: 'Bird',
-    peaceful: true,
+    peaceful: false, // ATACA voando (usa o clip de voo como mergulho); fraco e caçável
   },
 
   pheasant: {
