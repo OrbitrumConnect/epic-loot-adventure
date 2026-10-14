@@ -13,6 +13,15 @@ import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
 import { GlbHero, type HeroAction } from './glb-hero';
+import { GlbStaticBoss } from './glb-static-boss';
+
+/** Bosses de modelo SEM osso (kaiju/samurai) — movimento PROCEDURAL (glb-static-boss).
+ *  `height` em metros (escala absoluta). Leves o bastante p/ web (kaiju 14MB, samurai 1MB). */
+const STATIC_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
+  raider_kaiju: { url: '/models/bosses/kaiju.glb', height: 8.5, yaw: 0 }, // o MAIOR de todos
+  raider_samurai: { url: '/models/bosses/samurai.glb', height: 3.4, yaw: 0 }, // boss, maior que raider
+  // warlord (Colosso) e mushroom (Fúngico) CONTINUAM no Imp — nada removido.
+};
 
 /** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
 const USE_GLB_BOSS = true;
@@ -133,6 +142,16 @@ export const RAIDER_SPECIES: Record<string, Species> = {
       ...base, speed: 3.0, aggroRange: 40, attackRange: 8, leashRange: 400,
       chaseTimeout: 600, provokeRange: 60, walkSpeedChase: 9, walkSpeedIdle: 3.5,
       hitVerb: 'esmagou',
+    },
+  },
+  // Boss NOVO (somado, não substitui): Samurai Caído — ágil, golpe forte.
+  raider_samurai: {
+    scale: 3.3, bodyWidth: 0.9, bodyDepth: 0.5, weapon: 'club',
+    hood: false, shoulders: true, charm: false, boss: true, bossScale: 1.7,
+    tuning: {
+      ...base, speed: 4.1, aggroRange: 32, attackRange: 5, leashRange: 400,
+      chaseTimeout: 600, provokeRange: 48, walkSpeedChase: 14, walkSpeedIdle: 6,
+      hitVerb: 'retalhou',
     },
   },
 };
@@ -365,24 +384,28 @@ export function Raider({
   const s = spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale;
   const w = spec.bodyWidth;
   const d = spec.bodyDepth;
+  // Boss estático (kaiju/samurai) dimensiona rótulo/anel pela ALTURA real do modelo.
+  const sbDef = STATIC_BOSS[speciesId];
+  const labelScale = sbDef ? sbDef.height / 2 : s;
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
-      <SelectionRing ring={ring} radius={0.55 * s} c={c} />
-      <EnemyLabel name={name} height={2.15 * s} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
+      <SelectionRing ring={ring} radius={0.55 * labelScale} c={c} />
+      <EnemyLabel name={name} height={2.15 * labelScale} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
 
       {USE_GLB_BOSS && (() => {
-        // Batedor pode virar o gasmask (rig Valve remapeado + auto-escala).
-        const gas = USE_GLB_GASMASK && speciesId === 'raider_scout';
-        const url = gas ? GASMASK_URL : (RAIDER_GLB[speciesId] ?? DEFAULT_RAIDER_GLB);
+        // Boss de modelo SEM osso (kaiju/samurai) → movimento PROCEDURAL.
+        const sb = STATIC_BOSS[speciesId];
+        if (sb) {
+          return <GlbStaticBoss url={sb.url} actionRef={bossAction} height={sb.height} yaw={sb.yaw ?? 0} tint={sb.tint} groundBias={sb.groundBias ?? 0} />;
+        }
+        // Demais raiders/bosses: rig Universal + UAL (anima pernas).
         return (
           <GlbHero
-            charUrl={url}
+            charUrl={RAIDER_GLB[speciesId] ?? DEFAULT_RAIDER_GLB}
             actionRef={bossAction}
-            scale={gas ? 1 : (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale)}
+            scale={spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale}
             yaw={BOSS_GLB_YAW}
-            remapValve={gas}
-            autoHeight={gas ? 1.8 : undefined}
           />
         );
       })()}

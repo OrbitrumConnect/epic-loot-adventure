@@ -332,8 +332,16 @@ function waveBossCount(wave: number): number {
  *  - onda 10+: Kaiju aparece (o gigante)
  */
 function waveBossSpecies(wave: number, index: number): string {
-  if (wave >= 10) return index === 0 ? 'raider_kaiju' : index % 2 === 0 ? 'raider_mushroom' : 'raider_warlord';
-  if (wave >= 5) return index === 0 ? 'raider_mushroom' : 'raider_warlord';
+  if (wave >= 10) {
+    if (index === 0) return 'raider_kaiju';
+    const pool = ['raider_mushroom', 'raider_samurai', 'raider_warlord'];
+    return pool[index % pool.length]!;
+  }
+  if (wave >= 5) {
+    if (index === 0) return 'raider_mushroom';
+    return index % 2 === 0 ? 'raider_samurai' : 'raider_warlord';
+  }
+  if (wave >= 3) return index === 0 ? 'raider_samurai' : 'raider_warlord';
   return 'raider_warlord';
 }
 

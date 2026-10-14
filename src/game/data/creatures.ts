@@ -187,6 +187,25 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     icon: 'Shield',
     peaceful: false,
   },
+  raider_samurai: {
+    id: 'raider_samurai',
+    name: 'Samurai Caído',
+    maxHp: 1800,
+    attackPower: 60,
+    armor: 18,
+    attackCooldown: 2,
+    attackRange: 5,
+    aggroRange: 32,
+    lootTable: [
+      { itemId: 'iron_ore', quantity: 16, chance: 1 },
+      { itemId: 'iron_sword', quantity: 1, chance: 0.6 },
+      { itemId: 'raider_token', quantity: 30, chance: 1 },
+      { itemId: 'ammo', quantity: 10, chance: 0.9 },
+      { itemId: 'cooked_meat', quantity: 12, chance: 1 },
+    ],
+    icon: 'Shield',
+    peaceful: false,
+  },
 
   // ---------------------------------------------------------------------------
   // Fauna selvagem do vale. `peaceful` foge do jogador; hostil ataca ao ver.
