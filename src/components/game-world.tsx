@@ -1451,9 +1451,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     else props.onCollect();
   }, [props.onCollect]);
 
+  // Só árvores FARMÁVEIS (harvest-nodes) no mundo — decorativas removidas (perf
+  // + pedido do Pedro). Deixa 0 aqui; o verde vem dos nós de árvore colhíveis.
   const trees = useMemo(
     () =>
-      Array.from({ length: 340 }, (_, i) => ({
+      Array.from({ length: 0 }, (_, i) => ({
         x: (rand(i + 1) - 0.5) * MAP_HALF * 2,
         z: (rand(i + 301) - 0.5) * MAP_HALF * 2,
         size: 0.65 + rand(i + 701) * 0.7,

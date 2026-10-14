@@ -44,6 +44,12 @@ const ROCKY_ZONES: Zone[] = [
   { x: -60, z: -30, spread: 9 },
   { x: 50, z: -40, spread: 9 },
 ];
+/** Cristais concentrados em REGIÕES (mina de cristal) + no TOPO da montanha (NO). */
+const CRYSTAL_ZONES: Zone[] = [
+  { x: -74, z: 64, spread: 9 },  // topo da montanha de neve
+  { x: 52, z: -42, spread: 8 },  // veio de cristal a sudeste
+  { x: -58, z: -34, spread: 7 }, // veio a sudoeste
+];
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -105,14 +111,14 @@ export function createHarvestNodes(seed: number = DEFAULT_HARVEST_SEED): Harvest
   const sampler: Record<HarvestNodeKind, () => Position> = {
     tree: () => (rng() < 0.85 ? around(pick(FOREST_ZONES)) : anywhere()),
     pebble: () => anywhere(),
-    rock: () => (rng() < 0.8 ? around(pick(ROCKY_ZONES)) : anywhere()),
+    rock: () => around(pick(ROCKY_ZONES)),           // 100% em minas (não espalha)
     iron_vein: () => around(pick(ROCKY_ZONES)),
     gold_vein: () => {
       const p = around(pick(ROCKY_ZONES));
       return dist(p, PLAYER_SPAWN) < 25 ? INVALID : p;
     },
     crystal: () => {
-      const p = anywhere();
+      const p = around(pick(CRYSTAL_ZONES));         // concentrado (mina + montanha)
       return dist(p, PLAYER_SPAWN) < 15 ? INVALID : p;
     },
   };
