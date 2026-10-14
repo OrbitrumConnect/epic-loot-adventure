@@ -38,7 +38,7 @@ describe('camps · dados e posicionamento', () => {
     expect(broken.join(' ')).toContain('folga');
 
     const nearSpawn = findPlacementIssues([
-      { id: 'a', defId: 'raider_outpost', position: { x: 2, z: 2 } },
+      { id: 'a', defId: 'raider_outpost', position: { x: 7, z: -24 } }, // em cima do spawn novo
     ]);
     expect(nearSpawn.join(' ')).toContain('nascedouro');
   });
@@ -51,10 +51,10 @@ describe('camps · dados e posicionamento', () => {
       (a, b) => getDistance(a.position, PLAYER_SPAWN) - getDistance(b.position, PLAYER_SPAWN),
     );
     const nearest = byDistance[0]!;
-    expect(CAMPS[nearest.defId]!.tier).toBe(1);
+    expect(CAMPS[nearest.defId]!.tier).toBe(1); // o camp mais próximo ainda é o FÁCIL
     const dist = getDistance(nearest.position, PLAYER_SPAWN);
     expect(dist).toBeGreaterThanOrEqual(18);
-    expect(dist).toBeLessThanOrEqual(25);
+    expect(dist).toBeLessThanOrEqual(40); // spawn perto da fábrica (7,-26) → ~37m do 1º camp
   });
 
   it('cada definição tem estruturas, postos, guardas e recompensa crescente', () => {

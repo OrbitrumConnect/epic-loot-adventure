@@ -56,7 +56,7 @@ import {
 import type { FeedbackDraft } from '../systems/feedbackSystem';
 
 /** Para onde o piloto automático recua e para onde aponta um `travel` sem alvo. */
-export const HOME_POSITION: Position = { x: 0, z: 0 };
+export const HOME_POSITION: Position = { x: 7, z: -26 };
 
 type GameState = {
   player: PlayerState;
@@ -253,7 +253,7 @@ function createInitialPlayer(): PlayerState {
     stamina: 100,
     maxStamina: 100,
     gold: 250,
-    position: { x: 0, z: 1 },
+    position: { x: 7, z: -25 },
     inventory,
     attackCooldown: 0.8,
     lastAttackAt: 0,

@@ -14,7 +14,9 @@ import type { CampDefinition, CampStructure, Position } from '../types';
 // ---------------------------------------------------------------------------
 
 export const WORLD_HALF = 90;
-export const PLAYER_SPAWN: Position = { x: 0, z: 0 };
+// Nascedouro/safe-zone: no FLAT verde perto da fábrica central (7,-8), LONGE do
+// rio/ponte (que passa por 0,0) — spawn limpo (Pedro). Camps e nós se afastam daqui.
+export const PLAYER_SPAWN: Position = { x: 7, z: -26 };
 
 export const LAKE_CENTERS: { x: number; z: number; r: number }[] = [
   { x: 55, z: 55, r: 16 },
