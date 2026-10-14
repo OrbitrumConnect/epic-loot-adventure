@@ -30,7 +30,7 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   // (normalizamos por Y): assim a maior dimensão fica ~0.8-1.0 m (tamanho de ave real).
   goose: { url: '/models/animals/goose.glb', height: 0.28, yaw: 0, groundBias: -0.05 },
   pheasant: { url: '/models/animals/pheasant.glb', height: 0.34, yaw: 0, groundBias: -0.05 },
-  pigeon: { url: '/models/animals/pigeon.glb', height: 0.005, yaw: 0, groundBias: 0.6 }, // -90% de novo; voa ~0.6m (mergulha no player)
+  pigeon: { url: '/models/animals/pigeon.glb', height: 0.0004, yaw: 0, groundBias: 0.6 }, // modelo não normaliza -> height age ~linear; bem menor
 };
 
 type V3 = [number, number, number];
