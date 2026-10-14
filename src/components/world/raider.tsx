@@ -14,6 +14,13 @@ import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
 import { GlbHero, type HeroAction } from './glb-hero';
 import { GlbStaticBoss } from './glb-static-boss';
+import { GlbCreature } from './glb-creature';
+
+/** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
+ *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
+const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
+  raider_kaiju: { url: '/models/bosses/insectoid.glb', height: 6.5, yaw: Math.PI },
+};
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
  *  VAZIO: kaiju/samurai voltaram pro caminho ANIMADO (rig Universal + UAL, igual
@@ -306,6 +313,7 @@ export function Raider({
 
   const ref = useRef<THREE.Group>(null);
   const bossAction = useRef<HeroAction>('idle');
+  const bossMoving = useRef(false); // p/ boss-criatura (GlbCreature, anda/para)
   const leftLeg = useRef<THREE.Mesh>(null);
   const rightLeg = useRef<THREE.Mesh>(null);
   const leftArm = useRef<THREE.Mesh>(null);
@@ -331,6 +339,7 @@ export function Raider({
     ring,
     onAnimate: (anim, dt) => {
       bossAction.current = (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? 'walk' : 'idle';
+      bossMoving.current = anim.moving;
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.6 : 0;
       if (leftLeg.current) leftLeg.current.rotation.x = swing;
       if (rightLeg.current) rightLeg.current.rotation.x = -swing;
@@ -385,8 +394,8 @@ export function Raider({
   const s = spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale;
   const w = spec.bodyWidth;
   const d = spec.bodyDepth;
-  // Boss estático (kaiju/samurai) dimensiona rótulo/anel pela ALTURA real do modelo.
-  const sbDef = STATIC_BOSS[speciesId];
+  // Boss GLB próprio (estático ou criatura) dimensiona rótulo/anel pela altura real.
+  const sbDef = STATIC_BOSS[speciesId] ?? CREATURE_BOSS[speciesId];
   const labelScale = sbDef ? sbDef.height / 2 : s;
 
   return (
@@ -395,7 +404,12 @@ export function Raider({
       <EnemyLabel name={name} height={2.15 * labelScale} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
 
       {USE_GLB_BOSS && (() => {
-        // Boss de modelo SEM osso (kaiju/samurai) → movimento PROCEDURAL.
+        // Boss de MONSTRO com rig+anim próprios (insectoid) → renderer de criatura.
+        const cb = CREATURE_BOSS[speciesId];
+        if (cb) {
+          return <GlbCreature url={cb.url} movingRef={bossMoving} height={cb.height} yaw={cb.yaw ?? Math.PI} tint={cb.tint} groundBias={cb.groundBias ?? 0} />;
+        }
+        // Boss de modelo SEM osso → movimento PROCEDURAL (glb-static-boss).
         const sb = STATIC_BOSS[speciesId];
         if (sb) {
           return <GlbStaticBoss url={sb.url} actionRef={bossAction} height={sb.height} yaw={sb.yaw ?? 0} tint={sb.tint} groundBias={sb.groundBias ?? 0} />;
