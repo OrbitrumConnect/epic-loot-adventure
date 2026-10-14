@@ -884,9 +884,15 @@ function DayNightLighting({ c }: { c: Palette }) {
   useEffect(() => {
     scene.fog = fog.current;
     scene.background = bg.current;
+    // A sombra NÃO precisa re-renderizar todo quadro: o sol anda devagar. Desligo
+    // o autoUpdate e marco needsUpdate a ~15 Hz (ver abaixo) — corta ~75% dos
+    // passes de sombra (o mais caro da cena, com ~70 criaturas) sem perda visível.
+    const d = dir.current;
+    if (d) { d.shadow.autoUpdate = false; d.shadow.needsUpdate = true; }
   }, [scene]);
 
-  useFrame(() => {
+  const shadowAccum = useRef(0);
+  useFrame((_s, delta) => {
     const s = dayNight();
     if (dir.current) {
       dir.current.position.set(s.sunPos[0], s.sunPos[1], s.sunPos[2]);
@@ -901,6 +907,14 @@ function DayNightLighting({ c }: { c: Palette }) {
     fog.current.near = s.fogNear;
     fog.current.far = s.fogFar;
     bg.current.set(s.fogColor);
+
+    // Re-renderiza o shadow map ~15x/s (não 60): sombra de objeto em movimento
+    // atualiza fluido o bastante, mas pulamos ~3/4 dos passes.
+    shadowAccum.current += delta;
+    if (dir.current && shadowAccum.current >= 1 / 15) {
+      shadowAccum.current = 0;
+      dir.current.shadow.needsUpdate = true;
+    }
   });
 
   return (

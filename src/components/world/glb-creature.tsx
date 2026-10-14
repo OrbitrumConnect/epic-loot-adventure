@@ -3,6 +3,12 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { useGameStore } from '@/game/state/game-store';
+
+/** Distância² (m²) além da qual a criatura para de lançar sombra e de animar
+ *  (com ~70 bichos, é o maior ganho de FPS — longe ninguém nota). */
+const CREATURE_ACTIVE_D2 = 34 * 34;
+const tmpCreatureV = new THREE.Vector3();
 
 /** Bounding box a partir das GEOMETRIAS (independe de pose/skin/timing). */
 function measureGeo(root: THREE.Object3D): THREE.Box3 {
@@ -46,8 +52,12 @@ export function GlbCreature({
   const gltf = useGLTF(url) as unknown as { scene: THREE.Group; animations: THREE.AnimationClip[]; parser: { json: { textures?: unknown[]; materials?: { name?: string }[] }; getDependency: (t: string, i: number) => Promise<unknown> } };
   const { scene, animations } = gltf;
   const cloned = useMemo(() => skeletonClone(scene), [scene]);
-  const { actions, names } = useAnimations(animations, inner);
+  const { actions, names, mixer } = useAnimations(animations, inner);
   const current = useRef<string | null>(null);
+  /** Malhas do modelo (coletadas uma vez) p/ alternar castShadow sem traverse por quadro. */
+  const meshes = useRef<THREE.Mesh[]>([]);
+  /** Estado de proximidade atual (evita reescrever castShadow/timeScale todo quadro). */
+  const active = useRef(true);
 
   // Modelos "demo" trazem textura EMBUTIDA mas não a ligam no material (ficam
   // brancos/amarelos). Liga a baseColor via parser do glTF (material i → textura i).
@@ -94,10 +104,12 @@ export function GlbCreature({
     cloned.updateMatrixWorld(true);
     const b2 = measureGeo(cloned);
     cloned.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+    const collected: THREE.Mesh[] = [];
     cloned.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
+        collected.push(m);
         // Culling LIGADO + bounding inflado (não renderiza fora da tela).
         if (m.geometry && !m.geometry.userData['_inflated']) {
           if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
@@ -114,25 +126,41 @@ export function GlbCreature({
         }
       }
     });
+    meshes.current = collected;
     return cloned;
   }, [cloned, height, tint]);
 
-  const pick = (moving: boolean): string | undefined => {
+  // Clipes idle/walk resolvidos UMA vez (só dependem de `names`) — sem regex por quadro.
+  const clips = useMemo(() => {
     const find = (sub: string) => names.find((n) => n.toLowerCase().includes(sub));
-    if (moving) return find('walk') ?? find('run') ?? find('trot') ?? names[0];
-    return find('idle') ?? find('stand') ?? find('eat') ?? names.find((n) => !/walk|run|trot|howl|attack/i.test(n)) ?? names[0];
-  };
+    const walk = find('walk') ?? find('run') ?? find('trot') ?? names[0];
+    const idle = find('idle') ?? find('stand') ?? find('eat') ?? names.find((n) => !/walk|run|trot|howl|attack/i.test(n)) ?? names[0];
+    return { walk, idle };
+  }, [names]);
 
   useEffect(() => {
     // Começa no idle.
-    const n = pick(false);
+    const n = clips.idle;
     if (n && actions[n]) actions[n]!.reset().fadeIn(0.2).play();
     current.current = n ?? null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actions, names]);
+  }, [actions, clips]);
 
   useFrame(() => {
-    const want = pick(movingRef.current);
+    const g = inner.current;
+    if (!g) return;
+    // Longe do jogador: sai do passe de sombra e pausa o mixer (anim). Perto: liga.
+    g.getWorldPosition(tmpCreatureV);
+    const p = useGameStore.getState().player.position;
+    const near = (p.x - tmpCreatureV.x) * (p.x - tmpCreatureV.x) + (p.z - tmpCreatureV.z) * (p.z - tmpCreatureV.z) < CREATURE_ACTIVE_D2;
+    if (near !== active.current) {
+      active.current = near;
+      for (const m of meshes.current) m.castShadow = near;
+      if (mixer) mixer.timeScale = near ? 1 : 0;
+    }
+    if (!near) return; // longe: nem recalcula o clipe
+
+    const want = movingRef.current ? clips.walk : clips.idle;
     if (want && want !== current.current) {
       const prev = current.current;
       if (prev && actions[prev]) actions[prev]!.fadeOut(0.18);
