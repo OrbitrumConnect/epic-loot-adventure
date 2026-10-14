@@ -333,21 +333,22 @@ function waveBossCount(wave: number): number {
 /**
  * Qual boss nasce. Ondas maiores liberam bosses MAIORES; o 1º boss da onda é o
  * mais forte disponível, o resto varia pra horda ficar mista.
- *  - onda <5: só Colosso (warlord)
- *  - onda 5-9: Fúngico aparece (1,5× maior)
- *  - onda 10+: Kaiju aparece (o gigante)
+ *  - onda 1: só Colosso (warlord)
+ *  - onda 2-3: Samurai aparece
+ *  - onda 4-5: Fúngico aparece
+ *  - onda 6+: Kaiju aparece (o gigante) — adiantado a pedido do Pedro
  */
 function waveBossSpecies(wave: number, index: number): string {
-  if (wave >= 10) {
+  if (wave >= 6) {
     if (index === 0) return 'raider_kaiju';
     const pool = ['raider_mushroom', 'raider_samurai', 'raider_warlord'];
     return pool[index % pool.length]!;
   }
-  if (wave >= 5) {
+  if (wave >= 4) {
     if (index === 0) return 'raider_mushroom';
     return index % 2 === 0 ? 'raider_samurai' : 'raider_warlord';
   }
-  if (wave >= 3) return index === 0 ? 'raider_samurai' : 'raider_warlord';
+  if (wave >= 2) return index === 0 ? 'raider_samurai' : 'raider_warlord';
   return 'raider_warlord';
 }
 
@@ -1638,6 +1639,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       ],
       objectives: state.objectives,
       homePosition: HOME_POSITION,
+      baseUnderSiege: state.wave.phase === 'combat',
     };
   },
 }));

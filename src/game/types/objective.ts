@@ -57,6 +57,9 @@ export type AutoSnapshot = {
   resources: { id: string; position: Position; depleted: boolean }[];
   objectives: ObjectiveQueueState;
   homePosition: Position;
+  /** Onda em COMBATE (cerco à base) → o piloto prioriza DEFENDER: ataca o hostil
+   *  mais próximo dentro do raio de defesa e não persegue além dele. */
+  baseUnderSiege?: boolean;
   /** Cura automática ligada. Ausente = ligada. */
   autoPotion?: boolean;
   /** Raio (m) pra caçar o bicho mais próximo quando ocioso. 0/ausente = não caça sozinho. */
