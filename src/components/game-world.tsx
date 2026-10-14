@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
+import { OrthographicCamera, PerspectiveCamera, Stats } from '@react-three/drei';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
@@ -356,14 +356,22 @@ function Character({
     if (body.current && playerRef) (playerRef as any).current = body.current;
   });
 
-  // Ao (re)montar o mundo — inclusive voltando da aba Cidade — retoma a última
-  // posição salva na store, em vez de resetar no spawn ([0,0,1]). A store é
-  // atualizada a cada quadro (onPosition), então aqui está sempre fresca.
+  // Posição ao montar o mundo:
+  //  - LOGIN (1º load da sessão): sempre na ZONA SEGURA, mesmo com save antigo
+  //    (o Pedro quer entrar no jogo direto na zona de respawn).
+  //  - Voltar da aba Cidade (mesma sessão): retoma onde estava (store fresca).
   useEffect(() => {
     const b = body.current;
     if (!b) return;
-    const pos = useGameStore.getState().player.position;
-    b.position.set(pos.x, terrainHeight(pos.x, pos.z), pos.z);
+    if (!didInitialSpawn) {
+      didInitialSpawn = true;
+      const sx = SAFE_ZONE.x, sz = SAFE_ZONE.z;
+      b.position.set(sx, terrainHeight(sx, sz), sz);
+      useGameStore.setState(s => ({ player: { ...s.player, position: { x: sx, z: sz } } }));
+    } else {
+      const pos = useGameStore.getState().player.position;
+      b.position.set(pos.x, terrainHeight(pos.x, pos.z), pos.z);
+    }
     velocity.current.set(0, 0);
   }, []);
 
@@ -1048,6 +1056,10 @@ const ROAD_POINTS: [number, number][] = [
 /** Distância² (m²) além da qual uma luz de cenário é desligada (sai do shader).
  *  Alcance das luzes é ~9-13 m, então ~24 m já não ilumina nada perto do jogador. */
 const LIGHT_CULL_D2 = 24 * 24;
+
+/** Falso só no 1º load da sessão (vira true após spawnar na zona segura).
+ *  Reinicia a cada reload de página = cada login entra na zona segura. */
+let didInitialSpawn = false;
 
 function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
@@ -1795,6 +1807,8 @@ export default function GameWorld(props: WorldProps) {
         <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={160} />
       )}
       <WorldScene {...props} c={c} cameraMode={cameraMode} />
+      {/* Medidor de FPS — SÓ em dev (localhost); nunca vai pra produção. */}
+      {import.meta.env.DEV && <Stats />}
     </Canvas>
   );
 }

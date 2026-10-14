@@ -39,8 +39,13 @@ export function GlbCrystals() {
 
   const slots = useMemo(() => Array.from({ length: POOL }, () => proto.clone(true)), [proto]);
   const refs = useRef<(THREE.Group | null)[]>([]);
+  const acc = useRef(0);
 
-  useFrame(() => {
+  useFrame((_s, delta) => {
+    // Cristais não se movem: refazer filter+sort a 60Hz é desperdício. ~5Hz basta.
+    acc.current += delta;
+    if (acc.current < 0.2) return;
+    acc.current = 0;
     const st = useGameStore.getState();
     const p = st.player.position;
     const live = st.harvestNodes.filter((n) => n.kind === 'crystal' && !n.depleted);
