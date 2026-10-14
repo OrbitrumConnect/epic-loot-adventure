@@ -23,6 +23,7 @@ import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactor
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece } from './base-targets';
+import { cellCenter } from '@/game/systems/playerBaseSystem';
 
 /**
  * Clique num inimigo: esquerdo seleciona, Shift+esquerdo enfileira uma caçada.
@@ -150,6 +151,15 @@ export function flushPositions() {
 /* ------------------------------------------------------------------ *
  * Tuning por espécie
  * ------------------------------------------------------------------ */
+
+/**
+ * CONTROLE GERAL de velocidade de TODAS as criaturas (animais + inimigos +
+ * bosses). Um só número ajusta o mundo inteiro sem mexer espécie por espécie
+ * (pedido do Pedro: "um controle geral que você ajusta, não eu"). 1 = normal,
+ * 0.9 = 10% mais devagar, 1.1 = 10% mais rápido.
+ */
+export const CREATURE_SPEED_SCALE = 1;
+
 export type HostileTuning = {
   speed: number;
   wanderSpeed: number;
@@ -317,8 +327,8 @@ export function useHostileAI(opts: HostileOptions) {
       if (Math.abs(wx) > edge) ax -= Math.sign(wx) * 1.2;
       if (Math.abs(wz) > edge) az -= Math.sign(wz) * 1.2;
       const l2 = Math.sqrt(ax * ax + az * az) || 1;
-      targetX = wx + (ax / l2) * tuning.speed * dt;
-      targetZ = wz + (az / l2) * tuning.speed * dt;
+      targetX = wx + (ax / l2) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+      targetZ = wz + (az / l2) * tuning.speed * CREATURE_SPEED_SCALE * dt;
       moving = true;
     } else if (!tuning.peaceful && distToPlayer < aggroRange && distToHome < tuning.leashRange && chaseTimer.current < tuning.chaseTimeout) {
       chasing = true;
@@ -326,8 +336,8 @@ export function useHostileAI(opts: HostileOptions) {
       if (distToPlayer <= tuning.attackRange) chaseTimer.current = 0;
       const angle = Math.atan2(px - wx, pz - wz);
       if (distToPlayer > tuning.attackRange * 0.6) {
-        targetX = wx + Math.sin(angle) * tuning.speed * dt;
-        targetZ = wz + Math.cos(angle) * tuning.speed * dt;
+        targetX = wx + Math.sin(angle) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+        targetZ = wz + Math.cos(angle) * tuning.speed * CREATURE_SPEED_SCALE * dt;
         moving = true;
       }
       if (distToPlayer <= tuning.attackRange) {
@@ -368,6 +378,39 @@ export function useHostileAI(opts: HostileOptions) {
             const st = useGameStore.getState();
             st.damageBasePiece(hit.id, dmg);
             st.setMessage(`${creature.name} ataca ${BASE_PIECES[kind].name.toLowerCase()} da base! -${dmg}`);
+          }
+        }
+      }
+    } else if (creatureId.startsWith('wave')) {
+      // Inimigo de ONDA: marcha até a base e descarrega na peça mais próxima,
+      // mesmo com o player longe (é o cerco da horda). Se o player chegar perto,
+      // o ramo de cima (chase) já o prioriza.
+      chaseTimer.current = 0;
+      const base = useGameStore.getState().playerBase;
+      const core = base?.pieces.find((p) => p.kind === 'core');
+      if (core) {
+        const ctr = cellCenter(core.cell);
+        const distToBase = Math.sqrt((ctr.x - wx) ** 2 + (ctr.z - wz) ** 2);
+        if (distToBase > 3) {
+          const ang = Math.atan2(ctr.x - wx, ctr.z - wz);
+          targetX = wx + Math.sin(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+          targetZ = wz + Math.cos(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+          moving = true;
+        }
+        // Mira: muro/torre mais próximo (nearestBasePiece exclui o núcleo). Só
+        // quando NÃO há muro/torre no alcance (perímetro FURADO) e a criatura
+        // está colada no centro é que o NÚCLEO vira alvo — o último a cair.
+        const hit = nearestBasePiece(wx, wz);
+        const target = hit ?? (distToBase <= 3.5 ? { id: core.id, x: ctr.x, z: ctr.z } : null);
+        if (target) {
+          attackCooldown.current -= dt;
+          if (attackCooldown.current <= 0) {
+            attackCooldown.current = creature.attackCooldown;
+            swing.current = 0.35;
+            const dmg = Math.max(1, creature.attackPower);
+            reportDamageToStore(target.id, dmg, { x: target.x, z: target.z }, false);
+            const st = useGameStore.getState();
+            st.damageBasePiece(target.id, dmg);
           }
         }
       }

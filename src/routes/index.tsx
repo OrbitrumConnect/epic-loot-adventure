@@ -27,6 +27,8 @@ import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/at
 import { baseLv1Progress } from '@/game/systems/baseLv1';
 import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
+import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
+import { MusicPlayer } from '@/components/MusicPlayer';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
 import {
   clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
@@ -146,6 +148,9 @@ function Index() {
 
   // Boolean estreito: só muda quando a base entra/sai do estágio Clash.
   const cityUnlocked = useGameStore(s => canOpenCityView(s.playerBase));
+  const wave = useGameStore(s => s.wave);
+  const upgradeChoices = useGameStore(s => s.upgradeChoices);
+  const baseLevel = useGameStore(s => s.baseLevel);
   const autoPotion = useGameStore(s => s.autoPotion);
   const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
   const autoHuntRadius = useGameStore(s => s.autoHuntRadius);
@@ -163,6 +168,14 @@ function Index() {
   const playerBase = useGameStore(s => s.playerBase);
   const deliverToBase = useGameStore(s => s.deliverToBase);
   const baseProg = playerBase ? baseLv1Progress(playerBase) : null;
+  // HUD: vida da base (soma das peças) + rótulo da onda.
+  const baseHp = playerBase ? playerBase.pieces.reduce((a, p) => a + p.hp, 0) : 0;
+  const baseMaxHp = playerBase ? playerBase.pieces.reduce((a, p) => a + p.maxHp, 0) : 0;
+  const waveLabel = wave.phase === 'combat'
+    ? `Onda ${wave.wave} ⚔️`
+    : wave.phase === 'peace'
+      ? `Paz · Onda ${wave.wave + 1} em ${Math.max(0, Math.ceil((wave.phaseEndsAt - Date.now()) / 1000))}s`
+      : null;
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);
@@ -373,6 +386,7 @@ function Index() {
               { name: 'Vida', val: player.hp, max: player.maxHp, icon: Heart, kind: 'health' },
               { name: 'Mana', val: player.mana, max: player.maxMana, icon: Sparkles, kind: 'mana' },
               { name: 'Vigor', val: player.stamina, max: player.maxStamina, icon: Zap, kind: 'energy' },
+              ...(playerBase ? [{ name: 'Base', val: baseHp, max: baseMaxHp, icon: ShieldCheck, kind: 'base' }] : []),
             ].map(v => (
               <div className={`vital vital-${v.kind}`} key={v.kind}>
                 <div className="vital-label"><span><v.icon />{v.name}</span><strong>{v.val} / {v.max}</strong></div>
@@ -380,7 +394,15 @@ function Index() {
               </div>
             ))}
           </div>
+          {waveLabel && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
+              background: wave.phase === 'combat' ? 'rgba(239,68,68,0.18)' : 'rgba(251,191,36,0.15)',
+              color: wave.phase === 'combat' ? '#fca5a5' : '#fcd34d', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap',
+            }}>{waveLabel}</div>
+          )}
           <div className="header-currency"><Coins />{player.gold}</div>
+          <MusicPlayer />
           <Button variant="ghost" size="icon" className="icon-control" aria-label="Preferências" title="Preferências" onClick={() => open('settings')}><Settings /></Button>
         </header>
 
@@ -411,6 +433,64 @@ function Index() {
                   : 'Renascendo...'}
               </p>
               <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>Você reaparecerá na sua base</p>
+            </div>
+          )}
+          {ui.baseFell && !inCity && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 60,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'radial-gradient(ellipse at center, rgba(80,0,0,0.80) 0%, rgba(0,0,0,0.92) 100%)',
+              color: '#fff',
+            }}>
+              <Skull style={{ width: 72, height: 72, color: '#ef4444', marginBottom: 16 }} />
+              <h2 style={{ fontSize: 34, fontWeight: 700, margin: 0, color: '#ef4444', textShadow: '0 0 20px rgba(239,68,68,0.5)' }}>Sua base caiu!</h2>
+              <p style={{ fontSize: 16, marginTop: 12, opacity: 0.85 }}>A horda destruiu seu núcleo. Fim da sobrevivência.</p>
+              <button
+                onClick={() => useGameStore.getState().restartSurvival()}
+                style={{
+                  marginTop: 24, padding: '14px 30px', fontSize: 18, fontWeight: 700,
+                  color: '#0b0b0b', background: '#fbbf24', border: 'none', borderRadius: 10,
+                  cursor: 'pointer', boxShadow: '0 0 24px rgba(251,191,36,0.45)',
+                }}
+              >
+                🔥 Sobreviver de novo
+              </button>
+            </div>
+          )}
+          {upgradeChoices && !inCity && !ui.baseFell && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 58,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'radial-gradient(ellipse at center, rgba(10,20,40,0.78) 0%, rgba(0,0,0,0.90) 100%)',
+              color: '#fff', padding: 16,
+            }}>
+              <h2 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#60a5fa', textShadow: '0 0 18px rgba(96,165,250,0.5)' }}>
+                🏛️ Base nível {baseLevel} — escolha uma evolução
+              </h2>
+              <p style={{ fontSize: 14, marginTop: 8, marginBottom: 20, opacity: 0.8 }}>Onda repelida! Reforce a base antes da próxima horda.</p>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 760 }}>
+                {upgradeChoices.map((id) => {
+                  const card = UPGRADE_CARDS[id];
+                  const emoji = id === 'tower_damage' ? '🎯' : id === 'wall_hp' ? '🧱' : id === 'base_repair' ? '🔧' : '🛡️';
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => useGameStore.getState().pickUpgrade(id)}
+                      style={{
+                        width: 200, minHeight: 170, padding: '20px 16px', textAlign: 'center',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                        color: '#fff', background: 'linear-gradient(180deg, rgba(30,58,95,0.95) 0%, rgba(12,24,44,0.95) 100%)',
+                        border: '2px solid rgba(96,165,250,0.5)', borderRadius: 12, cursor: 'pointer',
+                        boxShadow: '0 0 20px rgba(96,165,250,0.25)',
+                      }}
+                    >
+                      <span style={{ fontSize: 40 }}>{emoji}</span>
+                      <span style={{ fontSize: 17, fontWeight: 700, color: '#93c5fd' }}>{card.name}</span>
+                      <span style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.35 }}>{card.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
           {!inCity && (<>

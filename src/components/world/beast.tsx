@@ -19,11 +19,12 @@ import { GlbCreature } from './glb-creature';
 /** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
  *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
 const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
-  rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a' },
-  deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c' },
+  // groundBias negativo = desce (os "demo" skinned flutuam ~30cm: bind-pose ≠ anim).
+  rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a', groundBias: -0.12 },
+  deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c', groundBias: -0.3 },
   boar: { url: '/models/animals/alligator.glb', height: 0.7, yaw: 0, tint: '#5a6b4a', groundBias: -1.15 },
-  bear: { url: '/models/animals/buffalo.glb', height: 2.0, yaw: 0, tint: '#4b3a2a' },
-  wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.3, yaw: 0, tint: '#c49a5e' },
+  bear: { url: '/models/animals/buffalo.glb', height: 2.0, yaw: 0, tint: '#4b3a2a', groundBias: -0.35 },
+  wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.3, yaw: 0, tint: '#c49a5e', groundBias: -0.3 },
 };
 
 type V3 = [number, number, number];

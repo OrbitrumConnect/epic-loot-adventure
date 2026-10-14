@@ -142,6 +142,45 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 
+  // Bosses MAIORES das ordas — mesmo rig (Imp) escalado. Fúngico ~1,5× o Colosso;
+  // Kaiju ~1,5× o Fúngico. Só aparecem nas ondas (ver spawnWaveRaiders).
+  raider_mushroom: {
+    id: 'raider_mushroom',
+    name: 'Aberração Fúngica',
+    maxHp: 1400,
+    attackPower: 48,
+    armor: 16,
+    attackCooldown: 2.6,
+    attackRange: 6,
+    aggroRange: 26,
+    lootTable: [
+      { itemId: 'iron_ore', quantity: 14, chance: 1 },
+      { itemId: 'leather_armor', quantity: 1, chance: 0.7 },
+      { itemId: 'raider_token', quantity: 24, chance: 1 },
+      { itemId: 'cooked_meat', quantity: 10, chance: 0.9 },
+    ],
+    icon: 'Shield',
+    peaceful: false,
+  },
+  raider_kaiju: {
+    id: 'raider_kaiju',
+    name: 'Kaiju Lunar',
+    maxHp: 3200,
+    attackPower: 75,
+    armor: 24,
+    attackCooldown: 3,
+    attackRange: 8,
+    aggroRange: 32,
+    lootTable: [
+      { itemId: 'iron_ore', quantity: 24, chance: 1 },
+      { itemId: 'iron_sword', quantity: 1, chance: 0.8 },
+      { itemId: 'raider_token', quantity: 50, chance: 1 },
+      { itemId: 'cooked_meat', quantity: 18, chance: 1 },
+    ],
+    icon: 'Shield',
+    peaceful: false,
+  },
+
   // ---------------------------------------------------------------------------
   // Fauna selvagem do vale. `peaceful` foge do jogador; hostil ataca ao ver.
   // O XP de cada uma sai de `creatureXp` (progressionSystem).

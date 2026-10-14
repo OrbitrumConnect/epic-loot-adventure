@@ -456,7 +456,8 @@ function Character({
     const pz = body.current.position.z;
     const inLake = LAKE_CENTERS.some(l => (px - l.x) ** 2 + (pz - l.z) ** 2 < l.r * l.r);
     const moveBonus = 1 + effectiveAttributes(useGameStore.getState().player).moveSpeed / 100;
-    const MAX_SPEED = (sprinting ? 6.5 : 4.5) * (inLake ? 0.4 : 1) * moveBonus;
+    // Andar/correr -10% (pedido do Pedro): correr 6.5→5.85, andar 4.5→4.05.
+    const MAX_SPEED = (sprinting ? 5.85 : 4.05) * (inLake ? 0.4 : 1) * moveBonus;
 
     if (targetVx !== 0 || targetVz !== 0) {
       const len = Math.sqrt(targetVx * targetVx + targetVz * targetVz);
@@ -1044,8 +1045,11 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
     const sand = new THREE.Color(c.path);             // areia clara
     const bone = new THREE.Color(c.light).lerp(new THREE.Color(c.path), 0.5);    // placa clara de pó
     const burnt = new THREE.Color(c['rock']);         // placa cinza-terra
-    const rockCol = new THREE.Color('#8b877f');       // pedra da montanha
-    const snowCol = new THREE.Color('#eef2f7');       // neve do topo
+    // Cores da montanha IGUAIS às laterais do Caio (distant-landscape): moss →
+    // stone → neve, pra a montanha andável harmonizar com o horizonte.
+    const mossCol = new THREE.Color(c.leaf).lerp(new THREE.Color('#ffffff'), 0.5);
+    const stoneCol = new THREE.Color(c['rock-light']).lerp(new THREE.Color('#ffffff'), 0.72);
+    const snowCol = new THREE.Color('#f2f5fa');       // neve do topo
     const nz = (x: number, z: number, s: number) =>
       Math.sin(x * s + 1.7) * Math.cos(z * s + 2.3) + Math.sin((x + z) * s * 0.7 + 0.5) * 0.5;
     const colors = new Float32Array(pos.count * 3);
@@ -1069,14 +1073,16 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
       } else if (patch > 0.5) {
         tmp.lerp(burnt, 0.5);                                   // placa cinza-terra
       }
-      // Montanha pedrosa: rocha subindo e NEVE no topo (mescla na cor do terreno).
+      // Montanha: moss (verde no pé) → stone (rocha clara) → neve no topo —
+      // mesma leitura das montanhas laterais (distant-landscape do Caio).
       const mh = snowMountainBump(x, z);
       let snowGrass = 1;
-      if (mh > 1) {
-        tmp.lerp(rockCol, Math.min(1, (mh - 1) / 5) * 0.9);
-        const snowT = Math.min(1, Math.max(0, (mh - SNOW_MOUNTAIN.peak * 0.5) / (SNOW_MOUNTAIN.peak * 0.4)));
-        tmp.lerp(snowCol, snowT);
-        snowGrass = Math.max(0, 1 - mh / 3); // sem grama na rocha/neve
+      if (mh > 0.5) {
+        tmp.lerp(mossCol, Math.min(1, mh / 2) * 0.35);                         // verdinho SÓ no pezinho (fraco)
+        tmp.lerp(stoneCol, Math.min(1, Math.max(0, (mh - 1.5) / 5)));          // ROCHA cedo e forte (realista)
+        const snowT = Math.min(1, Math.max(0, (mh - SNOW_MOUNTAIN.peak * 0.38) / (SNOW_MOUNTAIN.peak * 0.35)));
+        tmp.lerp(snowCol, snowT);                                              // neve no alto
+        snowGrass = Math.max(0, 1 - mh / 3); // sem grama já na rocha baixa
       }
       colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
       // Grama nas placas (patch alto), apagada na crosta escura.
@@ -1446,9 +1452,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     else props.onCollect();
   }, [props.onCollect]);
 
+  // Árvores decorativas REDUZIDAS (era 400→340; agora 80) — o grosso do verde vem
+  // dos nós farmáveis (harvest-nodes). Mais leve, sem ficar pelado.
   const trees = useMemo(
     () =>
-      Array.from({ length: 340 }, (_, i) => ({
+      Array.from({ length: 80 }, (_, i) => ({
         x: (rand(i + 1) - 0.5) * MAP_HALF * 2,
         z: (rand(i + 301) - 0.5) * MAP_HALF * 2,
         size: 0.65 + rand(i + 701) * 0.7,
@@ -1714,9 +1722,9 @@ export default function GameWorld(props: WorldProps) {
   return (
     <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
       {cameraMode === 'iso' ? (
-        <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={200} />
+        <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={160} />
       ) : (
-        <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={300} />
+        <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={160} />
       )}
       <WorldScene {...props} c={c} cameraMode={cameraMode} />
     </Canvas>

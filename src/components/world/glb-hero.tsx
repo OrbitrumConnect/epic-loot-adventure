@@ -50,7 +50,15 @@ export function GlbHero({
   const { scene } = useGLTF(charUrl);
   const { animations } = useGLTF(ANIM_URL);
   const cloned = useMemo(() => skeletonClone(scene), [scene]);
-  const { actions, names } = useAnimations(animations, inner);
+  // CLONA (só os clips usados: idle/walk/sword) por instância: a UAL vem cacheada
+  // (mesmos objetos p/ todos os bonecos) e compartilhar o mesmo AnimationClip
+  // entre vários mixers deixava alguns saqueadores presos no bind-pose (braços
+  // abertos). Clips próprios = cada um anima independente; filtrar poupa memória.
+  const clips = useMemo(
+    () => animations.filter((a) => /walk|sword|idle/i.test(a.name)).map((a) => a.clone()),
+    [animations],
+  );
+  const { actions, names } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
   // osso da mão direita (rig Unreal) pra anexar a arma; segue a animação
   const handBone = useMemo(() => {
@@ -64,10 +72,27 @@ export function GlbHero({
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
-        m.frustumCulled = false;
+        // Culling LIGADO (fora da tela não renderiza = horda barata). Infla o
+        // bounding (bind-pose) p/ cobrir a animação e não sumir na borda.
+        if (m.geometry && !m.geometry.userData['_inflated']) {
+          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+          if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
+          m.geometry.userData['_inflated'] = true;
+        }
       }
     });
   }, [cloned, names]);
+
+  // Belt-and-suspenders: assim que as animações carregam, GARANTE que algo esteja
+  // tocando (senão o boneco fica em T-pose se nasceu parado antes do clip existir).
+  useEffect(() => {
+    if (current.current) return;
+    const n = pickClip(names, actionRef.current);
+    if (n && actions[n]) {
+      actions[n]!.reset().setLoop(THREE.LoopRepeat, Infinity).fadeIn(0.2).play();
+      current.current = actionRef.current;
+    }
+  }, [actions, names, actionRef]);
 
   useFrame(() => {
     const want = actionRef.current;

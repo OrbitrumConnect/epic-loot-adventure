@@ -26,6 +26,7 @@ import { GlbBaseCastle } from './glb-base-castle';
 import { BaseHouse } from './base-house';
 import { GlbWatchTowers } from './glb-watchtower';
 import { TowerRuntime } from './tower-runtime';
+import { PowerOrbit } from './power-orbit';
 
 /** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
 const USE_GLB_BASE = false;
@@ -520,10 +521,12 @@ function BuildLayer({
 
   const doClaim = () => {
     const gs = useGameStore.getState();
-    if (gs.playerBase || !isBuildActive()) return;
+    if (gs.playerBase) { console.log('[BASE] clique ignorado: você JÁ tem uma base (só pode 1).'); return; }
+    if (!isBuildActive()) { console.log('[BASE] clique ignorado: modo de construção DESLIGADO (abra "Minha base" → Entrar no modo de construção).'); return; }
     const chk = updateClaimCandidate();
-    if (!chk) return;
-    if (!chk.ok) { gs.setMessage(`Não dá para reivindicar: ${chk.message}`); return; }
+    if (!chk) { console.log('[BASE] clique ignorado: sem candidato de terreno sob o cursor.'); return; }
+    if (!chk.ok) { console.log('[BASE] terreno INVÁLIDO:', chk.message, chk.origin); gs.setMessage(`Não dá para reivindicar: ${chk.message}`); return; }
+    console.log('[BASE] ✅ reivindicando terreno em', chk.origin);
     gs.claimBase(chk.origin, terrainHeight);    s.current.originKey = '';
     s.current.labelText = '';
   };
@@ -611,7 +614,11 @@ function BuildLayer({
     };
 
     const onDown = (e: PointerEvent) => {
-      if (!isBuildActive() || pausedRef.current) return;
+      if (!isBuildActive() || pausedRef.current) {
+        if (e.button === 0) console.log('[BASE] clique no mundo, mas modo de construção DESLIGADO' + (pausedRef.current ? ' (jogo pausado)' : '') + '. Abra "Minha base" → Entrar no modo de construção.');
+        return;
+      }
+      console.log('[BASE] clique recebido no modo de construção (botão', e.button, ').');
       // Modo de construção é dono do ponteiro: nem recurso nem ataque veem o clique.
       e.stopImmediatePropagation();
       e.preventDefault();
@@ -779,6 +786,7 @@ export function PlayerBase({
       {USE_GLB_BASE ? <GlbBaseCastle /> : <BaseStructures c={c} />}
       {USE_GLB_TOWER && <GlbWatchTowers />}
       <TowerRuntime paused={paused} />
+      <PowerOrbit paused={paused} />
       <BaseHouse />
       <BuildLayer c={c} playerRef={playerRef} paused={paused} />
     </>

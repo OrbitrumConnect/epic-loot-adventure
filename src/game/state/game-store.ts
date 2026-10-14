@@ -31,6 +31,7 @@ import {
   advanceStage as advanceBaseStageOnce, advanceStageFully, canOpenCityView as cityViewOpen,
   claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
   cellInSquare as cellInBaseSquare, worldToCell as worldToBaseCell, cellKey as baseCellKey,
+  cellCenter as baseCellCenter,
 } from '../systems/playerBaseSystem';
 import { baseLv1Layout, baseLv1Progress } from '../systems/baseLv1';
 import {
@@ -45,6 +46,10 @@ import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecial
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
+import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
+import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
+import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, tornadoPositions, tornadoCount, tornadoDamage, TORNADO_HIT_RADIUS, TORNADO_PUSH, TORNADO_BASE_WAVES, TORNADO_EXTEND_WAVES, dist2, type Vec2 } from '../systems/powerSystem';
+import { SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
   pushEvents, shotEvent, xpEvent,
@@ -70,6 +75,20 @@ type GameState = {
   selectedBaseType: BaseType;
   /** Milissegundos por torre; separado das peças para não reconstruir malhas por tiro. */
   towerLastShotAt: Record<string, number>;
+  /** Último tick dos powers orbitais (throttle do dano). */
+  powerLastTickAt: number;
+  /** Ciclo de HORDAS (Fase 5): paz ↔ combate, ondas cada vez mais difíceis. */
+  wave: WaveState;
+  /** Nível da base: sobe 1 a cada onda repelida (evolução por cartas). */
+  baseLevel: number;
+  /** Quantas vezes cada evolução foi escolhida (stacks). */
+  baseUpgrades: Record<UpgradeId, number>;
+  /** 3 cartas oferecidas após repelir uma onda; null = sem escolha pendente. */
+  upgradeChoices: UpgradeId[] | null;
+  /** Onda até a qual os bumerangues duram (0 = inativo). Renovar estende. */
+  orbitExpiresWave: number;
+  /** Onda até a qual os tornados duram (0 = inativo). Renovar estende. */
+  tornadoExpiresWave: number;
   camps: CampState[];
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
@@ -87,6 +106,8 @@ type GameState = {
 type GameActions = {
   selectBaseType: (type: BaseType) => void;
   tickTowers: (towers: readonly TowerSource[], now: number, rng?: () => number) => void;
+  /** Aplica o dano dos powers orbitais (bumerangues) na horda. Throttled. */
+  tickPowers: (now: number) => void;
   attack: (targetId: string) => void;
   specialAttack: (kind: 'jump' | 'spin') => void;
   collect: (nodeId: string) => void;
@@ -133,6 +154,10 @@ type GameActions = {
   damageBasePiece: (pieceId: string, amount: number) => void;
   /** Sobe um estágio da base se a condição estiver cumprida. */
   advanceBaseStage: () => void;
+  /** GAME OVER: recomeça a sobrevivência do zero (sem base/recurso). */
+  restartSurvival: () => void;
+  /** Escolhe uma das 3 cartas de evolução da base (entre ondas). */
+  pickUpgrade: (id: UpgradeId) => void;
   /** A vista de cidade só abre com o perímetro fechado (`clash`). */
   canOpenCityView: () => boolean;
   addObjective: (kind: ObjectiveKind, targetId: string | null) => void;
@@ -294,6 +319,67 @@ function createInitialCreatures(): CreatureState[] {
   ];
 }
 
+const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_brute', 'raider_shaman'] as const;
+
+/** Nº de bosses na onda — cresce com as ondas (teto 5). */
+function waveBossCount(wave: number): number {
+  return Math.min(5, Math.ceil(wave / 2)); // onda 1-2:1, 3-4:2, 5-6:3...
+}
+
+/**
+ * Qual boss nasce. Ondas maiores liberam bosses MAIORES; o 1º boss da onda é o
+ * mais forte disponível, o resto varia pra horda ficar mista.
+ *  - onda <5: só Colosso (warlord)
+ *  - onda 5-9: Fúngico aparece (1,5× maior)
+ *  - onda 10+: Kaiju aparece (o gigante)
+ */
+function waveBossSpecies(wave: number, index: number): string {
+  if (wave >= 10) return index === 0 ? 'raider_kaiju' : index % 2 === 0 ? 'raider_mushroom' : 'raider_warlord';
+  if (wave >= 5) return index === 0 ? 'raider_mushroom' : 'raider_warlord';
+  return 'raider_warlord';
+}
+
+/** Centro (core) da base, pra as hordas mirarem. null se não houver base. */
+function baseCenter(base: PlayerBaseState | null): { x: number; z: number } | null {
+  if (!base) return null;
+  const core = base.pieces.find((p) => p.kind === 'core');
+  return core ? baseCellCenter(core.cell) : null;
+}
+
+/** Cria os raiders de uma onda ao redor da base (eles marcham até ela — ver hostile-ai). */
+function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: number): CreatureState[] {
+  const hpScale = waveHpScale(wave);
+  const clamp = (v: number) => Math.max(-WORLD_HALF + 2, Math.min(WORLD_HALF - 2, v));
+  const out: CreatureState[] = [];
+  const mk = (sp: string, i: number, tag: string, hpMul = 1) => {
+    const def = CREATURES[sp];
+    if (!def) return;
+    const total = waveEnemyCount(wave) + waveBossCount(wave);
+    const ang = (i / Math.max(1, total)) * Math.PI * 2 + Math.random() * 0.5;
+    const r = 34 + Math.random() * 14; // nascem BEM fora da vista, marcham até a base
+    const hp = Math.round(scaleEnemyHp(def.maxHp) * hpScale * hpMul);
+    out.push({
+      id: `wave${wave}_${tag}${i}_${now}`,
+      speciesId: sp,
+      name: def.name,
+      hp, maxHp: hp,
+      attackPower: def.attackPower,
+      armor: def.armor,
+      attackCooldown: def.attackCooldown,
+      lastAttackAt: 0,
+      position: { x: clamp(center.x + Math.sin(ang) * r), z: clamp(center.z + Math.cos(ang) * r) },
+      behavior: 'patrol',
+      lootTable: [],
+      respawnAt: null,
+    });
+  };
+  const count = waveEnemyCount(wave);
+  for (let i = 0; i < count; i++) mk(WAVE_SPECIES[i % WAVE_SPECIES.length]!, i, '', 1);
+  const bosses = waveBossCount(wave);
+  for (let b = 0; b < bosses; b++) mk(waveBossSpecies(wave, b), count + b, 'boss', 1.2); // bosses da onda
+  return out;
+}
+
 function createInitialResources(): ResourceNode[] {
   return [
     createResourceNode('arcane_essence', { x: -3, z: -2 }, 5),
@@ -318,6 +404,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   playerBase: null,
   selectedBaseType: DEFAULT_BASE_TYPE,
   towerLastShotAt: {},
+  powerLastTickAt: 0,
+  wave: INITIAL_WAVE,
+  baseLevel: 1,
+  baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
+  upgradeChoices: null,
+  orbitExpiresWave: 0,
+  tornadoExpiresWave: 0,
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
   targetId: null,
@@ -347,7 +440,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const index = selectTowerTarget(tower, state.creatures, state.towerLastShotAt[tower.id], now);
       if (index < 0) continue;
       const c = state.creatures[index]!;
-      const damage = towerDamage(tower, c, rng);
+      // Dano base da torre (Caio) × multiplicador das cartas de evolução (hordas).
+      const damage = towerDamage(tower, c, rng) * towerDamageMult(state.baseUpgrades.tower_damage);
       const hp = Math.max(0, c.hp - damage);
       const drafts = [shotEvent(tower, c.position, 'arrow', BASE_TOWER_HEIGHT), damageEvent(c.id, damage, c.position)];
       let player = state.player;
@@ -364,6 +458,70 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         feedback: pushEvents(state.feedback, drafts, now),
       });
     }
+  },
+
+  tickPowers: (now) => {
+    const state = get();
+    if (!state.playerBase) return;
+    const core = state.playerBase.pieces.find((p) => p.kind === 'core');
+    if (!core) return;
+    if (now - state.powerLastTickAt < ORBIT_TICK_MS) return; // tick comum dos powers
+    const center = baseCellCenter(core.cell);
+    const wave = state.wave.wave;
+
+    // Campos de dano ATIVOS (bumerangue + tornado), cada um com suas posições,
+    // dano, raio² e empurrão. Power temporário: só entra dentro da duração.
+    type Field = { positions: Vec2[]; r2: number; dmg: number; push: number };
+    const fields: Field[] = [];
+    const orb = state.baseUpgrades.orbit_boomerang;
+    if (orb > 0 && wave <= state.orbitExpiresWave) {
+      fields.push({ positions: boomerangPositions(center, orbitCount(orb), now), r2: ORBIT_HIT_RADIUS * ORBIT_HIT_RADIUS, dmg: orbitDamage(orb), push: ORBIT_PUSH });
+    }
+    const tor = state.baseUpgrades.tornado;
+    if (tor > 0 && wave <= state.tornadoExpiresWave) {
+      fields.push({ positions: tornadoPositions(center, tornadoCount(tor), now), r2: TORNADO_HIT_RADIUS * TORNADO_HIT_RADIUS, dmg: tornadoDamage(tor), push: TORNADO_PUSH });
+    }
+    if (fields.length === 0) return;
+
+    let player = state.player;
+    let deathBags = state.deathBags;
+    const drafts: ReturnType<typeof damageEvent>[] = [];
+    const next = state.creatures.slice();
+    let changed = false;
+    for (let i = 0; i < next.length; i++) {
+      const c = next[i]!;
+      if (c.hp <= 0 || c.behavior === 'dead') continue;
+      if (CREATURES[c.speciesId]?.peaceful) continue; // power não corta bicho pacífico
+      let dmg = 0;
+      let push = 0;
+      for (const f of fields) {
+        if (f.positions.some((p) => dist2(p, c.position) <= f.r2)) {
+          if (f.dmg > dmg) dmg = f.dmg;
+          if (f.push > push) push = f.push;
+        }
+      }
+      if (dmg <= 0) continue;
+      const hp = Math.max(0, c.hp - dmg);
+      drafts.push(damageEvent(c.id, dmg, c.position));
+      if (hp === 0) {
+        const reward = rewardCreatureDeath(c, player, deathBags, drafts, Math.random);
+        player = reward.player;
+        deathBags = reward.bags;
+        next[i] = deadCreature(c, now, Math.random);
+      } else {
+        // Empurrão pra FORA da base (a lâmina/vendaval bate e afasta).
+        const dx = c.position.x - center.x;
+        const dz = c.position.z - center.z;
+        const len = Math.hypot(dx, dz) || 1;
+        next[i] = { ...c, hp, position: { x: c.position.x + (dx / len) * push, z: c.position.z + (dz / len) * push } };
+      }
+      changed = true;
+    }
+    if (!changed) { set({ powerLastTickAt: now }); return; }
+    set({
+      creatures: next, player, deathBags, powerLastTickAt: now,
+      feedback: pushEvents(state.feedback, drafts, now),
+    });
   },
 
   attack: (targetId: string) => {
@@ -972,6 +1130,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const message = placed > 0
       ? (prog.pct >= 100 ? 'Base Nível 1 concluída! 🏯 O Clash abriu.' : `Construção: ${prog.pct}% (+${placed} peças). Farme mais madeira/pedra.`)
       : (prog.pct >= 100 ? 'A base já está no Nível 1.' : 'Sem material. Farme madeira/pedra e volte pra entregar.');
+    console.log('[BASE] construir (martelo): +' + placed + ' peças · progresso ' + prog.pct + '% · ' + message);
     set({ playerBase: base, player: { ...s.player, inventory: inv }, ui: { ...s.ui, message } });
   },
 
@@ -999,9 +1158,96 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       : result.reopened
         ? 'Brecha no muro! A base está aberta.'
         : state.ui.message;
+    if (result.wiped) {
+      // Base CAIU na horda → GAME OVER. Para as ondas, limpa os inimigos de onda.
+      set({
+        playerBase: null,
+        wave: INITIAL_WAVE,
+        baseLevel: 1,
+        baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
+        upgradeChoices: null,
+        orbitExpiresWave: 0,
+        tornadoExpiresWave: 0,
+        creatures: state.creatures.filter((c) => !c.id.startsWith('wave')),
+        ui: { ...state.ui, message, baseFell: true },
+      });
+      return;
+    }
     set({
-      playerBase: result.wiped ? null : result.base,
+      playerBase: result.base,
       ui: { ...state.ui, message },
+    });
+  },
+
+  restartSurvival: () => {
+    // "Sobreviver de novo": recomeça do zero (sem base, sem recurso), mundo limpo.
+    try { localStorage.removeItem(SAVE_KEY); } catch { /* storage bloqueado */ }
+    set((s) => ({
+      player: createInitialPlayer(),
+      creatures: [...createInitialCreatures(), ...createWildCreatures(), ...createCamps(Date.now()).creatures],
+      resources: createInitialResources(),
+      harvestNodes: createHarvestNodes(),
+      deathBags: [],
+      playerBase: null,
+      towerLastShotAt: {},
+      wave: INITIAL_WAVE,
+      baseLevel: 1,
+      baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
+      upgradeChoices: null,
+      orbitExpiresWave: 0,
+      tornadoExpiresWave: 0,
+      objectives: createQueue(),
+      ui: { ...s.ui, baseFell: false, message: '🔥 Nova sobrevivência! Colete, construa a base e prepare as defesas.' },
+    }));
+  },
+
+  pickUpgrade: (id) => {
+    set((state) => {
+      if (!state.upgradeChoices || !state.upgradeChoices.includes(id)) return {};
+      // Powers TEMPORÁRIOS (bumerangue/tornado): ativo → renova (+1 e +2 ondas);
+      // do zero/expirado → recomeça (duração base). Os demais só acumulam stack.
+      let orbitExpiresWave = state.orbitExpiresWave;
+      let tornadoExpiresWave = state.tornadoExpiresWave;
+      let stacks: number;
+      if (id === 'orbit_boomerang') {
+        const active = (state.baseUpgrades.orbit_boomerang ?? 0) > 0 && state.wave.wave <= state.orbitExpiresWave;
+        stacks = active ? state.baseUpgrades.orbit_boomerang + 1 : 1;
+        orbitExpiresWave = (active ? state.orbitExpiresWave : state.wave.wave) + (active ? ORBIT_EXTEND_WAVES : ORBIT_BASE_WAVES);
+      } else if (id === 'tornado') {
+        const active = (state.baseUpgrades.tornado ?? 0) > 0 && state.wave.wave <= state.tornadoExpiresWave;
+        stacks = active ? state.baseUpgrades.tornado + 1 : 1;
+        tornadoExpiresWave = (active ? state.tornadoExpiresWave : state.wave.wave) + (active ? TORNADO_EXTEND_WAVES : TORNADO_BASE_WAVES);
+      } else {
+        stacks = (state.baseUpgrades[id] ?? 0) + 1;
+      }
+      const baseUpgrades = { ...state.baseUpgrades, [id]: stacks };
+      // Efeito nas peças da base (torre é multiplicador no tiro, não mexe em peça).
+      let playerBase = state.playerBase;
+      if (playerBase) {
+        const pieces = playerBase.pieces.map((p) => {
+          if (id === 'wall_hp') {
+            const maxHp = Math.round(p.maxHp * wallHpMult());
+            return { ...p, maxHp, hp: maxHp };
+          }
+          if (id === 'base_repair') return { ...p, hp: p.maxHp };
+          if (id === 'core_hp' && p.kind === 'core') {
+            const maxHp = Math.round(p.maxHp * coreHpMult());
+            return { ...p, maxHp, hp: maxHp };
+          }
+          return p;
+        });
+        playerBase = { ...playerBase, pieces };
+      }
+      const card = UPGRADE_CARDS[id];
+      return {
+        baseUpgrades,
+        playerBase,
+        baseLevel: state.baseLevel + 1,
+        upgradeChoices: null,
+        orbitExpiresWave,
+        tornadoExpiresWave,
+        ui: { ...state.ui, message: `🏛️ Base nível ${state.baseLevel + 1}: ${card.name}!` },
+      };
     });
   },
 
@@ -1211,6 +1457,29 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let player = state.player;
     const messages: string[] = [];
 
+    // HORDAS (Fase 5): ciclo paz↔combate; spawna a onda ao redor da base.
+    let waveState = state.wave;
+    let waveCreatures = ticked.creatures;
+    let upgradeChoices = state.upgradeChoices;
+    {
+      const center = baseCenter(state.playerBase);
+      const aliveWave = ticked.creatures.filter(
+        (c) => c.id.startsWith('wave') && c.hp > 0 && c.behavior !== 'dead',
+      ).length;
+      const wt = tickWaves(state.wave, now, center != null, aliveWave);
+      waveState = wt.state;
+      if (wt.startedWave && center) {
+        const spawned = spawnWaveRaiders(wt.startedWave, center, now);
+        waveCreatures = [...ticked.creatures, ...spawned];
+        waveState = markSpawned(waveState, spawned.length);
+      }
+      // Onda repelida → oferece 3 cartas de evolução da base (draft do Pedro).
+      if (wt.repelledWave && !upgradeChoices) {
+        upgradeChoices = rollUpgradeChoices(Math.random);
+      }
+      if (wt.message) messages.push(wt.message);
+    }
+
     for (const camp of discovery.newlyDiscovered) {
       messages.push(`Você avistou o ${camp.name}.`);
     }
@@ -1261,7 +1530,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       && feedback === state.feedback
       && harvestNodes === state.harvestNodes
       && ticked.camps === state.camps
-      && ticked.creatures === state.creatures
+      && waveCreatures === state.creatures
+      && waveState === state.wave
+      && upgradeChoices === state.upgradeChoices
       && objectiveResult.queue === state.objectives
       && messages.length === 0;
     if (nothingChanged) return;
@@ -1273,7 +1544,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     set(current => ({
       player,
       camps: ticked.camps,
-      creatures: ticked.creatures,
+      creatures: waveCreatures,
+      wave: waveState,
+      upgradeChoices,
       harvestNodes,
       feedback: pruneEvents(current.feedback, now),
       objectives: objectiveResult.queue,
