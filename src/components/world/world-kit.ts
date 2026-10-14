@@ -86,7 +86,7 @@ export const MAP_HALF = 90;
  * anel (igual o círculo dos acampamentos). Mesma ideia de `pushOut*` da base:
  * empurra qualquer corpo hostil para a borda do círculo.
  */
-export const SAFE_ZONE = { x: 0, z: 0, radius: 7 } as const;
+export const SAFE_ZONE = { x: 7, z: -25, radius: 7 } as const;
 
 /** Empurra (x,z) para fora da zona segura, somando o raio do corpo. Fora dela, nada muda. */
 export function pushOutSafeZone(x: number, z: number, bodyRadius = 0): [number, number] {
@@ -153,7 +153,7 @@ const FACTORY_PAD_CORE = 0.42;          // miolo plano (~9,2 m, cobre o prédio)
  *  relevo já é baixo) → o pad quase não mexe = sem platô/degrau. Longe de água.
  *  Uma no lugar da ruína do meio. Cada uma achata no SEU nível; o rio é preservado. */
 const FACTORY_POS: { x: number; z: number; rot: number }[] = [
-  { x: 7, z: -8, rot: 0.4 },     // CENTRO (clareira do spawn, plana)
+  { x: 7, z: -15, rot: 0.4 },    // CENTRO-SUL (clareira do spawn); afastada ~7m do rio/ponte
   { x: 78, z: 24, rot: 1.9 },    // beirada leste
   { x: 26, z: -76, rot: -0.8 },  // beirada sul
   { x: -80, z: -38, rot: 2.6 },  // beirada oeste

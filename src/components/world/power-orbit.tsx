@@ -76,12 +76,13 @@ export function PowerOrbit({ paused }: { paused: boolean }) {
       ))}
       {Array.from({ length: MAX_TORNADOES }, (_, i) => (
         <group key={`t${i}`} ref={(el) => { tornadoes.current[i] = el; }} visible={false}>
-          {/* cone invertido = funil do tornado (barato, translúcido) */}
-          <mesh position={[0, 2.2, 0]}>
+          {/* Funil do tornado: ponta FINA embaixo (no chão), boca larga em cima.
+              rotation X=π inverte o cone (ápice do coneGeometry é +y por padrão). */}
+          <mesh position={[0, 2.2, 0]} rotation={[Math.PI, 0, 0]}>
             <coneGeometry args={[1.6, 4.4, 10, 1, true]} />
             <meshStandardMaterial color="#cbd5e1" transparent opacity={0.4} emissive="#94a3b8" emissiveIntensity={0.3} side={THREE.DoubleSide} depthWrite={false} />
           </mesh>
-          <mesh position={[0, 0.9, 0]}>
+          <mesh position={[0, 0.9, 0]} rotation={[Math.PI, 0, 0]}>
             <coneGeometry args={[0.7, 1.8, 10, 1, true]} />
             <meshStandardMaterial color="#e2e8f0" transparent opacity={0.55} side={THREE.DoubleSide} depthWrite={false} />
           </mesh>

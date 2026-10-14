@@ -418,13 +418,13 @@ function Character({
     const ps = useGameStore.getState().player;
     if (ps.dead) {
       if (ps.respawnAt > 0 && Date.now() >= ps.respawnAt) {
-        // Renasce na CAMA da base, se já tiver uma; senão no ponto inicial.
+        // Renasce na CAMA da base, se já tiver uma; senão na ZONA SEGURA do spawn.
         const pb = useGameStore.getState().playerBase;
         const core = pb?.pieces.find(p => p.kind === 'core');
-        const sp = core ? cellCenter(core.cell) : { x: 0, z: 0 };
+        const sp = core ? cellCenter(core.cell) : { x: SAFE_ZONE.x, z: SAFE_ZONE.z };
         useGameStore.setState(s => ({
           player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: sp.x, z: sp.z } },
-          ui: { ...s.ui, message: core ? 'Você reviveu na sua base.' : 'Você reviveu!' },
+          ui: { ...s.ui, message: core ? 'Você reviveu na sua base.' : 'Você reviveu na zona segura.' },
         }));
         body.current.position.set(sp.x, terrainHeight(sp.x, sp.z), sp.z);
         velocity.current.set(0, 0);
