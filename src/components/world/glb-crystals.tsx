@@ -1,22 +1,24 @@
 import { useGLTF } from '@react-three/drei';
-import { useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { terrainHeight } from './world-kit';
 
 /**
- * Cristal da Essência Arcana como GLB (magic crystal, textura embutida). Visual
- * SÓ — `raycast` desligado, então o clique atravessa e acerta o nó procedural
- * atrás (mantém colheita/label intactos, sem regressão). O nó procedural fica
- * invisível (colorWrite off em harvest-nodes) enquanto `USE_GLB_CRYSTAL`.
+ * Cristal da Essência como GLB BONITO — mas o modelo é PESADO (~92k tris!). Então
+ * usamos um POOL fixo: só os `POOL` cristais mais PRÓXIMOS do player recebem o GLB
+ * (reposicionado por frame); os distantes ficam no cristal procedural barato
+ * (harvest-nodes). Visual quase igual, mas corta ~2,7M → ~0,4M tris. `raycast`
+ * OFF (o clique vai pro nó procedural atrás = colheita intacta).
  */
 const URL = '/models/crystal/crystal.glb';
 const TARGET_H = 1.5;
+const POOL = 4;
 
 function noRaycast() {}
 
 export function GlbCrystals() {
-  const nodes = useGameStore((s) => s.harvestNodes);
   const { scene } = useGLTF(URL);
 
   const proto = useMemo(() => {
@@ -35,21 +37,37 @@ export function GlbCrystals() {
     return wrap;
   }, [scene]);
 
-  const live = useMemo(
-    () => nodes.filter((n) => n.kind === 'crystal' && !n.depleted),
-    [nodes],
-  );
-  if (live.length === 0) return null;
+  const slots = useMemo(() => Array.from({ length: POOL }, () => proto.clone(true)), [proto]);
+  const refs = useRef<(THREE.Group | null)[]>([]);
+
+  useFrame(() => {
+    const st = useGameStore.getState();
+    const p = st.player.position;
+    const live = st.harvestNodes.filter((n) => n.kind === 'crystal' && !n.depleted);
+    live.sort((a, b) =>
+      ((a.position.x - p.x) ** 2 + (a.position.z - p.z) ** 2) -
+      ((b.position.x - p.x) ** 2 + (b.position.z - p.z) ** 2),
+    );
+    for (let i = 0; i < POOL; i++) {
+      const g = refs.current[i];
+      if (!g) continue;
+      const n = live[i];
+      if (n) {
+        g.visible = true;
+        g.position.set(n.position.x, terrainHeight(n.position.x, n.position.z), n.position.z);
+        g.rotation.y = (n.seed % 360) * (Math.PI / 180);
+      } else {
+        g.visible = false;
+      }
+    }
+  });
 
   return (
     <>
-      {live.map((n) => (
-        <primitive
-          key={n.id}
-          object={proto.clone()}
-          position={[n.position.x, terrainHeight(n.position.x, n.position.z), n.position.z]}
-          rotation={[0, (n.seed % 360) * (Math.PI / 180), 0]}
-        />
+      {slots.map((s, i) => (
+        <group key={i} ref={(el) => { refs.current[i] = el; }} visible={false}>
+          <primitive object={s} />
+        </group>
       ))}
     </>
   );

@@ -210,10 +210,9 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
     fade: [[0, 0.6, 0, 1.0]],
   };
 
-  // Cristal vivo vira GLB (GlbCrystals); o procedural fica INVISÍVEL mas ainda
-  // clicável (colorWrite/depthWrite off = sem cor nem oclusão, raycast mantém).
+  // Cristal procedural (barato) fica VISÍVEL em todos; o GLB bonito (92k tris!)
+  // só entra nos poucos mais próximos do player (perf) — ver glb-crystals.
   const crystalLiveMat = fadeMat(mat(c.crystal, 0.22));
-  if (USE_GLB_CRYSTAL) { crystalLiveMat.colorWrite = false; crystalLiveMat.depthWrite = false; }
   const crystal: KindAssets = {
     live: bake([
       { g: dodeca(0.8), color: c.rock, pos: [0, 0.4, 0], scale: [1.1, 0.7, 0.9] },
