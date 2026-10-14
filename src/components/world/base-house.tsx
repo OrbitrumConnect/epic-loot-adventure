@@ -22,6 +22,8 @@ const VSTRETCH = 1.05; // +5% SÓ na altura (porta mais alta sem alargar)
 // Altura do assoalho caminhável acima da base do modelo (o player pisa aqui dentro).
 // ~0.9 em escala 6.75 colocou os pés no piso certinho; mantido como fração pra escalar.
 const FLOOR_H = TARGET_H * 0.133 * VSTRETCH;
+/** Distância² (m²) além da qual a luz interna da casa sai do shader. */
+const HOUSE_LIGHT_D2 = 22 * 22;
 
 export function BaseHouse() {
   const pieces = useGameStore((s) => s.playerBase?.pieces);
@@ -105,6 +107,16 @@ export function BaseHouse() {
   const core = pieces?.find((p) => p.kind === 'core');
   const ctr = core ? cellCenter(core.cell) : null;
 
+  // Culling: a luz interna (forte) só fica no shader quando o jogador está perto
+  // da casa; longe, sai de cena (point-light pesa mesmo apagada).
+  const lightRef = useRef<THREE.PointLight>(null);
+  useFrame(() => {
+    const l = lightRef.current;
+    if (!l || !ctr) return;
+    const p = useGameStore.getState().player.position;
+    l.visible = (p.x - ctr.x) * (p.x - ctr.x) + (p.z - ctr.z) * (p.z - ctr.z) < HOUSE_LIGHT_D2;
+  });
+
   // Publica footprint + piso pro loop de física (chão caminhável + paredes sólidas).
   useEffect(() => {
     if (!ctr) {
@@ -130,7 +142,7 @@ export function BaseHouse() {
     <group position={[ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z]}>
       <primitive object={prepared.wrap} />
       {/* Luz interna quente (o telhado bloqueia o sol) */}
-      <pointLight position={[0, TARGET_H * 0.55, 0]} intensity={9} distance={TARGET_H * 2.6} decay={1.4} color="#ffe0b0" />
+      <pointLight ref={lightRef} position={[0, TARGET_H * 0.55, 0]} intensity={9} distance={TARGET_H * 2.6} decay={1.4} color="#ffe0b0" />
     </group>
   );
 }

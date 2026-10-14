@@ -20,6 +20,11 @@ import { useFadeGroup, type FadeSphere } from './occlusion';
 import { hashId, markPointerConsumed, mixColor, rand, terrainHeight, type Palette } from './world-kit';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { WatchtowerModel } from './glb-watchtower';
+import { useGameStore } from '@/game/state/game-store';
+
+/** Distância² (m²) além da qual a luz da fogueira do acampamento sai do shader. */
+const CAMP_LIGHT_D2 = 26 * 26;
+const tmpCampV = new THREE.Vector3();
 
 /** Watchtower do acampamento inimigo = GLB (mesma torre da base, estilo raider outpost). */
 const USE_GLB_CAMP_TOWER = true;
@@ -196,9 +201,24 @@ function Palisade({ kit }: { kit: CampKit }) {
 
 function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; flameRef: React.RefObject<THREE.Group | null> }) {
   const fireLight = useRef<THREE.PointLight>(null);
+  const emberLight = useRef<THREE.PointLight>(null);
   useFrame(({ clock }) => {
-    // Acende forte à noite (igual às luminárias e à fogueira do nascedouro).
-    if (fireLight.current) fireLight.current.intensity = (1.8 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 7) * 0.6;
+    // Culling: a luz da fogueira só fica no shader quando o jogador está perto
+    // (point-light custa fragment mesmo apagada). O fogo acende dia e noite —
+    // só cresce à noite — então aqui o corte é por DISTÂNCIA, não por hora.
+    const p = useGameStore.getState().player.position;
+    const fl = fireLight.current;
+    if (fl) {
+      fl.getWorldPosition(tmpCampV);
+      const near = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z) < CAMP_LIGHT_D2;
+      fl.visible = near;
+      if (near) fl.intensity = (1.8 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 7) * 0.6;
+    }
+    const el = emberLight.current;
+    if (el) {
+      el.getWorldPosition(tmpCampV);
+      el.visible = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z) < CAMP_LIGHT_D2;
+    }
   });
   return (
     <group>
@@ -228,7 +248,7 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
         <group position={[0, 0.1, 0]}>
           <mesh geometry={kit.sphere} material={kit.ember} scale={[0.6, 0.12, 0.6]} />
           {/* Brasa morrendo: brilho fraco pra o acampamento limpo não ficar apagado. */}
-          <pointLight color="#ff5a22" intensity={1.1} distance={7} decay={1.8} />
+          <pointLight ref={emberLight} color="#ff5a22" intensity={1.1} distance={7} decay={1.8} />
         </group>
       )}
     </group>
