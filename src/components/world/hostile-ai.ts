@@ -397,16 +397,20 @@ export function useHostileAI(opts: HostileOptions) {
           targetZ = wz + Math.cos(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
           moving = true;
         }
+        // Mira: muro/torre mais próximo (nearestBasePiece exclui o núcleo). Só
+        // quando NÃO há muro/torre no alcance (perímetro FURADO) e a criatura
+        // está colada no centro é que o NÚCLEO vira alvo — o último a cair.
         const hit = nearestBasePiece(wx, wz);
-        if (hit) {
+        const target = hit ?? (distToBase <= 3.5 ? { id: core.id, x: ctr.x, z: ctr.z } : null);
+        if (target) {
           attackCooldown.current -= dt;
           if (attackCooldown.current <= 0) {
             attackCooldown.current = creature.attackCooldown;
             swing.current = 0.35;
             const dmg = Math.max(1, creature.attackPower);
-            reportDamageToStore(hit.id, dmg, { x: hit.x, z: hit.z }, false);
+            reportDamageToStore(target.id, dmg, { x: target.x, z: target.z }, false);
             const st = useGameStore.getState();
-            st.damageBasePiece(hit.id, dmg);
+            st.damageBasePiece(target.id, dmg);
           }
         }
       }

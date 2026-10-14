@@ -21,7 +21,7 @@ export const UPGRADE_CARDS: Record<UpgradeId, UpgradeCard> = {
   wall_hp: { id: 'wall_hp', name: 'Muralha Reforçada', description: '+25% de vida das estruturas + reparo total', icon: 'BrickWall' },
   base_repair: { id: 'base_repair', name: 'Reparo de Campo', description: 'Repara 100% da base agora', icon: 'Wrench' },
   core_hp: { id: 'core_hp', name: 'Núcleo Blindado', description: '+60% de vida do núcleo', icon: 'ShieldPlus' },
-  orbit_boomerang: { id: 'orbit_boomerang', name: 'Bumerangues Orbitais', description: 'Lâminas giram em volta da base e cortam a horda', icon: 'Disc' },
+  orbit_boomerang: { id: 'orbit_boomerang', name: 'Bumerangues Orbitais', description: 'Lâminas giram fora do muro e empurram a horda · dura 5 ondas (renove: +1 lâmina, +2 ondas)', icon: 'Disc' },
 };
 
 const POOL: UpgradeId[] = ['tower_damage', 'wall_hp', 'base_repair', 'core_hp', 'orbit_boomerang'];

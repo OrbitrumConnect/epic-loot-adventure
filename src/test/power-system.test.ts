@@ -10,9 +10,9 @@ describe('powerSystem (bumerangues orbitais)', () => {
     expect(orbitCount(3)).toBe(5);
   });
 
-  it('dano cresce com os stacks', () => {
-    expect(orbitDamage(1)).toBe(14);
-    expect(orbitDamage(2)).toBe(24);
+  it('dano é baixo e cresce com os stacks', () => {
+    expect(orbitDamage(1)).toBe(7);
+    expect(orbitDamage(2)).toBe(12);
     expect(orbitDamage(1)).toBeLessThan(orbitDamage(3));
   });
 

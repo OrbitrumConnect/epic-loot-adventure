@@ -47,7 +47,7 @@ import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
-import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, dist2 } from '../systems/powerSystem';
+import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, dist2 } from '../systems/powerSystem';
 import { SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
@@ -83,6 +83,8 @@ type GameState = {
   baseUpgrades: Record<UpgradeId, number>;
   /** 3 cartas oferecidas após repelir uma onda; null = sem escolha pendente. */
   upgradeChoices: UpgradeId[] | null;
+  /** Onda até a qual os bumerangues duram (0 = inativo). Renovar estende. */
+  orbitExpiresWave: number;
   camps: CampState[];
   objectives: ObjectiveQueueState;
   /** Criatura escolhida à mão pelo jogador (clique no mundo ou na lista). */
@@ -401,6 +403,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   baseLevel: 1,
   baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
   upgradeChoices: null,
+  orbitExpiresWave: 0,
   camps: INITIAL_CAMP_WORLD.camps,
   objectives: createQueue(),
   targetId: null,
@@ -454,6 +457,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const state = get();
     const stacks = state.baseUpgrades.orbit_boomerang;
     if (stacks <= 0 || !state.playerBase) return;
+    if (state.wave.wave > state.orbitExpiresWave) return; // poder temporário expirou
     if (now - state.powerLastTickAt < ORBIT_TICK_MS) return;
     const core = state.playerBase.pieces.find((p) => p.kind === 'core');
     if (!core) return;
@@ -479,7 +483,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         deathBags = reward.bags;
         next[i] = deadCreature(c, now, Math.random);
       } else {
-        next[i] = { ...c, hp };
+        // Empurrão LEVE pra FORA da base (a lâmina bate e afasta, não só corta).
+        const dx = c.position.x - center.x;
+        const dz = c.position.z - center.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const px = c.position.x + (dx / len) * ORBIT_PUSH;
+        const pz = c.position.z + (dz / len) * ORBIT_PUSH;
+        next[i] = { ...c, hp, position: { x: px, z: pz } };
       }
       changed = true;
     }
@@ -1127,6 +1137,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         baseLevel: 1,
         baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
         upgradeChoices: null,
+        orbitExpiresWave: 0,
         creatures: state.creatures.filter((c) => !c.id.startsWith('wave')),
         ui: { ...state.ui, message, baseFell: true },
       });
@@ -1153,6 +1164,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       baseLevel: 1,
       baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0 },
       upgradeChoices: null,
+      orbitExpiresWave: 0,
       objectives: createQueue(),
       ui: { ...s.ui, baseFell: false, message: '🔥 Nova sobrevivência! Colete, construa a base e prepare as defesas.' },
     }));
@@ -1161,7 +1173,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   pickUpgrade: (id) => {
     set((state) => {
       if (!state.upgradeChoices || !state.upgradeChoices.includes(id)) return {};
-      const stacks = (state.baseUpgrades[id] ?? 0) + 1;
+      // Bumerangues = poder TEMPORÁRIO: ativo → renova (+1 lâmina, +2 ondas);
+      // do zero/expirado → recomeça (3 lâminas, dura 5 ondas).
+      let orbitExpiresWave = state.orbitExpiresWave;
+      let stacks: number;
+      if (id === 'orbit_boomerang') {
+        const active = (state.baseUpgrades.orbit_boomerang ?? 0) > 0 && state.wave.wave <= state.orbitExpiresWave;
+        stacks = active ? state.baseUpgrades.orbit_boomerang + 1 : 1;
+        orbitExpiresWave = (active ? state.orbitExpiresWave : state.wave.wave) + (active ? ORBIT_EXTEND_WAVES : ORBIT_BASE_WAVES);
+      } else {
+        stacks = (state.baseUpgrades[id] ?? 0) + 1;
+      }
       const baseUpgrades = { ...state.baseUpgrades, [id]: stacks };
       // Efeito nas peças da base (torre é multiplicador no tiro, não mexe em peça).
       let playerBase = state.playerBase;
@@ -1186,6 +1208,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         playerBase,
         baseLevel: state.baseLevel + 1,
         upgradeChoices: null,
+        orbitExpiresWave,
         ui: { ...state.ui, message: `🏛️ Base nível ${state.baseLevel + 1}: ${card.name}!` },
       };
     });

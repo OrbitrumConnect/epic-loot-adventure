@@ -23,8 +23,9 @@ export function PowerOrbit({ paused }: { paused: boolean }) {
     state.tickPowers(now);
 
     const stacks = state.baseUpgrades.orbit_boomerang;
+    const active = stacks > 0 && state.wave.wave <= state.orbitExpiresWave; // poder temporário
     const core = state.playerBase?.pieces.find((p) => p.kind === 'core');
-    const count = core && stacks > 0 ? orbitCount(stacks) : 0;
+    const count = core && active ? orbitCount(stacks) : 0;
     const positions = count > 0 && core ? boomerangPositions(cellCenter(core.cell), count, now) : [];
     for (let i = 0; i < MAX_BLADES; i++) {
       const g = refs.current[i];

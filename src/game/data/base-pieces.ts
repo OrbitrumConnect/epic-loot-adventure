@@ -44,8 +44,10 @@ export const BASE_PIECES: Record<BasePieceKind, BasePieceDefinition> = {
   core: {
     kind: 'core',
     name: 'Cama',
+    // Coração da base (alvo FINAL da horda): HP alto pra não cair rápido — só é
+    // atacado depois que muros/torres caem (perímetro furado).
     cost: [[{ itemId: 'wood', quantity: 4 }], [{ itemId: 'wood', quantity: 4 }], [{ itemId: 'wood', quantity: 4 }]],
-    hp: [60, 120, 240],
+    hp: [400, 800, 1600],
     solid: false,
   },
   wall: {
