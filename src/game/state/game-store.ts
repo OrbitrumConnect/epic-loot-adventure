@@ -1501,7 +1501,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const aliveWave = ticked.creatures.filter(
         (c) => c.id.startsWith('wave') && c.hp > 0 && c.behavior !== 'dead',
       ).length;
-      const wt = tickWaves(state.wave, now, center != null, aliveWave);
+      const wt = tickWaves(state.wave, now, center != null, aliveWave, state.playerBase?.enclosed === true);
       waveState = wt.state;
       if (wt.startedWave && center) {
         const spawned = spawnWaveRaiders(wt.startedWave, center, now);

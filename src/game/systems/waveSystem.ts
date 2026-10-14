@@ -19,7 +19,8 @@ export type WaveState = {
 
 export const INITIAL_WAVE: WaveState = { phase: 'idle', wave: 0, phaseEndsAt: 0, spawnPending: 0 };
 
-export const PEACE_MS = 60_000;      // 1 min de preparo entre ondas
+export const PEACE_MS = 60_000;      // 1 min de preparo ENTRE ondas
+export const FIRST_PEACE_MS = 300_000; // 5 min após FECHAR a base, antes da 1ª horda
 export const BASE_WAVE_ENEMIES = 4;  // referência de quantidade
 const START_MULT = 2;                // onda 1 = 2× a referência
 const STEP = 1.3;                    // +30% por onda
@@ -58,17 +59,22 @@ export function tickWaves(
   now: number,
   baseExists: boolean,
   aliveWaveEnemies: number,
+  baseEnclosed: boolean = true,
 ): WaveTick {
   if (!baseExists) return { state: INITIAL_WAVE, startedWave: null, repelledWave: null, message: null };
 
   switch (state.phase) {
     case 'idle':
-      // Base recém-assentada → entra em PAZ (preparo).
+      // Só ARMA o cerco quando a base estiver FECHADA (enclosed). Base aberta/em
+      // construção = sem hordas ainda (pedido do Pedro: tempo pra montar em paz).
+      if (!baseEnclosed) return { state, startedWave: null, repelledWave: null, message: null };
+      // Base fechada → PAZ LONGA (5 min) antes da 1ª horda. Depois que arma, o
+      // ciclo continua por `baseExists` mesmo se a base for furada no combate.
       return {
-        state: { phase: 'peace', wave: 0, phaseEndsAt: now + PEACE_MS, spawnPending: 0 },
+        state: { phase: 'peace', wave: 0, phaseEndsAt: now + FIRST_PEACE_MS, spawnPending: 0 },
         startedWave: null,
         repelledWave: null,
-        message: '🛡️ Base assentada! A primeira horda vem em 1 min — prepare as defesas.',
+        message: '🛡️ Base fechada! A primeira horda vem em ~5 min — prepare as defesas.',
       };
 
     case 'peace':
