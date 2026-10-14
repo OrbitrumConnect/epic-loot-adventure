@@ -18,7 +18,7 @@ import { GlbCreature } from './glb-creature';
 
 /** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
  *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
-const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
+const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number; fixedScale?: number }> = {
   // groundBias negativo = desce (os "demo" skinned flutuam ~30cm: bind-pose ≠ anim).
   rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a', groundBias: -0.12 },
   deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c', groundBias: -0.3 },
@@ -30,7 +30,7 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   // (normalizamos por Y): assim a maior dimensão fica ~0.8-1.0 m (tamanho de ave real).
   goose: { url: '/models/animals/goose.glb', height: 0.28, yaw: 0, groundBias: -0.05 },
   pheasant: { url: '/models/animals/pheasant.glb', height: 0.34, yaw: 0, groundBias: -0.05 },
-  pigeon: { url: '/models/animals/pigeon.glb', height: 0.0004, yaw: 0, groundBias: 0.6 }, // modelo não normaliza -> height age ~linear; bem menor
+  pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
 };
 
 type V3 = [number, number, number];
@@ -259,7 +259,7 @@ export function Beast({
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
       <SelectionRing ring={ring} radius={spec.ringRadius} c={c} />
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
-      {glb && <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} />}
+      {glb && <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} fixedScale={glb.fixedScale} />}
       <group ref={inner} visible={!glb}>
         {/* Corpo */}
         <mesh position={[0, bodyY, 0]} castShadow geometry={organicGeo(bw, bh, bd)} material={coat} />
