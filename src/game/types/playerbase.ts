@@ -30,6 +30,8 @@ export type BasePiece = {
   maxHp: number;
   /** Nível da peça: sobe o material (madeira → pedra → ferro) e o HP. */
   tier: 1 | 2 | 3;
+  /** Progressão da torre (1–20). Ausente em saves antigos: derivada do tier. */
+  level?: number | undefined;
 };
 
 /**

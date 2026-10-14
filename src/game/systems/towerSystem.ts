@@ -1,4 +1,4 @@
-import { BASE_PIECES } from '../data/base-pieces';
+import { towerLevelStats } from './towerLevelSystem';
 import { CREATURES } from '../data/creatures';
 import type { CreatureState, Position } from '../types';
 import type { BasePiece, BaseType } from '../types/playerbase';
@@ -6,11 +6,11 @@ import { baseTowerRange } from './baseTypeSystem';
 import { calculateDamage } from './combatSystem';
 
 /** Cache plano: posição calculada só quando as peças mudam. */
-export type TowerSource = Position & { id: string; tier: BasePiece['tier']; hp: number; baseType?: BaseType | undefined };
+export type TowerSource = Position & { id: string; tier: BasePiece['tier']; level?: number | undefined; hp: number; baseType?: BaseType | undefined };
 
 /** Sem mutação/alocação. now e lastShotAt em milissegundos. */
 export function selectTowerTarget(tower: TowerSource, creatures: readonly CreatureState[], lastShotAt: number | undefined, now: number): number {
-  const combat = BASE_PIECES.tower.combat![tower.tier - 1]!;
+  const combat = towerLevelStats(tower.tier, tower.level);
   if (tower.hp <= 0 || (lastShotAt !== undefined && now - lastShotAt < combat.cooldownMs)) return -1;
   let best = -1;
   const range = baseTowerRange(combat.range, tower.baseType);
@@ -31,5 +31,5 @@ export function selectTowerTarget(tower: TowerSource, creatures: readonly Creatu
 }
 
 export function towerDamage(tower: TowerSource, target: CreatureState, rng: () => number): number {
-  return calculateDamage(BASE_PIECES.tower.combat![tower.tier - 1]!.damage, target.armor, rng);
+  return calculateDamage(towerLevelStats(tower.tier, tower.level).damage, target.armor, rng);
 }

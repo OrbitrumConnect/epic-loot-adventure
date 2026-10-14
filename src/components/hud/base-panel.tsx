@@ -3,6 +3,9 @@ import { Bed, BrickWall, Castle, DoorOpen, Hammer, Landmark, Lock, LockOpen, Shi
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
 import { BASE_TYPES } from '@/game/data/base-types';
+import { ITEMS } from '@/game/data/items';
+import { getItemCount } from '@/game/systems/inventorySystem';
+import { MAX_TOWER_LEVEL, resolveTowerLevel, towerUpgradeCost } from '@/game/systems/towerLevelSystem';
 import { BaseTypePicker } from './base-type-picker';
 import type { BaseStage, BasePieceKind, PlayerBaseState } from '@/game/types/playerbase';
 import {
@@ -64,6 +67,8 @@ function useNow(enabled: boolean): number {
 export function BasePanel({ onClose }: { onClose: () => void }) {
   // Assinaturas estreitas: a referência de `playerBase` só muda quando a base muda.
   const base = useGameStore(s => s.playerBase);
+  const inventory = useGameStore(s => s.player.inventory);
+  const upgradeTower = useGameStore(s => s.upgradeTower);
   const setMode = useGameStore(s => s.setMode);
   const inCity = useGameStore(s => s.ui.mode === 'city');
   const build = useBuildSelection();
@@ -166,6 +171,32 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
           </span>
         ))}
       </div>
+
+      {counts.tower > 0 && (
+        <section className="base-stage" aria-label="Melhorias das torres">
+          <strong>Torres · evolução local</strong>
+          {base.pieces.filter(piece => piece.kind === 'tower').map((piece, index) => {
+            const level = resolveTowerLevel(piece.tier, piece.level);
+            const maxed = level >= MAX_TOWER_LEVEL;
+            const cost = towerUpgradeCost(piece.tier, level, base.baseType);
+            const affordable = cost.every(c => getItemCount(inventory, c.itemId) >= c.quantity);
+            const reason = piece.hp <= 0 ? 'Torre destruída' : maxed ? 'Nível máximo' : !affordable ? 'Recursos insuficientes' : `Melhorar para nível ${level + 1}`;
+            return (
+              <div key={piece.id} className="base-tower-upgrade">
+                <div>
+                  <strong>Torre {index + 1} · nível {level}/{MAX_TOWER_LEVEL}</strong>
+                  <small>Célula {piece.cell.gx}, {piece.cell.gz} · HP {Math.ceil(piece.hp)}/{Math.ceil(piece.maxHp)}</small>
+                  <small>{maxed ? 'Evolução completa' : `Próximo nível: ${cost.map(c => `${c.quantity} ${ITEMS[c.itemId]?.name ?? c.itemId} (${getItemCount(inventory, c.itemId)} disponível)`).join(' + ')}`}</small>
+                </div>
+                <Button size="sm" variant="outline" disabled={piece.hp <= 0 || maxed || !affordable}
+                  title={reason} aria-label={`Torre ${index + 1}: ${reason}`} onClick={() => upgradeTower(piece.id)}>
+                  {maxed ? 'Máximo' : piece.hp <= 0 ? 'Destruída' : 'Melhorar'}
+                </Button>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       <div className="panel-actions">
         <Button variant="outline" onClick={() => { setBuildMode(!build.active); if (!build.active) { if (inCity) setMode('world'); onClose(); } }}

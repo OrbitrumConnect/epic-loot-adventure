@@ -36,6 +36,7 @@ const base = z.object({
     id, kind: z.enum(['core', 'wall', 'door', 'tower', 'roof']), cell,
     rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
     hp: number, maxHp: number.positive(), tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    level: integer.min(1).max(20).optional(),
   }).refine(p => p.hp <= p.maxHp)).max(10000),
   enclosed: z.boolean(), claimedAt: number, lastDamagedAt: number.nullable(),
 }).refine(b => new Set(b.pieces.map(p => p.id)).size === b.pieces.length

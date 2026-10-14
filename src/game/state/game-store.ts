@@ -25,13 +25,15 @@ import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
 import type { BaseType, BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
 import { BASE_TYPES, DEFAULT_BASE_TYPE } from '../data/base-types';
 import { basePieceCost } from '../systems/baseTypeSystem';
-import { BASE_TOWER_HEIGHT, CLAIM_SIZE } from '../data/base-pieces';
+import { CLAIM_SIZE } from '../data/base-pieces';
+import { towerHeight } from '../systems/towerLevelSystem';
 import { selectTowerTarget, towerDamage, type TowerSource } from '../systems/towerSystem';
 import {
   advanceStage as advanceBaseStageOnce, advanceStageFully, canOpenCityView as cityViewOpen,
   claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
   cellInSquare as cellInBaseSquare, worldToCell as worldToBaseCell, cellKey as baseCellKey,
   cellCenter as baseCellCenter,
+  upgradeTower as upgradePlayerTower,
 } from '../systems/playerBaseSystem';
 import { baseLv1Layout, baseLv1Progress } from '../systems/baseLv1';
 import {
@@ -106,6 +108,7 @@ type GameState = {
 type GameActions = {
   selectBaseType: (type: BaseType) => void;
   tickTowers: (towers: readonly TowerSource[], now: number, rng?: () => number) => void;
+  upgradeTower: (pieceId: string) => void;
   /** Aplica o dano dos powers orbitais (bumerangues) na horda. Throttled. */
   tickPowers: (now: number) => void;
   attack: (targetId: string) => void;
@@ -432,6 +435,14 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   getUsedSlots: () => getUsedSlots(get().player.inventory),
   getItemCount: (itemId: string) => getItemCount(get().player.inventory, itemId),
 
+  upgradeTower: (pieceId) => {
+    const state = get();
+    if (!state.playerBase) return;
+    const result = upgradePlayerTower(state.playerBase, pieceId, state.player.inventory);
+    set({ playerBase: result.base, player: result.ok ? { ...state.player, inventory: result.inventory } : state.player,
+      ui: { ...state.ui, message: result.message } });
+  },
+
   tickTowers: (towers, now, rng = Math.random) => {
     // Nenhuma escrita/alocação nos quadros sem disparo. Cada torre lê o resultado
     // da anterior, portanto duas torres não premiam a mesma morte.
@@ -443,7 +454,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Dano base da torre (Caio) × multiplicador das cartas de evolução (hordas).
       const damage = towerDamage(tower, c, rng) * towerDamageMult(state.baseUpgrades.tower_damage);
       const hp = Math.max(0, c.hp - damage);
-      const drafts = [shotEvent(tower, c.position, 'arrow', BASE_TOWER_HEIGHT), damageEvent(c.id, damage, c.position)];
+      const drafts = [shotEvent(tower, c.position, 'arrow', towerHeight(tower.tier, tower.level)), damageEvent(c.id, damage, c.position)];
       let player = state.player;
       let deathBags = state.deathBags;
       if (hp === 0) {

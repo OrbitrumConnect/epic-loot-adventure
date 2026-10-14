@@ -19,7 +19,7 @@ export function TowerRuntime({ paused }: { paused: boolean }) {
       if (pieces) for (const p of pieces) {
         if (p.kind !== 'tower') continue;
         const c = cellCenter(p.cell);
-        current.towers.push({ id: p.id, tier: p.tier, hp: p.hp, x: c.x, z: c.z, baseType: state.playerBase?.baseType });
+        current.towers.push({ id: p.id, tier: p.tier, level: p.level, hp: p.hp, x: c.x, z: c.z, baseType: state.playerBase?.baseType });
       }
     }
     if (current.towers.length) state.tickTowers(current.towers, Date.now());
