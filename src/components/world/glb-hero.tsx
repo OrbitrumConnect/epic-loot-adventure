@@ -72,7 +72,13 @@ export function GlbHero({
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
-        m.frustumCulled = false;
+        // Culling LIGADO (fora da tela não renderiza = horda barata). Infla o
+        // bounding (bind-pose) p/ cobrir a animação e não sumir na borda.
+        if (m.geometry && !m.geometry.userData._inflated) {
+          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+          if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
+          m.geometry.userData._inflated = true;
+        }
       }
     });
   }, [cloned, names]);

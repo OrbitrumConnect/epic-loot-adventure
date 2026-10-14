@@ -98,7 +98,12 @@ export function GlbCreature({
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
-        m.frustumCulled = false;
+        // Culling LIGADO + bounding inflado (não renderiza fora da tela).
+        if (m.geometry && !m.geometry.userData._inflated) {
+          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+          if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
+          m.geometry.userData._inflated = true;
+        }
         if (tint) {
           // GLB "demo" sem baseColor → tinta a cor natural (combina com o cel-shade).
           const mats = Array.isArray(m.material) ? m.material : [m.material];
