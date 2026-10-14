@@ -291,6 +291,21 @@ function nearestCreatureWithin(snapshot: AutoSnapshot, radius: number): AutoSnap
   return best;
 }
 
+/** Recurso vivo (não esgotado) mais próximo do jogador — pro farm automático. */
+function nearestNode(snapshot: AutoSnapshot): AutoSnapshot['resources'][number] | null {
+  let best: AutoSnapshot['resources'][number] | null = null;
+  let bestDist = Infinity;
+  for (const node of snapshot.resources) {
+    if (node.depleted) continue;
+    const dist = getDistance(snapshot.playerPosition, node.position);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = node;
+    }
+  }
+  return best;
+}
+
 function engage(
   snapshot: AutoSnapshot,
   creature: { id: string; position: Position },
@@ -349,6 +364,15 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
       const huntRadius = Math.max(huntBase, snapshot.attackRange ?? 0);
       const prey = nearestCreatureWithin(snapshot, huntRadius);
       if (prey) return engage(snapshot, prey, 'Caçando por perto');
+    }
+    // 6b. Sem bicho pra caçar → FARM: colhe o recurso mais próximo (loop idle =
+    // luta↔farma, pedido do Pedro). Se aparecer bicho, o passo 4 reassume na hora.
+    const node = nearestNode(snapshot);
+    if (node) {
+      if (getDistance(snapshot.playerPosition, node.position) <= GATHER_RANGE) {
+        return { kind: 'gather', nodeId: node.id, to: { ...node.position } };
+      }
+      return { kind: 'move', to: { ...node.position }, reason: 'Farmando recurso' };
     }
     return { kind: 'idle', reason: 'Nenhum objetivo ativo.' };
   }

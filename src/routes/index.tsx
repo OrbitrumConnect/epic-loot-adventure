@@ -28,6 +28,7 @@ import { baseLv1Progress } from '@/game/systems/baseLv1';
 import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
+import { MusicPlayer } from '@/components/MusicPlayer';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
 import {
   clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
@@ -401,6 +402,7 @@ function Index() {
             }}>{waveLabel}</div>
           )}
           <div className="header-currency"><Coins />{player.gold}</div>
+          <MusicPlayer />
           <Button variant="ghost" size="icon" className="icon-control" aria-label="Preferências" title="Preferências" onClick={() => open('settings')}><Settings /></Button>
         </header>
 
