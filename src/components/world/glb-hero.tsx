@@ -23,6 +23,40 @@ function pickClip(names: string[], kind: HeroAction): string | undefined {
   return find('idle_shield_loop') ?? find('idle_rail_loop') ?? find('idle_foldarms') ?? find('idle');
 }
 
+/**
+ * Mapa ValveBiped (Source/HL2) → Unreal (UAL). Pra personagens com rig Valve
+ * (ex.: gasmask) animarem com a MESMA UAL dos outros: a gente RENOMEIA os ossos
+ * pro nome Unreal e os clips encaixam. (Pose base difere → pode sair um pouco
+ * torto; é reversível por flag.)
+ */
+const VALVE_TO_UNREAL: Record<string, string> = {
+  Pelvis: 'pelvis', Spine: 'spine_01', Spine1: 'spine_02', Spine2: 'spine_03', Spine4: 'spine_03',
+  Neck1: 'neck_01', Head1: 'head',
+  R_Clavicle: 'clavicle_r', R_UpperArm: 'upperarm_r', R_Forearm: 'lowerarm_r', R_Hand: 'hand_r',
+  L_Clavicle: 'clavicle_l', L_UpperArm: 'upperarm_l', L_Forearm: 'lowerarm_l', L_Hand: 'hand_l',
+  R_Thigh: 'thigh_r', R_Calf: 'calf_r', R_Foot: 'foot_r', R_Toe0: 'ball_r',
+  L_Thigh: 'thigh_l', L_Calf: 'calf_l', L_Foot: 'foot_l', L_Toe0: 'ball_l',
+};
+/** "ValveBiped.Bip01_R_UpperArm_20" → "R_UpperArm". */
+function valveCore(name: string): string | null {
+  const m = name.match(/Bip01_(.+?)(_\d+)?$/);
+  return m ? m[1]! : null;
+}
+/** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
+function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
+  const box = new THREE.Box3(); const tmp = new THREE.Box3();
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.geometry) {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      if (m.geometry.boundingBox) { tmp.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld); box.union(tmp); }
+    }
+  });
+  if (box.isEmpty()) box.set(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5));
+  return box;
+}
+
 export function GlbHero({
   actionRef,
   charUrl = CHAR_URL,
@@ -34,6 +68,8 @@ export function GlbHero({
   gripScale = 1,
   gripPos = [0, 0, 0],
   gripRot = [0, 0, 0],
+  remapValve = false,
+  autoHeight,
 }: {
   actionRef: React.MutableRefObject<HeroAction>;
   charUrl?: string;
@@ -45,11 +81,34 @@ export function GlbHero({
   gripScale?: number;
   gripPos?: [number, number, number];
   gripRot?: [number, number, number];
+  /** Rig ValveBiped → renomeia ossos pro Unreal (pra UAL animar). */
+  remapValve?: boolean;
+  /** Se definido, escala o modelo pra esta altura (m) e planta os pés em y=0. */
+  autoHeight?: number | undefined;
 }) {
   const inner = useRef<THREE.Group>(null);
   const { scene } = useGLTF(charUrl);
   const { animations } = useGLTF(ANIM_URL);
-  const cloned = useMemo(() => skeletonClone(scene), [scene]);
+  const cloned = useMemo(() => {
+    const c = skeletonClone(scene);
+    if (remapValve) {
+      c.traverse((o) => {
+        const core = valveCore(o.name);
+        if (core && VALVE_TO_UNREAL[core]) o.name = VALVE_TO_UNREAL[core];
+      });
+    }
+    if (autoHeight) {
+      c.updateMatrixWorld(true);
+      const box = measureGeoBox(c);
+      const h = box.max.y - box.min.y || 1;
+      const s = autoHeight / h;
+      c.scale.setScalar(s);
+      c.updateMatrixWorld(true);
+      const b2 = measureGeoBox(c);
+      c.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+    }
+    return c;
+  }, [scene, remapValve, autoHeight]);
   // CLONA (só os clips usados: idle/walk/sword) por instância: a UAL vem cacheada
   // (mesmos objetos p/ todos os bonecos) e compartilhar o mesmo AnimationClip
   // entre vários mixers deixava alguns saqueadores presos no bind-pose (braços

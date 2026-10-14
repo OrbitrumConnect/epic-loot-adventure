@@ -16,6 +16,10 @@ import { GlbHero, type HeroAction } from './glb-hero';
 
 /** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
 const USE_GLB_BOSS = true;
+/** Gasmask (rig ValveBiped remapeado p/ UAL) como o batedor. Flag reversível —
+ *  se a anim sair torta (pose base difere), só por false que volta ao Quaternius. */
+const USE_GLB_GASMASK = true;
+const GASMASK_URL = '/models/raiders/gasmask.glb';
 const IMP_URL = '/models/Imp.glb';
 const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
@@ -367,9 +371,21 @@ export function Raider({
       <SelectionRing ring={ring} radius={0.55 * s} c={c} />
       <EnemyLabel name={name} height={2.15 * s} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
 
-      {USE_GLB_BOSS && (
-        <GlbHero charUrl={RAIDER_GLB[speciesId] ?? DEFAULT_RAIDER_GLB} actionRef={bossAction} scale={spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale} yaw={BOSS_GLB_YAW} />
-      )}
+      {USE_GLB_BOSS && (() => {
+        // Batedor pode virar o gasmask (rig Valve remapeado + auto-escala).
+        const gas = USE_GLB_GASMASK && speciesId === 'raider_scout';
+        const url = gas ? GASMASK_URL : (RAIDER_GLB[speciesId] ?? DEFAULT_RAIDER_GLB);
+        return (
+          <GlbHero
+            charUrl={url}
+            actionRef={bossAction}
+            scale={gas ? 1 : (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale)}
+            yaw={BOSS_GLB_YAW}
+            remapValve={gas}
+            autoHeight={gas ? 1.8 : undefined}
+          />
+        );
+      })()}
 
       <group scale={s} visible={!USE_GLB_BOSS}>
         <group ref={torso}>
