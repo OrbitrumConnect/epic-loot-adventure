@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bed, BrickWall, Castle, DoorOpen, Hammer, Landmark, Lock, LockOpen, ShieldAlert, ShieldCheck, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
+import { BASE_TYPES } from '@/game/data/base-types';
+import { BaseTypePicker } from './base-type-picker';
 import type { BaseStage, BasePieceKind, PlayerBaseState } from '@/game/types/playerbase';
 import {
   canOpenCityView, claimLandQuality, stageProgress, STAGE_ORDER, type LandQuality,
@@ -100,6 +102,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
         <div className="base-lock" data-locked="true" role="status">
           <Lock aria-hidden="true" /><span>{cityLockReason(null)}</span>
         </div>
+        <BaseTypePicker />
         <div className="panel-actions">
           <Button onClick={enterBuild} title={`Entrar no modo de construção${key ? ` · ${key}` : ''}`}
             aria-label="Entrar no modo de construção">
@@ -133,6 +136,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="base-stage">
+        <p className="base-next">{base.baseType ? `${BASE_TYPES[base.baseType].name} · ${BASE_TYPES[base.baseType].description}` : 'Base original · atributos preservados.'}</p>
         <div className="base-stage-head">
           <span><small>Estágio</small><strong>{STAGE_LABEL[base.stage]}</strong></span>
           <span className="base-chip" data-quality={quality} title={land.hint}><Landmark aria-hidden="true" />{land.name}</span>

@@ -1,18 +1,20 @@
 import { BASE_PIECES } from '../data/base-pieces';
 import { CREATURES } from '../data/creatures';
 import type { CreatureState, Position } from '../types';
-import type { BasePiece } from '../types/playerbase';
+import type { BasePiece, BaseType } from '../types/playerbase';
+import { baseTowerRange } from './baseTypeSystem';
 import { calculateDamage } from './combatSystem';
 
 /** Cache plano: posição calculada só quando as peças mudam. */
-export type TowerSource = Position & { id: string; tier: BasePiece['tier']; hp: number };
+export type TowerSource = Position & { id: string; tier: BasePiece['tier']; hp: number; baseType?: BaseType | undefined };
 
 /** Sem mutação/alocação. now e lastShotAt em milissegundos. */
 export function selectTowerTarget(tower: TowerSource, creatures: readonly CreatureState[], lastShotAt: number | undefined, now: number): number {
   const combat = BASE_PIECES.tower.combat![tower.tier - 1]!;
   if (tower.hp <= 0 || (lastShotAt !== undefined && now - lastShotAt < combat.cooldownMs)) return -1;
   let best = -1;
-  let distance = combat.range * combat.range;
+  const range = baseTowerRange(combat.range, tower.baseType);
+  let distance = range * range;
   for (let i = 0; i < creatures.length; i++) {
     const c = creatures[i]!;
     if (c.hp <= 0 || c.behavior === 'dead' || c.behavior === 'respawning'

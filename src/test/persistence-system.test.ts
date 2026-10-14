@@ -6,6 +6,7 @@ import { createLocalSave, parseLocalSave, restoreLocalSave, SAVE_KEY, type Persi
 import { createHarvestNodes } from '../game/systems/harvestSystem';
 import { cellCenter, worldToCell } from '../game/systems/playerBaseSystem';
 import type { PlayerBaseState } from '../game/types/playerbase';
+import { weaponFor } from '../game/data/weapons';
 
 function fresh(): PersistState {
   const s = useGameStore.getState();
@@ -32,6 +33,21 @@ function memoryStorage(raw: string | null = null) {
 afterEach(() => vi.useRealTimers());
 
 describe('save local v1', () => {
+  it('reidratação do arco seleciona hotbar 8 e mantém perfil de combate ranged', () => {
+    const state = { ...fresh(), ui: { ...useGameStore.getState().ui, selectedHotbar: 0 } };
+    state.player.inventory.equipment.primary = 'bow';
+    const slot = state.player.inventory.slots.findIndex(s => s.itemId === 'bow');
+    expect(slot).toBeGreaterThanOrEqual(0);
+    state.player.inventory.hotbar.slots[8] = slot;
+    const save = parseLocalSave(JSON.stringify(createLocalSave(state)))!;
+    const restored = restoreLocalSave(save, state, 1000);
+    expect(restored.ui!.selectedHotbar).toBe(8);
+    const selected = restored.player.inventory.hotbar.slots[restored.ui!.selectedHotbar]!;
+    const held = restored.player.inventory.slots[selected!]!.itemId;
+    const profile = weaponFor(held);
+    expect(profile.ranged).toBe(true);
+    expect(profile.range).toBe(weaponFor('bow').range);
+  });
   it('roundtrip preserva progresso, equipamento, base, cooldown e apenas deltas de colheita', () => {
     const state = fresh();
     state.playerBase = claimFor(state);

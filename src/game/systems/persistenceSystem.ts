@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { ITEMS } from '../data/items';
-import type { PlayerState, HarvestNodeState, ResourceNode } from '../types';
+import type { PlayerState, HarvestNodeState, ResourceNode, UIState } from '../types';
 import type { PlayerBaseState } from '../types/playerbase';
 import { createHarvestNodes, tickHarvestNodes } from './harvestSystem';
 import { cellInSquare, worldToCell } from './playerBaseSystem';
 
 export const SAVE_KEY = 'tribos.local.v1';
 export type PersistState = {
+  ui?: UIState;
   player: PlayerState;
   playerBase: PlayerBaseState | null;
   towerLastShotAt: Record<string, number>;
@@ -27,6 +28,7 @@ const inventory = z.object({
   hotbar: z.object({ slots: z.array(integer.nullable()).max(100) }),
 }).refine(v => v.slots.length === v.maxSlots && v.hotbar.slots.every(i => i === null || i < v.slots.length));
 const base = z.object({
+  baseType: z.enum(['fortress', 'watchpost', 'workshop']).optional(),
   id, owner: z.object({ kind: z.enum(['player', 'tribe']), id, name: z.string() }),
   worldPosition: position, origin: cell, size: integer.positive().max(100),
   stage: z.enum(['none', 'bed', 'foundation', 'walls', 'towers', 'enclosed', 'clash']),
@@ -98,11 +100,17 @@ export function restoreLocalSave(save: LocalSave, initial: PersistState, now: nu
     return { ...n, quantity: delta.quantity, depleted: delta.depleted, respawnAt: delta.respawnAt };
   });
   const towerLastShotAt: Record<string, number> = {};
+  // A arma ativa é lida pela hotbar no combate. Equipamento restaurado precisa
+  // selecionar o mesmo slot, inclusive nos saves v1 anteriores a este campo de UI.
+  const equipped = save.player.inventory.equipment.primary;
+  const hotbarIndex = equipped === null ? -1 : save.player.inventory.hotbar.slots.findIndex(slot =>
+    slot !== null && save.player.inventory.slots[slot]?.itemId === equipped);
   for (const piece of claim?.pieces ?? []) {
     const stamp = save.towerLastShotAt[piece.id];
     if (piece.kind === 'tower' && stamp !== undefined) towerLastShotAt[piece.id] = Math.min(stamp, now);
   }
   return {
+    ...(initial.ui ? { ui: { ...initial.ui, selectedHotbar: hotbarIndex < 0 ? 0 : hotbarIndex } } : {}),
     playerBase: claim, towerLastShotAt,
     player: { ...initial.player, ...save.player, hp: save.player.maxHp, mana: save.player.maxMana,
       stamina: save.player.maxStamina, dead: false, respawnAt: 0 },

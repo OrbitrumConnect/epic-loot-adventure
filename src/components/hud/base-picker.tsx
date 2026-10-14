@@ -3,6 +3,7 @@ import { ITEMS } from '@/game/data/items';
 import { BASE_PIECES, pieceCost } from '@/game/data/base-pieces';
 import { getItemCount } from '@/game/systems/inventorySystem';
 import { ItemSprite } from './item-sprite';
+import { BaseTypePicker } from './base-type-picker';
 import {
   BUILD_MODE_KEY_LABEL, BUILD_PIECE_KINDS, setBuildKind, setBuildMode, setBuildTier, useBuildSelection,
   type BuildTier,
@@ -41,6 +42,7 @@ export function PiecePicker() {
     return (
       <div className="build-picker" role="toolbar" aria-label="Modo de construção">
         <span className="build-hint">Modo de construção: escolha no mundo o quadrado de terreno para reivindicar.</span>
+        <BaseTypePicker />
         {close}
       </div>
     );
