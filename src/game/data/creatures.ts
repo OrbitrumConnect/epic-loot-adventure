@@ -247,6 +247,54 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: true,
   },
 
+  goose: {
+    id: 'goose',
+    name: 'Ganso Selvagem',
+    maxHp: 22,
+    attackPower: 2,
+    armor: 0,
+    attackCooldown: 2,
+    attackRange: 1.2,
+    aggroRange: 8,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 1, chance: 0.8 },
+    ],
+    icon: 'Bird',
+    peaceful: true,
+  },
+
+  pigeon: {
+    id: 'pigeon',
+    name: 'Pombo',
+    maxHp: 10,
+    attackPower: 1,
+    armor: 0,
+    attackCooldown: 2,
+    attackRange: 1,
+    aggroRange: 7,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 1, chance: 0.6 },
+    ],
+    icon: 'Bird',
+    peaceful: true,
+  },
+
+  pheasant: {
+    id: 'pheasant',
+    name: 'Faisão',
+    maxHp: 18,
+    attackPower: 1,
+    armor: 0,
+    attackCooldown: 2,
+    attackRange: 1.2,
+    aggroRange: 8,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 1, chance: 0.75 },
+    ],
+    icon: 'Bird',
+    peaceful: true,
+  },
+
   boar: {
     id: 'boar',
     name: 'Javali Bravo',

@@ -10,6 +10,9 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   wolf: 10,
   wolf_alpha: 6,
   bear: 6,
+  goose: 5,
+  pheasant: 5,
+  pigeon: 8,
 };
 
 /** Total de criaturas selvagens geradas (soma de `WILD_SPAWN_COUNTS`). */
