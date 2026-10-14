@@ -23,7 +23,7 @@ export const DEFAULT_HARVEST_SEED = 20260;
 type Zone = { x: number; z: number; spread: number };
 
 /** Centros de floresta e de terreno rochoso (pontos fixos do vale). */
-const FOREST_ZONES: Zone[] = [
+export const FOREST_ZONES: Zone[] = [
   { x: -40, z: -24, spread: 14 },
   { x: 24, z: 52, spread: 14 },
   { x: -24, z: 64, spread: 12 },
