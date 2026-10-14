@@ -1577,6 +1577,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         position: c.position,
         behavior: c.behavior,
         hp: c.hp,
+        // Inimigo (raider/lobo/boss) vs pacífico (cervo/coelho): o piloto defende
+        // dos inimigos, mas NÃO persegue pacífico — senão nunca farma.
+        hostile: !(CREATURES[c.speciesId]?.peaceful ?? false),
       })),
       camps: state.camps.map(c => ({
         id: c.id,
