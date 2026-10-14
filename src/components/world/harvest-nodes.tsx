@@ -214,11 +214,13 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
   // só entra nos poucos mais próximos do player (perf) — ver glb-crystals.
   const crystalLiveMat = fadeMat(mat(c.crystal, 0.22));
   const crystal: KindAssets = {
+    // PEQUENO e azulado: some SOB o GLB bonito (cristais perto) e, de longe (sem
+    // GLB), lê como cristalzinho azul — não mais a base marrom gigante duplicada.
     live: bake([
-      { g: dodeca(0.8), color: c.rock, pos: [0, 0.4, 0], scale: [1.1, 0.7, 0.9] },
-      { g: cone(0.2, 1.1, 5), color: c.crystal, pos: [-0.4, 1.05, 0.1], rot: [0, 0, 0.3] },
-      { g: cone(0.26, 1.45, 5), color: mixColor(c.crystal, '#ffffff', 0.25), pos: [0, 1.25, 0.1] },
-      { g: cone(0.18, 0.95, 5), color: c.crystal, pos: [0.42, 1.0, 0.0], rot: [0, 0, -0.35] },
+      { g: dodeca(0.3), color: mixColor(c.crystal, c.dark, 0.45), pos: [0, 0.12, 0], scale: [1.1, 0.6, 0.9] },
+      { g: cone(0.11, 0.55, 5), color: c.crystal, pos: [-0.16, 0.42, 0.05], rot: [0, 0, 0.3] },
+      { g: cone(0.14, 0.72, 5), color: mixColor(c.crystal, '#ffffff', 0.25), pos: [0, 0.52, 0.05] },
+      { g: cone(0.1, 0.46, 5), color: c.crystal, pos: [0.18, 0.4, 0], rot: [0, 0, -0.35] },
     ]),
     dead: bake([
       { g: dodeca(0.55), color: rubble, pos: [0, 0.15, 0], scale: [1.2, 0.5, 1] },

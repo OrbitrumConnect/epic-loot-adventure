@@ -360,14 +360,7 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
         <LivingTrees placements={flora.broad} species="oak" c={c} />
         <ForestTrees placements={flora.dead} c={c} />
       </Suspense>
-      <BillboardField
-        tex={spriteTex(floraUrl(FLORA.bush))}
-        placements={flora.bush}
-        windTime={windTime}
-        wind="bush"
-        fadeSpheres={FLORA_FADE.bush}
-        registerMat={registerMat}
-      />
+      {/* Arbusto de outono (billboard branco/vermelho) REMOVIDO — não ficou bom. */}
       <ForestRocks placements={rocks.large} c={c} />
       <ForestRocks placements={rocks.small} c={c} />
       <GroundCover placements={grass} c={c} />
