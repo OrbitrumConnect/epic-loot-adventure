@@ -14,6 +14,7 @@ import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
+import { GlbContainers } from './world/glb-containers';
 import { WatchtowerModel } from './world/glb-watchtower';
 import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
@@ -1650,6 +1651,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
       <Factory />
       <FactoryRubble c={c} />
+      <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
         <WatchtowerModel height={6} />

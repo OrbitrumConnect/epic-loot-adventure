@@ -324,19 +324,6 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
     return out;
   }, []);
 
-  // Detritos: novos, poucos, longe da clareira do nascedouro.
-  const debris = useMemo(() => {
-    const out: Placement[] = [];
-    for (let i = 0; i < 46; i++) {
-      const x = (rand(i + 7001) - 0.5) * MAP_HALF * 1.85;
-      const z = (rand(i + 8001) - 0.5) * MAP_HALF * 1.85;
-      if (Math.hypot(x, z) < 11 || inLake(x, z, 1)) continue;
-      const h = 1.0 + rand(i + 60) * 0.7;
-      out.push({ x, z, w: h * 1.35, h, yaw: 0 });
-    }
-    return out;
-  }, []);
-
   useFrame(({ clock }) => {
     windTime.value = clock.elapsedTime;
     const b = 1 - 0.52 * nightFactor();
@@ -364,13 +351,8 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
       <ForestRocks placements={rocks.large} c={c} />
       <ForestRocks placements={rocks.small} c={c} />
       <GroundCover placements={grass} c={c} />
-      <BillboardField
-        tex={spriteTex(terrainUrl(TERRAIN.debris))}
-        placements={debris}
-        windTime={windTime}
-        fadeSpheres={null}
-        registerMat={registerMat}
-      />
+      {/* Entulho/debris (billboard 2D) REMOVIDO — chapado e girava (Pedro).
+          Substituído por containers 3D (glb-containers) no game-world. */}
     </>
   );
 }
