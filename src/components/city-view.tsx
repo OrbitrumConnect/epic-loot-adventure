@@ -420,19 +420,11 @@ function BuildingBubble({ building, now }: { building: PlacedBuilding; now: numb
 export default function CityView() {
   const base = useGameStore(s => s.base);
   const message = useGameStore(s => s.ui.message);
-  const tickBase = useGameStore(s => s.tickBase);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ moved: false });
   const [view, setView] = useState<View>({ x: 0, y: 30, zoom: 0.7 });
   const [selection, setSelection] = useState<Selection>(null);
-
-  // A base é resolvida por timestamp: um tick ao montar recupera o tempo fora da cidade.
-  useEffect(() => {
-    tickBase();
-    const id = window.setInterval(tickBase, 1000);
-    return () => window.clearInterval(id);
-  }, [tickBase]);
 
   const fitView = useCallback(() => {
     const el = rootRef.current;

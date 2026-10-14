@@ -91,9 +91,14 @@ function Index() {
   const toggleCamera = useCallback(() => setCameraMode(m => (m === 'iso' ? 'third' : 'iso')), []);
   useEffect(() => {
     const stop = startLocalPersistence();
+    // A raiz vive em todas as vistas: produção continua com a cidade fechada.
+    // Timestamps absolutos recuperam também intervalos suspensos pelo navegador.
+    const tickCity = () => useGameStore.getState().tickBase();
+    tickCity();
+    const cityTimer = window.setInterval(tickCity, 1000);
     setReady(true);
     audioManager.armAutoplay(); // música liga no 1º clique/tecla ao entrar
-    return stop;
+    return () => { window.clearInterval(cityTimer); stop(); };
   }, []);
 
   // Level-up: destaque breve quando o nível sobe (sem sistema novo de mensagens).
