@@ -894,9 +894,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   spawnBoss: () => {
     const state = get();
-    // Um colosso por vez: se já há um vivo, não nasce outro.
-    if (state.creatures.some(c => c.speciesId === 'raider_warlord' && c.behavior !== 'dead')) return;
-    const def = CREATURES['raider_warlord'];
+    // UM boss ambiente por vez (qualquer espécie com id boss_ viva).
+    if (state.creatures.some(c => c.id.startsWith('boss_') && c.behavior !== 'dead')) return;
+    // Sorteia o boss que ronda o MAPA: Colosso, Fúngico, Samurai ou Kaiju —
+    // os mesmos das ondas aparecem soltos no vale também (pedido do Pedro).
+    const POOL = ['raider_warlord', 'raider_mushroom', 'raider_samurai', 'raider_kaiju'];
+    const sp = POOL[Math.floor(Math.random() * POOL.length)]!;
+    const def = CREATURES[sp];
     if (!def) return;
     const p = state.player.position;
     const margin = WORLD_HALF - 6;
@@ -915,7 +919,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const hp = scaleEnemyHp(def.maxHp);
     const boss: CreatureState = {
       id: `boss_${Date.now()}`,
-      speciesId: 'raider_warlord',
+      speciesId: sp,
       name: def.name,
       hp,
       maxHp: hp,

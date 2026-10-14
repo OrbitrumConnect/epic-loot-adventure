@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useGameStore } from '@/game/state/game-store';
 import { CREATURES } from '@/game/data/creatures';
 
+// Boss AMBIENTE = id começa com `boss_` (a espécie é sorteada: warlord/mushroom/
+// samurai/kaiju), por isso filtra pelo id e não pela espécie.
 const aliveBosses = () =>
-  useGameStore.getState().creatures.filter(c => c.speciesId === 'raider_warlord' && c.behavior !== 'dead');
+  useGameStore.getState().creatures.filter(c => c.id.startsWith('boss_') && c.behavior !== 'dead');
 
 describe('mini-boss (raider_warlord)', () => {
   beforeEach(() => {
@@ -34,11 +36,11 @@ describe('mini-boss (raider_warlord)', () => {
     expect(aliveBosses()).toHaveLength(1);
   });
 
-  it('se o colosso morreu, um novo pode nascer', () => {
+  it('se o boss morreu, um novo pode nascer', () => {
     useGameStore.getState().spawnBoss();
     useGameStore.setState(s => ({
       creatures: s.creatures.map(c =>
-        c.speciesId === 'raider_warlord' ? { ...c, hp: 0, behavior: 'dead' as const, respawnAt: null } : c),
+        c.id.startsWith('boss_') ? { ...c, hp: 0, behavior: 'dead' as const, respawnAt: null } : c),
     }));
     useGameStore.getState().spawnBoss();
     expect(aliveBosses()).toHaveLength(1);

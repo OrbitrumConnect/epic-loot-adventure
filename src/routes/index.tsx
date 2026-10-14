@@ -29,6 +29,7 @@ import { weaponFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
 import { MusicPlayer } from '@/components/MusicPlayer';
+import { setBuildActive } from '@/components/world/build-mode';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
 import {
   clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
@@ -317,6 +318,13 @@ function Index() {
       <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
       <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
+      {!playerBase && (
+        <Button variant="ghost" className="world-action" data-on="true" aria-label="Reivindicar base"
+          title="Reivindicar base — clique aqui e depois no quadrado VERDE no chão"
+          onClick={() => { setBuildActive(true); useGameStore.getState().setMessage('🔨 Modo construção ligado — clique no quadrado VERDE no chão para reivindicar a base.'); }}>
+          <Hammer />
+        </Button>
+      )}
       {baseProg && baseProg.pct < 100 && (
         <Button variant="ghost" className="world-action" data-on="true" aria-label="Construir base" title={`Construir base — entregar recursos (${baseProg.pct}%)`} onClick={deliverToBase}><Hammer /></Button>
       )}
