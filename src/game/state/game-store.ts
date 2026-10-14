@@ -46,6 +46,7 @@ import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes }
 import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
+import { SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
   pushEvents, shotEvent, xpEvent,
@@ -134,6 +135,8 @@ type GameActions = {
   damageBasePiece: (pieceId: string, amount: number) => void;
   /** Sobe um estágio da base se a condição estiver cumprida. */
   advanceBaseStage: () => void;
+  /** GAME OVER: recomeça a sobrevivência do zero (sem base/recurso). */
+  restartSurvival: () => void;
   /** A vista de cidade só abre com o perímetro fechado (`clash`). */
   canOpenCityView: () => boolean;
   addObjective: (kind: ObjectiveKind, targetId: string | null) => void;
@@ -1044,10 +1047,37 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       : result.reopened
         ? 'Brecha no muro! A base está aberta.'
         : state.ui.message;
+    if (result.wiped) {
+      // Base CAIU na horda → GAME OVER. Para as ondas, limpa os inimigos de onda.
+      set({
+        playerBase: null,
+        wave: INITIAL_WAVE,
+        creatures: state.creatures.filter((c) => !c.id.startsWith('wave')),
+        ui: { ...state.ui, message, baseFell: true },
+      });
+      return;
+    }
     set({
-      playerBase: result.wiped ? null : result.base,
+      playerBase: result.base,
       ui: { ...state.ui, message },
     });
+  },
+
+  restartSurvival: () => {
+    // "Sobreviver de novo": recomeça do zero (sem base, sem recurso), mundo limpo.
+    try { localStorage.removeItem(SAVE_KEY); } catch { /* storage bloqueado */ }
+    set((s) => ({
+      player: createInitialPlayer(),
+      creatures: [...createInitialCreatures(), ...createWildCreatures(), ...createCamps(Date.now()).creatures],
+      resources: createInitialResources(),
+      harvestNodes: createHarvestNodes(),
+      deathBags: [],
+      playerBase: null,
+      towerLastShotAt: {},
+      wave: INITIAL_WAVE,
+      objectives: createQueue(),
+      ui: { ...s.ui, baseFell: false, message: '🔥 Nova sobrevivência! Colete, construa a base e prepare as defesas.' },
+    }));
   },
 
   advanceBaseStage: () => {

@@ -413,6 +413,28 @@ function Index() {
               <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>Você reaparecerá na sua base</p>
             </div>
           )}
+          {ui.baseFell && !inCity && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 60,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'radial-gradient(ellipse at center, rgba(80,0,0,0.80) 0%, rgba(0,0,0,0.92) 100%)',
+              color: '#fff',
+            }}>
+              <Skull style={{ width: 72, height: 72, color: '#ef4444', marginBottom: 16 }} />
+              <h2 style={{ fontSize: 34, fontWeight: 700, margin: 0, color: '#ef4444', textShadow: '0 0 20px rgba(239,68,68,0.5)' }}>Sua base caiu!</h2>
+              <p style={{ fontSize: 16, marginTop: 12, opacity: 0.85 }}>A horda destruiu seu núcleo. Fim da sobrevivência.</p>
+              <button
+                onClick={() => useGameStore.getState().restartSurvival()}
+                style={{
+                  marginTop: 24, padding: '14px 30px', fontSize: 18, fontWeight: 700,
+                  color: '#0b0b0b', background: '#fbbf24', border: 'none', borderRadius: 10,
+                  cursor: 'pointer', boxShadow: '0 0 24px rgba(251,191,36,0.45)',
+                }}
+              >
+                🔥 Sobreviver de novo
+              </button>
+            </div>
+          )}
           {!inCity && (<>
           <div className="zone-heading">
             <small><i className="status-dot" />{ui.mode === 'raid' ? 'Zona de conflito' : 'Território livre'}</small>

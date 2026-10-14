@@ -31,4 +31,6 @@ export type UIState = {
   panelMessage: string;
   chatOpen: boolean;
   sidebarCollapsed: boolean;
+  /** Base destruída na horda → tela de GAME OVER ("Sobreviver de novo"). */
+  baseFell?: boolean;
 };
