@@ -1722,9 +1722,9 @@ export default function GameWorld(props: WorldProps) {
   return (
     <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
       {cameraMode === 'iso' ? (
-        <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={200} />
+        <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={160} />
       ) : (
-        <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={300} />
+        <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={160} />
       )}
       <WorldScene {...props} c={c} cameraMode={cameraMode} />
     </Canvas>

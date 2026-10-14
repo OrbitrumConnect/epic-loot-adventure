@@ -29,13 +29,13 @@ type Keyframe = DayNight & { h: number };
 // Noite com luz azulada suave — escura pra ter clima, mas ainda jogável
 // (o jogador enxerga ao redor; a tocha e as luminárias completam).
 const KEYFRAMES: Keyframe[] = [
-  { h: 0,  sunPos: [6, 11, 10],   sunColor: '#6f86c8', sunIntensity: 1.15, ambientColor: '#4a568a', ambientIntensity: 1.34, fogColor: '#28355a', fogNear: 52, fogFar: 170 },
-  { h: 5,  sunPos: [-16, 4, 8],   sunColor: '#9a88d0', sunIntensity: 1.2,  ambientColor: '#6a6692', ambientIntensity: 1.28, fogColor: '#61627c', fogNear: 58, fogFar: 168 },
-  { h: 7,  sunPos: [-18, 7, 8],   sunColor: '#ffb36b', sunIntensity: 2.1,  ambientColor: '#8a7a90', ambientIntensity: 1.35, fogColor: '#d9b48a', fogNear: 65, fogFar: 175 },
-  { h: 12, sunPos: [-5, 28, 8],   sunColor: '#fff3d6', sunIntensity: 3.25, ambientColor: '#bfe0ff', ambientIntensity: 1.78, fogColor: '#cfe6c0', fogNear: 90, fogFar: 195 },
-  { h: 17, sunPos: [12, 10, 8],   sunColor: '#ffbf7a', sunIntensity: 2.4,  ambientColor: '#c7b3cf', ambientIntensity: 1.45, fogColor: '#d6b59a', fogNear: 75, fogFar: 185 },
-  { h: 19, sunPos: [18, 5, 8],    sunColor: '#ff7a45', sunIntensity: 1.6,  ambientColor: '#6a5a86', ambientIntensity: 1.15, fogColor: '#9c6f86', fogNear: 60, fogFar: 165 },
-  { h: 21, sunPos: [10, 12, 10],  sunColor: '#6678bc', sunIntensity: 1.2,  ambientColor: '#505c96', ambientIntensity: 1.36, fogColor: '#2b3860', fogNear: 54, fogFar: 168 },
+  { h: 0,  sunPos: [6, 11, 10],   sunColor: '#6f86c8', sunIntensity: 1.15, ambientColor: '#4a568a', ambientIntensity: 1.34, fogColor: '#28355a', fogNear: 52, fogFar: 116 },
+  { h: 5,  sunPos: [-16, 4, 8],   sunColor: '#9a88d0', sunIntensity: 1.2,  ambientColor: '#6a6692', ambientIntensity: 1.28, fogColor: '#61627c', fogNear: 58, fogFar: 114 },
+  { h: 7,  sunPos: [-18, 7, 8],   sunColor: '#ffb36b', sunIntensity: 2.1,  ambientColor: '#8a7a90', ambientIntensity: 1.35, fogColor: '#d9b48a', fogNear: 65, fogFar: 119 },
+  { h: 12, sunPos: [-5, 28, 8],   sunColor: '#fff3d6', sunIntensity: 3.25, ambientColor: '#bfe0ff', ambientIntensity: 1.78, fogColor: '#cfe6c0', fogNear: 90, fogFar: 132 },
+  { h: 17, sunPos: [12, 10, 8],   sunColor: '#ffbf7a', sunIntensity: 2.4,  ambientColor: '#c7b3cf', ambientIntensity: 1.45, fogColor: '#d6b59a', fogNear: 75, fogFar: 126 },
+  { h: 19, sunPos: [18, 5, 8],    sunColor: '#ff7a45', sunIntensity: 1.6,  ambientColor: '#6a5a86', ambientIntensity: 1.15, fogColor: '#9c6f86', fogNear: 60, fogFar: 112 },
+  { h: 21, sunPos: [10, 12, 10],  sunColor: '#6678bc', sunIntensity: 1.2,  ambientColor: '#505c96', ambientIntensity: 1.36, fogColor: '#2b3860', fogNear: 54, fogFar: 114 },
 ];
 
 function lerp(a: number, b: number, t: number): number {
