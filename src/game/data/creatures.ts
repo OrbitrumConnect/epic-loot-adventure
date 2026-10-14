@@ -17,7 +17,7 @@ export function scaleEnemyHp(baseHp: number): number {
 export const CREATURES: Record<string, CreatureDefinition> = {
   wolf: {
     id: 'wolf',
-    name: 'Lobo do Vale',
+    name: 'Raposa do Vale',
     maxHp: 80,
     attackPower: 8,
     armor: 2,
@@ -297,7 +297,7 @@ export const CREATURES: Record<string, CreatureDefinition> = {
 
   boar: {
     id: 'boar',
-    name: 'Javali Bravo',
+    name: 'Jacaré',
     maxHp: 70,
     attackPower: 10,
     armor: 3,
@@ -315,7 +315,7 @@ export const CREATURES: Record<string, CreatureDefinition> = {
 
   wolf_alpha: {
     id: 'wolf_alpha',
-    name: 'Lobo Alfa',
+    name: 'Leoa',
     maxHp: 140,
     attackPower: 16,
     armor: 5,
@@ -335,7 +335,7 @@ export const CREATURES: Record<string, CreatureDefinition> = {
 
   bear: {
     id: 'bear',
-    name: 'Urso Pardo',
+    name: 'Búfalo',
     maxHp: 220,
     attackPower: 24,
     armor: 6,

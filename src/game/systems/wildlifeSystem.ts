@@ -12,7 +12,8 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   bear: 6,
   goose: 5,
   pheasant: 5,
-  pigeon: 8,
+  // pigeon: só tem clip de VOO (sem idle/walk) → fica pairando no chão. Fora do
+  // spawn por ora; modelo/código seguem prontos p/ usar como ave de céu depois.
 };
 
 /** Total de criaturas selvagens geradas (soma de `WILD_SPAWN_COUNTS`). */

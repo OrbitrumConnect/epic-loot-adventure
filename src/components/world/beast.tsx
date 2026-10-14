@@ -25,10 +25,12 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   boar: { url: '/models/animals/alligator.glb', height: 0.7, yaw: 0, tint: '#5a6b4a', groundBias: -1.15 },
   bear: { url: '/models/animals/buffalo.glb', height: 2.0, yaw: 0, tint: '#4b3a2a', groundBias: -0.35 },
   wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.3, yaw: 0, tint: '#c49a5e', groundBias: -0.3 },
-  // Aves (texturas próprias → sem tint). Altura/groundBias podem precisar de ajuste fino visual.
-  goose: { url: '/models/animals/goose.glb', height: 0.85, yaw: 0, groundBias: -0.1 },
-  pheasant: { url: '/models/animals/pheasant.glb', height: 0.5, yaw: 0, groundBias: -0.1 },
-  pigeon: { url: '/models/animals/pigeon.glb', height: 0.35, yaw: 0, groundBias: -0.1 },
+  // Aves (texturas próprias → sem tint). OBS: a geometria vem com ASAS ABERTAS, então
+  // a envergadura (X/Z) é bem maior que a altura (Y) — por isso a altura aqui é BAIXA
+  // (normalizamos por Y): assim a maior dimensão fica ~0.8-1.0 m (tamanho de ave real).
+  goose: { url: '/models/animals/goose.glb', height: 0.28, yaw: 0, groundBias: -0.05 },
+  pheasant: { url: '/models/animals/pheasant.glb', height: 0.34, yaw: 0, groundBias: -0.05 },
+  pigeon: { url: '/models/animals/pigeon.glb', height: 0.3, yaw: 0, groundBias: -0.05 },
 };
 
 type V3 = [number, number, number];

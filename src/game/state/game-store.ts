@@ -278,7 +278,7 @@ function createInitialCreatures(): CreatureState[] {
     {
       id: 'wolf_1',
       speciesId: 'wolf',
-      name: 'Lobo do Vale',
+      name: 'Raposa do Vale',
       hp: scaleEnemyHp(80),
       maxHp: scaleEnemyHp(80),
       attackPower: 8,
@@ -293,7 +293,7 @@ function createInitialCreatures(): CreatureState[] {
     {
       id: 'wolf_2',
       speciesId: 'wolf',
-      name: 'Lobo do Vale',
+      name: 'Raposa do Vale',
       hp: scaleEnemyHp(80),
       maxHp: scaleEnemyHp(80),
       attackPower: 8,
@@ -308,7 +308,7 @@ function createInitialCreatures(): CreatureState[] {
     {
       id: 'wolf_3',
       speciesId: 'wolf',
-      name: 'Lobo do Vale',
+      name: 'Raposa do Vale',
       hp: scaleEnemyHp(80),
       maxHp: scaleEnemyHp(80),
       attackPower: 8,
