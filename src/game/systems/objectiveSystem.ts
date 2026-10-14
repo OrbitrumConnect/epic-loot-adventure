@@ -12,7 +12,7 @@ import { getDistance } from './combatSystem';
 /** Abaixo desta fração da vida máxima o piloto cura ou recua. */
 export const RETREAT_HP_RATIO = 0.35;
 /** Perseguidor dentro deste raio vira alvo imediato, antes da fila. */
-export const SELF_DEFENSE_RADIUS = 7;
+export const SELF_DEFENSE_RADIUS = 10;
 /** Alcance usado para decidir atacar em vez de andar (a loja exige <= 4). */
 export const ATTACK_RANGE = 3.2;
 /** Alcance usado para decidir coletar em vez de andar (a loja exige <= 4). */
@@ -21,9 +21,9 @@ export const GATHER_RANGE = 3.2;
 export const ARRIVAL_RADIUS = 2.5;
 /** Raio padrão de uma área de caça. */
 export const HUNT_AREA_RADIUS = 14;
-/** Raio em que o piloto SEMPRE engaja o inimigo mais próximo (defesa da base),
- *  mesmo com `autoHuntRadius` 0 — senão larga a base sob ataque e vai farmar. */
-export const AUTO_ENGAGE_RADIUS = 24;
+/** Regra do Pedro: o piloto só larga o farm pra lutar se um INIMIGO chegar
+ *  pertinho (~10m). Bate nele e VOLTA a farmar. Sem sair caçando longe. */
+export const AUTO_ENGAGE_RADIUS = 10;
 
 /** O que `tickObjectives` precisa ler. `AutoSnapshot` satisfaz este formato. */
 export type ObjectiveWorld = {
