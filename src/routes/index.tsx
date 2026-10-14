@@ -146,6 +146,7 @@ function Index() {
 
   // Boolean estreito: só muda quando a base entra/sai do estágio Clash.
   const cityUnlocked = useGameStore(s => canOpenCityView(s.playerBase));
+  const wave = useGameStore(s => s.wave);
   const autoPotion = useGameStore(s => s.autoPotion);
   const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
   const autoHuntRadius = useGameStore(s => s.autoHuntRadius);
@@ -163,6 +164,14 @@ function Index() {
   const playerBase = useGameStore(s => s.playerBase);
   const deliverToBase = useGameStore(s => s.deliverToBase);
   const baseProg = playerBase ? baseLv1Progress(playerBase) : null;
+  // HUD: vida da base (soma das peças) + rótulo da onda.
+  const baseHp = playerBase ? playerBase.pieces.reduce((a, p) => a + p.hp, 0) : 0;
+  const baseMaxHp = playerBase ? playerBase.pieces.reduce((a, p) => a + p.maxHp, 0) : 0;
+  const waveLabel = wave.phase === 'combat'
+    ? `Onda ${wave.wave} ⚔️`
+    : wave.phase === 'peace'
+      ? `Paz · Onda ${wave.wave + 1} em ${Math.max(0, Math.ceil((wave.phaseEndsAt - Date.now()) / 1000))}s`
+      : null;
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);
@@ -373,6 +382,7 @@ function Index() {
               { name: 'Vida', val: player.hp, max: player.maxHp, icon: Heart, kind: 'health' },
               { name: 'Mana', val: player.mana, max: player.maxMana, icon: Sparkles, kind: 'mana' },
               { name: 'Vigor', val: player.stamina, max: player.maxStamina, icon: Zap, kind: 'energy' },
+              ...(playerBase ? [{ name: 'Base', val: baseHp, max: baseMaxHp, icon: ShieldCheck, kind: 'base' }] : []),
             ].map(v => (
               <div className={`vital vital-${v.kind}`} key={v.kind}>
                 <div className="vital-label"><span><v.icon />{v.name}</span><strong>{v.val} / {v.max}</strong></div>
@@ -380,6 +390,13 @@ function Index() {
               </div>
             ))}
           </div>
+          {waveLabel && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
+              background: wave.phase === 'combat' ? 'rgba(239,68,68,0.18)' : 'rgba(251,191,36,0.15)',
+              color: wave.phase === 'combat' ? '#fca5a5' : '#fcd34d', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap',
+            }}>{waveLabel}</div>
+          )}
           <div className="header-currency"><Coins />{player.gold}</div>
           <Button variant="ghost" size="icon" className="icon-control" aria-label="Preferências" title="Preferências" onClick={() => open('settings')}><Settings /></Button>
         </header>
