@@ -503,6 +503,39 @@ function Index() {
                   );
                 })}
               </div>
+
+              {/* Subir ATRIBUTOS aqui mesmo (sem ir no loot), antes de escolher a evolução. */}
+              <div style={{
+                marginTop: 20, width: '100%', maxWidth: 420,
+                background: 'rgba(12,24,44,0.78)', border: '1px solid rgba(96,165,250,0.35)',
+                borderRadius: 12, padding: '12px 16px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <strong style={{ color: '#93c5fd', fontSize: 15 }}>Atributos</strong>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: (player.skillPoints ?? 0) > 0 ? '#fcd34d' : '#64748b' }}>
+                    {player.skillPoints ?? 0} ponto{(player.skillPoints ?? 0) === 1 ? '' : 's'}
+                  </span>
+                </div>
+                {([
+                  { key: 'damage', icon: '⚔', label: 'Dano' },
+                  { key: 'dexterity', icon: '✦', label: 'Destreza' },
+                  { key: 'carry', icon: '🎒', label: 'Capacidade' },
+                  { key: 'moveSpeed', icon: '»', label: 'Velocidade' },
+                ] as const).map(row => {
+                  const own = player.attributes?.[row.key] ?? 0;
+                  return (
+                    <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                      <span style={{ flex: 1, fontSize: 13 }}>{row.icon} {row.label}</span>
+                      <span style={{ width: 52, textAlign: 'right', fontSize: 13, color: '#cbd5e1' }}>+{attrs[row.key]}%</span>
+                      <Button variant="ghost" className="attr-btn" aria-label={`Diminuir ${row.label}`}
+                        disabled={own <= 0} onClick={() => deallocateSkill(row.key)}>−</Button>
+                      <Button variant="ghost" className="attr-btn" aria-label={`Aumentar ${row.label}`}
+                        disabled={(player.skillPoints ?? 0) <= 0 || own >= 60} onClick={() => allocateSkill(row.key)}>+</Button>
+                    </div>
+                  );
+                })}
+                <p style={{ fontSize: 11, opacity: 0.6, margin: '6px 0 0' }}>Distribua os pontos e depois escolha a evolução acima.</p>
+              </div>
             </div>
           )}
           {!inCity && (<>
