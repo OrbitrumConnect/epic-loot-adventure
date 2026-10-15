@@ -505,7 +505,11 @@ function findNextEvent(state: BaseState): BaseEvent | null {
     if (building.construction?.endsAt != null) {
       consider({ at: building.construction.endsAt, kind: 'construction', buildingId: building.id });
     }
-    const head = building.queue[0];
+    // `?.` de proposito: este laco roda no tique da cidade a cada segundo. Um
+    // predio sem `queue` (schema antigo, estado injetado em teste, merge de save)
+    // estourava aqui EM LOOP e derrubava o app inteiro no error boundary.
+    // Degradar em silencio e melhor que matar o jogo por um campo ausente.
+    const head = building.queue?.[0];
     if (head?.endsAt != null) consider({ at: head.endsAt, kind: 'queue', buildingId: building.id });
   }
   for (const expedition of state.expeditions) {
@@ -526,7 +530,7 @@ function applyEvent(state: BaseState, event: BaseEvent): BaseState {
 
   if (event.kind === 'queue') {
     const building = getBuilding(state, event.buildingId);
-    const head = building?.queue[0];
+    const head = building?.queue?.[0];
     if (!building || !head) return state;
     const completed = completeQueueItem(state, head);
     return updateBuilding(completed, event.buildingId, b => ({ ...b, queue: startQueueHead(b.queue.slice(1), event.at) }));

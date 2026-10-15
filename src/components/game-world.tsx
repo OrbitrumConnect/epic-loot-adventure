@@ -44,11 +44,16 @@ import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactor
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
-  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R, SAFE_ZONE,
+  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R, SAFE_ZONE, HERO_HEIGHT,
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes } from '@/game/systems/attributesSystem';
+import {
+  getFreeCam, setFreeCamActive, adjustFreeCamSpeed, adjustFreeCamFar,
+  FREE_SPEED_MIN, FREE_SPEED_MAX, type FreeCamInspect,
+} from './world/free-cam';
+import { FreeCamOverlay } from './world/free-cam-overlay';
 
 export type WorldProps = {
   mode: string;
@@ -57,8 +62,11 @@ export type WorldProps = {
   onPosition: (x: number, z: number) => void;
   onAttack?: () => void;
   paused: boolean;
-  cameraMode?: 'iso' | 'third';
+  cameraMode?: CameraMode;
 };
+
+/** `free` = câmera de depuração que voa pela cena com a simulação rodando. */
+export type CameraMode = 'iso' | 'third' | 'free';
 
 // Ponte caminhável: mesmo centro/rotação/medidas do grupo renderizado lá
 // embaixo. Sobre o tabuado o chão do jogador vira o topo do deck; nas pontas
@@ -322,7 +330,7 @@ function Character({
   paused: boolean;
   playerRef: React.RefObject<THREE.Group | null>;
   cameraYawRef: React.RefObject<number>;
-  cameraMode: 'iso' | 'third';
+  cameraMode: CameraMode;
 }) {
   const body = useRef<THREE.Group>(null);
   const sword = useRef<THREE.Group>(null);
@@ -446,8 +454,11 @@ function Character({
 
     const k = keys.current;
 
-    const dx = Number(k.has('KeyD') || k.has('ArrowRight')) - Number(k.has('KeyA') || k.has('ArrowLeft'));
-    const dz = Number(k.has('KeyS') || k.has('ArrowDown')) - Number(k.has('KeyW') || k.has('ArrowUp'));
+    // Câmera livre: WASD dirige a câmera, não o herói. O jogador continua sendo
+    // simulado (pelo piloto / clique-pra-andar), só não responde ao WASD.
+    const freeCam = cameraMode === 'free';
+    const dx = freeCam ? 0 : Number(k.has('KeyD') || k.has('ArrowRight')) - Number(k.has('KeyA') || k.has('ArrowLeft'));
+    const dz = freeCam ? 0 : Number(k.has('KeyS') || k.has('ArrowDown')) - Number(k.has('KeyW') || k.has('ArrowUp'));
 
     let targetVx = 0;
     let targetVz = 0;
@@ -551,8 +562,8 @@ function Character({
       body.current.rotation.y = currentRotY.current + p * Math.PI * 2;
     }
 
-    // Jump
-    if (k.has('Space') && isGrounded.current) {
+    // Jump — desligado na câmera livre (Espaço sobe a câmera, não pula o herói).
+    if (!freeCam && k.has('Space') && isGrounded.current) {
       jumpVelocity.current = 5;
       isGrounded.current = false;
       k.delete('Space');
@@ -678,7 +689,7 @@ function Character({
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
 
-      {USE_GLB_HERO && <GlbHero actionRef={heroAction} speedRef={heroSpeed} weapon={<HeldItem c={c} />} />}
+      {USE_GLB_HERO && <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />}
 
       <group visible={!USE_GLB_HERO}>
       {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
@@ -1301,7 +1312,65 @@ function WaterMaterial({ color, time, river = false }: {
   );
 }
 
-function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third' }) {
+/** Rótulos legíveis dos nós de colheita para a inspeção da câmera livre. */
+const NODE_LABEL: Record<string, string> = {
+  tree: 'Árvore', pebble: 'Seixo', rock: 'Rocha',
+  iron_vein: 'Veio de ferro', gold_vein: 'Veio de ouro', crystal: 'Cristal arcano',
+};
+
+/**
+ * Inspeção da câmera livre: projeta criaturas / nós / peças da base na tela e
+ * escolhe o que está mais perto da mira central (retículo). Roda ~4x/s, então
+ * pode projetar (aloca só o estritamente necessário via `scratch` reutilizado).
+ * Escreve em `out` no lugar — sem criar objeto por chamada.
+ */
+function inspectCenter(camera: THREE.Camera, scratch: THREE.Vector3, out: FreeCamInspect) {
+  const st = useGameStore.getState();
+  const THRESH = 0.12; // raio em NDC (tela [-1,1]) ao redor do centro
+  let bestD = THRESH;
+  let found = false;
+
+  const consider = (
+    x: number, y: number, z: number,
+    kind: FreeCamInspect['kind'], name: string, hp: string, state: string, id: string,
+  ) => {
+    scratch.set(x, y, z);
+    scratch.project(camera);
+    if (scratch.z < -1 || scratch.z > 1) return; // fora do frustum (perto/longe)
+    const d = Math.hypot(scratch.x, scratch.y);
+    if (d >= bestD) return;
+    bestD = d;
+    found = true;
+    out.kind = kind; out.name = name; out.hp = hp; out.state = state; out.id = id;
+  };
+
+  for (const cr of st.creatures) {
+    if (cr.behavior === 'dead') continue;
+    const y = terrainHeight(cr.position.x, cr.position.z) + 1;
+    consider(cr.position.x, y, cr.position.z, 'creature', cr.name,
+      `${Math.round(cr.hp)} / ${cr.maxHp}`, `behavior: ${cr.behavior}`, cr.id);
+  }
+  for (const n of st.harvestNodes) {
+    if (n.depleted) continue;
+    const y = terrainHeight(n.position.x, n.position.z) + 0.6;
+    consider(n.position.x, y, n.position.z, 'node', NODE_LABEL[n.kind] ?? n.kind,
+      '', `${n.quantity} / ${n.maxQuantity}`, n.id);
+  }
+  const pb = st.playerBase;
+  if (pb) {
+    for (const piece of pb.pieces) {
+      const c = cellCenter(piece.cell);
+      consider(c.x, terrainHeight(c.x, c.z) + 1, c.z, 'base', `Base · ${piece.kind}`,
+        `${Math.round(piece.hp)} / ${piece.maxHp}`, `tier ${piece.tier}`, piece.id);
+    }
+  }
+
+  if (!found && out.kind !== null) {
+    out.kind = null; out.name = ''; out.hp = ''; out.state = ''; out.id = '';
+  }
+}
+
+function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) {
   const { c, cameraMode } = props;
   const [showAshlandPilot, setShowAshlandPilot] = useState(false);
   useEffect(() => {
@@ -1321,6 +1390,15 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
   const prevCameraMode = useRef(cameraMode);
   const isoYaw = useRef(0);            // giro 360° da câmera de cima (MOBA): botão direito / 1 dedo
   const isoDragging = useRef(false);   // arrastando o botão direito pra girar
+
+  // Câmera livre (dev): teclas, posição e vetores de rascunho (criados 1x, nunca
+  // alocados por quadro). Métrica/inspeção escrevem no bridge `free-cam.ts`.
+  const freeKeys = useRef(new Set<string>());
+  const freePos = useRef(new THREE.Vector3(0, 10, 0));
+  const freeInit = useRef(false);
+  const freeLook = useRef(new THREE.Vector3());
+  const probe = useRef(new THREE.Vector3());
+  const metricAccum = useRef({ frames: 0, time: 0, next: 0 });
 
   useEffect(() => {
     if (camera instanceof THREE.OrthographicCamera) {
@@ -1351,14 +1429,20 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     };
 
     // Zoom (scroll) na terceira pessoa: distância 3–8, suavizada no frame.
+    // Na câmera livre a roda ajusta a VELOCIDADE-base de voo.
     const onWheel = (e: WheelEvent) => {
+      if (cameraMode === 'free') {
+        e.preventDefault();
+        adjustFreeCamSpeed(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+        return;
+      }
       if (cameraMode !== 'third') return;
       e.preventDefault();
       camDistTarget.current = THREE.MathUtils.clamp(camDistTarget.current + e.deltaY * 0.01, 3, 8);
     };
 
     const onClick = () => {
-      if (cameraMode === 'third' && !pointerLocked.current && !props.paused && !isBuildActive()) {
+      if ((cameraMode === 'third' || cameraMode === 'free') && !pointerLocked.current && !props.paused && !isBuildActive()) {
         canvas.requestPointerLock();
       }
     };
@@ -1366,6 +1450,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     const onMouseDown = (e: MouseEvent) => {
       // Botão DIREITO no modo de cima: inicia o giro 360° da câmera (não ataca/anda).
       if (e.button === 2 && cameraMode === 'iso') { isoDragging.current = true; return; }
+      // Câmera livre (Caio): clique nunca ataca — a inspeção é pela mira central.
+      if (cameraMode === 'free') return;
       // Clique já consumido por um inimigo / estrutura / recurso não ataca.
       if (wasPointerConsumed(e)) return;
       // Modo de construção: o clique é do arrasto de muro, nunca ataque.
@@ -1464,7 +1550,36 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     }
   }, [cameraMode]);
 
-  useFrame(({ clock }) => {
+  // Teclado da câmera livre. Vive à parte do movimento do herói: WASD/Q/E/Space/
+  // Ctrl voam; [ ] mudam o alcance de visão (far) na borda da tecla. O bridge
+  // sinaliza ao HUD que o modo está ativo e reinicia a posição na entrada.
+  useEffect(() => {
+    setFreeCamActive(cameraMode === 'free');
+    if (cameraMode !== 'free') { freeKeys.current.clear(); freeInit.current = false; return undefined; }
+    const FREE_CODES = new Set([
+      'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'Space',
+      'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight',
+    ]);
+    const down = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return;
+      if (e.code === 'BracketLeft') { adjustFreeCamFar(-20); return; }
+      if (e.code === 'BracketRight') { adjustFreeCamFar(20); return; }
+      if (FREE_CODES.has(e.code)) { if (e.code === 'Space') e.preventDefault(); freeKeys.current.add(e.code); }
+    };
+    const up = (e: KeyboardEvent) => freeKeys.current.delete(e.code);
+    const clear = () => freeKeys.current.clear();
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', clear);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', clear);
+      freeKeys.current.clear();
+    };
+  }, [cameraMode]);
+
+  useFrame(({ clock }, delta) => {
     waterTime.value = clock.elapsedTime;
     const p = playerRef.current;
     if (!p) return;
@@ -1488,6 +1603,70 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
       camera.position.copy(camTarget.current);
       camLookAt.current.lerp(new THREE.Vector3(px, py, pz), lerpFactor);
       camera.lookAt(camLookAt.current);
+    } else if (cameraMode === 'free') {
+      const free = getFreeCam();
+      const yaw = cameraYaw.current;
+      const pitch = cameraPitch.current;
+      // Direção de visão (inclui o pitch: WASD voam no plano da tela).
+      const fx = Math.sin(yaw) * Math.cos(pitch);
+      const fy = Math.sin(pitch);
+      const fz = Math.cos(yaw) * Math.cos(pitch);
+      // Lateral no plano do chão (strafe) — perpendicular ao yaw.
+      const rx = Math.cos(yaw);
+      const rz = -Math.sin(yaw);
+
+      if (modeChanged || !freeInit.current) {
+        // Entra onde a câmera do jogo já estava, para não teletransportar a vista.
+        freePos.current.copy(camera.position);
+        freeInit.current = true;
+        // Sincroniza o far ao plano atual da câmera, reiniciando no padrão.
+        if (camera instanceof THREE.PerspectiveCamera) free.far = camera.far;
+      }
+
+      const k = freeKeys.current;
+      const mf = Number(k.has('KeyW')) - Number(k.has('KeyS'));
+      const mr = Number(k.has('KeyD')) - Number(k.has('KeyA'));
+      const mu = Number(k.has('KeyE') || k.has('Space')) - Number(k.has('KeyQ') || k.has('ControlLeft') || k.has('ControlRight'));
+      let speed = free.speed;
+      if (k.has('ShiftLeft') || k.has('ShiftRight')) speed *= 3;
+      if (k.has('AltLeft') || k.has('AltRight')) speed *= 0.25;
+      const step = THREE.MathUtils.clamp(speed, FREE_SPEED_MIN, FREE_SPEED_MAX) * Math.min(delta, 0.05);
+
+      freePos.current.x += (fx * mf + rx * mr) * step;
+      freePos.current.y += (fy * mf + mu) * step;
+      freePos.current.z += (fz * mf + rz * mr) * step;
+      // Não mergulha no terreno: piso mínimo acima do chão.
+      const floorY = terrainHeight(freePos.current.x, freePos.current.z) + 0.6;
+      if (freePos.current.y < floorY) freePos.current.y = floorY;
+
+      camera.position.copy(freePos.current);
+      freeLook.current.set(freePos.current.x + fx, freePos.current.y + fy, freePos.current.z + fz);
+      camera.lookAt(freeLook.current);
+
+      // Aplica o alcance de visão (far). Lower far = frustum culling corta o longe,
+      // menos draw calls quando a câmera livre olha o mapa inteiro.
+      if (camera instanceof THREE.PerspectiveCamera && camera.far !== free.far) {
+        camera.far = free.far;
+        camera.updateProjectionMatrix();
+      }
+
+      // Inspeção pela mira central + métricas — no máximo ~4x/s (nunca por quadro).
+      const acc = metricAccum.current;
+      acc.frames++;
+      acc.time += delta;
+      if (clock.elapsedTime >= acc.next) {
+        acc.next = clock.elapsedTime + 0.25;
+        if (acc.time > 0) {
+          free.metrics.fps = Math.round(acc.frames / acc.time);
+          free.metrics.ms = (acc.time / acc.frames) * 1000;
+        }
+        free.metrics.calls = gl.info.render.calls;
+        free.metrics.triangles = gl.info.render.triangles;
+        acc.frames = 0;
+        acc.time = 0;
+        inspectCenter(camera, probe.current, free.inspect);
+        free.version++;
+      }
     } else {
       const yaw = cameraYaw.current;
       const pitch = cameraPitch.current;
@@ -1832,15 +2011,19 @@ export default function GameWorld(props: WorldProps) {
   const cameraMode = props.cameraMode ?? 'iso';
 
   return (
-    <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
-      {cameraMode === 'iso' ? (
-        <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={160} />
-      ) : (
-        <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={160} />
-      )}
-      <WorldScene {...props} c={c} cameraMode={cameraMode} />
-      {/* Medidor de FPS — SÓ em dev (localhost); nunca vai pra produção. */}
-      {import.meta.env.DEV && <Stats />}
-    </Canvas>
+    <>
+      <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
+        {cameraMode === 'iso' ? (
+          <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={160} />
+        ) : (
+          <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={160} />
+        )}
+        <WorldScene {...props} c={c} cameraMode={cameraMode} />
+        {/* Medidor de FPS — SÓ em dev (localhost); nunca vai pra produção. */}
+        {import.meta.env.DEV && <Stats />}
+      </Canvas>
+      {/* HUD da câmera livre (fora do Canvas; só renderiza com o modo ativo). */}
+      <FreeCamOverlay />
+    </>
   );
 }

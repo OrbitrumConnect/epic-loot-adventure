@@ -382,3 +382,17 @@ describe('baseSystem · depósito (Mapa → Base)', () => {
     expect(getItemCount(result.inventory, 'wood')).toBe(7);
   });
 });
+
+describe('tique da cidade resiste a prédio sem fila', () => {
+  // Regressão: `findNextEvent` fazia `building.queue[0]` sem guarda. Um prédio
+  // sem `queue` — vindo de save antigo, de merge, ou de estado injetado em
+  // teste — estourava EM LOOP pelo tickBase e derrubava o app no error boundary.
+  it('não estoura quando um prédio não tem queue', () => {
+    const base = createInitialBase(Date.now());
+    const quebrado = { ...base, buildings: [
+      ...base.buildings,
+      { id: 'sem-fila', defId: 'war_camp', level: 3, plot: 9, construction: null } as never,
+    ] };
+    expect(() => tickBase(quebrado, Date.now())).not.toThrow();
+  });
+});

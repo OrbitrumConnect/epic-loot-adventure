@@ -33,10 +33,12 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
   // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
-  eel: { url: '/models/animals/eel.glb', fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m: height:4 não normalizava (sumia). fixedScale MEDIDO (66m→~4m alto, ~12m longo)
-  monster: { url: '/models/animals/monster.glb', fixedScale: 0.0085, yaw: 0, groundBias: 0 },    // real 296m -> ~2.5m
+  eel: { url: '/models/animals/eel.glb', fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m + DUPLA-FACE no arquivo (sumia ao virar/single-sided); fixedScale MEDIDO (~4m alto)
+  // Aberração: minha versão (albedo + fixedScale MEDIDO) — a do Caio (height 1,3x)
+  // ficou ENORME. real 296m -> ~2.5m.
+  monster: { url: '/models/animals/monster.glb', fixedScale: 0.0085, yaw: 0, groundBias: 0 },
   collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // fora do spawn (quantize)
-  civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // tint (evita branco/azul)
+  civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // spawn 0 (removido): demo azul + T-pose
   zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4, tint: '#7a8a66' },     // tint esverdeado
   pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.38, yaw: Math.PI, groundBias: -0.3 }, // -0.3 = cola no chão (flutuava; -1.2 enterrava, erro meu)
   flintmaw: { url: '/models/animals/flintmaw.glb', fixedScale: 1.1, yaw: 0, groundBias: 0.3 }, // yaw 0 = vira de frente (vinha de costas ao atacar); voa ~1m (Pedro aprovou)
