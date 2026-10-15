@@ -1,0 +1,15 @@
+{
+  "style": "Style: stylized low-poly 3D game character render, soft rounded shapes, strong readable silhouette, hand-painted textures, warm earthy tribal palette with rust-red accents, lit from the top-left with a soft rim light, shown at a slight three-quarter angle, filling most of its quadrant. Full-body adult survivors of a solar superflare, one coherent scrap-built tribal army. Chunky readable proportions, large hands and boots, realistic material shading matching leather item icons. Shared stitched dark brown hide, ochre linen, rust-red scarf or sash, bone toggles, weathered iron and repurposed metal. Clear equipment silhouettes readable at 48 pixels, restrained surface details, no magic, no futuristic technology, no pristine medieval plate. All four stand at the same scale, entire bodies and equipment visible with generous magenta gaps. Progression means basic militia, reinforced line defender, then skilled ranged specialist; scout is a lightly equipped explorer.",
+  "background": "Background: flat solid pure magenta #FF00FF everywhere, no gradients, no shadows on the background or below feet, no ground, no platforms, no text, no numbers, no labels, no borders, no grid lines, no floating objects. Exactly four separate full-body characters, one centered in each quadrant.",
+  "sheets": [
+    {
+      "id": "troops",
+      "items": [
+        { "id": "warrior", "prompt": "a broad basic tribal warrior, bare head with short dark hair, simple stitched sleeveless hide vest and rust-red waist sash, wrapped forearms, worn boots, holding a short broad chipped scrap-metal machete out to the side and a small crude wooden buckler; humble inexpensive militia kit, compact square silhouette" },
+        { "id": "spearman", "prompt": "a disciplined tribal spearman, patched salvaged iron cap, ochre padded tunic with reinforced scrap shoulder plates, rust-red neck scarf, holding one tall upright wooden spear with a prominent triangular salvaged metal point and one large vertically elongated shield made of battered rusted sheet metal and wood; protective sturdy silhouette, clearly better equipped than warrior, entire spear inside quadrant" },
+        { "id": "archer", "prompt": "an expert tribal archer, open-faced ochre hood and short rust-red shoulder mantle, fitted layered stitched hide armor with carefully made leather bracers, quiver on back with chunky visible arrow fletching, holding one large curved laminated wood bow with salvaged metal reinforcement away from torso and a single arrow in other hand; confident upright stance, refined craftsmanship rather than heavy armor, unmistakable bow crescent silhouette" },
+        { "id": "scout", "prompt": "a nimble tribal scout explorer, wind-swept dark hair with rust-red headband, short ochre travel poncho, light leather straps, compact backpack with a rolled bedroll across its top, side satchel and water flask, one hand raised shading the eyes looking into distance, other hand near satchel; no spear, no shield, no bow, light economical expedition equipment, asymmetrical forward-leaning alert silhouette" }
+      ]
+    }
+  ]
+}
