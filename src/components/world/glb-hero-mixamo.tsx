@@ -21,6 +21,11 @@ const CLIP_URL: Record<string, string> = {
 };
 /** Osso da mão direita no rig Mixamo (no Unreal seria `hand_r`). */
 const HAND_BONE = 'mixamorig:RightHand';
+/** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
+ *  Mixamo são Y-up → a anim DEITA o herói. Cancela com +90° X num wrapper (fora do
+ *  esqueleto, não distorce o skinning). Y afina a planta dos pés no chão. */
+const STAND_FIX_X = Math.PI / 2;
+const STAND_FIX_Y = 0;
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
@@ -175,7 +180,10 @@ export function GlbHeroMixamo({
 
   return (
     <group ref={inner} rotation={[0, yaw, 0]} scale={scale}>
-      <primitive object={cloned} />
+      {/* Wrapper que "levanta" o herói (cancela o -90° X do rig Meshy). */}
+      <group rotation={[STAND_FIX_X, 0, 0]} position={[0, STAND_FIX_Y, 0]}>
+        <primitive object={cloned} />
+      </group>
       {weapon && handBone
         ? createPortal(
             <group position={gripPos} rotation={gripRot} scale={gripScale}>
