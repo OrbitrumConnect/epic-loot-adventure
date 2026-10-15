@@ -88,9 +88,14 @@ const navigation = [
 
 function Index() {
   const [ready, setReady] = useState(false);
-  const [cameraMode, setCameraMode] = useState<'iso' | 'third'>('iso');
+  const [cameraMode, setCameraMode] = useState<'iso' | 'third' | 'free'>('iso');
   const [deathCountdown, setDeathCountdown] = useState(0);
+  // V alterna só entre os modos de JOGO (iso/third). Se a câmera livre de
+  // depuração estiver ligada, V a desliga e volta ao isométrico.
   const toggleCamera = useCallback(() => setCameraMode(m => (m === 'iso' ? 'third' : 'iso')), []);
+  // Câmera livre de dev: atalho discreto (crase/backtick) — disponível também na
+  // produção (o Pedro testa no Vercel), mas sem botão óbvio pro jogador comum.
+  const toggleFreeCam = useCallback(() => setCameraMode(m => (m === 'free' ? 'iso' : 'free')), []);
   useEffect(() => {
     const stop = startLocalPersistence();
     // A raiz vive em todas as vistas: produção continua com a cidade fechada.
@@ -262,7 +267,10 @@ function Index() {
       if (e.target instanceof HTMLInputElement) return;
       // 1–9 → slots 0–8; 0 → slot 9. Demais slots (ex.: rifle) por clique.
       if (/^[0-9]$/.test(e.key)) useHotbarSlot(e.key === '0' ? 9 : Number(e.key) - 1);
-      if (e.code === 'KeyE' && !inCity) {
+      // Na câmera livre, E/Q/R/Espaço pilotam a câmera (no game-world), não o
+      // herói — então as ações de jogo ficam suspensas enquanto ela está ligada.
+      const freeCam = cameraMode === 'free';
+      if (e.code === 'KeyE' && !inCity && !freeCam) {
         const state = useGameStore.getState();
         const pb = state.playerBase;
         if (pb) {
@@ -275,9 +283,10 @@ function Index() {
         }
         collectNearest();
       }
-      if (e.code === 'KeyQ' && !inCity) specialAttack('jump');
-      if (e.code === 'KeyR' && !inCity) specialAttack('spin');
+      if (e.code === 'KeyQ' && !inCity && !freeCam) specialAttack('jump');
+      if (e.code === 'KeyR' && !inCity && !freeCam) specialAttack('spin');
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
+      if (e.code === 'Backquote' && !inCity) toggleFreeCam();
       if (e.code === 'KeyV' && !inCity) toggleCamera();
       if (e.code === 'KeyG' && !inCity) toggleAutoMode();
       if (e.code === 'KeyB') {
@@ -291,7 +300,7 @@ function Index() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, ui.panel, inCity]);
+  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, cameraMode, ui.panel, inCity]);
 
   function open(id: string) {
     setPanelMessage('');
