@@ -350,7 +350,7 @@ function waveBossCount(wave: number): number {
  */
 function waveBossSpecies(wave: number, index: number): string {
   if (wave >= 6) {
-    if (index === 0) return 'raider_kaiju';
+    if (index === 0) return 'raider_mushroom'; // kaiju removido (Aberração já faz o papel)
     const pool = ['raider_mushroom', 'raider_samurai', 'raider_warlord'];
     return pool[index % pool.length]!;
   }
@@ -924,7 +924,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (state.creatures.some(c => c.id.startsWith('boss_') && c.behavior !== 'dead')) return;
     // Sorteia o boss que ronda o MAPA: Colosso, Fúngico, Samurai ou Kaiju —
     // os mesmos das ondas aparecem soltos no vale também (pedido do Pedro).
-    const POOL = ['raider_warlord', 'raider_mushroom', 'raider_samurai', 'raider_kaiju'];
+    const POOL = ['raider_warlord', 'raider_mushroom', 'raider_samurai']; // kaiju removido
     const sp = POOL[Math.floor(Math.random() * POOL.length)]!;
     const def = CREATURES[sp];
     if (!def) return;

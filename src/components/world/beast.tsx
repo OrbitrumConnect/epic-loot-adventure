@@ -33,13 +33,13 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
   // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
-  eel: { url: '/models/animals/eel.glb', fixedScale: 0.045, yaw: Math.PI, groundBias: 0 },      // real 66m -> ~3m
+  eel: { url: '/models/animals/eel.glb', fixedScale: 0.045, yaw: 0, groundBias: 0 },              // yaw 0 (180 sumia = backface); real 66m -> ~3m
   monster: { url: '/models/animals/monster.glb', fixedScale: 0.0085, yaw: 0, groundBias: 0 },    // real 296m -> ~2.5m
-  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // quantize: não medi; ver depois
-  civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4 },   // real 181m -> ~1.8m
-  zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4 },       // real 3.15m -> ~1.8m
-  pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.38, yaw: Math.PI, groundBias: 0 },   // real 6.6m -> ~2.5m
-  flintmaw: { url: '/models/animals/flintmaw.glb', fixedScale: 1.1, yaw: Math.PI, groundBias: 0.3 }, // real 1.8m -> ~2m
+  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // fora do spawn (quantize)
+  civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // tint (evita branco/azul)
+  zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4, tint: '#7a8a66' },     // tint esverdeado
+  pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.38, yaw: Math.PI, groundBias: -1.2 }, // -1.2: colar no chão (estava voando)
+  flintmaw: { url: '/models/animals/flintmaw.glb', fixedScale: 1.1, yaw: Math.PI, groundBias: 0.3 }, // voa ~1m (ok, Pedro aprovou)
 };
 
 type V3 = [number, number, number];
