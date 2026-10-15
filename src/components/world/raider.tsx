@@ -19,9 +19,8 @@ import { GlbCreature } from './glb-creature';
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
 const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
-  // VAZIO: insectoid/tribal-bug têm esqueleto PRÓPRIO (Pelvis/Bicep/Claw/Mandible),
-  // sem clip de andar e incompatível com a UAL (ossos Unreal). Por isso vão pro
-  // caminho PROCEDURAL (STATIC_BOSS) → balançam ao andar + investem no ataque.
+  // Mushroom = Pigman (tem idle/walk/run PRÓPRIOS → anda de verdade). 21MB→3.3MB.
+  raider_mushroom: { url: '/models/bosses/pigman.glb', height: 4.5, yaw: Math.PI },
 };
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
@@ -31,8 +30,7 @@ const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number;
  *  humanoide animado — ambos escalados por `bossScale`. Re-adicionar aqui só se
  *  um dia houver um modelo estático de propósito. */
 const STATIC_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
-  raider_kaiju: { url: '/models/bosses/insectoid.glb', height: 6.5, yaw: Math.PI },   // monstro c/ rig próprio, sem walk → procedural
-  raider_mushroom: { url: '/models/bosses/tribal-bug.glb', height: 4.5, yaw: Math.PI }, // idem
+  raider_kaiju: { url: '/models/bosses/insectoid.glb', height: 6.5, yaw: Math.PI },   // monstro c/ rig próprio, sem walk → procedural (ainda bugado; trocar modelo)
 };
 
 /** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
