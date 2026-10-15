@@ -19,8 +19,6 @@ const CLIP_URL: Record<string, string> = {
   run: '/models/red/run.glb',
   attack: '/models/red/attack.glb',
 };
-/** Osso da mão direita no rig Mixamo (no Unreal seria `hand_r`). */
-const HAND_BONE = 'mixamorig:RightHand';
 /** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
  *  Mixamo são Y-up → a anim DEITA o herói. Cancela com +90° X num wrapper (fora do
  *  esqueleto, não distorce o skinning). Y afina a planta dos pés no chão. */
@@ -127,8 +125,14 @@ export function GlbHeroMixamo({
   const current = useRef<HeroAction | null>(null);
 
   const handBone = useMemo(() => {
+    // O GLTFLoader do three REMOVE o ':' dos nomes → 'mixamorig:RightHand' vira
+    // 'mixamorigRightHand'. Busca robusta (ignora pontuação/caixa).
     let b: THREE.Object3D | undefined;
-    cloned.traverse((o) => { if (!b && o.name === HAND_BONE) b = o; });
+    cloned.traverse((o) => {
+      if (b) return;
+      const n = o.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (n === 'mixamorigrighthand' || n.endsWith('righthand')) b = o;
+    });
     return b;
   }, [cloned]);
 
