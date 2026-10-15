@@ -23,7 +23,9 @@ const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number;
   raider_mushroom: { url: '/models/bosses/pigman.glb', height: 4.5, yaw: Math.PI },
   // Kaiju = Wukong via GlbCreature (NÃO GlbHero): height normaliza o tamanho (estava
   // gigante) e usa a textura própria (estava azul/normal-map). Toca o idle embutido.
-  raider_kaiju: { url: '/models/bosses/wukong.glb', height: 7, yaw: Math.PI },
+  // Kaiju = Aberração GIGANTE (monster.glb): renderiza certo (textura+anim+bbox ok),
+  // leve, distinto do demônio. Wukong aposentado (16 texturas PBR -> azul; não normaliza).
+  raider_kaiju: { url: '/models/animals/monster.glb', height: 8, yaw: Math.PI },
 };
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
@@ -52,7 +54,7 @@ const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
 const RAIDER_GLB: Record<string, string> = {
   raider_warlord: IMP_URL,
   raider_mushroom: IMP_URL, // boss maior — mesmo rig que já temos, só escala
-  raider_kaiju: '/models/bosses/wukong.glb', // Wukong (Niu Mo Wang) — ossos Unreal → UAL (anda+ataca). bossScale pode precisar ajuste
+  raider_kaiju: IMP_URL,    // fallback (nunca usado: CREATURE_BOSS tem o kaiju)
   raider_puglin: '/models/raiders/puglin.glb', // minion Unreal → UAL (anda+ataca)
   raider_samurai: '/models/raiders/Male_Peasant.gltf', // humanoide animado (bossScale 1.7)
   raider_scout: '/models/raiders/Male_Peasant.gltf',

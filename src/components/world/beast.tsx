@@ -28,8 +28,8 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   // Aves (texturas próprias → sem tint). OBS: a geometria vem com ASAS ABERTAS, então
   // a envergadura (X/Z) é bem maior que a altura (Y) — por isso a altura aqui é BAIXA
   // (normalizamos por Y): assim a maior dimensão fica ~0.8-1.0 m (tamanho de ave real).
-  goose: { url: '/models/animals/goose.glb', height: 0.47, yaw: 0, groundBias: -0.05 },
-  pheasant: { url: '/models/animals/pheasant.glb', height: 0.57, yaw: 0, groundBias: -0.05 },
+  goose: { url: '/models/animals/goose.glb', height: 0.61, yaw: 0, groundBias: -0.05 },
+  pheasant: { url: '/models/animals/pheasant.glb', height: 0.74, yaw: 0, groundBias: -0.05 },
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros (anim própria). eel rasteja (tamanho ~boss 1); monster ~3m.
   eel: { url: '/models/animals/eel.glb', height: 3.2, yaw: Math.PI, groundBias: 0 }, // -20% + vira 180° (vinha de costas)
