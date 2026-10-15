@@ -16,7 +16,7 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   eel: 6,    // Serpe Rastejante: monstro grande (anim própria de rastejar)
   monster: 6, // Aberração: monstro ~3m (anim própria)
   collector: 0, // FORA por ora: quantizado (não medi) → risco de gigante; reprocessar sem quantize depois
-  civilian: 5, // Saqueador Rústico (humanoide Mixamo, walk próprio)
+  civilian: 0, // REMOVIDO (Pedro): modelo demo vinha azul + T-pose (anim mixamo não roda). Fora do jogo.
   zombie: 5,   // Morto-Vivo (humanoide Mixamo, walk próprio)
   pelter: 6,   // Mecha Pelter (anim própria) — 5-6 espalhados (Pedro)
   flintmaw: 3, // Fauce de Sílex (meio voador, anim própria)
