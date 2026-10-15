@@ -71,6 +71,7 @@ export function GlbHeroMixamo({
   runSync = 0.42,
   standFixX = STAND_FIX_X,
   rangedAttack = false,
+  forceBow = false,
   gripScale = 1,
   gripPos = [0.04, 0.04, 0.08],
   gripRot = [0, Math.PI / 2, Math.PI / 2],
@@ -91,6 +92,8 @@ export function GlbHeroMixamo({
   standFixX?: number;
   /** Só o player: troca o ataque pela anim de arco quando a arma é de longe. */
   rangedAttack?: boolean;
+  /** Força o ataque de arco SEMPRE (raider arqueiro/xamã — só ataca de longe). */
+  forceBow?: boolean;
   gripScale?: number;
   gripPos?: [number, number, number];
   gripRot?: [number, number, number];
@@ -186,7 +189,9 @@ export function GlbHeroMixamo({
     // Ataque POR ARMA (só o player): arma de longe → anim de arco; mão → combo.
     // Raiders (rangedAttack=false) sempre usam o combo. 'playingAtk' = clip em curso.
     let atkName = 'attack';
-    if (rangedAttack && actions['attackBow']) {
+    if (forceBow && actions['attackBow']) {
+      atkName = 'attackBow'; // arqueiro/xamã: só ataca de longe
+    } else if (rangedAttack && actions['attackBow']) {
       const kind = heldKindFor(selectedItemId(useGameStore.getState()));
       if (kind === 'bow' || kind === 'pistol' || kind === 'rifle') atkName = 'attackBow';
     }

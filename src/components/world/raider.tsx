@@ -62,11 +62,11 @@ const RAIDER_GLB: Record<string, string> = {
 /** Raiders com rig MIXAMO (Meshy): usam o GlbHeroMixamo + os clips Mixamo
  *  compartilhados (idle/walk/run/attack). standFixX: FBX convertido = +90°;
  *  GLB direto do Meshy já é Y-up = 0. */
-const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number }> = {
+const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean }> = {
   raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.9 },     // spiked, 2x (Pedro)
   raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8 },       // pirata
   raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3 },  // brutamontes (maior)
-  raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85 },// arqueiro
+  raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true },// arqueiro: só ataque de longe
   raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9 },      // swamp winged hybrid
   raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 4.5 }, // alien giant brute (boss) — grandão 4.5m
 };
@@ -133,9 +133,9 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     scale: 0.95, bodyWidth: 0.55, bodyDepth: 0.33, weapon: 'staff',
     hood: true, shoulders: false, charm: true,
     tuning: {
-      ...base, speed: 3.4, aggroRange: 13, attackRange: 3.2, leashRange: 13,
+      ...base, speed: 3.4, aggroRange: 15, attackRange: 10, leashRange: 16,
       chaseTimeout: 12, provokeRange: 24, walkSpeedChase: 14, walkSpeedIdle: 7,
-      hitVerb: 'amaldiçoou',
+      hitVerb: 'flechou', // arqueiro: ataca de LONGE (10m)
     },
   },
   // Puglin (kit Bestiary, esqueleto Unreal → anima com a UAL igual o warlord):
@@ -454,6 +454,7 @@ export function Raider({
               actionRef={bossAction}
               autoHeight={mx.height}
               standFixX={mx.standFixX}
+              forceBow={mx.forceBow ?? false}
               yaw={BOSS_GLB_YAW}
             />
           );
