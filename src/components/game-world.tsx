@@ -363,16 +363,20 @@ function Character({
   useEffect(() => {
     const b = body.current;
     if (!b) return;
+    let px: number, pz: number;
     if (!didInitialSpawn) {
       didInitialSpawn = true;
-      const sx = SAFE_ZONE.x, sz = SAFE_ZONE.z;
-      b.position.set(sx, terrainHeight(sx, sz), sz);
-      useGameStore.setState(s => ({ player: { ...s.player, position: { x: sx, z: sz } } }));
+      px = SAFE_ZONE.x; pz = SAFE_ZONE.z;
+      useGameStore.setState(s => ({ player: { ...s.player, position: { x: px, z: pz } } }));
     } else {
       const pos = useGameStore.getState().player.position;
-      b.position.set(pos.x, terrainHeight(pos.x, pos.z), pos.z);
+      px = pos.x; pz = pos.z;
     }
+    b.position.set(px, terrainHeight(px, pz), pz);
     velocity.current.set(0, 0);
+    // Alinha o ALVO de movimento ao ponto onde nasceu, senão o personagem
+    // caminha sozinho até o alvo padrão (0,0,1 ≈ ponte) logo ao entrar.
+    movement.current?.set(px, 0, pz);
   }, []);
 
   useEffect(() => {

@@ -17,7 +17,7 @@ export function scaleEnemyHp(baseHp: number): number {
 export const CREATURES: Record<string, CreatureDefinition> = {
   wolf: {
     id: 'wolf',
-    name: 'Lobo do Vale',
+    name: 'Raposa do Vale',
     maxHp: 80,
     attackPower: 8,
     armor: 2,
@@ -79,6 +79,25 @@ export const CREATURES: Record<string, CreatureDefinition> = {
       { itemId: 'health_potion', quantity: 1, chance: 0.25 },
     ],
     icon: 'Swords',
+    peaceful: false,
+  },
+
+  raider_puglin: {
+    id: 'raider_puglin',
+    name: 'Puglin',
+    maxHp: 60,
+    attackPower: 9,
+    armor: 2,
+    attackCooldown: 1.5,
+    attackRange: 2.0,
+    aggroRange: 10,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 1, chance: 0.5 },
+      { itemId: 'raider_token', quantity: 1, chance: 0.6 },
+      { itemId: 'stone', quantity: 2, chance: 0.4 },
+      { itemId: 'ammo', quantity: 5, chance: 0.7 },
+    ],
+    icon: 'Skull',
     peaceful: false,
   },
 
@@ -247,9 +266,109 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: true,
   },
 
+  goose: {
+    id: 'goose',
+    name: 'Ganso Selvagem',
+    maxHp: 22,
+    attackPower: 2,
+    armor: 0,
+    attackCooldown: 2,
+    attackRange: 1.2,
+    aggroRange: 8,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 1, chance: 0.8 },
+    ],
+    icon: 'Bird',
+    peaceful: true,
+  },
+
+  pigeon: {
+    id: 'pigeon',
+    name: 'Pombo Bravo',
+    maxHp: 10,
+    attackPower: 2,
+    armor: 0,
+    attackCooldown: 1.5,
+    attackRange: 1.8,
+    aggroRange: 9,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 1, chance: 0.6 },
+    ],
+    icon: 'Bird',
+    peaceful: false, // ATACA voando (usa o clip de voo como mergulho); fraco e caçável
+  },
+
+  pheasant: {
+    id: 'pheasant',
+    name: 'Faisão',
+    maxHp: 18,
+    attackPower: 1,
+    armor: 0,
+    attackCooldown: 2,
+    attackRange: 1.2,
+    aggroRange: 8,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 1, chance: 0.75 },
+    ],
+    icon: 'Bird',
+    peaceful: true,
+  },
+
+  eel: {
+    id: 'eel',
+    name: 'Serpe Rastejante',
+    maxHp: 150,
+    attackPower: 18,
+    armor: 4,
+    attackCooldown: 1.8,
+    attackRange: 2.6,
+    aggroRange: 11,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 3, chance: 0.8 },
+      { itemId: 'bone', quantity: 2, chance: 0.5 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
+  collector: {
+    id: 'collector',
+    name: 'O Coletor',
+    maxHp: 260,
+    attackPower: 26,
+    armor: 6,
+    attackCooldown: 2.1,
+    attackRange: 2.8,
+    aggroRange: 12,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 2, chance: 0.6 },
+      { itemId: 'bone', quantity: 3, chance: 0.7 },
+      { itemId: 'health_potion', quantity: 1, chance: 0.3 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
+  monster: {
+    id: 'monster',
+    name: 'Aberração',
+    maxHp: 190,
+    attackPower: 22,
+    armor: 5,
+    attackCooldown: 2.0,
+    attackRange: 2.8,
+    aggroRange: 10,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 3, chance: 0.7 },
+      { itemId: 'bone', quantity: 2, chance: 0.6 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
   boar: {
     id: 'boar',
-    name: 'Javali Bravo',
+    name: 'Jacaré',
     maxHp: 70,
     attackPower: 10,
     armor: 3,
@@ -267,7 +386,7 @@ export const CREATURES: Record<string, CreatureDefinition> = {
 
   wolf_alpha: {
     id: 'wolf_alpha',
-    name: 'Lobo Alfa',
+    name: 'Leoa',
     maxHp: 140,
     attackPower: 16,
     armor: 5,
@@ -287,7 +406,7 @@ export const CREATURES: Record<string, CreatureDefinition> = {
 
   bear: {
     id: 'bear',
-    name: 'Urso Pardo',
+    name: 'Búfalo',
     maxHp: 220,
     attackPower: 24,
     armor: 6,

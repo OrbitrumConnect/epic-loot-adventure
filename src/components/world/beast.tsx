@@ -18,13 +18,23 @@ import { GlbCreature } from './glb-creature';
 
 /** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
  *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
-const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
+const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number; fixedScale?: number }> = {
   // groundBias negativo = desce (os "demo" skinned flutuam ~30cm: bind-pose ≠ anim).
   rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a', groundBias: -0.12 },
   deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c', groundBias: -0.3 },
   boar: { url: '/models/animals/alligator.glb', height: 0.7, yaw: 0, tint: '#5a6b4a', groundBias: -1.15 },
   bear: { url: '/models/animals/buffalo.glb', height: 2.0, yaw: 0, tint: '#4b3a2a', groundBias: -0.35 },
   wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.3, yaw: 0, tint: '#c49a5e', groundBias: -0.3 },
+  // Aves (texturas próprias → sem tint). OBS: a geometria vem com ASAS ABERTAS, então
+  // a envergadura (X/Z) é bem maior que a altura (Y) — por isso a altura aqui é BAIXA
+  // (normalizamos por Y): assim a maior dimensão fica ~0.8-1.0 m (tamanho de ave real).
+  goose: { url: '/models/animals/goose.glb', height: 0.47, yaw: 0, groundBias: -0.05 },
+  pheasant: { url: '/models/animals/pheasant.glb', height: 0.57, yaw: 0, groundBias: -0.05 },
+  pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
+  // Monstros (anim própria). eel rasteja (tamanho ~boss 1); monster ~3m.
+  eel: { url: '/models/animals/eel.glb', height: 4, yaw: 0, groundBias: 0 },
+  monster: { url: '/models/animals/monster.glb', height: 3, yaw: 0, groundBias: 0 },
+  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 }, // 91MB->6.9MB (quantize)
 };
 
 type V3 = [number, number, number];
@@ -107,6 +117,15 @@ export const BEASTS: Record<string, BeastSpec> = {
     ears: 'cone', earColor: '#2a2c32', tail: 'long', tailColor: '#2a2c32', eyes: '#ff5a1f',
     extras: ['mane'], extraColor: '#8a8f9a', labelHeight: 1.9, ringRadius: 0.85,
     tuning: { ...WOLF_TUNING, speed: 4.4, aggroRange: 11, attackRange: 2.8, leashRange: 28, hitVerb: 'dilacerou' },
+  },
+  // Pombo Bravo: ave HOSTIL que mergulha no jogador (usa o clip de voo do GLB).
+  // Rápida, alcance curto, fraca. Corpo procedural só é usado se o GLB falhar.
+  pigeon: {
+    scale: 1, body: [0.18, 0.16, 0.26], bodyColor: '#8a8f98', legLen: 0.08, legThick: 0.04, legColor: '#c97a4a',
+    head: [0.12, 0.12, 0.14], headColor: '#9aa0aa', headPos: [0, 0.08, 0.16],
+    ears: 'cone', earColor: '#8a8f98', tail: 'stub', tailColor: '#8a8f98', eyes: '#d84a28',
+    extraColor: '#000000', labelHeight: 0.9, ringRadius: 0.4,
+    tuning: { ...hostileBase, speed: 5.2, aggroRange: 9, attackRange: 1.8, leashRange: 20, chaseTimeout: 10, walkSpeedChase: 18, walkSpeedIdle: 10, hitVerb: 'bicou' },
   },
 };
 
@@ -244,7 +263,7 @@ export function Beast({
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
       <SelectionRing ring={ring} radius={spec.ringRadius} c={c} />
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
-      {glb && <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} />}
+      {glb && <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} fixedScale={glb.fixedScale} />}
       <group ref={inner} visible={!glb}>
         {/* Corpo */}
         <mesh position={[0, bodyY, 0]} castShadow geometry={organicGeo(bw, bh, bd)} material={coat} />

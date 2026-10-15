@@ -35,16 +35,16 @@ describe('tipos de base', () => {
   it('Oficina preview e cobrança concordam; cobrança ignora custo adulterado', () => {
     const base = freshBase('workshop');
     const at = cellCenter(origin);
-    const inv = createInventory([{ itemId: 'wood', quantity: 4 }, { itemId: 'stone', quantity: 3 }]);
+    const inv = createInventory([{ itemId: 'wood', quantity: 9 }, { itemId: 'stone', quantity: 6 }]);
     const preview = previewLine(at, at, 'tower', base, inv);
     expect(preview.affordable).toBe(true);
-    expect(preview.cost).toEqual([{ itemId: 'wood', quantity: 4 }, { itemId: 'stone', quantity: 3 }]);
+    expect(preview.cost).toEqual([{ itemId: 'wood', quantity: 9 }, { itemId: 'stone', quantity: 6 }]);
     const placed = placePieces(base, { ...preview, cost: [] }, inv, 0);
     expect(placed.ok).toBe(true);
     expect(getItemCount(placed.inventory, 'wood')).toBe(0);
     expect(getItemCount(placed.inventory, 'stone')).toBe(0);
     expect(placePieces(freshBase(), preview, inv, 0).ok).toBe(false);
-    expect(basePieceCost('door', 1, 'workshop')[0]!.quantity).toBe(2);
+    expect(basePieceCost('door', 1, 'workshop')[0]!.quantity).toBe(4);
   });
   it('Atalaia alcança hostil que a torre comum não alcança', () => {
     // Alcance comum do tier 1, lido da tabela. O inimigo fica 1 m alem dele:
@@ -88,7 +88,7 @@ describe('tipos de base', () => {
     expect(restored.baseType).toBeUndefined();
     const at = cellCenter(origin);
     const preview = previewLine(at, at, 'tower', restored, rich());
-    expect(preview.cost[0]!.quantity).toBe(6);
+    expect(preview.cost[0]!.quantity).toBe(12);
     expect(placePieces(restored, preview, rich(), 0).placed[0]!.hp).toBe(200);
   });
 });

@@ -10,6 +10,12 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   wolf: 10,
   wolf_alpha: 6,
   bear: 6,
+  goose: 5,
+  pheasant: 5,
+  pigeon: 40, // Pombo Bravo: espalhados pelo mapa (Pedro curtiu). Hostil, voa e mergulha.
+  eel: 6,    // Serpe Rastejante: monstro grande (anim própria de rastejar)
+  monster: 6, // Aberração: monstro ~3m (anim própria)
+  collector: 2, // O Coletor: rig pesado (1444 ossos) → poucos; gating de distância alivia
 };
 
 /** Total de criaturas selvagens geradas (soma de `WILD_SPAWN_COUNTS`). */

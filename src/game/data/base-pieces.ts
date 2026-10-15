@@ -114,8 +114,13 @@ export const BASE_PIECES: Record<BasePieceKind, BasePieceDefinition> = {
   },
 };
 
+/** Multiplicador global do custo das peças da base. Pedido do Pedro: a base
+ *  fechava em ~1-2 bolsas; ×2 faz exigir ~3 bolsas (mais farm = mais valor).
+ *  Número único pra tunar: suba/baixe aqui que preview, cobrança e layout seguem. */
+export const BASE_COST_MULT = 2;
+
 export function pieceCost(kind: BasePieceKind, tier: 1 | 2 | 3): BaseCost[] {
-  return BASE_PIECES[kind].cost[tier - 1]!;
+  return BASE_PIECES[kind].cost[tier - 1]!.map(c => ({ ...c, quantity: Math.max(1, Math.round(c.quantity * BASE_COST_MULT)) }));
 }
 
 export function pieceMaxHp(kind: BasePieceKind, tier: 1 | 2 | 3): number {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  INITIAL_WAVE, PEACE_MS, BASE_WAVE_ENEMIES,
+  INITIAL_WAVE, PEACE_MS, FIRST_PEACE_MS, BASE_WAVE_ENEMIES,
   tickWaves, waveMultiplier, waveEnemyCount, waveHpScale, markSpawned,
 } from '../game/systems/waveSystem';
 
@@ -27,10 +27,10 @@ describe('waveSystem · ciclo', () => {
     expect(r.state).toEqual(INITIAL_WAVE);
   });
 
-  it('base assentada → PAZ com cronômetro de 1 min', () => {
-    const r = tickWaves(INITIAL_WAVE, 1000, true, 0);
+  it('base FECHADA → PAZ longa (5 min) antes da 1ª horda', () => {
+    const r = tickWaves(INITIAL_WAVE, 1000, true, 0, true);
     expect(r.state.phase).toBe('peace');
-    expect(r.state.phaseEndsAt).toBe(1000 + PEACE_MS);
+    expect(r.state.phaseEndsAt).toBe(1000 + FIRST_PEACE_MS);
     expect(r.message).toBeTruthy();
   });
 

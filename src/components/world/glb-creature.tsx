@@ -38,6 +38,7 @@ export function GlbCreature({
   yaw = Math.PI,
   tint,
   groundBias = 0,
+  fixedScale,
 }: {
   url: string;
   movingRef: React.MutableRefObject<boolean>;
@@ -47,6 +48,8 @@ export function GlbCreature({
   tint?: string | undefined;
   /** Ajuste fino de altura (o bind-pose de alguns skinned difere da anim → flutua). */
   groundBias?: number;
+  /** Escala ABSOLUTA (ignora `height`): p/ modelos cujo bbox não normaliza. */
+  fixedScale?: number | undefined;
 }) {
   const inner = useRef<THREE.Group>(null);
   const gltf = useGLTF(url) as unknown as { scene: THREE.Group; animations: THREE.AnimationClip[]; parser: { json: { textures?: unknown[]; materials?: { name?: string }[] }; getDependency: (t: string, i: number) => Promise<unknown> } };
@@ -97,10 +100,14 @@ export function GlbCreature({
     // Mede pela GEOMETRIA (estável; não depende de pose/timing do skinned mesh —
     // em produção/mobile o Box3.setFromObject dava box minúsculo → escala gigante).
     cloned.updateMatrixWorld(true);
-    const box = measureGeo(cloned);
-    const h = box.max.y - box.min.y || 1;
-    const s = height / h;
-    cloned.scale.setScalar(s);
+    if (fixedScale != null) {
+      // Modelo que não normaliza (ex.: pigeon): escala absoluta, determinística.
+      cloned.scale.setScalar(fixedScale);
+    } else {
+      const box = measureGeo(cloned);
+      const h = box.max.y - box.min.y || 1;
+      cloned.scale.setScalar(height / h);
+    }
     cloned.updateMatrixWorld(true);
     const b2 = measureGeo(cloned);
     cloned.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
@@ -128,7 +135,7 @@ export function GlbCreature({
     });
     meshes.current = collected;
     return cloned;
-  }, [cloned, height, tint]);
+  }, [cloned, height, tint, fixedScale]);
 
   // Clipes idle/walk resolvidos UMA vez (só dependem de `names`) — sem regex por quadro.
   const clips = useMemo(() => {

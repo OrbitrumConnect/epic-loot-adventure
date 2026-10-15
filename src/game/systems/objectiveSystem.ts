@@ -25,6 +25,10 @@ export const HUNT_AREA_RADIUS = 14;
  *  pertinho (~10m). Bate nele e VOLTA a farmar. Sem sair caçando longe. */
 export const AUTO_ENGAGE_RADIUS = 10;
 
+/** DURANTE A ONDA: o piloto defende a base atacando o hostil mais próximo até
+ *  este raio (pedido do Pedro: ~35m, foca o mais perto e NÃO persegue além). */
+export const BASE_DEFENSE_RADIUS = 35;
+
 /** O que `tickObjectives` precisa ler. `AutoSnapshot` satisfaz este formato. */
 export type ObjectiveWorld = {
   playerPosition: Position;
@@ -372,6 +376,14 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   // 4
   const threat = nearestThreat(snapshot);
   if (threat) return { kind: 'attack', creatureId: threat.id, to: { ...threat.position } };
+
+  // 4b. DEFESA DE BASE — durante a ONDA (cerco), prioriza o hostil mais próximo
+  // até BASE_DEFENSE_RADIUS (35m) ACIMA da fila: na horda, defender vem antes de
+  // farmar. Foca o mais perto e não persegue nada além de 35m (pedido do Pedro).
+  if (snapshot.baseUnderSiege) {
+    const foe = nearestHostileWithin(snapshot, BASE_DEFENSE_RADIUS);
+    if (foe) return engage(snapshot, foe, 'Defendendo a base');
+  }
 
   // 5
   const active = getActiveObjective(snapshot.objectives);

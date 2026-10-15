@@ -154,7 +154,7 @@ describe('playerBase · construção', () => {
     const p = previewLine(at(base, 0, 0), at(base, 4, 1), 'wall', base, RICH);
     expect(p.cells).toHaveLength(5);
     expect(p.cells.every(c => c.gz === base.origin.gz)).toBe(true);
-    expect(p.cost).toEqual([{ itemId: 'wood', quantity: 10 }]);
+    expect(p.cost).toEqual([{ itemId: 'wood', quantity: 20 }]);
     expect(p.affordable).toBe(true);
   });
 
@@ -165,7 +165,7 @@ describe('playerBase · construção', () => {
     const core = base.pieces[0]!.cell;
     const over = previewLine(cellCenter({ gx: core.gx - 1, gz: core.gz }), cellCenter({ gx: core.gx + 1, gz: core.gz }), 'wall', base, RICH);
     expect(over.blocked.map(b => b.cell)).toContainEqual(core);
-    expect(over.cost).toEqual([{ itemId: 'wood', quantity: 4 }]);
+    expect(over.cost).toEqual([{ itemId: 'wood', quantity: 8 }]);
   });
 
   it('sem material não é bancável e placePieces não muda nada', () => {
@@ -185,7 +185,7 @@ describe('playerBase · construção', () => {
     expect(r.placed[0]!.hp).toBe(r.placed[0]!.maxHp);
     const woodBefore = RICH.slots.filter(s => s.itemId === 'wood').reduce((n, s) => n + s.quantity, 0);
     const woodAfter = r.inventory.slots.filter(s => s.itemId === 'wood').reduce((n, s) => n + s.quantity, 0);
-    expect(woodBefore - woodAfter).toBe(6);
+    expect(woodBefore - woodAfter).toBe(12);
   });
 });
 
@@ -350,6 +350,9 @@ describe('playerBase · store', () => {
     expect(pb.stage).toBe('bed');
     expect(pb.owner.kind).toBe('player');
 
+    // Custo das peças dobrou (BASE_COST_MULT): garante material pras 4 paredes.
+    useGameStore.setState(st => ({ player: { ...st.player, inventory: RICH } }));
+
     const preview: BuildPreview = previewLine(
       cellCenter(pb.origin), cellCenter({ gx: pb.origin.gx + 3, gz: pb.origin.gz }),
       'wall', pb, useGameStore.getState().player.inventory,
@@ -358,7 +361,7 @@ describe('playerBase · store', () => {
     useGameStore.getState().placeBasePieces(preview);
     const after = useGameStore.getState();
     expect(after.playerBase!.pieces.filter(p => p.kind === 'wall')).toHaveLength(4);
-    expect(after.getItemCount('wood')).toBe(woodBefore - 8);
+    expect(after.getItemCount('wood')).toBe(woodBefore - 16);
     expect(after.playerBase!.stage).toBe('foundation');
     expect(after.canOpenCityView()).toBe(false);
 

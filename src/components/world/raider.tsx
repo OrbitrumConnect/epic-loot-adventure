@@ -19,8 +19,9 @@ import { GlbCreature } from './glb-creature';
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
 const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
-  raider_kaiju: { url: '/models/bosses/insectoid.glb', height: 6.5, yaw: Math.PI },
-  raider_mushroom: { url: '/models/bosses/tribal-bug.glb', height: 4.5, yaw: Math.PI }, // monstro skinned (bind-pose + move)
+  // VAZIO: insectoid/tribal-bug têm esqueleto PRÓPRIO (Pelvis/Bicep/Claw/Mandible),
+  // sem clip de andar e incompatível com a UAL (ossos Unreal). Por isso vão pro
+  // caminho PROCEDURAL (STATIC_BOSS) → balançam ao andar + investem no ataque.
 };
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
@@ -29,7 +30,10 @@ const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number;
  *  invisível/sem animação e pesavam. Kaiju = Imp (demônio animado), samurai =
  *  humanoide animado — ambos escalados por `bossScale`. Re-adicionar aqui só se
  *  um dia houver um modelo estático de propósito. */
-const STATIC_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {};
+const STATIC_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
+  raider_kaiju: { url: '/models/bosses/insectoid.glb', height: 6.5, yaw: Math.PI },   // monstro c/ rig próprio, sem walk → procedural
+  raider_mushroom: { url: '/models/bosses/tribal-bug.glb', height: 4.5, yaw: Math.PI }, // idem
+};
 
 /** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
 const USE_GLB_BOSS = true;
@@ -47,6 +51,7 @@ const RAIDER_GLB: Record<string, string> = {
   raider_warlord: IMP_URL,
   raider_mushroom: IMP_URL, // boss maior — mesmo rig que já temos, só escala
   raider_kaiju: IMP_URL,    // boss gigante — demônio animado (bossScale 5.6)
+  raider_puglin: '/models/raiders/puglin.glb', // minion Unreal → UAL (anda+ataca)
   raider_samurai: '/models/raiders/Male_Peasant.gltf', // humanoide animado (bossScale 1.7)
   raider_scout: '/models/raiders/Male_Peasant.gltf',
   raider_warrior: '/models/raiders/Female_Peasant.gltf',
@@ -118,6 +123,18 @@ export const RAIDER_SPECIES: Record<string, Species> = {
       ...base, speed: 3.4, aggroRange: 13, attackRange: 3.2, leashRange: 13,
       chaseTimeout: 12, provokeRange: 24, walkSpeedChase: 14, walkSpeedIdle: 7,
       hitVerb: 'amaldiçoou',
+    },
+  },
+  // Puglin (kit Bestiary, esqueleto Unreal → anima com a UAL igual o warlord):
+  // minion atarracado, animado de verdade (anda + ataca). bodyWidth/Depth só
+  // valem se o GLB estiver OFF.
+  raider_puglin: {
+    scale: 1.3, bodyWidth: 0.6, bodyDepth: 0.4, weapon: 'axe',
+    hood: false, shoulders: false, charm: false,
+    tuning: {
+      ...base, speed: 3.6, aggroRange: 10, attackRange: 2.2, leashRange: 15,
+      chaseTimeout: 13, provokeRange: 20, walkSpeedChase: 15, walkSpeedIdle: 8,
+      hitVerb: 'mordeu',
     },
   },
   // Mini-boss: 2,5× o brutamontes (1.32 → 3.3). Caça pelo mapa (leash longo),
