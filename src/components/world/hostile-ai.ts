@@ -95,6 +95,10 @@ export function labelScaleFor(camera: THREE.Camera, viewportHeight: number, dist
 const LABEL_RANGE = 12;
 /** Raio do corpo da criatura para a colisão com a base (aprox., igual ao player). */
 const CREATURE_RADIUS = 0.5;
+/** Separação entre criaturas (anti-empilhamento): empurra quando 2 ficam a menos
+ *  disto; força do empurrão. Evita "10 bichos dentro de 1" cercando o jogador. */
+const SEP_RADIUS = 1.1;
+const SEP_STRENGTH = 3.2;
 /** Largura-alvo da barra em pixels, para ser legível nas duas câmeras. */
 const BAR_PIXELS = 84;
 
@@ -451,6 +455,28 @@ export function useHostileAI(opts: HostileOptions) {
       targetX = wx + Math.sin(moveAngle) * tuning.wanderSpeed * dt;
       targetZ = wz + Math.cos(moveAngle) * tuning.wanderSpeed * dt;
       moving = true;
+    }
+
+    // SEPARAÇÃO entre criaturas (anti-empilhamento): empurra pra longe de quem
+    // está colado, usando as posições vivas dos `creatureAnchors`. Assim a horda
+    // não vira "10 bichos dentro de 1" te cercando bugado — eles se espalham.
+    {
+      let sx = 0, sz = 0;
+      for (const [oid, oa] of creatureAnchors) {
+        if (oid === creatureId || !oa.alive) continue;
+        const dx = targetX - oa.x, dz = targetZ - oa.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < SEP_RADIUS * SEP_RADIUS && d2 > 1e-4) {
+          const d = Math.sqrt(d2);
+          const push = (SEP_RADIUS - d) / SEP_RADIUS; // mais forte quanto mais perto
+          sx += (dx / d) * push;
+          sz += (dz / d) * push;
+        }
+      }
+      if (sx !== 0 || sz !== 0) {
+        targetX += sx * SEP_STRENGTH * dt;
+        targetZ += sz * SEP_STRENGTH * dt;
+      }
     }
 
     // Colisão da base (mesma do player): cerca + paredes da casa bloqueiam a
