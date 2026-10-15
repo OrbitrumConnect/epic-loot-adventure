@@ -68,6 +68,7 @@ const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: nu
   raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3 },  // brutamontes (maior)
   raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85 },// arqueiro
   raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9 },      // swamp winged hybrid
+  raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 2.1 }, // alien giant brute (boss) — normal 1o, aumenta depois
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
