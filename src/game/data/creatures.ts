@@ -208,9 +208,9 @@ export const CREATURES: Record<string, CreatureDefinition> = {
   },
   raider_samurai: {
     id: 'raider_samurai',
-    name: 'Samurai Caído',
+    name: 'Couraça de Espinhos',
     maxHp: 1800,
-    attackPower: 60,
+    attackPower: 39, // -35% (era 60, quase one-hit)
     armor: 18,
     attackCooldown: 2,
     attackRange: 5,

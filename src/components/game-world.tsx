@@ -13,6 +13,7 @@ import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
+import { LandmarkTree } from './world/landmark-tree';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
 import { GlbContainers } from './world/glb-containers';
@@ -1949,6 +1950,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
       <Factory />
       <FactoryRubble c={c} />
+      {/* Árvores-marco gigantes (poucas, landmark): uma perto do nascedouro. */}
+      <LandmarkTree x={16} z={-33} scale={6} />
+      <LandmarkTree x={-44} z={28} scale={5} yaw={1.3} />
       <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
