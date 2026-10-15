@@ -1,8 +1,8 @@
-import type { BaseState, InventoryState } from '../types';
+import type { BaseResult, BaseState, InventoryState } from '../types';
 import type { GridCell, PlayerBaseState } from '../types/playerbase';
 import { PLOT_COUNT } from '../data/buildings';
 import { basePieceCost } from './baseTypeSystem';
-import { placeBuilding } from './baseSystem';
+import { enqueueUnit, placeBuilding, startUpgrade } from './baseSystem';
 import { baseLv1Layout } from './baseLv1';
 import { advanceStageFully, cellKey, placePieces } from './playerBaseSystem';
 
@@ -60,4 +60,33 @@ export function constructNextWall(playerBase: PlayerBaseState | null, inventory:
   }, inventory, now);
   if (!result.ok) return fail(result.message);
   return { ok: true, playerBase: advanceStageFully(result.base), inventory: result.inventory, message: result.message };
+}
+
+/** O centro de treinamento físico só fica útil com o Campo de Guerra da cidade por trás. */
+export function hasTrainingCamp(playerBase: PlayerBaseState | null): boolean {
+  return !!playerBase?.pieces.some(piece => piece.kind === 'training');
+}
+
+/** Instância do Campo de Guerra da cidade — a fonte da verdade do treino. */
+export function warCampBuilding(base: BaseState) {
+  return base.buildings.find(building => building.defId === 'war_camp') ?? null;
+}
+
+/**
+ * Ponte do centro físico para a fila do Campo de Guerra: exige a peça `training`
+ * construída e delega o resto (nível, custo, vagas) ao `enqueueUnit` da cidade.
+ */
+export function trainTroop(base: BaseState, playerBase: PlayerBaseState | null, unitId: string, now: number): BaseResult {
+  if (!hasTrainingCamp(playerBase)) return { state: base, ok: false, message: 'Construa o centro de treinamento primeiro.' };
+  const camp = warCampBuilding(base);
+  if (!camp) return { state: base, ok: false, message: 'Centro de treinamento sem Campo de Guerra na cidade.' };
+  return enqueueUnit(base, camp.id, unitId, now);
+}
+
+/** Ponte para a melhoria do Campo de Guerra; só com o centro físico instalado. */
+export function upgradeTrainingCamp(base: BaseState, playerBase: PlayerBaseState | null, now: number): BaseResult {
+  if (!hasTrainingCamp(playerBase)) return { state: base, ok: false, message: 'Construa o centro de treinamento primeiro.' };
+  const camp = warCampBuilding(base);
+  if (!camp) return { state: base, ok: false, message: 'Centro de treinamento sem Campo de Guerra na cidade.' };
+  return startUpgrade(base, camp.id, now);
 }
