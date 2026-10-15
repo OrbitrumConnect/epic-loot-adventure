@@ -28,9 +28,11 @@ export function fadeMaterial(source: THREE.Material): THREE.Material {
   return material;
 }
 
-export function ForestBatch({ geometry, material, placements, spheres }: {
+export function ForestBatch({ geometry, material, placements, spheres, yOffset = 0 }: {
   geometry: THREE.BufferGeometry; material: THREE.Material;
   placements: ForestPlacement[]; spheres: FadeSphere[];
+  /** Desloca o Y (m) após o terreno. Pedras usam -0.25 p/ semienterrar; árvores ficam em 0. */
+  yOffset?: number;
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   // aFade belongs to a batch, never to the cached GLTF geometry.
@@ -41,7 +43,7 @@ export function ForestBatch({ geometry, material, placements, spheres }: {
     if (!mesh) return;
     const dummy = new THREE.Object3D();
     placements.forEach((p, i) => {
-      dummy.position.set(p.x, terrainHeight(p.x, p.z), p.z);
+      dummy.position.set(p.x, terrainHeight(p.x, p.z) + yOffset, p.z);
       dummy.rotation.set(0, p.yaw + rand(p.x * 9 + p.z) * Math.PI * 2, 0);
       dummy.scale.set(p.w, p.h, p.w);
       dummy.updateMatrix();
@@ -51,7 +53,7 @@ export function ForestBatch({ geometry, material, placements, spheres }: {
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
     return registerInstancedFade(mesh, spheres);
-  }, [placements, spheres, ownGeometry]);
+  }, [placements, spheres, ownGeometry, yOffset]);
   return <instancedMesh ref={ref} args={[ownGeometry, material, Math.max(1, placements.length)]} castShadow receiveShadow />;
 }
 
@@ -143,5 +145,5 @@ export function ForestRocks({ placements, c }: { placements: ForestPlacement[]; 
   }, []);
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => material.dispose(), [material]);
-  return <ForestBatch geometry={geometry} material={material} placements={placements} spheres={rockSpheres} />;
+  return <ForestBatch geometry={geometry} material={material} placements={placements} spheres={rockSpheres} yOffset={-0.25} />;
 }
