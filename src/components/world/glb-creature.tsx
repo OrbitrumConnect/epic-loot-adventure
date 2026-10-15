@@ -67,9 +67,6 @@ export function GlbCreature({
   useEffect(() => {
     const texCount = gltf.parser.json.textures?.length ?? 0;
     if (texCount === 0) return;
-    // Modelo com TINT usa a cor chapada — não re-liga textura (ex.: civilian/zombie,
-    // cujas 18/12 texturas confundiam e davam AZUL/branco).
-    if (tint) return;
     const jsonMats = gltf.parser.json.materials ?? [];
     let alive = true;
     const meshes: THREE.Mesh[] = [];
@@ -81,10 +78,7 @@ export function GlbCreature({
           const sm = mm as THREE.MeshStandardMaterial;
           if (!sm || sm.map) continue;
           const mi = jsonMats.findIndex((m) => m.name === sm.name);
-          // Índice CORRETO da baseColor (não o índice do material!); fallback: índice
-          // do material (modelos demo simples: deer/goose → material 0 = textura 0).
-          const baseIdx = mi >= 0 ? (jsonMats[mi] as { pbrMetallicRoughness?: { baseColorTexture?: { index?: number } } })?.pbrMetallicRoughness?.baseColorTexture?.index : undefined;
-          const ti = Math.max(0, Math.min(texCount - 1, baseIdx != null ? baseIdx : (mi < 0 ? 0 : mi)));
+          const ti = Math.max(0, Math.min(texCount - 1, mi < 0 ? 0 : mi));
           try {
             const tex = (await gltf.parser.getDependency('texture', ti)) as THREE.Texture;
             if (!alive) return;
