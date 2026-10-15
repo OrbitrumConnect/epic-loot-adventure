@@ -21,6 +21,9 @@ import { GlbCreature } from './glb-creature';
 const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
   // Mushroom = Pigman (tem idle/walk/run PRÓPRIOS → anda de verdade). 21MB→3.3MB.
   raider_mushroom: { url: '/models/bosses/pigman.glb', height: 4.5, yaw: Math.PI },
+  // Kaiju = Wukong via GlbCreature (NÃO GlbHero): height normaliza o tamanho (estava
+  // gigante) e usa a textura própria (estava azul/normal-map). Toca o idle embutido.
+  raider_kaiju: { url: '/models/bosses/wukong.glb', height: 7, yaw: Math.PI },
 };
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
