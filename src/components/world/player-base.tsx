@@ -25,6 +25,7 @@ import { cellCenter, checkClaim, previewLine, worldToCell } from '@/game/systems
 import { GlbBaseCastle } from './glb-base-castle';
 import { BaseHouse } from './base-house';
 import { GlbWatchTowers } from './glb-watchtower';
+import { GlbTrainingCamps } from './glb-training-camp';
 import { TowerRuntime } from './tower-runtime';
 import { PowerOrbit } from './power-orbit';
 
@@ -45,7 +46,7 @@ import { labelTexture, pixelsPerUnit, terrainHeight, type Palette } from './worl
 
 const noRaycast = () => {};
 
-const KINDS: BasePieceKind[] = ['core', 'wall', 'door', 'tower', 'roof'];
+const KINDS: Exclude<BasePieceKind, 'training'>[] = ['core', 'wall', 'door', 'tower', 'roof'];
 const CAP = CLAIM_SIZE * CLAIM_SIZE;
 const TIER_NAMES = ['madeira', 'pedra', 'ferro'] as const;
 
@@ -148,6 +149,7 @@ function BaseStructures({ c }: { c: Palette }) {
 
     if (pieces) {
       for (const p of pieces) {
+        if (p.kind === 'training') continue; // prédio composto, fora dos lotes de peças simples
         if (USE_GLB_TOWER && p.kind === 'tower') continue; // torre vira GLB (GlbWatchTowers)
         const batch = built.batches[KINDS.indexOf(p.kind) * 3 + (p.tier - 1)];
         if (!batch || batch.mesh.count >= CAP) continue;
@@ -344,6 +346,7 @@ const GHOST_OK = new THREE.Color('#4dff8f');
 const GHOST_POOR = new THREE.Color('#ff8a3c');
 const GHOST_BAD = new THREE.Color('#ff3b30');
 const GHOST_SIZE: Record<BasePieceKind, [number, number, number]> = {
+  training: [1.8, 1.9, 1.8],
   core: [1, 0.6, 1.8], wall: [2, 1.7, 0.6], door: [2, 2.1, 0.6], tower: [1.7, 3.6, 1.7], roof: [2, 2.6, 2],
 };
 
@@ -785,6 +788,7 @@ export function PlayerBase({
     <>
       {USE_GLB_BASE ? <GlbBaseCastle /> : <BaseStructures c={c} />}
       {USE_GLB_TOWER && <GlbWatchTowers />}
+      <GlbTrainingCamps />
       <TowerRuntime paused={paused} />
       <PowerOrbit paused={paused} />
       <BaseHouse />

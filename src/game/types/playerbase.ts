@@ -14,7 +14,7 @@ import type { Position } from './player';
 /** Lado da quadrícula do mundo, em metros. Tudo encaixa nesta grade. */
 export const BASE_GRID = 2;
 
-export type BasePieceKind = 'core' | 'wall' | 'door' | 'tower' | 'roof';
+export type BasePieceKind = 'core' | 'wall' | 'door' | 'tower' | 'roof' | 'training';
 export type BaseType = 'fortress' | 'watchpost' | 'workshop';
 
 /** Coordenada em quadrículas, não em metros. Converter sempre pelos helpers do sistema. */

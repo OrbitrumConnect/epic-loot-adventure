@@ -1,4 +1,4 @@
-import type { BasePieceKind } from '../types/playerbase';
+import { BASE_GRID, type BasePieceKind } from '../types/playerbase';
 
 /**
  * Peças da base do jogador (Fase 3). Só quatro formas simples, mais o núcleo
@@ -27,6 +27,8 @@ export type BaseCost = { itemId: string; quantity: number };
 export type TowerCombat = { range: number; damage: number; cooldownMs: number };
 /** Altura do GLB compartilhada com a origem dos disparos. */
 export const BASE_TOWER_HEIGHT = 6;
+/** Centro interno ocupa uma célula, com margem de 10% para circulação. */
+export const BASE_TRAINING_WIDTH = BASE_GRID * 0.9;
 
 export type BasePieceDefinition = {
   kind: BasePieceKind;
@@ -35,12 +37,23 @@ export type BasePieceDefinition = {
   cost: [BaseCost[], BaseCost[], BaseCost[]];
   /** HP por tier (índice 0 = tier 1). */
   hp: [number, number, number];
-  /** Bloqueia passagem no teste de cerco (porta conta como muro). */
+  /** Peça sólida; prédios internos como training não contam no teste de cerco. */
   solid: boolean;
   combat?: [TowerCombat, TowerCombat, TowerCombat];
 };
 
 export const BASE_PIECES: Record<BasePieceKind, BasePieceDefinition> = {
+  training: {
+    kind: 'training',
+    name: 'Centro de treinamento',
+    cost: [
+      [{ itemId: 'wood', quantity: 12 }, { itemId: 'stone', quantity: 8 }],
+      [{ itemId: 'wood', quantity: 16 }, { itemId: 'stone', quantity: 18 }],
+      [{ itemId: 'iron_ore', quantity: 12 }, { itemId: 'stone', quantity: 24 }],
+    ],
+    hp: [250, 500, 1000],
+    solid: true,
+  },
   core: {
     kind: 'core',
     name: 'Cama',

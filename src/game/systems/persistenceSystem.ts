@@ -38,7 +38,7 @@ const playerBaseSchema = z.object({
   worldPosition: position, origin: cell, size: integer.positive().max(100),
   stage: z.enum(['none', 'bed', 'foundation', 'walls', 'towers', 'enclosed', 'clash']),
   pieces: z.array(z.object({
-    id, kind: z.enum(['core', 'wall', 'door', 'tower', 'roof']), cell,
+    id, kind: z.enum(['core', 'wall', 'door', 'tower', 'roof', 'training']), cell,
     rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
     hp: number, maxHp: number.positive(), tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     level: integer.min(1).max(20).optional(),

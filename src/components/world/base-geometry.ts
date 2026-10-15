@@ -240,10 +240,10 @@ export const CRACK_FADE: Record<'wall' | 'door' | 'tower', FadeSphere[]> = {
   wall: WALL_FADE, door: WALL_FADE, tower: TOWER_FADE,
 };
 
-export function buildPieceAssets(c: Palette): Record<`${BasePieceKind}${1 | 2 | 3}`, PieceAssets> {
+export function buildPieceAssets(c: Palette): Record<`${Exclude<BasePieceKind, 'training'>}${1 | 2 | 3}`, PieceAssets> {
   const ks = tones(c);
   const doorLeaf = [mixColor(c.trunk, c.light, 0.18), c.trunk, ks[2].metal];
-  const out = {} as Record<`${BasePieceKind}${1 | 2 | 3}`, PieceAssets>;
+  const out = {} as Record<`${Exclude<BasePieceKind, 'training'>}${1 | 2 | 3}`, PieceAssets>;
   for (let t = 0; t < 3; t++) {
     const k = ks[t]!;
     const tier = (t + 1) as 1 | 2 | 3;

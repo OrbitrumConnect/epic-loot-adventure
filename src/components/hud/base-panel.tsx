@@ -40,6 +40,7 @@ const KIND_ROWS: { kind: BasePieceKind; label: string; Icon: React.ComponentType
   { kind: 'door', label: 'Portas', Icon: DoorOpen },
   { kind: 'tower', label: 'Torres', Icon: Landmark },
   { kind: 'roof', label: 'Telhados', Icon: Warehouse },
+  { kind: 'training', label: 'Centro de treinamento', Icon: Castle },
 ];
 
 /** Por que a vista de cidade ainda está trancada (ou `null` se aberta). */
@@ -76,7 +77,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
   const now = useNow(Boolean(base?.lastDamagedAt));
 
   const counts = useMemo(() => {
-    const c: Record<BasePieceKind, number> = { core: 0, wall: 0, door: 0, tower: 0, roof: 0 };
+    const c: Record<BasePieceKind, number> = { core: 0, wall: 0, door: 0, tower: 0, roof: 0, training: 0 };
     for (const p of base?.pieces ?? []) c[p.kind] += 1;
     return c;
   }, [base?.pieces]);
