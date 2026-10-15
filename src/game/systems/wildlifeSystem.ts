@@ -13,6 +13,8 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   goose: 5,
   pheasant: 5,
   pigeon: 4, // Pombo Bravo: hostil, voa e mergulha no jogador (usa o clip de voo)
+  eel: 2,    // Serpe Rastejante: monstro grande (anim própria de rastejar)
+  monster: 2, // Aberração: monstro ~3m (anim própria)
 };
 
 /** Total de criaturas selvagens geradas (soma de `WILD_SPAWN_COUNTS`). */

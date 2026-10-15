@@ -314,6 +314,40 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: true,
   },
 
+  eel: {
+    id: 'eel',
+    name: 'Serpe Rastejante',
+    maxHp: 150,
+    attackPower: 18,
+    armor: 4,
+    attackCooldown: 1.8,
+    attackRange: 2.6,
+    aggroRange: 11,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 3, chance: 0.8 },
+      { itemId: 'bone', quantity: 2, chance: 0.5 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
+  monster: {
+    id: 'monster',
+    name: 'Aberração',
+    maxHp: 190,
+    attackPower: 22,
+    armor: 5,
+    attackCooldown: 2.0,
+    attackRange: 2.8,
+    aggroRange: 10,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 3, chance: 0.7 },
+      { itemId: 'bone', quantity: 2, chance: 0.6 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
   boar: {
     id: 'boar',
     name: 'Jacaré',
