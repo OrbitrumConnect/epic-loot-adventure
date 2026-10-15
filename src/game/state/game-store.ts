@@ -87,6 +87,8 @@ type GameState = {
   wave: WaveState;
   /** Nível da base: sobe 1 a cada onda repelida (evolução por cartas). */
   baseLevel: number;
+  /** Casa da base evoluiu p/ PEDRA (nível 10 + custo). Só troca a skin; dimensão/colisão iguais. */
+  baseEvolved: boolean;
   /** Quantas vezes cada evolução foi escolhida (stacks). */
   baseUpgrades: Record<UpgradeId, number>;
   /** 3 cartas oferecidas após repelir uma onda; null = sem escolha pendente. */
@@ -149,6 +151,8 @@ type GameActions = {
   tickBase: () => void;
   placeBuilding: (defId: BuildingId, plotIndex: number) => void;
   upgradeBuilding: (instanceId: string) => void;
+  /** Evolui a casa da base p/ PEDRA (exige nível 10 + madeira/pedra). */
+  evolveBaseToStone: () => void;
   enqueueUnit: (instanceId: string, unitId: string) => void;
   cancelQueueItem: (instanceId: string, itemId: string) => void;
   sendExpedition: (expeditionId: string, scouts: number) => void;
@@ -430,6 +434,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   powerLastTickAt: 0,
   wave: INITIAL_WAVE,
   baseLevel: 1,
+  baseEvolved: false,
   baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
   upgradeChoices: null,
   orbitExpiresWave: 0,
@@ -1104,6 +1109,25 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   upgradeBuilding: (instanceId) => {
     const result = startUpgrade(get().base, instanceId, Date.now());
     applyBaseResult(set, result);
+  },
+
+  evolveBaseToStone: () => {
+    const s = get();
+    if (s.baseEvolved) return;
+    const LEVEL = 10, WOOD = 100, STONE = 200;
+    if ((s.player.level ?? 1) < LEVEL) {
+      set({ ui: { ...s.ui, message: `Casa de pedra: precisa ser nível ${LEVEL}.` } });
+      return;
+    }
+    const inv = s.player.inventory;
+    const w = getItemCount(inv, 'wood'), st = getItemCount(inv, 'stone');
+    if (w < WOOD || st < STONE) {
+      set({ ui: { ...s.ui, message: `Falta material: ${WOOD} madeira + ${STONE} pedra (tem ${w}/${st}).` } });
+      return;
+    }
+    let nextInv = removeItem(inv, 'wood', WOOD);
+    nextInv = removeItem(nextInv, 'stone', STONE);
+    set({ baseEvolved: true, player: syncCarry({ ...s.player, inventory: nextInv }), ui: { ...s.ui, message: 'Casa evoluída para PEDRA! 🏰' } });
   },
 
   enqueueUnit: (instanceId, unitId) => {

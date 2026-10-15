@@ -84,6 +84,9 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
   const buildWall = useGameStore(s => s.constructNextWall);
   const buildCamp = useGameStore(s => s.constructTrainingCamp);
   const upgradeBuilding = useGameStore(s => s.upgradeBuilding);
+  const evolveBaseToStone = useGameStore(s => s.evolveBaseToStone);
+  const baseEvolved = useGameStore(s => s.baseEvolved);
+  const playerLevel = useGameStore(s => s.player.level);
   const build = useBuildSelection();
   const key = BUILD_MODE_KEY_LABEL;
   const warCamp = cityBase.buildings.find(b => b.defId === 'war_camp') ?? null;
@@ -287,6 +290,19 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
             aria-label={`Evoluir Campo de Guerra${upgradeReason ? `: ${upgradeReason}` : ''}`}
             onClick={() => { if (warCamp) upgradeBuilding(warCamp.id); }}>
             <Hammer />Evoluir
+          </Button>
+        </div>
+
+        <div className="base-tower-upgrade">
+          <div>
+            <strong>Evoluir Casa (Pedra)</strong>
+            <small>{baseEvolved ? 'Casa de pedra ativa ✓' : `Nível 10 + 100 madeira + 200 pedra · só troca a skin (mesma dimensão/colisão). Seu nível: ${playerLevel}`}</small>
+          </div>
+          <Button size="sm" variant="outline" disabled={baseEvolved || playerLevel < 10}
+            title={baseEvolved ? 'Já é de pedra' : playerLevel < 10 ? 'Precisa ser nível 10' : 'Evoluir para casa de pedra'}
+            aria-label="Evoluir casa para pedra"
+            onClick={() => evolveBaseToStone()}>
+            <Hammer />{baseEvolved ? 'Pedra' : 'Evoluir'}
           </Button>
         </div>
       </section>
