@@ -12,7 +12,7 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   bear: 6,
   goose: 5,
   pheasant: 5,
-  pigeon: 4, // Pombo Bravo: hostil, voa e mergulha no jogador (usa o clip de voo)
+  pigeon: 40, // Pombo Bravo: espalhados pelo mapa (Pedro curtiu). Hostil, voa e mergulha.
   eel: 2,    // Serpe Rastejante: monstro grande (anim própria de rastejar)
   monster: 2, // Aberração: monstro ~3m (anim própria)
   collector: 1, // O Coletor: rig pesado (1444 ossos) → só 1; gating de distância alivia
