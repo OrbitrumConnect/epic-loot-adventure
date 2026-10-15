@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bed, BrickWall, Castle, DoorOpen, Hammer, Landmark, Lock, LockOpen, ShieldAlert, ShieldCheck, Warehouse } from 'lucide-react';
+import { Bed, BrickWall, Castle, DoorOpen, Hammer, Landmark, Lock, LockOpen, ShieldAlert, ShieldCheck, Swords, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
 import { BASE_TYPES } from '@/game/data/base-types';
 import { ITEMS } from '@/game/data/items';
+import { UNITS } from '@/game/data/units';
 import { getItemCount } from '@/game/systems/inventorySystem';
+import { getQueueCapacity, getRemainingMs, getTroopCount, getUpgradeBlockReason } from '@/game/systems/baseSystem';
+import { nextWall } from '@/game/systems/trainingCampSystem';
+import { basePieceCost } from '@/game/systems/baseTypeSystem';
 import { MAX_TOWER_LEVEL, resolveTowerLevel, towerUpgradeCost } from '@/game/systems/towerLevelSystem';
 import { BaseTypePicker } from './base-type-picker';
 import type { BaseStage, BasePieceKind, PlayerBaseState } from '@/game/types/playerbase';
@@ -71,10 +75,20 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
   const inventory = useGameStore(s => s.player.inventory);
   const upgradeTower = useGameStore(s => s.upgradeTower);
   const setMode = useGameStore(s => s.setMode);
+  const setPanel = useGameStore(s => s.setPanel);
   const inCity = useGameStore(s => s.ui.mode === 'city');
+  // A cidade (`base`) é a fonte da verdade do treino; o painel é modal, então o
+  // mundo 3D fica pausado e `s.base` só muda no tique de 1 s — assinatura barata.
+  const cityBase = useGameStore(s => s.base);
+  const buildWall = useGameStore(s => s.constructNextWall);
+  const buildCamp = useGameStore(s => s.constructTrainingCamp);
+  const upgradeBuilding = useGameStore(s => s.upgradeBuilding);
   const build = useBuildSelection();
   const key = BUILD_MODE_KEY_LABEL;
-  const now = useNow(Boolean(base?.lastDamagedAt));
+  const warCamp = cityBase.buildings.find(b => b.defId === 'war_camp') ?? null;
+  const campQueue = warCamp?.queue ?? [];
+  // Relógio só tica sob ataque ou com fila em andamento: sem fila, nada a animar.
+  const now = useNow(Boolean(base?.lastDamagedAt) || campQueue.length > 0);
 
   const counts = useMemo(() => {
     const c: Record<BasePieceKind, number> = { core: 0, wall: 0, door: 0, tower: 0, roof: 0, training: 0 };
@@ -127,6 +141,23 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
   const underAttack = base.lastDamagedAt != null && now - base.lastDamagedAt < UNDER_ATTACK_MS;
   const unlocked = canOpenCityView(base);
   const reopened = unlocked && !base.enclosed;
+
+  // Administração (muro · centro de treinamento · evolução), toda com ações já prontas.
+  const campBuilt = base.pieces.some(p => p.kind === 'training');
+  const wall = nextWall(base);
+  const campCost = basePieceCost('training', 1, base.baseType);
+  const wallCost = basePieceCost('wall', 1, base.baseType);
+  const costText = (cost: { itemId: string; quantity: number }[]) =>
+    cost.map(c => `${c.quantity} ${ITEMS[c.itemId]?.name ?? c.itemId}`).join(' · ') || 'sem custo';
+  const campAffordable = campCost.every(c => getItemCount(inventory, c.itemId) >= c.quantity);
+  const wallAffordable = wallCost.every(c => getItemCount(inventory, c.itemId) >= c.quantity);
+  const upgradeReason = warCamp ? getUpgradeBlockReason(cityBase, warCamp.id) : 'Construa o centro de treinamento primeiro';
+  const campReason = campBuilt ? 'Centro de treinamento já construído'
+    : !campAffordable ? 'Material insuficiente na mochila' : 'Instalar o centro de treinamento';
+  const wallReason = !wall ? 'Muros completos ou terreno não reivindicado'
+    : !wallAffordable ? 'Material insuficiente na mochila' : 'Erguer o próximo muro do perímetro';
+  const troops = getTroopCount(cityBase);
+  const secs = (ms: number) => `${Math.ceil(ms / 1000)}s`;
 
   return (
     <>
@@ -198,6 +229,61 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
           })}
         </section>
       )}
+
+      <section className="base-stage" aria-label="Treinamento e muralhas">
+        <strong>Tropas e muralhas · administração</strong>
+
+        <div className="base-tower-upgrade">
+          <div>
+            <strong>Tropas prontas: {troops}</strong>
+            <small>{campBuilt
+              ? `Centro de treinamento instalado${warCamp ? ` · Campo de Guerra nível ${warCamp.level} · fila ${campQueue.length}/${getQueueCapacity(cityBase, warCamp)}` : ''}`
+              : 'Centro de treinamento ainda não construído'}</small>
+            <small>{campQueue.length === 0
+              ? 'Nenhuma tropa em treino.'
+              : `Em treino: ${campQueue.map(q => `${UNITS[q.unitId]?.name ?? q.unitId} (${q.endsAt == null ? 'aguardando' : secs(getRemainingMs(q, now))})`).join(' · ')}`}</small>
+          </div>
+          <Button size="sm" variant="outline" title="Abrir o centro de treinamento para treinar tropas"
+            aria-label="Abrir o centro de treinamento" onClick={() => setPanel('training')}>
+            <Swords />Treinar
+          </Button>
+        </div>
+
+        <div className="base-tower-upgrade">
+          <div>
+            <strong>Centro de treinamento</strong>
+            <small>{campBuilt ? 'Construído e vinculado ao Campo de Guerra.' : `Mochila: ${costText(campCost)}`}</small>
+          </div>
+          <Button size="sm" variant="outline" disabled={campBuilt || !campAffordable}
+            title={campReason} aria-label={`Construir centro de treinamento: ${campReason}`} onClick={buildCamp}>
+            <Castle />{campBuilt ? 'Pronto' : 'Construir'}
+          </Button>
+        </div>
+
+        <div className="base-tower-upgrade">
+          <div>
+            <strong>Próximo muro</strong>
+            <small>{wall ? `Mochila: ${costText(wallCost)}` : 'Perímetro completo.'}</small>
+          </div>
+          <Button size="sm" variant="outline" disabled={!wall || !wallAffordable}
+            title={wallReason} aria-label={`Construir próximo muro: ${wallReason}`} onClick={buildWall}>
+            <BrickWall />Erguer
+          </Button>
+        </div>
+
+        <div className="base-tower-upgrade">
+          <div>
+            <strong>Evoluir Campo de Guerra</strong>
+            <small>{warCamp ? `Nível ${warCamp.level} · mais vagas de fila e tropas liberadas` : 'Disponível após construir o centro.'}</small>
+          </div>
+          <Button size="sm" variant="outline" disabled={!warCamp || Boolean(upgradeReason)}
+            title={upgradeReason ?? `Evoluir para nível ${(warCamp?.level ?? 0) + 1}`}
+            aria-label={`Evoluir Campo de Guerra${upgradeReason ? `: ${upgradeReason}` : ''}`}
+            onClick={() => { if (warCamp) upgradeBuilding(warCamp.id); }}>
+            <Hammer />Evoluir
+          </Button>
+        </div>
+      </section>
 
       <div className="panel-actions">
         <Button variant="outline" onClick={() => { setBuildMode(!build.active); if (!build.active) { if (inCity) setMode('world'); onClose(); } }}

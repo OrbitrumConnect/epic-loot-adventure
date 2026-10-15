@@ -15,6 +15,7 @@ import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
 import { ToolCrafting } from '@/components/hud/tool-crafting';
 import { ItemSprite, ICON_MAP } from '@/components/hud/item-sprite';
 import { BasePanel, cityLockReason } from '@/components/hud/base-panel';
+import { TrainingPanel } from '@/components/hud/training-panel';
 import { PiecePicker } from '@/components/hud/base-picker';
 import { canOpenCityView } from '@/game/systems/playerBaseSystem';
 import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
@@ -77,6 +78,7 @@ const navigation = [
   { id: 'objectives', name: 'Objetivos', icon: ListChecks },
   { id: 'home', name: 'Home · Base', icon: Home },
   { id: 'base', name: 'Minha base', icon: Landmark },
+  { id: 'training', name: 'Treinamento', icon: Swords },
   { id: 'city', name: 'Cidade', icon: Castle },
   { id: 'map', name: 'Mapa', icon: Map },
   { id: 'raid', name: 'Raids', icon: Swords },
@@ -311,7 +313,7 @@ function Index() {
   });
 
   const panel = ui.panel;
-  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
+  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
 
   // Triggers do mundo (piloto/pegar/atacar/especiais/câmera/casa). Mesma fonte
   // renderizada em dois lugares: sobre o mundo (desktop) e no rodapé ao lado do
@@ -617,7 +619,7 @@ function Index() {
               <section className="game-panel" role="dialog" aria-modal="true" aria-label={title}>
                 <div className="panel-heading">
                   <div>
-                    <small>{panel === 'map' ? 'Território livre' : panel === 'home' ? 'Os Guardiões' : panel === 'base' ? 'Terreno e muralhas' : 'TRIBOS'}</small>
+                    <small>{panel === 'map' ? 'Território livre' : panel === 'home' ? 'Os Guardiões' : panel === 'base' ? 'Terreno e muralhas' : panel === 'training' ? 'Tropas e muralhas' : 'TRIBOS'}</small>
                     <h2>{title}</h2>
                   </div>
                   <Button variant="ghost" size="icon" title="Fechar" aria-label="Fechar" onClick={() => setPanel(null)}><X /></Button>
@@ -823,6 +825,8 @@ function Index() {
                 )}
 
                 {panel === 'base' && <BasePanel onClose={() => setPanel(null)} />}
+
+                {panel === 'training' && <TrainingPanel onClose={() => setPanel(null)} />}
 
                 {panel === 'tribe' && (
                   <>
