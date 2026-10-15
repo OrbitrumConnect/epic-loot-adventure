@@ -3,7 +3,9 @@ import { createPortal, useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
+import { heldKindFor, selectedItemId } from './held-weapon';
 
 /**
  * Herói com rig **Mixamo** (ex.: Survivor Red do Meshy — que rigga via Mixamo).
@@ -18,6 +20,7 @@ const CLIP_URL: Record<string, string> = {
   walk: '/models/red/walk.glb',
   run: '/models/red/run.glb',
   attack: '/models/red/attack.glb',
+  attackBow: '/models/red/attack_bow.glb',
   jump: '/models/red/jump.glb',
 };
 /** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
@@ -86,6 +89,7 @@ export function GlbHeroMixamo({
   const walkG = useGLTF(CLIP_URL['walk']!);
   const runG = useGLTF(CLIP_URL['run']!);
   const attackG = useGLTF(CLIP_URL['attack']!);
+  const attackBowG = useGLTF(CLIP_URL['attackBow']!);
   const jumpG = useGLTF(CLIP_URL['jump']!);
 
   const cloned = useMemo(() => {
@@ -119,12 +123,14 @@ export function GlbHeroMixamo({
       a.tracks = a.tracks.filter((t) => boneNames.has(t.name.split('.')[0] ?? ''));
       return stripRootMotion(a);
     };
-    return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(jumpG, 'jump')]
+    return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(jumpG, 'jump')]
       .filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, jumpG, boneNames]);
+  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames]);
 
   const { actions } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
+  /** Qual clip de ataque está tocando ('attack' combo ou 'attackBow'). */
+  const playingAtk = useRef<string>('attack');
 
   const handBone = useMemo(() => {
     // O GLTFLoader do three REMOVE o ':' dos nomes → 'mixamorig:RightHand' vira
@@ -164,25 +170,37 @@ export function GlbHeroMixamo({
 
   useFrame(() => {
     const want = actionRef.current;
-    const atk = actions['attack'];
-    const atkDur = atk?.getClip().duration ?? 0;
-    const atkFinished = !atk || !atk.isRunning() || atk.time >= atkDur - 0.02;
+
+    // Ataque POR ARMA: arma de longe (arco/pistola/rifle) → anim de arco;
+    // arma de mão (espada/machado/...) → combo. 'playingAtk' é o clip em curso.
+    const kind = heldKindFor(selectedItemId(useGameStore.getState()));
+    const ranged = (kind === 'bow' || kind === 'pistol' || kind === 'rifle') && !!actions['attackBow'];
+    const atkName = ranged ? 'attackBow' : 'attack';
+
+    // Clip que está REALMENTE tocando num estado (attack usa o playingAtk).
+    const clipOf = (st: HeroAction | null): string | null =>
+      st === 'attack' ? playingAtk.current : st;
+    const curClipName = clipOf(current.current);
+    const playing = curClipName ? actions[curClipName] : null;
+    const playDur = playing?.getClip().duration ?? 0;
+    const atkFinished = !playing || !playing.isRunning() || playing.time >= playDur - 0.02;
 
     // ATAQUE NÃO É CORTADO: enquanto o clip toca, não troca (termina 100% mesmo
     // que o bicho morra no meio e o estado volte pra idle/walk).
     if (current.current === 'attack' && !atkFinished) return;
 
     // (Re)dispara o ataque quando pedido e não há ataque rolando.
-    if (want === 'attack' && atk) {
-      if (current.current !== 'attack' || atkFinished) {
-        const prev = current.current;
-        if (prev && prev !== 'attack' && actions[prev]) actions[prev]!.fadeOut(0.1);
+    if (want === 'attack') {
+      const atk = actions[atkName];
+      if (atk && (current.current !== 'attack' || atkFinished)) {
+        if (curClipName && curClipName !== atkName && actions[curClipName]) actions[curClipName]!.fadeOut(0.1);
         atk.reset();
         atk.timeScale = ATTACK_SPEED;
         atk.setLoop(THREE.LoopOnce, 1);
         atk.clampWhenFinished = true;
         atk.fadeIn(0.08).play();
         current.current = 'attack';
+        playingAtk.current = atkName;
       }
       return;
     }
@@ -191,8 +209,7 @@ export function GlbHeroMixamo({
     const jmp = actions['jump'];
     if (want === 'jump' && jmp) {
       if (current.current !== 'jump') {
-        const prev = current.current;
-        if (prev && actions[prev]) actions[prev]!.fadeOut(0.1);
+        if (curClipName && actions[curClipName]) actions[curClipName]!.fadeOut(0.1);
         jmp.reset();
         jmp.setLoop(THREE.LoopOnce, 1);
         jmp.clampWhenFinished = true;
@@ -204,10 +221,9 @@ export function GlbHeroMixamo({
 
     // Idle / Walk / Run (loop). Re-dispara ao mudar de estado ou se o loop parou.
     const nextName = actions[want] ? want : 'idle';
-    const curName = current.current;
-    const curRunning = curName ? !!actions[curName]?.isRunning() : false;
-    if (actions[nextName] && (want !== curName || !curRunning)) {
-      if (curName && curName !== nextName && actions[curName]) actions[curName]!.fadeOut(0.18);
+    const curRunning = curClipName ? !!actions[curClipName]?.isRunning() : false;
+    if (actions[nextName] && (want !== current.current || !curRunning)) {
+      if (curClipName && curClipName !== nextName && actions[curClipName]) actions[curClipName]!.fadeOut(0.18);
       const a = actions[nextName]!;
       a.reset();
       a.timeScale = 1;
@@ -246,4 +262,5 @@ useGLTF.preload(CLIP_URL['idle']!);
 useGLTF.preload(CLIP_URL['walk']!);
 useGLTF.preload(CLIP_URL['run']!);
 useGLTF.preload(CLIP_URL['attack']!);
+useGLTF.preload(CLIP_URL['attackBow']!);
 useGLTF.preload(CLIP_URL['jump']!);
