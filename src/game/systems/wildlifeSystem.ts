@@ -18,6 +18,8 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   collector: 2, // O Coletor: rig pesado (1444 ossos) → poucos; gating de distância alivia
   civilian: 5, // Saqueador Rústico (humanoide Mixamo, walk próprio)
   zombie: 5,   // Morto-Vivo (humanoide Mixamo, walk próprio)
+  pelter: 3,   // Mecha Pelter (anim própria)
+  flintmaw: 3, // Fauce de Sílex (meio voador, anim própria)
 };
 
 /** Total de criaturas selvagens geradas (soma de `WILD_SPAWN_COUNTS`). */

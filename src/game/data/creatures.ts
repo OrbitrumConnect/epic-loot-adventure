@@ -400,6 +400,40 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 
+  pelter: {
+    id: 'pelter',
+    name: 'Mecha Pelter',
+    maxHp: 130,
+    attackPower: 16,
+    armor: 6,
+    attackCooldown: 2.0,
+    attackRange: 2.6,
+    aggroRange: 11,
+    lootTable: [
+      { itemId: 'iron_ore', quantity: 3, chance: 0.6 },
+      { itemId: 'stone', quantity: 3, chance: 0.5 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
+  flintmaw: {
+    id: 'flintmaw',
+    name: 'Fauce de Sílex',
+    maxHp: 95,
+    attackPower: 14,
+    armor: 3,
+    attackCooldown: 1.6,
+    attackRange: 2.4,
+    aggroRange: 12,
+    lootTable: [
+      { itemId: 'bone', quantity: 2, chance: 0.6 },
+      { itemId: 'raw_meat', quantity: 2, chance: 0.5 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
   boar: {
     id: 'boar',
     name: 'Jacaré',

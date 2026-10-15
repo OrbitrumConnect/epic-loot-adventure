@@ -38,6 +38,8 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   // Humanoides hostis (Mixamo walk próprio). yaw pode precisar flip (vinha de costas).
   civilian: { url: '/models/animals/civilian.glb', height: 1.8, yaw: Math.PI, groundBias: 0 },
   zombie: { url: '/models/animals/zombie.glb', height: 1.8, yaw: Math.PI, groundBias: 0 },
+  pelter: { url: '/models/animals/pelter.glb', height: 2.5, yaw: Math.PI, groundBias: 0 },
+  flintmaw: { url: '/models/animals/flintmaw.glb', height: 2, yaw: Math.PI, groundBias: 0.3 }, // meio voador
 };
 
 type V3 = [number, number, number];
