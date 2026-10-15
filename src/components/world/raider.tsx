@@ -64,7 +64,7 @@ const RAIDER_GLB: Record<string, string> = {
  *  GLB direto do Meshy já é Y-up = 0. */
 const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number }> = {
   raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 1.95 }, // "samurai caído" → spiked (tira o corpo sem cabeça)
-  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: 0, height: 1.8 },             // pirata (GLB direto = já em pé)
+  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8 },    // pirata (via FBX = escala normal + -90°)
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 

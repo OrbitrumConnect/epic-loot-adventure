@@ -71,7 +71,7 @@ export function GlbHeroMixamo({
   standFixX = STAND_FIX_X,
   rangedAttack = false,
   gripScale = 1,
-  gripPos = [0.04, 0.0, 0.14],
+  gripPos = [0.04, 0.04, 0.08],
   gripRot = [0, Math.PI / 2, Math.PI / 2],
 }: {
   actionRef: React.MutableRefObject<HeroAction>;
