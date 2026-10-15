@@ -31,15 +31,15 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   goose: { url: '/models/animals/goose.glb', height: 0.61, yaw: 0, groundBias: -0.05 },
   pheasant: { url: '/models/animals/pheasant.glb', height: 0.74, yaw: 0, groundBias: -0.05 },
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
-  // Monstros (anim própria). eel rasteja (tamanho ~boss 1); monster ~3m.
-  eel: { url: '/models/animals/eel.glb', height: 3.2, yaw: Math.PI, groundBias: 0 }, // -20% + vira 180° (vinha de costas)
-  monster: { url: '/models/animals/monster.glb', height: 3, yaw: 0, groundBias: 0 },
-  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 }, // 91MB->6.9MB (quantize)
-  // Humanoides hostis (Mixamo walk próprio). yaw pode precisar flip (vinha de costas).
-  civilian: { url: '/models/animals/civilian.glb', height: 1.8, yaw: 0, groundBias: 0.4 }, // 0.9 levantava demais (parecia grandão) -> 0.4
-  zombie: { url: '/models/animals/zombie.glb', height: 1.8, yaw: 0, groundBias: 0.4 },
-  pelter: { url: '/models/animals/pelter.glb', height: 2.5, yaw: Math.PI, groundBias: 0 },
-  flintmaw: { url: '/models/animals/flintmaw.glb', height: 2, yaw: Math.PI, groundBias: 0.3 }, // meio voador
+  // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
+  // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
+  eel: { url: '/models/animals/eel.glb', fixedScale: 0.045, yaw: Math.PI, groundBias: 0 },      // real 66m -> ~3m
+  monster: { url: '/models/animals/monster.glb', fixedScale: 0.0085, yaw: 0, groundBias: 0 },    // real 296m -> ~2.5m
+  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // quantize: não medi; ver depois
+  civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4 },   // real 181m -> ~1.8m
+  zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4 },       // real 3.15m -> ~1.8m
+  pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.38, yaw: Math.PI, groundBias: 0 },   // real 6.6m -> ~2.5m
+  flintmaw: { url: '/models/animals/flintmaw.glb', fixedScale: 1.1, yaw: Math.PI, groundBias: 0.3 }, // real 1.8m -> ~2m
 };
 
 type V3 = [number, number, number];

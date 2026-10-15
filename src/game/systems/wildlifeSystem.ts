@@ -15,7 +15,7 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   pigeon: 40, // Pombo Bravo: espalhados pelo mapa (Pedro curtiu). Hostil, voa e mergulha.
   eel: 6,    // Serpe Rastejante: monstro grande (anim própria de rastejar)
   monster: 6, // Aberração: monstro ~3m (anim própria)
-  collector: 2, // O Coletor: rig pesado (1444 ossos) → poucos; gating de distância alivia
+  collector: 0, // FORA por ora: quantizado (não medi) → risco de gigante; reprocessar sem quantize depois
   civilian: 5, // Saqueador Rústico (humanoide Mixamo, walk próprio)
   zombie: 5,   // Morto-Vivo (humanoide Mixamo, walk próprio)
   pelter: 3,   // Mecha Pelter (anim própria)

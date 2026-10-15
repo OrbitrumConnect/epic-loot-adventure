@@ -18,14 +18,14 @@ import { GlbCreature } from './glb-creature';
 
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
-const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
+const CREATURE_BOSS: Record<string, { url: string; height?: number; fixedScale?: number; yaw?: number; tint?: string; groundBias?: number }> = {
   // Mushroom = Pigman (tem idle/walk/run PRÓPRIOS → anda de verdade). 21MB→3.3MB.
   raider_mushroom: { url: '/models/bosses/pigman.glb', height: 4.5, yaw: Math.PI },
   // Kaiju = Wukong via GlbCreature (NÃO GlbHero): height normaliza o tamanho (estava
   // gigante) e usa a textura própria (estava azul/normal-map). Toca o idle embutido.
   // Kaiju = Aberração gigante (monster.glb REPROCESSADO sem quantize → normaliza +
   // textura webp carrega). height 8 = boss grande. Distinto do demônio.
-  raider_kaiju: { url: '/models/animals/monster.glb', height: 1.0, yaw: Math.PI },
+  raider_kaiju: { url: '/models/animals/monster.glb', fixedScale: 0.0135, yaw: Math.PI }, // real 296m -> ~4m (boss)
 };
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
@@ -429,7 +429,7 @@ export function Raider({
         // Boss de MONSTRO com rig+anim próprios (insectoid) → renderer de criatura.
         const cb = CREATURE_BOSS[speciesId];
         if (cb) {
-          return <GlbCreature url={cb.url} movingRef={bossMoving} height={cb.height} yaw={cb.yaw ?? Math.PI} tint={cb.tint} groundBias={cb.groundBias ?? 0} />;
+          return <GlbCreature url={cb.url} movingRef={bossMoving} height={cb.height} fixedScale={cb.fixedScale} yaw={cb.yaw ?? Math.PI} tint={cb.tint} groundBias={cb.groundBias ?? 0} />;
         }
         // Boss de modelo SEM osso → movimento PROCEDURAL (glb-static-boss).
         const sb = STATIC_BOSS[speciesId];
