@@ -63,7 +63,7 @@ export function GlbHeroMixamo({
   scale = 1,
   yaw = 0,
   autoHeight = 1.8,
-  walkSync = 0.45,
+  walkSync = 0.6,
   gripScale = 1,
   gripPos = [0, 0.05, 0.02],
   gripRot = [0, 0, Math.PI / 2],
