@@ -33,7 +33,7 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
   // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
-  eel: { url: '/models/animals/eel.glb', height: 4, yaw: 0, groundBias: 0 }, // volta ao 1o estado (Pedro: tava ok antes de eu virar)
+  eel: { url: '/models/animals/eel.glb', fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m: height:4 não normalizava (sumia). fixedScale MEDIDO (66m→~4m alto, ~12m longo)
   monster: { url: '/models/animals/monster.glb', fixedScale: 0.0085, yaw: 0, groundBias: 0 },    // real 296m -> ~2.5m
   collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // fora do spawn (quantize)
   civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // tint (evita branco/azul)
