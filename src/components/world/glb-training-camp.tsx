@@ -1,12 +1,12 @@
 import { useGLTF } from '@react-three/drei';
-import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { useCallback, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { BASE_TRAINING_WIDTH } from '@/game/data/base-pieces';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import type { BasePiece } from '@/game/types/playerbase';
-import { palette, terrainHeight } from './world-kit';
+import { markPointerConsumed, palette, terrainHeight } from './world-kit';
 import { trainingColliders } from './training-collider';
 
 const WALL = '/models/castle/wall.glb';
@@ -96,8 +96,26 @@ export function GlbTrainingCamp({ piece }: { piece: BasePiece }) {
       ? groundY + 1.22 : 1e6;
   });
 
+  // Clique no corpo abre o painel de treino. markPointerConsumed impede que o
+  // mesmo clique vire ataque no terreno (wasPointerConsumed em game-world).
+  // Em modo de construção o pointerdown é capturado antes pelo canvas
+  // (player-base.tsx, stopImmediatePropagation), então este handler nem dispara.
+  const openTraining = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    markPointerConsumed(e.nativeEvent);
+    useGameStore.getState().setPanel('training');
+  }, []);
+  const onPointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    document.body.style.cursor = 'pointer';
+  }, []);
+  const onPointerOut = useCallback(() => { document.body.style.cursor = ''; }, []);
+  useEffect(() => () => { document.body.style.cursor = ''; }, []);
+
   return <group position={[center.x, groundY, center.z]} rotation={[0, piece.rotation * Math.PI / 180, 0]}
-    userData={{ trainingCamp: true, pieceId: piece.id, buildingId: warCamp?.id, level }}>
+    userData={{ trainingCamp: true, pieceId: piece.id, buildingId: warCamp?.id, level }}
+    onPointerDown={openTraining} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
     <primitive object={prepared.model} dispose={null} />
   </group>;
 }
