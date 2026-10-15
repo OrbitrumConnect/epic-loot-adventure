@@ -32,7 +32,7 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   pheasant: { url: '/models/animals/pheasant.glb', height: 0.57, yaw: 0, groundBias: -0.05 },
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros (anim própria). eel rasteja (tamanho ~boss 1); monster ~3m.
-  eel: { url: '/models/animals/eel.glb', height: 4, yaw: 0, groundBias: 0 },
+  eel: { url: '/models/animals/eel.glb', height: 3.2, yaw: Math.PI, groundBias: 0 }, // -20% + vira 180° (vinha de costas)
   monster: { url: '/models/animals/monster.glb', height: 3, yaw: 0, groundBias: 0 },
   collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 }, // 91MB->6.9MB (quantize)
 };

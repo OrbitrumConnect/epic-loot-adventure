@@ -17,7 +17,7 @@ import { houseCollider, housePlayerInside } from './house-collider';
  * footprint + altura do piso em `houseCollider`: o loop do jogador usa isso pra
  * (1) te apoiar no assoalho de madeira e (2) tornar as paredes sólidas.
  */
-const TARGET_H = 7.43; // +10% (porta mais alta — não bate a cabeça na entrada)
+const TARGET_H = 8.3; // +12% (casa maior → VÃO DA PORTA mais largo: o personagem não passava)
 const VSTRETCH = 1.05; // +5% SÓ na altura (porta mais alta sem alargar)
 // Altura do assoalho caminhável acima da base do modelo (o player pisa aqui dentro).
 // ~0.9 em escala 6.75 colocou os pés no piso certinho; mantido como fração pra escalar.

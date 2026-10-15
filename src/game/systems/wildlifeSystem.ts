@@ -25,7 +25,7 @@ export const WILD_CREATURE_COUNT: number = Object.values(WILD_SPAWN_COUNTS).redu
 export const WILD_SPAWN_SAFE_RADIUS = 12;
 /** Folga além do raio de cada acampamento. */
 export const WILD_CAMP_MARGIN = 5;
-export const WILD_MIN_SPACING = 5;
+export const WILD_MIN_SPACING = 9; // espalha mais (evita 2 bichos colados — ex. serpentes)
 export const DEFAULT_WILD_SEED = 7771;
 
 function mulberry32(seed: number): () => number {
