@@ -12,6 +12,7 @@ import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
+import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
 import { GlbContainers } from './world/glb-containers';
@@ -319,6 +320,8 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
 
 /** Liga o herói GLB (Quaternius) no lugar do boneco de blocos. Reversível pela flag. */
 const USE_GLB_HERO = true;
+/** Survivor Red (rig Mixamo) no lugar do Kael (rig Unreal/UAL). Reversível: false volta o Kael. */
+const USE_RED_HERO = true;
 
 function Character({
   c, attack, movement, onPosition, paused, playerRef, cameraYawRef, cameraMode,
@@ -689,7 +692,9 @@ function Character({
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
 
-      {USE_GLB_HERO && <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />}
+      {USE_GLB_HERO && (USE_RED_HERO
+        ? <GlbHeroMixamo actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />
+        : <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />)}
 
       <group visible={!USE_GLB_HERO}>
       {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
