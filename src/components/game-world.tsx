@@ -1950,9 +1950,15 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
       <Factory />
       <FactoryRubble c={c} />
-      {/* Árvores-marco gigantes (poucas, landmark): uma perto do nascedouro. */}
-      <LandmarkTree x={16} z={-33} scale={6} />
-      <LandmarkTree x={-44} z={28} scale={5} yaw={1.3} />
+      {/* Árvores-marco gigantes (gnarled): uma perto do nascedouro + ~5 espalhadas (não muito longe). */}
+      {[
+        { x: 11, z: -22, scale: 6 },      // perto do centro do nascedouro
+        { x: -18, z: -10, scale: 5.5, yaw: 0.8 },
+        { x: 34, z: -48, scale: 6.5, yaw: 2.1 },
+        { x: -32, z: -42, scale: 5, yaw: 1.3 },
+        { x: 42, z: 8, scale: 6, yaw: 3.0 },
+        { x: -40, z: 24, scale: 5.5, yaw: 0.4 },
+      ].map((t, i) => <LandmarkTree key={`tree-g-${i}`} x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
       <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>

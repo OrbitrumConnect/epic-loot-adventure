@@ -9,7 +9,7 @@ import { terrainHeight } from './world-kit';
  * O modelo tem o pé ~0,97 abaixo da origem (raízes) → planta pela base.
  */
 const URL = '/models/trees/tree-gnarled.glb';
-const BASE_BELOW = 0.97; // minY do modelo (nativo) → compensa p/ fincar no chão
+const BASE_BELOW = 0.89; // minY do modelo → finca no chão (-~0.5 do que era; raiz tava alta)
 
 export function LandmarkTree({ x, z, scale = 5.5, yaw = 0 }: { x: number; z: number; scale?: number; yaw?: number }) {
   const { scene } = useGLTF(URL);
