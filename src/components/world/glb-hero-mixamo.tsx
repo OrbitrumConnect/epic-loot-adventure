@@ -18,6 +18,7 @@ const CLIP_URL: Record<string, string> = {
   walk: '/models/red/walk.glb',
   run: '/models/red/run.glb',
   attack: '/models/red/attack.glb',
+  jump: '/models/red/jump.glb',
 };
 /** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
  *  Mixamo são Y-up → a anim DEITA o herói. Cancela com +90° X num wrapper (fora do
@@ -85,6 +86,7 @@ export function GlbHeroMixamo({
   const walkG = useGLTF(CLIP_URL['walk']!);
   const runG = useGLTF(CLIP_URL['run']!);
   const attackG = useGLTF(CLIP_URL['attack']!);
+  const jumpG = useGLTF(CLIP_URL['jump']!);
 
   const cloned = useMemo(() => {
     const c = skeletonClone(scene);
@@ -117,9 +119,9 @@ export function GlbHeroMixamo({
       a.tracks = a.tracks.filter((t) => boneNames.has(t.name.split('.')[0] ?? ''));
       return stripRootMotion(a);
     };
-    return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack')]
+    return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(jumpG, 'jump')]
       .filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, boneNames]);
+  }, [idleG, walkG, runG, attackG, jumpG, boneNames]);
 
   const { actions } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
@@ -185,7 +187,22 @@ export function GlbHeroMixamo({
       return;
     }
 
-    // Idle / Walk (loop). Re-dispara ao mudar de estado ou se o loop parou.
+    // PULO (oneshot): toca ao sair do chão; segura o último frame até pousar.
+    const jmp = actions['jump'];
+    if (want === 'jump' && jmp) {
+      if (current.current !== 'jump') {
+        const prev = current.current;
+        if (prev && actions[prev]) actions[prev]!.fadeOut(0.1);
+        jmp.reset();
+        jmp.setLoop(THREE.LoopOnce, 1);
+        jmp.clampWhenFinished = true;
+        jmp.fadeIn(0.08).play();
+        current.current = 'jump';
+      }
+      return;
+    }
+
+    // Idle / Walk / Run (loop). Re-dispara ao mudar de estado ou se o loop parou.
     const nextName = actions[want] ? want : 'idle';
     const curName = current.current;
     const curRunning = curName ? !!actions[curName]?.isRunning() : false;
@@ -199,9 +216,10 @@ export function GlbHeroMixamo({
       a.fadeIn(0.15).play();
       current.current = want;
     }
-    // Cadência do walk acompanha a velocidade real (anti foot-sliding).
-    if (current.current === 'walk' && speedRef && actions['walk']) {
-      actions['walk']!.timeScale = THREE.MathUtils.clamp(speedRef.current * walkSync, 0.4, 3.0);
+    // Cadência do walk/run acompanha a velocidade real (anti foot-sliding).
+    if ((current.current === 'walk' || current.current === 'run') && speedRef) {
+      const a = actions[current.current];
+      if (a) a.timeScale = THREE.MathUtils.clamp(speedRef.current * walkSync, 0.4, 3.0);
     }
   });
 
@@ -228,3 +246,4 @@ useGLTF.preload(CLIP_URL['idle']!);
 useGLTF.preload(CLIP_URL['walk']!);
 useGLTF.preload(CLIP_URL['run']!);
 useGLTF.preload(CLIP_URL['attack']!);
+useGLTF.preload(CLIP_URL['jump']!);

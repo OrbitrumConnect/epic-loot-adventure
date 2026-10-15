@@ -518,7 +518,13 @@ function Character({
     }
 
     const moving = velocity.current.length() > 0.1;
-    heroAction.current = attackPhase.current !== 'idle' ? 'attack' : moving ? 'walk' : 'idle';
+    heroAction.current = attackPhase.current !== 'idle'
+      ? 'attack'
+      : !isGrounded.current
+        ? 'jump'
+        : moving
+          ? (sprinting ? 'run' : 'walk')
+          : 'idle';
     heroSpeed.current = velocity.current.length();
 
     let nx = body.current.position.x + velocity.current.x * dt;
