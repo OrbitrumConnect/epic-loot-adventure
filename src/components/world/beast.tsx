@@ -18,7 +18,7 @@ import { GlbCreature } from './glb-creature';
 
 /** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
  *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
-const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number; fixedScale?: number }> = {
+const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number; tint?: string; groundBias?: number; fixedScale?: number }> = {
   // groundBias negativo = desce (os "demo" skinned flutuam ~30cm: bind-pose ≠ anim).
   rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a', groundBias: -0.12 },
   deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c', groundBias: -0.3 },

@@ -19,8 +19,7 @@ import { GlbCreature } from './glb-creature';
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
 const CREATURE_BOSS: Record<string, { url: string; height?: number; fixedScale?: number; yaw?: number; tint?: string; groundBias?: number }> = {
-  // Mushroom = Pigman (tem idle/walk/run PRÓPRIOS → anda de verdade). 21MB→3.3MB.
-  raider_mushroom: { url: '/models/bosses/pigman.glb', height: 4.5, yaw: Math.PI },
+  // Mushroom: pigman REMOVIDO (ficou zoado) → volta pro Imp via RAIDER_GLB (funciona).
   // Kaiju = Wukong via GlbCreature (NÃO GlbHero): height normaliza o tamanho (estava
   // gigante) e usa a textura própria (estava azul/normal-map). Toca o idle embutido.
   // Kaiju = Aberração gigante (monster.glb REPROCESSADO sem quantize → normaliza +
@@ -418,7 +417,7 @@ export function Raider({
   const d = spec.bodyDepth;
   // Boss GLB próprio (estático ou criatura) dimensiona rótulo/anel pela altura real.
   const sbDef = STATIC_BOSS[speciesId] ?? CREATURE_BOSS[speciesId];
-  const labelScale = sbDef ? sbDef.height / 2 : s;
+  const labelScale = sbDef ? (sbDef.height ?? 4) / 2 : s;
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
