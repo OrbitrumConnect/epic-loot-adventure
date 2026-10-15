@@ -99,7 +99,7 @@ export const HERO_HEIGHT = 1.869;
  * anel (igual o círculo dos acampamentos). Mesma ideia de `pushOut*` da base:
  * empurra qualquer corpo hostil para a borda do círculo.
  */
-export const SAFE_ZONE = { x: 2, z: -28, radius: 7 } as const;
+export const SAFE_ZONE = { x: 2, z: -28, radius: 11 } as const;
 
 /** Empurra (x,z) para fora da zona segura, somando o raio do corpo. Fora dela, nada muda. */
 export function pushOutSafeZone(x: number, z: number, bodyRadius = 0): [number, number] {
