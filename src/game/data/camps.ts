@@ -120,6 +120,7 @@ export const CAMPS: Record<string, CampDefinition> = {
       { speciesId: 'raider_scout', offset: { x: -1.6, z: -4.4 }, guard: true },
       { speciesId: 'raider_scout', offset: { x: 1.8, z: -4.2 }, guard: true },
       { speciesId: 'raider_warrior', offset: { x: 0.4, z: 2.6 }, guard: false },
+      { speciesId: 'raider_samurai', offset: { x: 0, z: -0.5 }, guard: false }, // spiked (junto do pirata, p/ ver sem esperar onda)
     ],
     reward: {
       gold: 80,
