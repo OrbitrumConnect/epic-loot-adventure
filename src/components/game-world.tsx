@@ -501,7 +501,7 @@ function Character({
     const inLake = LAKE_CENTERS.some(l => (px - l.x) ** 2 + (pz - l.z) ** 2 < l.r * l.r);
     const moveBonus = 1 + effectiveAttributes(useGameStore.getState().player).moveSpeed / 100;
     // Andar/correr -10% (pedido do Pedro): correr 6.5→5.85, andar 4.5→4.05.
-    const MAX_SPEED = (sprinting ? 4.3 : 2.0) * (inLake ? 0.4 : 1) * moveBonus;
+    const MAX_SPEED = (sprinting ? 4.8 : 2.0) * (inLake ? 0.4 : 1) * moveBonus;
 
     if (targetVx !== 0 || targetVz !== 0) {
       const len = Math.sqrt(targetVx * targetVx + targetVz * targetVz);

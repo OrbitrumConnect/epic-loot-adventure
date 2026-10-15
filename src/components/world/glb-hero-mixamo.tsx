@@ -68,6 +68,7 @@ export function GlbHeroMixamo({
   yaw = 0,
   autoHeight = 1.8,
   walkSync = 0.6,
+  runSync = 0.42,
   standFixX = STAND_FIX_X,
   rangedAttack = false,
   gripScale = 1,
@@ -84,6 +85,8 @@ export function GlbHeroMixamo({
   /** Escala o modelo pra esta altura (m) e planta os pés em y=0. */
   autoHeight?: number;
   walkSync?: number;
+  /** Cadência da CORRIDA (separada do walk): clip de run tem passada maior. */
+  runSync?: number;
   /** Correção do -90° (FBX Meshy). GLB direto do Meshy já é Y-up → passar 0. */
   standFixX?: number;
   /** Só o player: troca o ataque pela anim de arco quando a arma é de longe. */
@@ -244,9 +247,11 @@ export function GlbHeroMixamo({
       current.current = want;
     }
     // Cadência do walk/run acompanha a velocidade real (anti foot-sliding).
+    // Run usa um sync MENOR (passada maior → não "patina" o pé).
     if ((current.current === 'walk' || current.current === 'run') && speedRef) {
       const a = actions[current.current];
-      if (a) a.timeScale = THREE.MathUtils.clamp(speedRef.current * walkSync, 0.4, 3.0);
+      const sync = current.current === 'run' ? runSync : walkSync;
+      if (a) a.timeScale = THREE.MathUtils.clamp(speedRef.current * sync, 0.4, 3.0);
     }
   });
 
