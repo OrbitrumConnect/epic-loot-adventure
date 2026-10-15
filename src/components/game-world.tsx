@@ -44,7 +44,7 @@ import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactor
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
-  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R, SAFE_ZONE,
+  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R, SAFE_ZONE, HERO_HEIGHT,
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
@@ -678,7 +678,7 @@ function Character({
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
 
-      {USE_GLB_HERO && <GlbHero actionRef={heroAction} speedRef={heroSpeed} weapon={<HeldItem c={c} />} />}
+      {USE_GLB_HERO && <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />}
 
       <group visible={!USE_GLB_HERO}>
       {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}

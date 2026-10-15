@@ -81,6 +81,19 @@ function riverFlatten(x: number, z: number): number {
 export const MAP_HALF = 90;
 
 /**
+ * Altura do herói em unidades de mundo — FONTE ÚNICA.
+ *
+ * Medida no próprio modelo: `Male_Ranger.gltf` tem bbox 1.799 x 1.869 x 0.373 e
+ * nenhum scale no node raiz, então 1.869 é a altura com que ele já renderizava.
+ * Fixar o valor aqui não muda a aparência; torna o número EXPLÍCITO para quem
+ * precisa dimensionar outra coisa em relação ao jogador.
+ *
+ * Quem deriva daqui acompanha sozinho se o herói mudar de tamanho — é o caso
+ * da Aberração, dimensionada em `HERO_HEIGHT * 1.3` em `beast.tsx`.
+ */
+export const HERO_HEIGHT = 1.869;
+
+/**
  * ZONA SEGURA do sobrevivente: círculo no spawn (origem) onde o jogador renasce
  * e para onde NENHUM inimigo nem boss entra — um respiro. Marcada no chão por um
  * anel (igual o círculo dos acampamentos). Mesma ideia de `pushOut*` da base:

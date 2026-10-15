@@ -43,3 +43,6 @@ art/**/__pycache__/
 
 # Lixo de execucao de teste
 .test-tmp/
+
+# Cache de ferramenta local
+.cache/

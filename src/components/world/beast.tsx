@@ -13,7 +13,7 @@ import { CREATURES } from '@/game/data/creatures';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING, type HostileTuning } from './hostile-ai';
-import { mixColor, terrainHeight, type Palette } from './world-kit';
+import { HERO_HEIGHT, mixColor, terrainHeight, type Palette } from './world-kit';
 import { GlbCreature } from './glb-creature';
 
 /** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
@@ -33,7 +33,9 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros (anim própria). eel rasteja (tamanho ~boss 1); monster ~3m.
   eel: { url: '/models/animals/eel.glb', height: 3.2, yaw: Math.PI, groundBias: 0 }, // -20% + vira 180° (vinha de costas)
-  monster: { url: '/models/animals/monster.glb', height: 3, yaw: 0, groundBias: 0 },
+  // Aberração: 1,3x a altura do HERÓI, derivada da fonte única. Se o jogador
+  // mudar de tamanho, ela acompanha sozinha — pedido explícito do owner.
+  monster: { url: '/models/animals/monster.glb', height: HERO_HEIGHT * 1.3, yaw: 0, groundBias: 0 },
   collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 }, // 91MB->6.9MB (quantize)
   // Humanoides hostis (Mixamo walk próprio). yaw pode precisar flip (vinha de costas).
   civilian: { url: '/models/animals/civilian.glb', height: 1.8, yaw: 0, groundBias: 0.9 }, // Mixamo: vira p/ frente + sobe (pé enterrava)
