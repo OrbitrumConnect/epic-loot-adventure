@@ -23,8 +23,8 @@ const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number;
   raider_mushroom: { url: '/models/bosses/pigman.glb', height: 4.5, yaw: Math.PI },
   // Kaiju = Wukong via GlbCreature (NÃO GlbHero): height normaliza o tamanho (estava
   // gigante) e usa a textura própria (estava azul/normal-map). Toca o idle embutido.
-  // Kaiju = Aberração GIGANTE (monster.glb): renderiza certo (textura+anim+bbox ok),
-  // leve, distinto do demônio. Wukong aposentado (16 texturas PBR -> azul; não normaliza).
+  // Kaiju = Aberração gigante (monster.glb REPROCESSADO sem quantize → normaliza +
+  // textura webp carrega). height 8 = boss grande. Distinto do demônio.
   raider_kaiju: { url: '/models/animals/monster.glb', height: 8, yaw: Math.PI },
 };
 
