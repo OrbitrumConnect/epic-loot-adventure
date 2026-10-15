@@ -25,7 +25,7 @@ const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number;
   // gigante) e usa a textura própria (estava azul/normal-map). Toca o idle embutido.
   // Kaiju = Aberração gigante (monster.glb REPROCESSADO sem quantize → normaliza +
   // textura webp carrega). height 8 = boss grande. Distinto do demônio.
-  raider_kaiju: { url: '/models/animals/monster.glb', height: 8, yaw: Math.PI },
+  raider_kaiju: { url: '/models/animals/monster.glb', height: 3.5, yaw: Math.PI },
 };
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
