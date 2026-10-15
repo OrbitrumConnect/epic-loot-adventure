@@ -34,6 +34,7 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   // Monstros (anim própria). eel rasteja (tamanho ~boss 1); monster ~3m.
   eel: { url: '/models/animals/eel.glb', height: 4, yaw: 0, groundBias: 0 },
   monster: { url: '/models/animals/monster.glb', height: 3, yaw: 0, groundBias: 0 },
+  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 }, // 91MB->6.9MB (quantize)
 };
 
 type V3 = [number, number, number];

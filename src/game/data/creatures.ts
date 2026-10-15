@@ -331,6 +331,24 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 
+  collector: {
+    id: 'collector',
+    name: 'O Coletor',
+    maxHp: 260,
+    attackPower: 26,
+    armor: 6,
+    attackCooldown: 2.1,
+    attackRange: 2.8,
+    aggroRange: 12,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 2, chance: 0.6 },
+      { itemId: 'bone', quantity: 3, chance: 0.7 },
+      { itemId: 'health_potion', quantity: 1, chance: 0.3 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
   monster: {
     id: 'monster',
     name: 'Aberração',
