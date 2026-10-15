@@ -4,6 +4,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { BASE_RESOURCE_IDS, BASE_RESOURCE_NAMES, BUILDINGS } from '@/game/data/buildings';
 import { ITEMS } from '@/game/data/items';
 import { UNITS } from '@/game/data/units';
+import { UnitSprite } from '@/components/hud/unit-sprite';
 import type { BaseResources, PlacedBuilding } from '@/game/types';
 import { getEnqueueBlockReason, getQueueCapacity, getRemainingMs, getUnitCost, getUnitsForBuilding, getUpgradeBlockReason, getUpgradeCost } from '@/game/systems/baseSystem';
 import { basePieceCost } from '@/game/systems/baseTypeSystem';
@@ -57,13 +58,13 @@ export function TrainingPanel({ onClose }: { onClose?: () => void }) {
       {upgrade(camp)}
       <p>Fila {camp.queue.length}/{getQueueCapacity(base, camp)}</p>
       {camp.queue.length === 0 && <p className="text-muted-foreground">Fila vazia.</p>}
-      {camp.queue.map(item => <p key={item.id}>{UNITS[item.unitId]?.name ?? item.unitId} · {item.endsAt == null ? `aguardando · ${seconds(item.durationMs)}` : seconds(getRemainingMs(item, now))}</p>)}
+      {camp.queue.map(item => <p key={item.id} className="unit-row"><UnitSprite unitId={item.unitId} size={24} /><span>{UNITS[item.unitId]?.name ?? item.unitId} · {item.endsAt == null ? `aguardando · ${seconds(item.durationMs)}` : seconds(getRemainingMs(item, now))}</span></p>)}
       {getUnitsForBuilding('war_camp').map(unit => {
         const reason = getEnqueueBlockReason(base, camp.id, unit.id);
-        return <div key={unit.id} className="space-y-1"><p>{unit.name} · nível {unit.minBuildingLevel} · {resourceText(getUnitCost(base, unit.id))}</p><Button size="sm" variant="outline" disabled={Boolean(reason)} onClick={() => enqueueUnit(camp.id, unit.id)}>Treinar {unit.name}</Button>{reason && <p className="text-muted-foreground">{reason}</p>}</div>;
+        return <div key={unit.id} className="space-y-1"><p className="unit-row"><UnitSprite unitId={unit.id} size={40} /><span>{unit.name} · nível {unit.minBuildingLevel} · {resourceText(getUnitCost(base, unit.id))}</span></p><Button size="sm" variant="outline" disabled={Boolean(reason)} onClick={() => enqueueUnit(camp.id, unit.id)}>Treinar {unit.name}</Button>{reason && <p className="text-muted-foreground">{reason}</p>}</div>;
       })}
     </div>}
-    <p>Tropas prontas: {Object.entries(base.troops).map(([id, n]) => `${UNITS[id]?.name ?? id}: ${n}`).join(' · ') || 'nenhuma'}</p>
+    <p className="unit-row">Tropas prontas:{Object.entries(base.troops).map(([id, n]) => <span key={id} className="unit-row" title={UNITS[id]?.name ?? id}><UnitSprite unitId={id} size={24} />{UNITS[id]?.name ?? id}: {n}</span>)}{Object.keys(base.troops).length === 0 && ' nenhuma'}</p>
     {hall && upgrade(hall)}
     <div className="space-y-1"><p>Próximo muro · mochila: {physicalCost('wall')}</p><Button size="sm" variant="outline" disabled={!wall || !wallAffordable} onClick={buildWall}>Construir próximo muro</Button><p className="text-muted-foreground">{!wall ? 'Muros completos ou terreno não reivindicado.' : !wallAffordable ? 'Material insuficiente na mochila.' : 'Mantém porta e cantos reservados.'}</p></div>
     <Button size="sm" variant="outline" disabled={!playerBase} onClick={deliver}>Entregar materiais ao perímetro</Button>

@@ -5,6 +5,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { BASE_TYPES } from '@/game/data/base-types';
 import { ITEMS } from '@/game/data/items';
 import { UNITS } from '@/game/data/units';
+import { UnitSprite } from '@/components/hud/unit-sprite';
 import { getItemCount } from '@/game/systems/inventorySystem';
 import { getQueueCapacity, getRemainingMs, getTroopCount, getUpgradeBlockReason } from '@/game/systems/baseSystem';
 import { nextWall } from '@/game/systems/trainingCampSystem';
@@ -239,9 +240,14 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
             <small>{campBuilt
               ? `Centro de treinamento instalado${warCamp ? ` · Campo de Guerra nível ${warCamp.level} · fila ${campQueue.length}/${getQueueCapacity(cityBase, warCamp)}` : ''}`
               : 'Centro de treinamento ainda não construído'}</small>
+            <small className="unit-row">{Object.entries(cityBase.troops).map(([id, n]) => (
+              <span key={id} className="unit-row" title={UNITS[id]?.name ?? id}><UnitSprite unitId={id} size={22} />{n}</span>
+            ))}</small>
             <small>{campQueue.length === 0
               ? 'Nenhuma tropa em treino.'
-              : `Em treino: ${campQueue.map(q => `${UNITS[q.unitId]?.name ?? q.unitId} (${q.endsAt == null ? 'aguardando' : secs(getRemainingMs(q, now))})`).join(' · ')}`}</small>
+              : <>Em treino: {campQueue.map(q => (
+                <span key={q.id} className="unit-row"><UnitSprite unitId={q.unitId} size={20} />{UNITS[q.unitId]?.name ?? q.unitId} ({q.endsAt == null ? 'aguardando' : secs(getRemainingMs(q, now))})</span>
+              ))}</>}</small>
           </div>
           <Button size="sm" variant="outline" title="Abrir o centro de treinamento para treinar tropas"
             aria-label="Abrir o centro de treinamento" onClick={() => setPanel('training')}>
