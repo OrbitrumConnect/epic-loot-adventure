@@ -82,6 +82,25 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 
+  raider_puglin: {
+    id: 'raider_puglin',
+    name: 'Puglin',
+    maxHp: 60,
+    attackPower: 9,
+    armor: 2,
+    attackCooldown: 1.5,
+    attackRange: 2.0,
+    aggroRange: 10,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 1, chance: 0.5 },
+      { itemId: 'raider_token', quantity: 1, chance: 0.6 },
+      { itemId: 'stone', quantity: 2, chance: 0.4 },
+      { itemId: 'ammo', quantity: 5, chance: 0.7 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
   raider_brute: {
     id: 'raider_brute',
     name: 'Saqueador Brutamontes',

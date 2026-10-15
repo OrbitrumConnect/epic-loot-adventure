@@ -323,7 +323,7 @@ function createInitialCreatures(): CreatureState[] {
   ];
 }
 
-const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_brute', 'raider_shaman'] as const;
+const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_puglin', 'raider_brute', 'raider_shaman'] as const;
 
 /** Nº de bosses na onda — cresce com as ondas (teto 5). */
 function waveBossCount(wave: number): number {

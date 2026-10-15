@@ -51,6 +51,7 @@ const RAIDER_GLB: Record<string, string> = {
   raider_warlord: IMP_URL,
   raider_mushroom: IMP_URL, // boss maior — mesmo rig que já temos, só escala
   raider_kaiju: IMP_URL,    // boss gigante — demônio animado (bossScale 5.6)
+  raider_puglin: '/models/raiders/puglin.glb', // minion Unreal → UAL (anda+ataca)
   raider_samurai: '/models/raiders/Male_Peasant.gltf', // humanoide animado (bossScale 1.7)
   raider_scout: '/models/raiders/Male_Peasant.gltf',
   raider_warrior: '/models/raiders/Female_Peasant.gltf',
@@ -122,6 +123,18 @@ export const RAIDER_SPECIES: Record<string, Species> = {
       ...base, speed: 3.4, aggroRange: 13, attackRange: 3.2, leashRange: 13,
       chaseTimeout: 12, provokeRange: 24, walkSpeedChase: 14, walkSpeedIdle: 7,
       hitVerb: 'amaldiçoou',
+    },
+  },
+  // Puglin (kit Bestiary, esqueleto Unreal → anima com a UAL igual o warlord):
+  // minion atarracado, animado de verdade (anda + ataca). bodyWidth/Depth só
+  // valem se o GLB estiver OFF.
+  raider_puglin: {
+    scale: 1.3, bodyWidth: 0.6, bodyDepth: 0.4, weapon: 'axe',
+    hood: false, shoulders: false, charm: false,
+    tuning: {
+      ...base, speed: 3.6, aggroRange: 10, attackRange: 2.2, leashRange: 15,
+      chaseTimeout: 13, provokeRange: 20, walkSpeedChase: 15, walkSpeedIdle: 8,
+      hitVerb: 'mordeu',
     },
   },
   // Mini-boss: 2,5× o brutamontes (1.32 → 3.3). Caça pelo mapa (leash longo),
