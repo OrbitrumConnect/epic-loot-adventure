@@ -35,6 +35,9 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   eel: { url: '/models/animals/eel.glb', height: 3.2, yaw: Math.PI, groundBias: 0 }, // -20% + vira 180° (vinha de costas)
   monster: { url: '/models/animals/monster.glb', height: 3, yaw: 0, groundBias: 0 },
   collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 }, // 91MB->6.9MB (quantize)
+  // Humanoides hostis (Mixamo walk próprio). yaw pode precisar flip (vinha de costas).
+  civilian: { url: '/models/animals/civilian.glb', height: 1.8, yaw: Math.PI, groundBias: 0 },
+  zombie: { url: '/models/animals/zombie.glb', height: 1.8, yaw: Math.PI, groundBias: 0 },
 };
 
 type V3 = [number, number, number];

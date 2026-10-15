@@ -16,6 +16,8 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   eel: 6,    // Serpe Rastejante: monstro grande (anim própria de rastejar)
   monster: 6, // Aberração: monstro ~3m (anim própria)
   collector: 2, // O Coletor: rig pesado (1444 ossos) → poucos; gating de distância alivia
+  civilian: 5, // Saqueador Rústico (humanoide Mixamo, walk próprio)
+  zombie: 5,   // Morto-Vivo (humanoide Mixamo, walk próprio)
 };
 
 /** Total de criaturas selvagens geradas (soma de `WILD_SPAWN_COUNTS`). */

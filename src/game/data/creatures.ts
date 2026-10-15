@@ -366,6 +366,40 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 
+  civilian: {
+    id: 'civilian',
+    name: 'Saqueador Rústico',
+    maxHp: 55,
+    attackPower: 8,
+    armor: 2,
+    attackCooldown: 1.6,
+    attackRange: 2.0,
+    aggroRange: 10,
+    lootTable: [
+      { itemId: 'raider_token', quantity: 1, chance: 0.5 },
+      { itemId: 'raw_meat', quantity: 1, chance: 0.4 },
+    ],
+    icon: 'Swords',
+    peaceful: false,
+  },
+
+  zombie: {
+    id: 'zombie',
+    name: 'Morto-Vivo',
+    maxHp: 48,
+    attackPower: 7,
+    armor: 1,
+    attackCooldown: 1.8,
+    attackRange: 1.9,
+    aggroRange: 11,
+    lootTable: [
+      { itemId: 'bone', quantity: 2, chance: 0.6 },
+      { itemId: 'raw_meat', quantity: 1, chance: 0.3 },
+    ],
+    icon: 'Skull',
+    peaceful: false,
+  },
+
   boar: {
     id: 'boar',
     name: 'Jacaré',
