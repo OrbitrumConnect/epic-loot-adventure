@@ -22,10 +22,21 @@ Fonte dos itens e dos números: `docs/tribos/investigacao-lag-2026-10-15.md`.
 
 - [x] **Texturas 4096² dos personagens** — 89.343.261 → 11.525.081 bytes (−87%).
       Commit `2a421b4`. Era ~1,34 GB dos ~2,1 GB de VRAM.
-- [~] **Encolher o volume da shadow-camera.** Hoje cobre 120×120 (−60..60); quando o
-      passe de sombra dispara custa **+283 draw calls e +3,6M triângulos**. Reduzir para
-      perto do jogador (ordem de 40×40). Risco baixo: sombra distante não é visível.
-- [ ] **Rever as 18 point lights** (número simultâneo, raio, `decay`). Esforço baixo.
+- [x] **Encolher o volume da shadow-camera** — commit `9ba29e9`. 120×120 → 48×48 (±24).
+      A luz direcional **não seguia o jogador** (target fixo na origem). Encolher sem
+      consertar isso faria a sombra sumir ao andar mais de ~20 m da origem — a armadilha
+      da tarefa. Luz e target passaram a acompanhar o jogador no laço de quadro,
+      preservando a direção do sol, com zero alocação por quadro. Os 15 Hz do passe
+      (`autoUpdate=false` + `needsUpdate`) ficaram intactos.
+      Medido no quadro em que o passe dispara: draw calls **+310 → +177 (−43%)**,
+      triângulos **+3,72M → +3,59M (−3,6%)**.
+      **O ganho em triângulo veio bem menor que o relatório sugeria, e o motivo importa:**
+      o custo de triângulo do passe é dominado por malha instanciada e pelo terreno, que
+      são desenhados inteiros quando o bounding cruza o frustum. Frustum menor não
+      subdivide malha única nem faz culling por instância. Quem quiser o triângulo tem
+      que mexer no que projeta sombra, não no tamanho do volume. Fica registrado para
+      ninguém reabrir esta porta esperando os 3,6M.
+- [~] **Rever as 18 point lights** (número simultâneo, raio, `decay`). Esforço baixo.
       Custo não isolado ainda — medir antes de mexer, não presumir ganho.
 - [~] **Consertar a instância paralela do `window.__celStats`.** Hoje aponta para um
       módulo paralelo (HMR) e fica em 0 enquanto o render real roda, o que **impede
