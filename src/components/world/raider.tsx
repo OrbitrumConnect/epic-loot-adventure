@@ -67,6 +67,7 @@ const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: nu
   raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8 },       // pirata
   raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3 },  // brutamontes (maior)
   raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85 },// arqueiro
+  raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9 },      // swamp winged hybrid
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
