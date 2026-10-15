@@ -166,7 +166,7 @@ const FACTORY_PAD_CORE = 0.42;          // miolo plano (~9,2 m, cobre o prédio)
  *  relevo já é baixo) → o pad quase não mexe = sem platô/degrau. Longe de água.
  *  Uma no lugar da ruína do meio. Cada uma achata no SEU nível; o rio é preservado. */
 const FACTORY_POS: { x: number; z: number; rot: number }[] = [
-  { x: 39, z: -24, rot: 0.4 },   // bem afastada do nascedouro p/ LESTE (Pedro: +10m de novo)
+  { x: 42, z: -40, rot: 0.4 },   // p/ o lado (fora da rua de pedra) — Pedro: não em cima do caminho
   { x: 78, z: 24, rot: 1.9 },    // beirada leste
   { x: 26, z: -76, rot: -0.8 },  // beirada sul
   { x: -80, z: -38, rot: 2.6 },  // beirada oeste
