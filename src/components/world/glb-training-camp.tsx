@@ -1,6 +1,6 @@
 import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { BASE_TRAINING_WIDTH } from '@/game/data/base-pieces';
@@ -23,6 +23,21 @@ export function GlbTrainingCamp({ piece }: { piece: BasePiece }) {
   const gate = useGLTF(GATE);
   const roof = useGLTF(ROOF);
   const gl = useThree(s => s.gl);
+  const readyPulse = useRef(0);
+  // Observe committed production, not elapsed wall time or a shrinking queue:
+  // cancellation must never announce a ready troop. Subscription also catches
+  // completions between frames and batches resolved after a background pause.
+  useEffect(() => useGameStore.subscribe((state, previous) => {
+    if (state.base === previous.base) return;
+    const before = previous.base.buildings.find(b => b.defId === 'war_camp');
+    const after = state.base.buildings.find(b => b.defId === 'war_camp');
+    const head = before?.queue[0];
+    if (!head || !after || after.id !== before.id) return;
+    if (!after.queue.some(item => item.id === head.id)
+      && (state.base.troops[head.unitId] ?? 0) > (previous.base.troops[head.unitId] ?? 0)) {
+      readyPulse.current = 1.25;
+    }
+  }), []);
   const clipPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6), []);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]);
 
@@ -78,7 +93,7 @@ export function GlbTrainingCamp({ piece }: { piece: BasePiece }) {
     const iron = material(colors.metal, 0.35);
     const earth = material(colors['ground-light']);
     // Only these geometries belong to this instance; cached GLB geometry stays shared.
-    const geometries = [new THREE.BoxGeometry(1, 1, 1),
+    const geometries: THREE.BufferGeometry[] = [new THREE.BoxGeometry(1, 1, 1),
       new THREE.CylinderGeometry(1, 1, 1, 10), new THREE.ConeGeometry(1, 1, 4),
       new THREE.SphereGeometry(1, 8, 6)];
     const shape = (geometry: number, mat: THREE.Material,
@@ -174,8 +189,40 @@ export function GlbTrainingCamp({ piece }: { piece: BasePiece }) {
         }
       }
     }
+    // Fixed signal pool: two reused primitives and one ring, no lights/shadows.
+    // Signal sits above the silhouette even when the proximity cut hides the gate.
+    const signal = new THREE.Group();
+    const signalHeight = 1.75 + progress * 0.65;
+    const pole = shape(1, wood, 0.65, signalHeight / 2, -0.48,
+      0.025, signalHeight, 0.025);
+    const clothMaterial = material(colors.gold);
+    clothMaterial.clippingPlanes = null;
+    clothMaterial.emissive.set(colors.gold);
+    const cloth = shape(0, clothMaterial, -0.23, -0.19, 0, 0.46, 0.38, 0.035);
+    const pennant = new THREE.Group();
+    pennant.position.set(0.65, signalHeight, -0.48);
+    pennant.add(cloth);
+    signal.add(pole, pennant);
+    pole.castShadow = cloth.castShadow = false;
+    pole.receiveShadow = cloth.receiveShadow = false;
+    signal.visible = false;
+    model.add(signal);
+    const pulseGeometry = new THREE.RingGeometry(0.87, 1, 32);
+    geometries.push(pulseGeometry);
+    const pulseMaterial = material(colors.gold);
+    pulseMaterial.clippingPlanes = null;
+    pulseMaterial.emissive.set(colors.gold);
+    pulseMaterial.emissiveIntensity = 1.5;
+    pulseMaterial.transparent = true;
+    pulseMaterial.forceSinglePass = true;
+    pulseMaterial.depthWrite = false;
+    pulseMaterial.toneMapped = false;
+    const pulse = new THREE.Mesh(pulseGeometry, pulseMaterial);
+    pulse.rotation.x = -Math.PI / 2;
+    pulse.visible = false;
+    model.add(pulse);
     // Fixed centered bounds: ornaments never enlarge the published placement footprint.
-    return { model, materials, geometries,
+    return { model, materials, geometries, signal, pennant, clothMaterial, pulse, pulseMaterial,
       halfX: TRAINING_FOOTPRINT / 2, halfZ: TRAINING_FOOTPRINT / 2 };
   }, [wall.scene, gate.scene, roof.scene, clipPlane, level]);
   useEffect(() => () => {
@@ -197,12 +244,38 @@ export function GlbTrainingCamp({ piece }: { piece: BasePiece }) {
     };
   }, [piece.id, piece.rotation, center.x, center.z, prepared.halfX, prepared.halfZ]);
 
-  useFrame(({ camera }) => {
-    const player = useGameStore.getState().player.position;
+  useFrame(({ camera, clock }, delta) => {
+    const state = useGameStore.getState();
+    const player = state.player.position;
     const dx = player.x - center.x, dz = player.z - center.z;
     // Ortográfica é a vista iso. Corte local só perto: mantém a silhueta à distância.
     clipPlane.constant = camera instanceof THREE.OrthographicCamera && dx * dx + dz * dz < 16
       ? groundY + 1.22 : 1e6;
+    // Indexed scan avoids a per-frame selector callback/temporary collection.
+    let training = false;
+    for (let i = 0; i < state.base.buildings.length; i++) {
+      const building = state.base.buildings[i];
+      if (building?.defId === 'war_camp') {
+        training = building.level > 0 && building.queue.length > 0;
+        break;
+      }
+    }
+    prepared.signal.visible = training;
+    if (training) {
+      const beat = Math.sin(clock.elapsedTime * 5);
+      prepared.pennant.rotation.y = beat * 0.35;
+      prepared.pennant.rotation.z = beat * 0.12;
+      prepared.clothMaterial.emissiveIntensity = 0.35 + (beat + 1) * 0.3;
+    }
+    prepared.pulse.visible = level > 0 && readyPulse.current > 0;
+    if (readyPulse.current > 0) {
+      const progress = 1 - readyPulse.current / 1.25;
+      prepared.pulse.position.y = 0.85 + progress * 0.9;
+      prepared.pulse.scale.setScalar(0.4 + progress * 1.1);
+      prepared.pulseMaterial.opacity = (1 - progress) * 0.85;
+      // Cap resumed-tab delta so a completion still receives visible feedback.
+      readyPulse.current = Math.max(0, readyPulse.current - Math.min(delta, 0.05));
+    }
   });
 
   // Clique no corpo abre o painel de treino. markPointerConsumed impede que o
