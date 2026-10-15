@@ -65,8 +65,8 @@ export function GlbHeroMixamo({
   autoHeight = 1.8,
   walkSync = 0.45,
   gripScale = 1,
-  gripPos = [0.02, 0.06, 0],
-  gripRot = [Math.PI / 2, 0, 0],
+  gripPos = [0, 0.05, 0.02],
+  gripRot = [0, 0, Math.PI / 2],
 }: {
   actionRef: React.MutableRefObject<HeroAction>;
   speedRef?: React.MutableRefObject<number>;
