@@ -1959,6 +1959,14 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         { x: 42, z: 8, scale: 6, yaw: 3.0 },
         { x: -40, z: 24, scale: 5.5, yaw: 0.4 },
       ].map((t, i) => <LandmarkTree key={`tree-g-${i}`} x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
+      {/* ~10 árvores split-trunk espalhadas perto do nascedouro (a "outra" árvore). */}
+      {[
+        { x: 20, z: -12, scale: 4.5 }, { x: -10, z: -40, scale: 5, yaw: 1.1 },
+        { x: 28, z: -30, scale: 4, yaw: 2.3 }, { x: -24, z: -20, scale: 4.8, yaw: 0.5 },
+        { x: 38, z: -14, scale: 4.2, yaw: 3.1 }, { x: -36, z: -4, scale: 5, yaw: 1.8 },
+        { x: 18, z: 4, scale: 4.5, yaw: 0.9 }, { x: -14, z: 14, scale: 4, yaw: 2.6 },
+        { x: 46, z: -36, scale: 4.6, yaw: 0.2 }, { x: 2, z: -50, scale: 5, yaw: 1.5 },
+      ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url="/models/trees/tree-split.glb" x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
       <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>

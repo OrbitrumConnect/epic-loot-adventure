@@ -8,11 +8,11 @@ import { terrainHeight } from './world-kit';
  * Poucas no mapa (1-2) como landmark "bolado". Não é a fauna/floresta normal.
  * O modelo tem o pé ~0,97 abaixo da origem (raízes) → planta pela base.
  */
-const URL = '/models/trees/tree-gnarled.glb';
+const GNARLED = '/models/trees/tree-gnarled.glb';
 const BASE_BELOW = 0.89; // minY do modelo → finca no chão (-~0.5 do que era; raiz tava alta)
 
-export function LandmarkTree({ x, z, scale = 5.5, yaw = 0 }: { x: number; z: number; scale?: number; yaw?: number }) {
-  const { scene } = useGLTF(URL);
+export function LandmarkTree({ x, z, scale = 5.5, yaw = 0, url = GNARLED }: { x: number; z: number; scale?: number; yaw?: number; url?: string }) {
+  const { scene } = useGLTF(url);
   const tree = useMemo(() => {
     const c = scene.clone();
     c.traverse((o) => {
@@ -29,4 +29,5 @@ export function LandmarkTree({ x, z, scale = 5.5, yaw = 0 }: { x: number; z: num
   );
 }
 
-useGLTF.preload(URL);
+useGLTF.preload(GNARLED);
+useGLTF.preload('/models/trees/tree-split.glb');
