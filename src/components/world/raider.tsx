@@ -30,7 +30,8 @@ const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number;
  *  humanoide animado — ambos escalados por `bossScale`. Re-adicionar aqui só se
  *  um dia houver um modelo estático de propósito. */
 const STATIC_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
-  raider_kaiju: { url: '/models/bosses/insectoid.glb', height: 6.5, yaw: Math.PI },   // monstro c/ rig próprio, sem walk → procedural (ainda bugado; trocar modelo)
+  // VAZIO: kaiju agora é o Wukong (ossos Unreal → UAL, via RAIDER_GLB). insectoid/
+  // tribal-bug aposentados (rig próprio sem walk, bugavam).
 };
 
 /** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
@@ -48,7 +49,7 @@ const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
 const RAIDER_GLB: Record<string, string> = {
   raider_warlord: IMP_URL,
   raider_mushroom: IMP_URL, // boss maior — mesmo rig que já temos, só escala
-  raider_kaiju: IMP_URL,    // boss gigante — demônio animado (bossScale 5.6)
+  raider_kaiju: '/models/bosses/wukong.glb', // Wukong (Niu Mo Wang) — ossos Unreal → UAL (anda+ataca). bossScale pode precisar ajuste
   raider_puglin: '/models/raiders/puglin.glb', // minion Unreal → UAL (anda+ataca)
   raider_samurai: '/models/raiders/Male_Peasant.gltf', // humanoide animado (bossScale 1.7)
   raider_scout: '/models/raiders/Male_Peasant.gltf',
