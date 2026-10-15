@@ -1319,6 +1319,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
   const camDistTarget = useRef(5);
   const pointerLocked = useRef(false);
   const prevCameraMode = useRef(cameraMode);
+  const isoYaw = useRef(0);            // giro 360° da câmera de cima (MOBA): botão direito / 1 dedo
+  const isoDragging = useRef(false);   // arrastando o botão direito pra girar
 
   useEffect(() => {
     if (camera instanceof THREE.OrthographicCamera) {
@@ -1331,6 +1333,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     const canvas = gl.domElement;
 
     const onMouseMove = (e: MouseEvent) => {
+      // Câmera de cima (MOBA): arrastar c/ botão DIREITO gira 360° ao redor do boneco.
+      if (isoDragging.current) {
+        isoYaw.current -= e.movementX * 0.006;
+        return;
+      }
       if (!pointerLocked.current) return;
       const sensitivity = 0.0025;
       cameraYaw.current -= e.movementX * sensitivity;
@@ -1357,6 +1364,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     };
 
     const onMouseDown = (e: MouseEvent) => {
+      // Botão DIREITO no modo de cima: inicia o giro 360° da câmera (não ataca/anda).
+      if (e.button === 2 && cameraMode === 'iso') { isoDragging.current = true; return; }
       // Clique já consumido por um inimigo / estrutura / recurso não ataca.
       if (wasPointerConsumed(e)) return;
       // Modo de construção: o clique é do arrasto de muro, nunca ataque.
@@ -1367,6 +1376,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
         }
       }
     };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 2) isoDragging.current = false;
+    };
+    // Botão direito gira a câmera no modo de cima → suprime o menu de contexto do navegador.
+    const onContextMenu = (e: MouseEvent) => { if (cameraMode === 'iso') e.preventDefault(); };
 
     // Touch (mobile): arrastar 1 dedo gira a câmera no 3ª pessoa; TAP no chão
     // anda até o ponto (modo manual). Reusa a infra de "clique-pra-andar": basta
@@ -1398,6 +1413,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
         cameraYaw.current -= (t.clientX - lastTX) * sensitivity;
         cameraPitch.current = THREE.MathUtils.clamp(cameraPitch.current - (t.clientY - lastTY) * sensitivity, -1.0, 0.65);
         e.preventDefault(); // enquanto gira: evita scroll/zoom da página
+      } else if (cameraMode === 'iso' && moved) {
+        // Câmera de cima: arrastar 1 dedo gira 360° (o TAP continua andando até o ponto).
+        isoYaw.current -= (t.clientX - lastTX) * 0.006;
+        e.preventDefault();
       }
       lastTX = t.clientX; lastTY = t.clientY;
     };
@@ -1412,8 +1431,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mouseup', onMouseUp);
     document.addEventListener('pointerlockchange', onLockChange);
     canvas.addEventListener('click', onClick);
+    canvas.addEventListener('contextmenu', onContextMenu);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('touchstart', onTouchStart, { passive: true });
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -1423,8 +1444,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     return () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('pointerlockchange', onLockChange);
       canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('contextmenu', onContextMenu);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('touchstart', onTouchStart);
       canvas.removeEventListener('touchmove', onTouchMove);
@@ -1435,6 +1458,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
   }, [gl, cameraMode, props.paused]);
 
   useEffect(() => {
+    isoDragging.current = false; // ao trocar de modo, nunca fica "preso" girando
     if (cameraMode === 'iso' && pointerLocked.current) {
       document.exitPointerLock();
     }
@@ -1453,8 +1477,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: 'iso' | 'third
     prevCameraMode.current = cameraMode;
 
     if (cameraMode === 'iso') {
-      const isoOffset = new THREE.Vector3(24, 29, 24);
-      const wantPos = new THREE.Vector3(px + isoOffset.x, isoOffset.y, pz + isoOffset.z);
+      // Offset horizontal (24,24) GIRADO por isoYaw → vê os outros lados (360°).
+      // Altura fixa em 29. Com isoYaw=0 é idêntico ao ângulo atual (sem regressão).
+      const a = isoYaw.current;
+      const rx = 24 * Math.cos(a) - 24 * Math.sin(a);
+      const rz = 24 * Math.sin(a) + 24 * Math.cos(a);
+      const wantPos = new THREE.Vector3(px + rx, 29, pz + rz);
       const lerpFactor = modeChanged ? 1 : 0.06;
       camTarget.current.lerp(wantPos, lerpFactor);
       camera.position.copy(camTarget.current);
