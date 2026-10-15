@@ -402,7 +402,8 @@ export function isEnclosed(base: PlayerBaseState): boolean {
   const core = base.pieces.find(p => p.kind === 'core');
   if (!core) return false;
 
-  const solid = new Set(base.pieces.filter(p => BASE_PIECES[p.kind].solid).map(p => cellKey(p.cell)));
+  // O centro ocupa espaço físico, mas é prédio interno: nunca substitui muro no perímetro.
+  const solid = new Set(base.pieces.filter(p => p.kind !== 'training' && BASE_PIECES[p.kind].solid).map(p => cellKey(p.cell)));
   const minX = base.origin.gx - 1;
   const minZ = base.origin.gz - 1;
   const maxX = base.origin.gx + base.size;

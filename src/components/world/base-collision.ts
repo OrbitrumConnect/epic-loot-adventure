@@ -6,8 +6,11 @@
  */
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
+import { BASE_GRID } from '@/game/types/playerbase';
+import { BASE_TRAINING_WIDTH } from '@/game/data/base-pieces';
 import { houseCollider, HOUSE_WALLS_SOLID } from './house-collider';
 import { factoryColliders, FACTORY_WALLS_SOLID, FACTORY_ROOF_CUT } from './factory-collider';
+import { trainingColliders } from './training-collider';
 
 /** Empurra (x,z) pra fora de um círculo sólido de raio r, deslize natural. */
 function pushCircle(x: number, z: number, ox: number, oz: number, r: number, self: number): [number, number] {
@@ -88,12 +91,29 @@ export function factoryRoofCutY(px: number, pz: number): number | null {
   return null;
 }
 
-/** Cerca da base sólida (muro + torre bloqueiam; portão/core/telhado passam). */
+/** Muro, torre e centro bloqueiam; portão/core/telhado passam. */
 export function pushOutBasePieces(x: number, z: number, self: number): [number, number] {
   const base = useGameStore.getState().playerBase;
   if (!base) return [x, z];
   let rx = x, rz = z;
   for (const p of base.pieces) {
+    if (p.kind === 'training') {
+      // Fallback sólido durante carregamento do GLB; footprint publicado substitui as medidas.
+      let cx = (p.cell.gx + 0.5) * BASE_GRID, cz = (p.cell.gz + 0.5) * BASE_GRID;
+      let halfX = BASE_TRAINING_WIDTH / 2, halfZ = BASE_TRAINING_WIDTH / 2;
+      for (const collider of trainingColliders) {
+        if (collider.pieceId !== p.id) continue;
+        cx = collider.cx; cz = collider.cz; halfX = collider.halfX; halfZ = collider.halfZ;
+        break;
+      }
+      const dx = rx - cx, dz = rz - cz;
+      const overlapX = halfX + self - Math.abs(dx), overlapZ = halfZ + self - Math.abs(dz);
+      if (overlapX > 0 && overlapZ > 0) {
+        if (overlapX < overlapZ) rx += (dx < 0 ? -1 : 1) * overlapX;
+        else rz += (dz < 0 ? -1 : 1) * overlapZ;
+      }
+      continue;
+    }
     if (p.kind !== 'wall' && p.kind !== 'tower') continue; // portão/core/telhado: passa
     const ctr = cellCenter(p.cell);
     [rx, rz] = pushCircle(rx, rz, ctr.x, ctr.z, p.kind === 'tower' ? 1.0 : 0.9, self);

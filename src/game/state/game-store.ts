@@ -35,6 +35,10 @@ import {
   cellCenter as baseCellCenter,
   upgradeTower as upgradePlayerTower,
 } from '../systems/playerBaseSystem';
+import {
+  constructTrainingCamp as buildTrainingCamp, constructNextWall as buildNextWall,
+  trainTroop as trainTroopSystem, upgradeTrainingCamp as upgradeTrainingCampSystem,
+} from '../systems/trainingCampSystem';
 import { baseLv1Layout, baseLv1Progress } from '../systems/baseLv1';
 import {
   addObjective as addQueueObjective, clearObjectives as clearQueueObjectives, createQueue,
@@ -154,6 +158,12 @@ type GameActions = {
   placeBasePieces: (preview: BuildPreview, tier?: 1 | 2 | 3) => void;
   /** Entrega recursos da bolsa pra erguer a base até o Lv1 padrão (construção por %). */
   deliverToBase: () => void;
+  constructTrainingCamp: () => void;
+  constructNextWall: () => void;
+  /** Treina uma tropa pela fila do Campo de Guerra; exige o centro físico construído. */
+  trainTroop: (unitId: string) => void;
+  /** Evolui o Campo de Guerra da cidade; exige o centro físico construído. */
+  upgradeTrainingCamp: () => void;
   damageBasePiece: (pieceId: string, amount: number) => void;
   /** Sobe um estágio da base se a condição estiver cumprida. */
   advanceBaseStage: () => void;
@@ -1139,6 +1149,30 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       resources: clearedResources,
       ui: { ...state.ui, message: removed > 0 ? `${result.message} Terreno limpo.` : result.message },
     });
+  },
+
+  constructTrainingCamp: () => {
+    const s = get();
+    const result = buildTrainingCamp(s.base, s.playerBase, s.player.inventory, Date.now());
+    set({ base: result.base, playerBase: result.playerBase, player: { ...s.player, inventory: result.inventory }, ui: { ...s.ui, message: result.message } });
+  },
+
+  constructNextWall: () => {
+    const s = get();
+    const result = buildNextWall(s.playerBase, s.player.inventory, Date.now());
+    set({ playerBase: result.playerBase, player: { ...s.player, inventory: result.inventory }, ui: { ...s.ui, message: result.message } });
+  },
+
+  trainTroop: (unitId) => {
+    const s = get();
+    const result = trainTroopSystem(s.base, s.playerBase, unitId, Date.now());
+    applyBaseResult(set, result);
+  },
+
+  upgradeTrainingCamp: () => {
+    const s = get();
+    const result = upgradeTrainingCampSystem(s.base, s.playerBase, Date.now());
+    applyBaseResult(set, result);
   },
 
   deliverToBase: () => {

@@ -725,3 +725,8 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .base-pieces { grid-template-columns: repeat(3,1fr); }
 }
 .base-lock + .base-stage { padding-top: 14px; }
+
+/* Sprite de tropa no HUD (treino e administração da base). */
+.unit-sprite { display: inline-block; flex-shrink: 0; object-fit: contain; vertical-align: middle; filter: drop-shadow(0 2px 2px oklch(0.10 0.01 155 / 55%)); }
+.unit-sprite-fallback { color: var(--primary); filter: none; }
+.unit-row { display: flex; align-items: center; gap: 8px; }

@@ -7,10 +7,11 @@ import { createHarvestNodes } from '../game/systems/harvestSystem';
 import { cellCenter, worldToCell } from '../game/systems/playerBaseSystem';
 import type { PlayerBaseState } from '../game/types/playerbase';
 import { weaponFor } from '../game/data/weapons';
+import { createInitialBase, enqueueUnit, getUnitDurationMs, startUpgrade, tickBase } from '../game/systems/baseSystem';
 
 function fresh(): PersistState {
   const s = useGameStore.getState();
-  return { player: structuredClone(s.player), playerBase: null, towerLastShotAt: {},
+  return { base: createInitialBase(1000), player: structuredClone(s.player), playerBase: null, towerLastShotAt: {},
     harvestNodes: createHarvestNodes(), resources: structuredClone(s.resources) };
 }
 function claimFor(state: PersistState): PlayerBaseState {
@@ -33,6 +34,72 @@ function memoryStorage(raw: string | null = null) {
 afterEach(() => vi.useRealTimers());
 
 describe('save local v1', () => {
+  it('save antigo sem cidade e campos parciais recebem defaults v1', () => {
+    const saved = createLocalSave(fresh());
+    delete saved.base;
+    expect(restoreLocalSave(parseLocalSave(JSON.stringify(saved))!, fresh(), 4000).base)
+      .toEqual(createInitialBase(4000));
+    saved.base = { troops: { warrior: 3 }, resources: { wood: 12 } };
+    const restored = restoreLocalSave(parseLocalSave(JSON.stringify(saved))!, fresh(), 4000).base;
+    expect(restored.troops).toEqual({ warrior: 3 });
+    expect(restored.resources).toEqual({ ...createInitialBase(4000).resources, wood: 12 });
+  });
+  it('preserva cidade completa e resolve obras e vários itens vencidos uma única vez', () => {
+    const state = fresh();
+    state.base.buildings.push({ id: 'b2', defId: 'war_camp', level: 1, plotIndex: 0, construction: null, queue: [] });
+    state.base.seq = 2;
+    state.base.resources = { wood: 10000, stone: 10000, food: 10000, essence: 10000 };
+    state.base.troops = { warrior: 3 };
+    state.base = startUpgrade(state.base, 'b1', 1000).state;
+    state.base = enqueueUnit(state.base, 'b2', 'warrior', 1000).state;
+    state.base = enqueueUnit(state.base, 'b2', 'warrior', 1000).state;
+    expect(state.base.buildings[1]!.queue).toHaveLength(2);
+    const saved = parseLocalSave(JSON.stringify(createLocalSave(state)))!;
+    expect(saved.base).toEqual(state.base);
+    expect(restoreLocalSave(saved, fresh(), 1000).base).toEqual(state.base);
+    const now = 1000 + Math.max(getUnitDurationMs(state.base, 'warrior') * 3,
+      state.base.buildings[0]!.construction!.durationMs * 2);
+    const restored = restoreLocalSave(saved, fresh(), now);
+    expect(restored.base).toEqual(tickBase(state.base, now));
+    expect(restored.base.troops['warrior']).toBe(5);
+    expect(restored.base.buildings[1]!.queue).toHaveLength(0);
+    const again = restoreLocalSave(parseLocalSave(JSON.stringify(createLocalSave(restored)))!, fresh(), now);
+    expect(again.base).toEqual(restored.base);
+  });
+  it('rejeita cidade malformada, IDs desconhecidos e timestamps inconsistentes', () => {
+    const save = createLocalSave(fresh());
+    const city = fresh().base;
+    for (const base of [{ troops: { warrior: -1 } }, { resources: { wood: 'bad' } },
+      { buildings: [{ ...city.buildings[0], defId: 'missing' }] },
+      { buildings: [{ ...city.buildings[0], construction: {
+        targetLevel: 2, order: 2, durationMs: 10, startedAt: 10, endsAt: null,
+      } }] }, { buildings: [city.buildings[0], city.buildings[0]] }]) {
+      expect(parseLocalSave(JSON.stringify({ ...save, base }))).toBeNull();
+    }
+  });
+  it('relógio recuado preserva jobs válidos em novos saves e não congela o tick', () => {
+    const state = fresh();
+    state.base = startUpgrade(state.base, 'b1', 1000).state;
+    expect(state.base.buildings[0]!.construction).not.toBeNull();
+    state.base.lastTickAt = 2000;
+    for (const now of [1500, 1]) {
+      const restored = restoreLocalSave(parseLocalSave(JSON.stringify(createLocalSave(state)))!, fresh(), now);
+      expect(restored.base.lastTickAt).toBe(now);
+      expect(parseLocalSave(JSON.stringify(createLocalSave(restored)))).not.toBeNull();
+      const endsAt = restored.base.buildings[0]!.construction!.endsAt!;
+      expect(tickBase(restored.base, endsAt + 1).buildings[0]!.construction).toBeNull();
+    }
+  });
+  it('mudanças exclusivas da cidade agendam save', () => {
+    vi.useFakeTimers();
+    const store = createStore(() => fresh());
+    const storage = memoryStorage();
+    const connection = connectLocalPersistence(store, storage);
+    store.setState(s => ({ base: { ...s.base, troops: { warrior: 2 } } }));
+    vi.advanceTimersByTime(2000);
+    expect(parseLocalSave(storage.getItem(SAVE_KEY))?.base?.troops).toEqual({ warrior: 2 });
+    connection.stop();
+  });
   it('reidratação do arco seleciona hotbar 8 e mantém perfil de combate ranged', () => {
     const state = { ...fresh(), ui: { ...useGameStore.getState().ui, selectedHotbar: 0 } };
     state.player.inventory.equipment.primary = 'bow';
@@ -66,7 +133,7 @@ describe('save local v1', () => {
     const save = parseLocalSave(raw)!;
     expect(save.harvest).toHaveLength(1);
     const restored = restoreLocalSave(save, fresh(), 2000);
-    expect(createLocalSave(restored)).toEqual(save);
+    expect(createLocalSave(restored)).toEqual({ ...save, base: tickBase(state.base, 2000) });
   });
   it('versão desconhecida e payload malformado são descartados sem exceção', () => {
     const valid = createLocalSave(fresh());

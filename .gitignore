@@ -40,3 +40,6 @@ art/packs/01-ashland-lowpoly/.local-triposr/
 
 # Bytecode dos scripts de arte (regeneravel)
 art/**/__pycache__/
+
+# Lixo de execucao de teste
+.test-tmp/

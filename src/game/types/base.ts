@@ -84,6 +84,8 @@ export type BaseUnitDefinition = {
   description: string;
   kind: BaseUnitKind;
   icon: string;
+  /** Sprite webp da tropa (opcional); `icon` segue como fallback. */
+  sprite?: string;
   building: BuildingId;
   minBuildingLevel: number;
   cost: BaseResources;

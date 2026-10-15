@@ -12,6 +12,19 @@ Stack: React 19 + Three 0.186 + R3F + Zustand + TanStack Start. Dev em `localhos
 
 O que já está pronto e **não** deve ser reconstruído: torre que atira (`systems/towerSystem.ts`), save local (`systems/persistenceSystem.ts`), três tipos de base (`systems/baseTypeSystem.ts`), hordas com cronômetro de 1 min e cartas de upgrade entre ondas (`systems/waveSystem.ts`, `data/base-upgrades.ts`), farm, custo em recurso, ghost verde/vermelho, snap de grade, pool de projéteis.
 
+## REGRA INEGOCIÁVEL — uma fase, uma sessão
+
+**Abra uma sessão NOVA do Codex para cada fase deste briefing.** Não rode duas fases na mesma sessão, e não rode o briefing inteiro de uma vez.
+
+Isto não é preferência, é o que a medição mostrou. Agregando 800 sessões em `~/.codex/sessions`:
+
+- **99,9% do gasto é input**, não saída: de 208,06M tokens do Astra, 207,33M são input e só 731k são output. O raciocínio é 0,07% do total — baixar o esforço **não resolve**.
+- **Cada turno reenvia a conversa inteira.** Numa sessão real de 203 turnos neste projeto, o input por turno subiu de 43k para 175k, a um ritmo de **+915 tokens por turno**. Cobrado todo turno, o custo cresce ao quadrado do tamanho da sessão.
+- O contexto base custa **35k** no primeiro turno. Sessão nova recomeça barata.
+- Partir o mesmo trabalho em pedaços de 50 turnos corta **~50%**; em 25 turnos, **~60%**.
+
+Ao fim de cada fase: commit, **encerre a sessão**, e abra outra para a fase seguinte. Se perceber que a sessão passou de ~50 turnos no meio de uma fase, feche, commite o que está pronto e continue em sessão nova.
+
 ## Economia de token
 
 - Não releia o repo inteiro. Abra só os arquivos citados aqui.
