@@ -699,7 +699,7 @@ function Character({
       </mesh>
 
       {USE_GLB_HERO && (USE_RED_HERO
-        ? <GlbHeroMixamo actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />
+        ? <GlbHeroMixamo actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} rangedAttack weapon={<HeldItem c={c} />} />
         : <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />)}
 
       <group visible={!USE_GLB_HERO}>

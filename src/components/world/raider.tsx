@@ -13,6 +13,7 @@ import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
 import { GlbHero, type HeroAction } from './glb-hero';
+import { GlbHeroMixamo } from './glb-hero-mixamo';
 import { GlbStaticBoss } from './glb-static-boss';
 import { GlbCreature } from './glb-creature';
 
@@ -55,10 +56,15 @@ const RAIDER_GLB: Record<string, string> = {
   raider_mushroom: IMP_URL, // boss maior — mesmo rig que já temos, só escala
   raider_kaiju: IMP_URL,    // fallback (nunca usado: CREATURE_BOSS tem o kaiju)
   raider_puglin: '/models/raiders/puglin.glb', // minion Unreal → UAL (anda+ataca)
-  raider_samurai: '/models/raiders/Male_Peasant.gltf', // humanoide animado (bossScale 1.7)
-  raider_scout: '/models/raiders/Male_Peasant.gltf',
   raider_warrior: '/models/raiders/Female_Peasant.gltf',
   raider_shaman: '/models/raiders/Female_Ranger.gltf',
+};
+/** Raiders com rig MIXAMO (Meshy): usam o GlbHeroMixamo + os clips Mixamo
+ *  compartilhados (idle/walk/run/attack). standFixX: FBX convertido = +90°;
+ *  GLB direto do Meshy já é Y-up = 0. */
+const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number }> = {
+  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 1.95 }, // "samurai caído" → spiked (tira o corpo sem cabeça)
+  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: 0, height: 1.8 },             // pirata (GLB direto = já em pé)
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
@@ -434,6 +440,19 @@ export function Raider({
         const sb = STATIC_BOSS[speciesId];
         if (sb) {
           return <GlbStaticBoss url={sb.url} actionRef={bossAction} height={sb.height} yaw={sb.yaw ?? 0} tint={sb.tint} groundBias={sb.groundBias ?? 0} />;
+        }
+        // Raider com rig MIXAMO (Meshy: spiked/pirata) → GlbHeroMixamo + clips Mixamo.
+        const mx = MIXAMO_RAIDER[speciesId];
+        if (mx) {
+          return (
+            <GlbHeroMixamo
+              charUrl={mx.url}
+              actionRef={bossAction}
+              autoHeight={mx.height}
+              standFixX={mx.standFixX}
+              yaw={BOSS_GLB_YAW}
+            />
+          );
         }
         // Demais raiders/bosses: rig Universal + UAL (anima pernas).
         return (

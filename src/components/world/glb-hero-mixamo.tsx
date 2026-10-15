@@ -63,10 +63,13 @@ export function GlbHeroMixamo({
   actionRef,
   speedRef,
   weapon,
+  charUrl = RED_URL,
   scale = 1,
   yaw = 0,
   autoHeight = 1.8,
   walkSync = 0.6,
+  standFixX = STAND_FIX_X,
+  rangedAttack = false,
   gripScale = 1,
   gripPos = [0.04, 0.04, 0.08],
   gripRot = [0, Math.PI / 2, Math.PI / 2],
@@ -74,17 +77,23 @@ export function GlbHeroMixamo({
   actionRef: React.MutableRefObject<HeroAction>;
   speedRef?: React.MutableRefObject<number>;
   weapon?: ReactNode;
+  /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
+  charUrl?: string;
   scale?: number;
   yaw?: number;
   /** Escala o modelo pra esta altura (m) e planta os pés em y=0. */
   autoHeight?: number;
   walkSync?: number;
+  /** Correção do -90° (FBX Meshy). GLB direto do Meshy já é Y-up → passar 0. */
+  standFixX?: number;
+  /** Só o player: troca o ataque pela anim de arco quando a arma é de longe. */
+  rangedAttack?: boolean;
   gripScale?: number;
   gripPos?: [number, number, number];
   gripRot?: [number, number, number];
 }) {
   const inner = useRef<THREE.Group>(null);
-  const { scene } = useGLTF(RED_URL);
+  const { scene } = useGLTF(charUrl);
   const idleG = useGLTF(CLIP_URL['idle']!);
   const walkG = useGLTF(CLIP_URL['walk']!);
   const runG = useGLTF(CLIP_URL['run']!);
@@ -171,11 +180,13 @@ export function GlbHeroMixamo({
   useFrame(() => {
     const want = actionRef.current;
 
-    // Ataque POR ARMA: arma de longe (arco/pistola/rifle) → anim de arco;
-    // arma de mão (espada/machado/...) → combo. 'playingAtk' é o clip em curso.
-    const kind = heldKindFor(selectedItemId(useGameStore.getState()));
-    const ranged = (kind === 'bow' || kind === 'pistol' || kind === 'rifle') && !!actions['attackBow'];
-    const atkName = ranged ? 'attackBow' : 'attack';
+    // Ataque POR ARMA (só o player): arma de longe → anim de arco; mão → combo.
+    // Raiders (rangedAttack=false) sempre usam o combo. 'playingAtk' = clip em curso.
+    let atkName = 'attack';
+    if (rangedAttack && actions['attackBow']) {
+      const kind = heldKindFor(selectedItemId(useGameStore.getState()));
+      if (kind === 'bow' || kind === 'pistol' || kind === 'rifle') atkName = 'attackBow';
+    }
 
     // Clip que está REALMENTE tocando num estado (attack usa o playingAtk).
     const clipOf = (st: HeroAction | null): string | null =>
@@ -241,8 +252,8 @@ export function GlbHeroMixamo({
 
   return (
     <group ref={inner} rotation={[0, yaw, 0]} scale={scale}>
-      {/* Wrapper que "levanta" o herói (cancela o -90° X do rig Meshy). */}
-      <group rotation={[STAND_FIX_X, 0, 0]} position={[0, STAND_FIX_Y, 0]}>
+      {/* Wrapper que "levanta" o herói (cancela o -90° X do rig Meshy FBX). */}
+      <group rotation={[standFixX, 0, 0]} position={[0, STAND_FIX_Y, 0]}>
         <primitive object={cloned} />
       </group>
       {weapon && handBone
