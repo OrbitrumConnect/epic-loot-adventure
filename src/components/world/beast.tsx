@@ -36,8 +36,8 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   monster: { url: '/models/animals/monster.glb', height: 3, yaw: 0, groundBias: 0 },
   collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 }, // 91MB->6.9MB (quantize)
   // Humanoides hostis (Mixamo walk próprio). yaw pode precisar flip (vinha de costas).
-  civilian: { url: '/models/animals/civilian.glb', height: 1.8, yaw: 0, groundBias: 0.9 }, // Mixamo: vira p/ frente + sobe (pé enterrava)
-  zombie: { url: '/models/animals/zombie.glb', height: 1.8, yaw: 0, groundBias: 0.9 },
+  civilian: { url: '/models/animals/civilian.glb', height: 1.8, yaw: 0, groundBias: 0.4 }, // 0.9 levantava demais (parecia grandão) -> 0.4
+  zombie: { url: '/models/animals/zombie.glb', height: 1.8, yaw: 0, groundBias: 0.4 },
   pelter: { url: '/models/animals/pelter.glb', height: 2.5, yaw: Math.PI, groundBias: 0 },
   flintmaw: { url: '/models/animals/flintmaw.glb', height: 2, yaw: Math.PI, groundBias: 0.3 }, // meio voador
 };
