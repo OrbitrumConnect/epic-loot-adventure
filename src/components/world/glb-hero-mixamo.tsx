@@ -26,6 +26,8 @@ const HAND_BONE = 'mixamorig:RightHand';
  *  esqueleto, não distorce o skinning). Y afina a planta dos pés no chão. */
 const STAND_FIX_X = Math.PI / 2;
 const STAND_FIX_Y = 0;
+/** Velocidade do clip de ataque (combo Mixamo é longo → acelera p/ fechar a janela). */
+const ATTACK_SPEED = 1.5;
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
@@ -62,10 +64,10 @@ export function GlbHeroMixamo({
   scale = 1,
   yaw = 0,
   autoHeight = 1.8,
-  walkSync = 1.1,
+  walkSync = 0.45,
   gripScale = 1,
-  gripPos = [0, 0, 0],
-  gripRot = [0, 0, 0],
+  gripPos = [0.02, 0.06, 0],
+  gripRot = [Math.PI / 2, 0, 0],
 }: {
   actionRef: React.MutableRefObject<HeroAction>;
   speedRef?: React.MutableRefObject<number>;
@@ -156,25 +158,46 @@ export function GlbHeroMixamo({
 
   useFrame(() => {
     const want = actionRef.current;
-    const nextName = actions[want] ? want : (actions['idle'] ? 'idle' : null);
+    const atk = actions['attack'];
+    const atkDur = atk?.getClip().duration ?? 0;
+    const atkFinished = !atk || !atk.isRunning() || atk.time >= atkDur - 0.02;
+
+    // ATAQUE NÃO É CORTADO: enquanto o clip toca, não troca (termina 100% mesmo
+    // que o bicho morra no meio e o estado volte pra idle/walk).
+    if (current.current === 'attack' && !atkFinished) return;
+
+    // (Re)dispara o ataque quando pedido e não há ataque rolando.
+    if (want === 'attack' && atk) {
+      if (current.current !== 'attack' || atkFinished) {
+        const prev = current.current;
+        if (prev && prev !== 'attack' && actions[prev]) actions[prev]!.fadeOut(0.1);
+        atk.reset();
+        atk.timeScale = ATTACK_SPEED;
+        atk.setLoop(THREE.LoopOnce, 1);
+        atk.clampWhenFinished = true;
+        atk.fadeIn(0.08).play();
+        current.current = 'attack';
+      }
+      return;
+    }
+
+    // Idle / Walk (loop). Re-dispara ao mudar de estado ou se o loop parou.
+    const nextName = actions[want] ? want : 'idle';
     const curName = current.current;
     const curRunning = curName ? !!actions[curName]?.isRunning() : false;
-    // Re-dispara ao MUDAR de estado, ou quando um loop (idle/walk) parou.
-    const stalledLoop = want !== 'attack' && !curRunning;
-    if (nextName && actions[nextName] && (want !== curName || stalledLoop)) {
+    if (actions[nextName] && (want !== curName || !curRunning)) {
       if (curName && curName !== nextName && actions[curName]) actions[curName]!.fadeOut(0.18);
-      const loop = want !== 'attack';
       const a = actions[nextName]!;
       a.reset();
       a.timeScale = 1;
-      a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
-      a.clampWhenFinished = !loop;
+      a.setLoop(THREE.LoopRepeat, Infinity);
+      a.clampWhenFinished = false;
       a.fadeIn(0.15).play();
       current.current = want;
     }
     // Cadência do walk acompanha a velocidade real (anti foot-sliding).
     if (current.current === 'walk' && speedRef && actions['walk']) {
-      actions['walk']!.timeScale = THREE.MathUtils.clamp(speedRef.current * walkSync, 0.4, 5.5);
+      actions['walk']!.timeScale = THREE.MathUtils.clamp(speedRef.current * walkSync, 0.4, 3.0);
     }
   });
 
