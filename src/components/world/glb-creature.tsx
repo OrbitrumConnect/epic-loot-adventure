@@ -67,6 +67,10 @@ export function GlbCreature({
   useEffect(() => {
     const texCount = gltf.parser.json.textures?.length ?? 0;
     if (texCount === 0) return;
+    // SÓ para modelos "demo" de 1 textura (goose/eel): aí material 0 = textura 0.
+    // Modelos com VÁRIAS texturas (civilian/zombie/collector...) já têm material PBR
+    // próprio — forçar aqui pegava a textura errada (normal-map) e ficava AZUL. Não mexer.
+    if (texCount > 1) return;
     const jsonMats = gltf.parser.json.materials ?? [];
     let alive = true;
     const meshes: THREE.Mesh[] = [];
