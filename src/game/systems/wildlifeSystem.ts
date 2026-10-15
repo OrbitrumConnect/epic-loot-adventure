@@ -13,7 +13,7 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   goose: 5,
   pheasant: 5,
   pigeon: 55, // Pombo Bravo: mais pelo mapa (Pedro curtiu). Hostil, voa e mergulha.
-  eel: 6,    // Serpe Rastejante: monstro grande (anim própria de rastejar)
+  eel: 0,    // REMOVIDA (Pedro): modelo Tripo quebrado (nó escala-100 + single-sided). Survivor Red entra no lugar.
   monster: 6, // Aberração: monstro ~3m (anim própria)
   collector: 0, // FORA por ora: quantizado (não medi) → risco de gigante; reprocessar sem quantize depois
   civilian: 0, // REMOVIDO (Pedro): modelo demo vinha azul + T-pose (anim mixamo não roda). Fora do jogo.
