@@ -28,6 +28,7 @@ import {
   labelTexture, markPointerConsumed, mixColor, rand, terrainHeight, type Palette,
 } from './world-kit';
 import { GlbCrystals } from './glb-crystals';
+import { GlbRocks } from './glb-rocks';
 
 const KINDS: HarvestNodeKind[] = ['tree', 'pebble', 'rock', 'iron_vein', 'gold_vein', 'crystal'];
 /** Cristal da Essência = GLB (esconde o procedural, mantém clique). */
@@ -451,6 +452,7 @@ export function HarvestNodes({ c }: { c: Palette }) {
         />
       ))}
       {USE_GLB_CRYSTAL && <GlbCrystals />}
+      <GlbRocks />
       <HarvestLabel c={c} hover={hover} assets={built.assets} />
     </>
   );
