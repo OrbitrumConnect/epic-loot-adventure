@@ -63,9 +63,8 @@ const RAIDER_GLB: Record<string, string> = {
  *  compartilhados (idle/walk/run/attack). standFixX: FBX convertido = +90°;
  *  GLB direto do Meshy já é Y-up = 0. */
 const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number }> = {
-  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 1.95 }, // "samurai caído" → spiked (padrão Merged = funciona)
-  // raider_scout (pirata) FORA até reexport: o Meshy só deu Walking/Running (ossos SEM
-  // 'mixamorig:' → clips não grudam). Precisa do Merged_Animations. Scout volta pro peasant.
+  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.9 },  // spiked, 2x (Pedro)
+  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8 },    // pirata (padrão Merged = ossos mixamorig)
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 

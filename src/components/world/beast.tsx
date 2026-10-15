@@ -40,7 +40,7 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // fora do spawn (quantize)
   civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // spawn 0 (removido): demo azul + T-pose
   zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4, tint: '#7a8a66' },     // tint esverdeado
-  pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.38, yaw: Math.PI, groundBias: -0.3 }, // -0.3 = cola no chão (flutuava; -1.2 enterrava, erro meu)
+  pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.57, yaw: Math.PI, groundBias: -0.3 }, // 1.5x (Pedro); -0.3 = cola no chão
   flintmaw: { url: '/models/animals/flintmaw.glb', fixedScale: 1.1, yaw: 0, groundBias: 0.3 }, // yaw 0 = vira de frente (vinha de costas ao atacar); voa ~1m (Pedro aprovou)
 };
 
