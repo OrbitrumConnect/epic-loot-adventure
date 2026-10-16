@@ -15,7 +15,8 @@ import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { DesertPlain, DesertMountain } from './world/desert-terrain';
+import { DesertPlain, DesertMountain, MOUNTAIN_CAVE } from './world/desert-terrain';
+import { terrainMeshY } from './world/terrain-collision';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
@@ -594,6 +595,9 @@ function Character({
       terrainHeight(body.current.position.x, body.current.position.z),
       bridgeSurfaceY(body.current.position.x, body.current.position.z),
       houseFloor,
+      // Malha do terreno (planície + montanhas): anda no relevo real e SOBE nas
+      // montanhas. Só ergue o piso — acampamento/casa/fábrica têm colisão própria.
+      terrainMeshY(body.current.position.x, body.current.position.z),
     );
 
     if (!isGrounded.current) {
@@ -2004,13 +2008,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       ))}
       {/* Multiplayer: avatares dos outros jogadores (online). */}
       <RemotePlayers />
-      {/* Planície do deserto (1ª passada visual — mapa novo). */}
-      <DesertPlain />
-      {/* Montanhas rochosas novas (1ª passada visual — posição a travar). Maior no
-          fundo, menor no canto; colisão climável/caverna entra na fase seguinte. */}
-      {/* Montanha com caverna: boca virada pro spawn (player nasce perto da origem). */}
+      {/* Planície do deserto (puxada pro fundo p/ a crista de pedra ir pra trás da parede). */}
+      <DesertPlain z={22} />
+      {/* Montanha rochosa (boca da caverna virada pro spawn) + montanha-caverna
+          (passarela) no canto. Ambas climáveis (ver terrain-collision.ts). */}
       <DesertMountain size={84} x={-42} z={84} rotY={3.44} />
-      <DesertMountain size={52} x={58} z={70} rotY={-0.9} />
+      <DesertMountain size={110} x={66} z={66} rotY={0.6} url={MOUNTAIN_CAVE} />
       <GlbContainers />
       {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
           montanhas GLB novas + crista de pedra da planície entram no lugar. */}
