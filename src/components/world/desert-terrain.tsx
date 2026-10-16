@@ -42,7 +42,7 @@ function useTerrainCollision(ref: React.RefObject<THREE.Group | null>) {
   }, []);
 }
 
-export function DesertPlain({ size = 196, x = 0, z = 0, rotY = (3 * Math.PI) / 4 + (37 * Math.PI) / 180 }: { size?: number; x?: number; z?: number; rotY?: number }) {
+export function DesertPlain({ size = 196, x = 0, z = 0, yOffset = 0, rotY = (3 * Math.PI) / 4 + (37 * Math.PI) / 180 }: { size?: number; x?: number; z?: number; yOffset?: number; rotY?: number }) {
   const { scene } = useGLTF(PLAIN_URL);
   const model = useMemo(() => {
     const c = scene.clone(true);
@@ -64,7 +64,7 @@ export function DesertPlain({ size = 196, x = 0, z = 0, rotY = (3 * Math.PI) / 4
   // (que casa com a planície); só as montanhas dão colisão de malha (subir). Assim
   // a planície pode mover/crescer sem erguer o player sobre acampamento/base.
   return (
-    <group position={[x, terrainHeight(x, z), z]} rotation={[0, rotY, 0]}>
+    <group position={[x, terrainHeight(x, z) + yOffset, z]} rotation={[0, rotY, 0]}>
       <primitive object={model} />
     </group>
   );

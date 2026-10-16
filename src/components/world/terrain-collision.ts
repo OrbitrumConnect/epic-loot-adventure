@@ -46,7 +46,7 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 
 /** O quanto o jogador consegue SUBIR por quadro (degrau/ladeira). O raycast parte
  *  um pouco acima dos pés, então ladeira sobe mas parede vertical não (anda em volta). */
-const STEP_UP = 1.6;
+const STEP_UP = 0.7;
 
 /**
  * Altura do CHÃO logo abaixo dos pés do jogador em (x,z), a partir de `fromY`

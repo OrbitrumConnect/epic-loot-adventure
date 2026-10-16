@@ -342,6 +342,11 @@ function CampPiece({ spheres, children, ...rest }: {
 /** Modelo GLB do acampamento (Meshy decimado ~99k tris) — escalado pro RAIO do
  *  camp (preenche o círculo) e fincado no chão. Troca o visual procedural feio. */
 const CAMP_URL = '/models/props/raider-camp.glb';
+/** Giro EXTRA de camps específicos (o padrão é um hash por id). Pedro: o camp perto
+ *  do labirinto/estradinha estava virado errado → gira pra ficar de frente pra estrada. */
+const CAMP_YAW_EXTRA: Record<string, number> = {
+  blackclaw_camp: (160 * Math.PI) / 180,
+};
 function GlbCampModel({ radius, y, yaw }: { radius: number; y: number; yaw: number }) {
   const { scene } = useGLTF(CAMP_URL);
   const model = useMemo(() => {
@@ -409,7 +414,7 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
       </mesh>
 
       {/* Skin novo: GLB do acampamento (escalado pro raio). */}
-      <GlbCampModel radius={radius} y={markerY} yaw={(hashId(camp.id) % 360) * (Math.PI / 180)} />
+      <GlbCampModel radius={radius} y={markerY} yaw={(hashId(camp.id) % 360) * (Math.PI / 180) + (CAMP_YAW_EXTRA[camp.id] ?? 0)} />
 
       {/* Do procedural fica SÓ a fogueira (fogo + luz); o resto é o GLB. */}
       {structures.filter((s) => s.kind === 'bonfire').map((s, i) => {

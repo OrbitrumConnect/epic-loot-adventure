@@ -591,15 +591,15 @@ function Character({
     // Mesmo pra fábrica: dentro + iso → corta o teto; senão prédio inteiro.
     const facCut = factoryRoofCutY(body.current.position.x, body.current.position.z);
     factoryClip.constant = facCut !== null && cameraMode === 'iso' ? facCut : 1e9;
-    const groundY = Math.max(
-      terrainHeight(body.current.position.x, body.current.position.z),
-      bridgeSurfaceY(body.current.position.x, body.current.position.z),
-      houseFloor,
-      // Malha das montanhas: pega o CHÃO logo abaixo dos pés (não o topo), então dá
-      // pra SUBIR no topo E ENTRAR na caverna. Só ergue o piso — camp/casa/fábrica
-      // têm colisão própria.
-      terrainMeshY(body.current.position.x, body.current.position.z, body.current.position.y),
-    );
+    // Malha das montanhas: pega o CHÃO logo abaixo dos pés (não o topo). Quando há
+    // malha (player sobre montanha/caverna), ELA manda — inclusive piso de caverna
+    // ABAIXO do chão procedural (senão o Math.max prende o player em 0 e a "colisão
+    // acaba" dentro da cave). Fora das montanhas, terreno normal (camp/casa/fábrica).
+    const bx = body.current.position.x, bz = body.current.position.z;
+    const mountainY = terrainMeshY(bx, bz, body.current.position.y);
+    const groundY = mountainY > -Infinity
+      ? mountainY
+      : Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor);
 
     if (!isGrounded.current) {
       jumpVelocity.current -= 15 * dt;
@@ -2011,11 +2011,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <RemotePlayers />
       {/* Planície do deserto (puxada um pouco pro fundo; aumento LEVE só p/ não
           abrir buraco verde na frente). */}
-      <DesertPlain size={206} z={16} />
+      <DesertPlain size={206} z={36} yOffset={-0.5} />
       {/* Montanha rochosa (boca da caverna virada pro spawn) + montanha-caverna
-          (passarela) no canto, baixada ~0.5. Ambas climáveis (terrain-collision.ts). */}
-      <DesertMountain size={84} x={-42} z={84} rotY={3.44} />
-      <DesertMountain size={110} x={66} z={66} rotY={0.6} yOffset={-0.5} url={MOUNTAIN_CAVE} />
+          (passarela) no canto. Baixadas p/ matar z-fighting com a grama. Climáveis. */}
+      <DesertMountain size={84} x={-42} z={84} rotY={3.44} yOffset={-0.5} />
+      <DesertMountain size={110} x={66} z={66} rotY={0.6} yOffset={-1.0} url={MOUNTAIN_CAVE} />
       <GlbContainers />
       {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
           montanhas GLB novas + crista de pedra da planície entram no lugar. */}
