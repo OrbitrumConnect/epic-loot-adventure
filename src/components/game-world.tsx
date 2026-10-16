@@ -2011,11 +2011,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <RemotePlayers />
       {/* Planície do deserto (puxada um pouco pro fundo; aumento LEVE só p/ não
           abrir buraco verde na frente). */}
-      <DesertPlain size={206} z={36} yOffset={-0.5} />
+      <DesertPlain size={206} z={36} yOffset={-1.0} />
       {/* Montanha rochosa (boca da caverna virada pro spawn) + montanha-caverna
-          (passarela) no canto. Baixadas p/ matar z-fighting com a grama. Climáveis. */}
-      <DesertMountain size={84} x={-42} z={84} rotY={3.44} yOffset={-0.5} />
-      <DesertMountain size={110} x={66} z={66} rotY={0.6} yOffset={-1.0} url={MOUNTAIN_CAVE} />
+          (passarela) no canto. Baixadas p/ o chão original prevalecer em cima. Climáveis. */}
+      <DesertMountain size={84} x={-42} z={84} rotY={3.44} yOffset={-1.0} />
+      <DesertMountain size={110} x={66} z={66} rotY={0.6} yOffset={-1.5} url={MOUNTAIN_CAVE} />
       <GlbContainers />
       {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
           montanhas GLB novas + crista de pedra da planície entram no lugar. */}
