@@ -38,19 +38,28 @@ export function registerTerrain(root: THREE.Object3D): () => void {
 }
 
 const ray = new THREE.Raycaster();
-ray.far = 800;
-// three-mesh-bvh: só o primeiro acerto (topo) = mais rápido.
+// three-mesh-bvh: só o primeiro acerto = mais rápido.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (ray as any).firstHitOnly = true;
 const ORIGIN = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
 
-/** Altura da superfície da malha de terreno em (x,z) por raycast de cima pra
- *  baixo. `-Infinity` quando não há malha ali (cai no fallback procedural). */
-export function terrainMeshY(x: number, z: number): number {
+/** O quanto o jogador consegue SUBIR por quadro (degrau/ladeira). O raycast parte
+ *  um pouco acima dos pés, então ladeira sobe mas parede vertical não (anda em volta). */
+const STEP_UP = 1.6;
+
+/**
+ * Altura do CHÃO logo abaixo dos pés do jogador em (x,z), a partir de `fromY`
+ * (Y atual dos pés). O raio sai de `fromY + STEP_UP` pra baixo e pega a PRIMEIRA
+ * superfície — o piso onde ele pisa, NÃO o topo da montanha lá em cima. É isso
+ * que deixa ENTRAR na caverna (anda no piso sob o teto) em vez de subir no topo.
+ * `-Infinity` quando não há malha ali (cai no fallback procedural).
+ */
+export function terrainMeshY(x: number, z: number, fromY: number): number {
   if (terrains.size === 0) return -Infinity;
-  ORIGIN.set(x, 400, z);
+  ORIGIN.set(x, fromY + STEP_UP, z);
   ray.set(ORIGIN, DOWN);
+  ray.far = fromY + STEP_UP + 80; // alcança o chão bem abaixo
   let best = -Infinity;
   for (const root of terrains) {
     const hits = ray.intersectObject(root, true);

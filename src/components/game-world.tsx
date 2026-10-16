@@ -595,9 +595,10 @@ function Character({
       terrainHeight(body.current.position.x, body.current.position.z),
       bridgeSurfaceY(body.current.position.x, body.current.position.z),
       houseFloor,
-      // Malha do terreno (planície + montanhas): anda no relevo real e SOBE nas
-      // montanhas. Só ergue o piso — acampamento/casa/fábrica têm colisão própria.
-      terrainMeshY(body.current.position.x, body.current.position.z),
+      // Malha das montanhas: pega o CHÃO logo abaixo dos pés (não o topo), então dá
+      // pra SUBIR no topo E ENTRAR na caverna. Só ergue o piso — camp/casa/fábrica
+      // têm colisão própria.
+      terrainMeshY(body.current.position.x, body.current.position.z, body.current.position.y),
     );
 
     if (!isGrounded.current) {
