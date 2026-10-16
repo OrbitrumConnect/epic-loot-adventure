@@ -14,21 +14,68 @@ const PLAIN_URL = '/models/terrain/desert-plain.glb';
 const MOUNTAIN_URL = '/models/terrain/mountain.glb';
 const MOUNTAIN_CAVE_URL = '/models/terrain/mountain-cave.glb';
 
-/** Deixa o material FOSCO (reflete pouco como a planície original — sem glare do sol). */
+/**
+ * Deixa o material FOSCO e harmoniza a paleta terrosa.
+ *
+ * Problema corrigido: no glTF 2.0 o Three.js calcula
+ *   effectiveMetalness = material.metalness × metalnessMap.pixel.B
+ *   effectiveRoughness  = material.roughness  × roughnessMap.pixel.G
+ * Portanto setar metalness=0 SEM nulificar metalnessMap não garante zero reflexo
+ * — pixels B residuais do export do Meshy continuariam causando brilho metálico.
+ * Solução: metalnessMap = null (e roughnessMap = null nas montanhas) antes dos escalares.
+ * normalMap e map (albedo) são preservados para manter relevo e textura originais.
+ *
+ * Um lerp de cor único e leve é aplicado ao clone na carga (nunca por frame) para
+ * aproximar o chão esverdeado e as montanhas avermelhadas à mesma paleta terrosa quente.
+ */
 function makeMatte(c: THREE.Object3D, shadow: 'receive' | 'cast') {
+  // Terreno quente: marrom-areia para o chão, marrom-pedra para montanhas.
+  const GROUND_TINT  = new THREE.Color('#9c7a4a'); // areia quente — puxa o verde p/ marrom
+  const MOUNTAIN_TINT = new THREE.Color('#7a5c3e'); // pedra seca — reduz over-saturação avermelhada
+  const isMountain = shadow === 'cast';
+
   c.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
-    if (shadow === 'receive') m.receiveShadow = true; else m.castShadow = true;
+    if (isMountain) {
+      m.castShadow = true;
+    } else {
+      m.receiveShadow = true;
+    }
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     for (const mat of mats) {
       const pm = mat as THREE.MeshStandardMaterial;
-      if (pm && 'roughness' in pm) {
-        pm.roughness = 1;
-        pm.metalness = 0;
-        pm.envMapIntensity = 0;
-        pm.needsUpdate = true;
+      if (!pm || !('roughness' in pm)) continue;
+
+      // ── 1. Nulifica os mapas PBR de metal/rough ANTES dos escalares ──────────
+      // Three.js multiplica escalar × pixel do mapa; sem nullar, metalness=0
+      // não elimina o reflexo se o canal B tiver valor residual (comum no Meshy).
+      pm.metalnessMap = null;
+      pm.metalness    = 0;
+
+      if (isMountain) {
+        // Montanhas: roughnessMap do Meshy pode ter pixels G baixos → áreas brilhantes.
+        // Nullamos e travamos em 0.95 (pedra seca natural).
+        pm.roughnessMap = null;
+        pm.roughness    = 0.95;
+      } else {
+        // Chão: mantemos roughnessMap para variação superficial; escalar alto o suficiente
+        // para que mesmo pixels G baixos resultem em roughness razoável.
+        pm.roughness = 1.0;
       }
+
+      pm.envMapIntensity = 0;
+
+      // ── 2. Tint único na carga — harmoniza paleta sem achatar a textura ──────
+      // Aplica AQUI, sobre o clone já separado da cena original, portanto não
+      // acumula em re-renders. lerp 0.22–0.28 = sutil; preserva detalhes do albedo.
+      if (isMountain) {
+        pm.color.lerp(MOUNTAIN_TINT, 0.22); // reduz avermelhado excessivo
+      } else {
+        pm.color.lerp(GROUND_TINT, 0.28);   // retira cast verde-acinzentado
+      }
+
+      pm.needsUpdate = true;
     }
   });
 }
