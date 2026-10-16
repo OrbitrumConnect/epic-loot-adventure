@@ -2096,4 +2096,3 @@ export default function GameWorld(props: WorldProps) {
     </>
   );
 }
-?
