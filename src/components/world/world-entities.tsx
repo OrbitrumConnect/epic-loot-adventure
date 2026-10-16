@@ -8,7 +8,7 @@
  * quadro continua lendo `getState()` dentro do laço.
  */
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { Beast } from './beast';
