@@ -174,7 +174,16 @@ const FACTORY_POS: { x: number; z: number; rot: number }[] = [
 /** padY = altura natural no centro; o footprint inteiro é achatado nela. */
 export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));
 
+/**
+ * Montanha antiga ZERADA (Pedro 16/10): o relevo procedural do canto NO foi
+ * nivelado porque as montanhas GLB novas (Desert_rocky_mountain, climáveis, com
+ * caverna) entram no lugar + a crista de pedra da própria planície vai atrás.
+ * Deixar `false` nivela o canto; `true` restaura a cadeia procedural antiga.
+ */
+const OLD_SNOW_MOUNTAIN = false;
+
 export function snowMountainBump(x: number, z: number): number {
+  if (!OLD_SNOW_MOUNTAIN) return 0; // montanha antiga zerada — ver nota acima
   // MAX dos domos (cadeia conectada; vales entre picos ficam mais baixos).
   let h = 0;
   for (const p of SNOW_PEAKS) {

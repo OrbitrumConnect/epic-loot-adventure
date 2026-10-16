@@ -15,12 +15,11 @@ import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { DesertPlain } from './world/desert-terrain';
+import { DesertPlain, DesertMountain } from './world/desert-terrain';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
 import { GlbContainers } from './world/glb-containers';
-import { WatchtowerModel } from './world/glb-watchtower';
 import { weaponFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
@@ -2007,11 +2006,13 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <RemotePlayers />
       {/* Planície do deserto (1ª passada visual — mapa novo). */}
       <DesertPlain />
+      {/* Montanhas rochosas novas (1ª passada visual — posição a travar). Maior no
+          fundo, menor no canto; colisão climável/caverna entra na fase seguinte. */}
+      <DesertMountain size={84} x={-48} z={72} rotY={0.3} />
+      <DesertMountain size={52} x={60} z={74} rotY={-0.9} />
       <GlbContainers />
-      {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
-      <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
-        <WatchtowerModel height={6} />
-      </group>
+      {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
+          montanhas GLB novas + crista de pedra da planície entram no lugar. */}
       <Campfire c={c} position={[-1, 0, 4]} />
       <Campfire c={c} position={[10, 0, -6]} />
       <Campfire c={c} position={[-15, 0, -12]} />
