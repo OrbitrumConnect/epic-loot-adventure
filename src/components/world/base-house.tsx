@@ -7,6 +7,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { terrainHeight } from './world-kit';
 import { houseCollider, housePlayerInside } from './house-collider';
+import type { BasePiece } from '@/game/types/playerbase';
 
 /**
  * Casa completa (WoodHouse.obj + textura) como PRÉDIO central da base — 1 modelo
@@ -25,14 +26,19 @@ const FLOOR_H = TARGET_H * 0.133 * VSTRETCH;
 /** Distância² (m²) além da qual a luz interna da casa sai do shader. */
 const HOUSE_LIGHT_D2 = 22 * 22;
 
-export function BaseHouse() {
-  const pieces = useGameStore((s) => s.playerBase?.pieces);
+export function BaseHouse({
+  pieces: remotePieces,
+  remote = false,
+}: { pieces?: BasePiece[] | null; remote?: boolean } = {}) {
+  const localPieces = useGameStore((s) => s.playerBase?.pieces);
+  const pieces = remotePieces === undefined ? localPieces : remotePieces;
   const obj = useLoader(OBJLoader, '/models/house/WoodHouse.obj');
   const diffuse = useTexture('/models/house/Diffuse.png');
   const normal = useTexture('/models/house/normal.png');
   // Casa de PEDRA (evolução nível 10). Carrega sempre; só renderiza quando evoluída.
   const stone = useGLTF('/models/house/stone-house.glb');
-  const baseEvolved = useGameStore((s) => s.baseEvolved ?? false);
+  const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
+  const baseEvolved = remote ? false : localBaseEvolved;
 
   const gl = useThree((s) => s.gl);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // habilita o corte do teto
@@ -125,8 +131,8 @@ export function BaseHouse() {
 
   // Publica footprint + piso pro loop de física (chão caminhável + paredes sólidas).
   useEffect(() => {
-    if (!ctr) {
-      houseCollider.current = null;
+    if (remote || !ctr) {
+      if (!remote) houseCollider.current = null;
       return;
     }
     const floorY = terrainHeight(ctr.x, ctr.z) + FLOOR_H;
@@ -141,14 +147,14 @@ export function BaseHouse() {
     return () => {
       houseCollider.current = null;
     };
-  }, [ctr?.x, ctr?.z, prepared.halfX, prepared.halfZ, prepared.wallSegs]);
+  }, [ctr?.x, ctr?.z, prepared.halfX, prepared.halfZ, prepared.wallSegs, remote]);
 
   if (!ctr) return null;
   return (
     <group position={[ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z]}>
       <primitive object={prepared.wrap} />
       {/* Luz interna quente (o telhado bloqueia o sol) */}
-      <pointLight ref={lightRef} position={[0, TARGET_H * 0.55, 0]} intensity={9} distance={TARGET_H * 2.6} decay={1.4} color="#ffe0b0" />
+      {!remote && <pointLight ref={lightRef} position={[0, TARGET_H * 0.55, 0]} intensity={9} distance={TARGET_H * 2.6} decay={1.4} color="#ffe0b0" />}
     </group>
   );
 }

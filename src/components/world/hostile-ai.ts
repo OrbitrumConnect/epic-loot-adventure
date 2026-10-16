@@ -25,6 +25,7 @@ import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece } from './base-targets';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
+import { canSimulateSharedWorld } from '@/net/multiplayer';
 
 /**
  * Clique num inimigo: esquerdo seleciona, Shift+esquerdo enfileira uma caçada.
@@ -138,6 +139,7 @@ export function queuePosition(id: string, x: number, z: number, behavior: Creatu
 }
 
 export function flushPositions() {
+  if (!canSimulateSharedWorld()) { pending.clear(); return; }
   if (pending.size === 0) return;
   useGameStore.setState(s => ({
     creatures: s.creatures.map(cr => {

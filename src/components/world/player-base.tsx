@@ -830,14 +830,18 @@ export function NetBases({ c }: { c: Palette }) {
   const ids = useNet(useShallow((s) => Object.keys(s.bases)));
   return (
     <>
-      {ids.map((id) => (
-        <BaseStructures
-          key={`remote-base-${id}`}
-          c={c}
-          interactive={false}
-          piecesSource={() => useNet.getState().bases[id]?.pieces ?? null}
-        />
-      ))}
+      {ids.map((id) => <RemoteBase key={`remote-base-${id}`} id={id} c={c} />)}
+    </>
+  );
+}
+
+function RemoteBase({ id, c }: { id: string; c: Palette }) {
+  const base = useNet((s) => s.bases[id] ?? null);
+  if (!base) return null;
+  return (
+    <>
+      <BaseStructures c={c} interactive={false} piecesSource={() => useNet.getState().bases[id]?.pieces ?? null} />
+      <BaseHouse pieces={base.pieces} remote />
     </>
   );
 }

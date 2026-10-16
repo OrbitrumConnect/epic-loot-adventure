@@ -18,6 +18,7 @@ import { getCamps } from './objective-bridge';
 import { isRaider, Raider } from './raider';
 import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
+import { broadcastWorld, MP_ENABLED, useNet } from '@/net/multiplayer';
 
 const SYNC_INTERVAL = 0.2;
 
@@ -77,6 +78,27 @@ export function Enemies({ c, playerRef }: { c: Palette; playerRef: React.RefObje
       )}
     </>
   );
+}
+
+export function MultiplayerWorldSync() {
+  const connected = useNet((s) => s.connected);
+  const isHost = useNet((s) => s.isHost);
+  const remoteWorld = useNet((s) => s.world);
+
+  useEffect(() => {
+    if (!MP_ENABLED || !connected || !isHost) return;
+    const send = () => broadcastWorld(useGameStore.getState().creatures);
+    send();
+    const timer = window.setInterval(send, 450);
+    return () => window.clearInterval(timer);
+  }, [connected, isHost]);
+
+  useEffect(() => {
+    if (!MP_ENABLED || !connected || isHost || !remoteWorld) return;
+    useGameStore.setState({ creatures: remoteWorld });
+  }, [connected, isHost, remoteWorld]);
+
+  return null;
 }
 
 export function Camps({ c }: { c: Palette }) {

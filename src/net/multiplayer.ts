@@ -11,6 +11,7 @@
 import { createClient, type RealtimeChannel } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import type { PlayerBaseState } from '@/game/types/playerbase';
+import type { CreatureState } from '@/game/types/creature';
 
 const SUPA_URL = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
 const SUPA_ANON = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
@@ -40,6 +41,8 @@ type NetState = {
   players: Record<string, RemotePose>;
   /** Base de cada outro jogador (pra renderizar a base dele no mapa). */
   bases: Record<string, PlayerBaseState>;
+  /** Snapshot do mundo enviado pelo anfitrião. Clientes convidados nunca o simulam. */
+  world: CreatureState[] | null;
   join: (code?: string) => void;
   leave: () => void;
   setName: (n: string) => void;
@@ -59,6 +62,7 @@ export const useNet = create<NetState>((set, get) => ({
   selfName: 'Viajante-' + Math.floor(100 + Math.random() * 900),
   players: {},
   bases: {},
+  world: null,
 
   setName: (n) => set({ selfName: n.trim() || get().selfName }),
 
@@ -88,6 +92,12 @@ export const useNet = create<NetState>((set, get) => ({
       });
     });
 
+    ch.on('broadcast', { event: 'world' }, ({ payload }) => {
+      const p = payload as { id: string; creatures: CreatureState[] };
+      if (p.id === selfId || get().isHost || !Array.isArray(p.creatures)) return;
+      set({ world: p.creatures });
+    });
+
     ch.on('presence', { event: 'sync' }, () => {
       const st = ch.presenceState();
       const ids = Object.keys(st);
@@ -110,12 +120,12 @@ export const useNet = create<NetState>((set, get) => ({
     });
 
     channel = ch;
-    set({ room, connected: false, isHost, players: {}, bases: {} });
+    set({ room, connected: false, isHost, players: {}, bases: {}, world: null });
   },
 
   leave: () => {
     if (channel && supabase) { void supabase.removeChannel(channel); channel = null; }
-    set({ room: null, connected: false, isHost: false, players: {}, bases: {} });
+    set({ room: null, connected: false, isHost: false, players: {}, bases: {}, world: null });
   },
 }));
 
@@ -138,6 +148,19 @@ export function broadcastBase(base: PlayerBaseState | null): void {
   if (!channel || !useNet.getState().connected) return;
   const { selfId } = useNet.getState();
   void channel.send({ type: 'broadcast', event: 'base', payload: { id: selfId, base } });
+}
+
+/** Estado comum dos inimigos. Só o anfitrião publica; convidados apenas o consomem. */
+export function broadcastWorld(creatures: CreatureState[]): void {
+  if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
+  const { selfId } = useNet.getState();
+  void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, creatures } });
+}
+
+/** Em uma sala, a simulação pertence ao anfitrião. Fora dela, o jogo continua solo. */
+export function canSimulateSharedWorld(): boolean {
+  const state = useNet.getState();
+  return !state.connected || state.isHost;
 }
 
 /** Link de convite da sala atual (pra compartilhar). */

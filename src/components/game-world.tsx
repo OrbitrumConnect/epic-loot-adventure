@@ -32,7 +32,7 @@ import { BaseFireFX } from './world/base-fire';
 import { BaseNightLights } from './world/base-night-lights';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { isBuildActive } from './world/build-mode';
-import { Camps, Enemies } from './world/world-entities';
+import { Camps, Enemies, MultiplayerWorldSync } from './world/world-entities';
 import { Billboards, groundTexture } from './world/billboards';
 import { AshlandPilot } from './world/ashland-glb-pilot';
 import { CelShade } from './world/cel-shade';
@@ -2091,6 +2091,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <BaseNightLights />
       <SafeZoneMarker />
       <Camps c={c} />
+      <MultiplayerWorldSync />
       <Enemies c={c} playerRef={playerRef} />
 
       <TargetRoute playerRef={playerRef} />
