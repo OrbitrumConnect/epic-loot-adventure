@@ -2008,7 +2008,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <DesertPlain />
       {/* Montanhas rochosas novas (1ª passada visual — posição a travar). Maior no
           fundo, menor no canto; colisão climável/caverna entra na fase seguinte. */}
-      <DesertMountain size={84} x={-42} z={84} rotY={0.3} />
+      {/* Montanha com caverna: boca virada pro spawn (player nasce perto da origem). */}
+      <DesertMountain size={84} x={-42} z={84} rotY={3.44} />
       <DesertMountain size={52} x={58} z={70} rotY={-0.9} />
       <GlbContainers />
       {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
