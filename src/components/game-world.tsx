@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { OrthographicCamera, PerspectiveCamera, Stats } from '@react-three/drei';
+import { OrthographicCamera, PerspectiveCamera, Stats, useGLTF } from '@react-three/drei';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
@@ -1088,18 +1088,29 @@ const LIGHT_CULL_D2 = 24 * 24;
  *  Reinicia a cada reload de página = cada login entra na zona segura. */
 let didInitialSpawn = false;
 
+const LIGHT_POST_URL = '/models/props/light-post.glb';
+const LIGHT_POST_H = 3.2; // altura alvo do poste (modelo Mad Max decimado ~10k tris)
+
 function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
-  const bulb = useRef<THREE.MeshStandardMaterial>(null);
+  const { scene } = useGLTF(LIGHT_POST_URL);
+  // Modelo GLB escalado + fincado no chão + centrado (clone por instância; GLB cacheado).
+  const model = useMemo(() => {
+    const c = scene.clone(true);
+    c.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.castShadow = true; });
+    const box = new THREE.Box3().setFromObject(c);
+    const h = box.max.y - box.min.y || 1;
+    c.scale.setScalar(LIGHT_POST_H / h);
+    const b2 = new THREE.Box3().setFromObject(c);
+    c.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+    return c;
+  }, [scene]);
   useFrame(() => {
     const nf = nightFactor();
     const flick = 0.9 + Math.sin(performance.now() * 0.006 + x * 1.3) * 0.1;
-    if (bulb.current) bulb.current.emissiveIntensity = nf * 2.4 * flick;
     const l = light.current;
     if (!l) return;
-    // Culling de luz: de dia (nf~0) ou longe do jogador, a luz SAI do shader
-    // (visible=false). O alcance é 13 m, então acima de ~22 m ela não ilumina
-    // nada perto — cortar é invisível e tira ~90% das luzes do custo por frame.
+    // Culling de luz: de dia (nf~0) ou longe do jogador, a luz SAI do shader.
     const p = useGameStore.getState().player.position;
     const near = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < LIGHT_CULL_D2;
     l.visible = nf > 0.04 && near;
@@ -1107,18 +1118,12 @@ function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
   });
   return (
     <group position={[x, y, z]}>
-      <mesh position={[0, 1.3, 0]} castShadow>
-        <cylinderGeometry args={[0.07, 0.1, 2.6, 6]} />
-        <meshStandardMaterial color="#3a3a42" />
-      </mesh>
-      <mesh position={[0, 2.68, 0]}>
-        <boxGeometry args={[0.26, 0.32, 0.26]} />
-        <meshStandardMaterial ref={bulb} color="#ffd98a" emissive="#ffb040" emissiveIntensity={0} />
-      </mesh>
-      <pointLight ref={light} position={[0, 2.6, 0]} color="#ffcf87" intensity={0} distance={13} decay={1.6} />
+      <primitive object={model} />
+      <pointLight ref={light} position={[0, LIGHT_POST_H * 0.9, 0]} color="#ffcf87" intensity={0} distance={13} decay={1.6} />
     </group>
   );
 }
+useGLTF.preload(LIGHT_POST_URL);
 
 function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => void) | undefined; paused?: boolean | undefined }) {
   const size = MAP_HALF * 2 + 40;
