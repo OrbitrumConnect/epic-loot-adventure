@@ -61,6 +61,7 @@ import {
   pushEvents, shotEvent, xpEvent,
 } from '../systems/feedbackSystem';
 import type { FeedbackDraft } from '../systems/feedbackSystem';
+import { broadcastCreatureHit, canSimulateSharedWorld } from '@/net/multiplayer';
 
 /** Para onde o piloto automático recua e para onde aponta um `travel` sem alvo. */
 export const HOME_POSITION: Position = { x: 7, z: -26 };
@@ -603,6 +604,20 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
     const finalPower = Math.round(totalPower * damageMultiplier(state.player));
+
+    if (!canSimulateSharedWorld()) {
+      broadcastCreatureHit({ targetId, source: state.player.position, damage: finalPower });
+      set({
+        player: {
+          ...state.player,
+          lastAttackAt: now,
+          inventory: usesBullet ? removeItem(state.player.inventory, 'ammo', 1) : state.player.inventory,
+        },
+        attackTick: state.attackTick + 1,
+        ui: { ...state.ui, message: `Golpe enviado contra ${creature.name}.` },
+      });
+      return;
+    }
 
     const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name, playerCritStats(state.player));
 

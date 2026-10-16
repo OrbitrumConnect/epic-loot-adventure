@@ -29,6 +29,13 @@ export type RemotePose = {
   action: string; t: number;
 };
 
+export type CreatureHitIntent = {
+  id: string;
+  targetId: string;
+  source: { x: number; z: number };
+  damage: number;
+};
+
 type NetState = {
   room: string | null;
   connected: boolean;
@@ -52,6 +59,7 @@ const rand = (n: number) => Math.random().toString(36).slice(2, 2 + n);
 const randRoom = () => rand(5).toUpperCase();
 
 let channel: RealtimeChannel | null = null;
+let creatureHitHandler: ((intent: CreatureHitIntent) => void) | null = null;
 
 export const useNet = create<NetState>((set, get) => ({
   room: null,
@@ -96,6 +104,12 @@ export const useNet = create<NetState>((set, get) => ({
       const p = payload as { id: string; creatures: CreatureState[] };
       if (p.id === selfId || get().isHost || !Array.isArray(p.creatures)) return;
       set({ world: p.creatures });
+    });
+
+    ch.on('broadcast', { event: 'creature-hit' }, ({ payload }) => {
+      const hit = payload as CreatureHitIntent;
+      if (!get().isHost || hit.id === selfId || !hit.targetId || !Number.isFinite(hit.damage)) return;
+      creatureHitHandler?.(hit);
     });
 
     ch.on('presence', { event: 'sync' }, () => {
@@ -161,6 +175,18 @@ export function broadcastWorld(creatures: CreatureState[]): void {
 export function canSimulateSharedWorld(): boolean {
   const state = useNet.getState();
   return !state.connected || state.isHost;
+}
+
+/** Convidado pede o golpe; o anfitrião valida e altera o inimigo comum. */
+export function broadcastCreatureHit(intent: Omit<CreatureHitIntent, 'id'>): void {
+  if (!channel || !useNet.getState().connected || useNet.getState().isHost) return;
+  const { selfId } = useNet.getState();
+  void channel.send({ type: 'broadcast', event: 'creature-hit', payload: { ...intent, id: selfId } });
+}
+
+/** Registrado pela camada de mundo enquanto este navegador é anfitrião. */
+export function registerCreatureHitHandler(handler: ((intent: CreatureHitIntent) => void) | null): void {
+  creatureHitHandler = handler;
 }
 
 /** Link de convite da sala atual (pra compartilhar). */

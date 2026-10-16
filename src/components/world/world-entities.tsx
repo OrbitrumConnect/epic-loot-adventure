@@ -18,7 +18,7 @@ import { getCamps } from './objective-bridge';
 import { isRaider, Raider } from './raider';
 import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
-import { broadcastWorld, MP_ENABLED, useNet } from '@/net/multiplayer';
+import { broadcastWorld, MP_ENABLED, registerCreatureHitHandler, useNet } from '@/net/multiplayer';
 
 const SYNC_INTERVAL = 0.2;
 
@@ -97,6 +97,26 @@ export function MultiplayerWorldSync() {
     if (!MP_ENABLED || !connected || isHost || !remoteWorld) return;
     useGameStore.setState({ creatures: remoteWorld });
   }, [connected, isHost, remoteWorld]);
+
+  useEffect(() => {
+    if (!MP_ENABLED || !connected || !isHost) return;
+    registerCreatureHitHandler((hit) => {
+      const state = useGameStore.getState();
+      const creature = state.creatures.find((c) => c.id === hit.targetId);
+      if (!creature || creature.behavior === 'dead') return;
+      const dx = creature.position.x - hit.source.x;
+      const dz = creature.position.z - hit.source.z;
+      if (dx * dx + dz * dz > 24 * 24) return;
+      const damage = Math.max(1, Math.round(hit.damage) - creature.armor);
+      const hp = Math.max(0, creature.hp - damage);
+      useGameStore.setState((current) => ({
+        creatures: current.creatures.map((c) => c.id !== creature.id ? c : hp === 0
+          ? { ...c, hp: 0, behavior: 'dead', respawnAt: Date.now() + 20_000 }
+          : { ...c, hp, behavior: 'chase' }),
+      }));
+    });
+    return () => registerCreatureHitHandler(null);
+  }, [connected, isHost]);
 
   return null;
 }
