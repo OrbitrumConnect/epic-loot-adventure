@@ -67,3 +67,21 @@ export function terrainMeshY(x: number, z: number, fromY: number): number {
   }
   return best;
 }
+
+/**
+ * Altura do TOPO da malha em (x,z) — raycast de bem alto pra baixo. Usado por
+ * INIMIGOS e PROPS (árvore/pedra) que ficam SOBRE a montanha (superfície de cima,
+ * sem entrar em caverna). `-Infinity` quando não há malha ali.
+ */
+export function terrainMeshTopY(x: number, z: number): number {
+  if (terrains.size === 0) return -Infinity;
+  ORIGIN.set(x, 500, z);
+  ray.set(ORIGIN, DOWN);
+  ray.far = 700;
+  let best = -Infinity;
+  for (const root of terrains) {
+    const hits = ray.intersectObject(root, true);
+    if (hits.length > 0 && hits[0]!.point.y > best) best = hits[0]!.point.y;
+  }
+  return best;
+}

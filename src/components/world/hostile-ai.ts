@@ -19,6 +19,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
+import { terrainMeshTopY } from './terrain-collision';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
@@ -489,8 +490,13 @@ export function useHostileAI(opts: HostileOptions) {
     [targetX, targetZ] = pushOutSafeZone(targetX, targetZ, CREATURE_RADIUS);
     g.position.x = THREE.MathUtils.clamp(targetX, -MAP_HALF, MAP_HALF);
     g.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
-    // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno.
-    g.position.y = Math.max(terrainHeight(g.position.x, g.position.z), houseFloorSurfaceY(g.position.x, g.position.z));
+    // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno — e
+    // SOBE na superfície das montanhas (malha) quando está sobre elas.
+    g.position.y = Math.max(
+      terrainHeight(g.position.x, g.position.z),
+      houseFloorSurfaceY(g.position.x, g.position.z),
+      terrainMeshTopY(g.position.x, g.position.z),
+    );
 
     const behavior: CreatureBehavior = flee
       ? 'flee'
