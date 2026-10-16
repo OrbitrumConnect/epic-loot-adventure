@@ -13,7 +13,7 @@ import { terrainHeight } from './world-kit';
  */
 const URL = '/models/terrain/desert-plain.glb';
 
-export function DesertPlain({ size = 196, x = 0, z = 0, rotY = Math.PI / 2 }: { size?: number; x?: number; z?: number; rotY?: number }) {
+export function DesertPlain({ size = 196, x = 0, z = 0, rotY = (3 * Math.PI) / 4 }: { size?: number; x?: number; z?: number; rotY?: number }) {
   const { scene } = useGLTF(URL);
   const model = useMemo(() => {
     const c = scene.clone(true);
