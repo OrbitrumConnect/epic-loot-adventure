@@ -16,13 +16,15 @@ createServer(async (req, res) => {
     if (asset.startsWith(publicRoot.replace(/[\\/]$/, '') + sep)) {
       const info = await stat(asset).catch(() => null);
       if (info?.isFile()) {
-        res.writeHead(200, { 'Content-Type': mime[extname(asset)] || 'application/octet-stream' });
+        res.writeHead(200, { 'Content-Type': mime[extname(asset)] || 'application/octet-stream', 'Cache-Control': 'no-store, no-cache, must-revalidate' });
         res.end(await readFile(asset));
         return;
       }
     }
     const response = await worker.fetch(new Request(url, { method: req.method, headers: req.headers }), {}, { waitUntil: promise => promise.catch(console.error) });
-    res.writeHead(response.status, Object.fromEntries(response.headers));
+    const headers = Object.fromEntries(response.headers);
+    headers['cache-control'] = 'no-store, no-cache, must-revalidate';
+    res.writeHead(response.status, headers);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch (error) {
     console.error(error);

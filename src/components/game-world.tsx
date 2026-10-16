@@ -59,6 +59,8 @@ import {
   FREE_SPEED_MIN, FREE_SPEED_MAX, type FreeCamInspect,
 } from './world/free-cam';
 import { FreeCamOverlay } from './world/free-cam-overlay';
+import { EditorWorldLayer } from './editor/editor-world';
+import { isEditorActive } from './editor/editor-store';
 
 export type WorldProps = {
   mode: string;
@@ -1505,12 +1507,14 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     };
 
     const onClick = () => {
+      if (isEditorActive()) return;
       if ((cameraMode === 'third' || cameraMode === 'free') && !pointerLocked.current && !props.paused && !isBuildActive()) {
         canvas.requestPointerLock();
       }
     };
 
     const onMouseDown = (e: MouseEvent) => {
+      if (isEditorActive()) return;
       // Botão DIREITO no modo de cima: inicia o giro 360° da câmera (não ataca/anda).
       if (e.button === 2 && cameraMode === 'iso') { isoDragging.current = true; return; }
       // Câmera livre (Caio): clique nunca ataca — a inspeção é pela mira central.
@@ -1620,7 +1624,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     setFreeCamActive(cameraMode === 'free');
     if (cameraMode !== 'free') { freeKeys.current.clear(); freeInit.current = false; return undefined; }
     const FREE_CODES = new Set([
-      'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'Space',
+      'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyC', 'Space',
       'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight',
     ]);
     const down = (e: KeyboardEvent) => {
@@ -1688,8 +1692,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
       const k = freeKeys.current;
       const mf = Number(k.has('KeyW')) - Number(k.has('KeyS'));
-      const mr = Number(k.has('KeyD')) - Number(k.has('KeyA'));
-      const mu = Number(k.has('KeyE') || k.has('Space')) - Number(k.has('KeyQ') || k.has('ControlLeft') || k.has('ControlRight'));
+      // Lateral da câmera: A = direita e D = esquerda no referencial atual do mundo.
+      // Invertido aqui para corresponder ao arrasto visual da câmera livre.
+      const mr = Number(k.has('KeyA')) - Number(k.has('KeyD'));
+      const mu = Number(k.has('KeyE') || k.has('Space')) - Number(k.has('KeyQ') || k.has('KeyC') || k.has('ControlLeft') || k.has('ControlRight'));
       let speed = free.speed;
       if (k.has('ShiftLeft') || k.has('ShiftRight')) speed *= 3;
       if (k.has('AltLeft') || k.has('AltRight')) speed *= 0.25;
@@ -1933,6 +1939,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <Atmosphere c={c} paused={props.paused} />
 
       <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
+      <EditorWorldLayer />
 
       <mesh geometry={path} receiveShadow>
         <meshStandardMaterial map={roadTex} bumpMap={roadTex} bumpScale={0.045} roughness={0.92} side={THREE.DoubleSide} />
@@ -2009,7 +2016,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         { x: -32, z: -42, scale: 5, yaw: 1.3 },
         { x: 42, z: 8, scale: 6, yaw: 3.0 },
         { x: -40, z: 24, scale: 5.5, yaw: 0.4 },
-      ].map((t, i) => <LandmarkTree key={`tree-g-${i}`} x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
+      ].map((t, i) => <LandmarkTree key={`tree-g-${i}`} editorId={`map-tree-gnarled-0${i + 1}`} x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
       {/* ~10 árvores split-trunk espalhadas perto do nascedouro (a "outra" árvore). */}
       {[
         { x: 20, z: -12, scale: 4.5 }, { x: -10, z: -40, scale: 5, yaw: 1.1 },
@@ -2029,10 +2036,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       {/* Planície do deserto (puxada um pouco pro fundo; aumento LEVE só p/ não
           abrir buraco verde na frente). */}
       <DesertPlain size={206} z={36} yOffset={-1.0} />
+      <DesertMountain x={-57.4} z={91.1} yOffset={-0.5} url="/models/terrain/mountain.glb" transform={{ position: [-57.4, -0.5, 91.1], rotation: [0, -3.5, 0], scale: [5.6, 6.6, 4.2] }} />
+      <DesertMountain x={-86.3} z={50} yOffset={-0.5} url={MOUNTAIN_CAVE} transform={{ position: [-86.3, -0.5, 50], rotation: [0, -7.2, 0], scale: [7.7, 8.7, 7.1] }} />
       {/* Montanha rochosa (boca da caverna virada pro spawn) + montanha-caverna
           (passarela) no canto. Baixadas p/ o chão original prevalecer em cima. Climáveis. */}
-      <DesertMountain size={84} x={-42} z={84} rotY={3.44} yOffset={-1.0} />
-      <DesertMountain size={110} x={66} z={66} rotY={0.6} yOffset={-1.5} url={MOUNTAIN_CAVE} />
       <GlbContainers />
       {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
           montanhas GLB novas + crista de pedra da planície entram no lugar. */}

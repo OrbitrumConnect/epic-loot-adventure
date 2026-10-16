@@ -166,10 +166,8 @@ const FACTORY_PAD_CORE = 0.42;          // miolo plano (~9,2 m, cobre o prédio)
  *  relevo já é baixo) → o pad quase não mexe = sem platô/degrau. Longe de água.
  *  Uma no lugar da ruína do meio. Cada uma achata no SEU nível; o rio é preservado. */
 const FACTORY_POS: { x: number; z: number; rot: number }[] = [
-  { x: 58, z: -8, rot: 0.4 },    // área aberta a LESTE (longe do nascedouro, camps e árvores) — Pedro
-  { x: 78, z: 24, rot: 1.9 },    // beirada leste
-  { x: 26, z: -76, rot: -0.8 },  // beirada sul
-  { x: -80, z: -38, rot: 2.6 },  // beirada oeste
+  { x: 42, z: -76, rot: -0.8 },  // deslocada para o lado, longe do acampamento
+  { x: 78, z: 24, rot: 1.9 },    // extremo oposto do mapa
 ];
 /** padY = altura natural no centro; o footprint inteiro é achatado nela. */
 export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));

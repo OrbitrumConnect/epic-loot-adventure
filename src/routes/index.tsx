@@ -42,6 +42,8 @@ import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/wo
 const GameWorld = lazy(() => import('@/components/game-world'));
 import { BossSpawner } from '@/components/world/boss-spawner';
 import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
+import { EditorPanel } from '@/components/editor/editor-panel';
+import { useEditorStore } from '@/components/editor/editor-store';
 const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
@@ -89,6 +91,8 @@ const navigation = [
 
 function Index() {
   const [ready, setReady] = useState(false);
+  const editorActive = useEditorStore(s => s.active);
+  const setEditorActive = useEditorStore(s => s.setActive);
   const [cameraMode, setCameraMode] = useState<'iso' | 'third' | 'free'>('iso');
   const [deathCountdown, setDeathCountdown] = useState(0);
   // V alterna só entre os modos de JOGO (iso/third). Se a câmera livre de
@@ -266,6 +270,13 @@ function Index() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      if (e.code === 'F8') {
+        e.preventDefault();
+        setEditorActive(!editorActive);
+        setCameraMode(editorActive ? 'iso' : 'free');
+        return;
+      }
+      if (editorActive) return;
       // 1–9 → slots 0–8; 0 → slot 9. Demais slots (ex.: rifle) por clique.
       if (/^[0-9]$/.test(e.key)) useHotbarSlot(e.key === '0' ? 9 : Number(e.key) - 1);
       // Na câmera livre, E/Q/R/Espaço pilotam a câmera (no game-world), não o
@@ -301,7 +312,7 @@ function Index() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, cameraMode, ui.panel, inCity]);
+  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, cameraMode, ui.panel, inCity, editorActive, setEditorActive]);
 
   function open(id: string) {
     setPanelMessage('');
@@ -353,6 +364,7 @@ function Index() {
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
       <MultiplayerPanel />
+      {editorActive && <EditorPanel />}
       <aside className="game-sidebar" aria-label="Navegação do jogo">
         <Button variant="ghost" size="icon" className="sidebar-toggle"
           title="Esconder menu (mais espaço pro jogo)" aria-label="Esconder menu" onClick={toggleSidebar}>
@@ -444,7 +456,7 @@ function Index() {
           )}
           {ready && !inCity && (
             <Suspense fallback={<div className="world-loading">Entrando no vale…</div>}>
-              <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel)} onAttack={hitNearest} cameraMode={cameraMode} />
+              <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel) || editorActive} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
           {ready && ui.mode === 'world' && <BossSpawner />}
