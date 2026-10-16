@@ -251,7 +251,7 @@ export const CAMP_IDS = Object.keys(CAMPS);
 /** Onde cada acampamento fica no mundo. O tier 1 é o mais perto do nascedouro. */
 export const CAMP_PLACEMENTS: CampPlacement[] = [
   { id: 'raider_outpost', defId: 'raider_outpost', position: { x: 23, z: 7 } },
-  { id: 'blackclaw_camp', defId: 'blackclaw_camp', position: { x: -45, z: 35 } },
+  { id: 'blackclaw_camp', defId: 'blackclaw_camp', position: { x: -54, z: 42 } },
   { id: 'crackedbone_warband', defId: 'crackedbone_warband', position: { x: 55, z: -50 } },
   { id: 'stonefist_stronghold', defId: 'stonefist_stronghold', position: { x: -60, z: -58 } },
 ];

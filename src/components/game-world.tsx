@@ -16,7 +16,7 @@ import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
 import { DesertPlain, DesertMountain, MOUNTAIN_CAVE } from './world/desert-terrain';
-import { terrainMeshY } from './world/terrain-collision';
+import { terrainMeshY, registerWall, wallHeightAt } from './world/terrain-collision';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
@@ -548,6 +548,17 @@ function Character({
     [nx, nz] = pushOutBasePieces(nx, nz, PLAYER_RADIUS);
     // Paredes das fábricas: sólidas (entra pela abertura).
     [nx, nz] = pushOutFactoryWalls(nx, nz, PLAYER_RADIUS);
+    // Paredes do LABIRINTO: no XZ do player, se a malha da parede está alta (acima
+    // do chão + 0.8m) = parede → bloqueia. Testa por eixo pra DESLIZAR (não travar).
+    {
+      const ox = body.current.position.x, oz = body.current.position.z;
+      const inWall = (wx: number, wz: number) => wallHeightAt(wx, wz) > terrainHeight(wx, wz) + 0.8;
+      if (inWall(nx, nz)) {
+        if (!inWall(nx, oz)) nz = oz;
+        else if (!inWall(ox, nz)) nx = ox;
+        else { nx = ox; nz = oz; }
+      }
+    }
 
     body.current.position.x = THREE.MathUtils.clamp(nx, -MAP_HALF, MAP_HALF);
     body.current.position.z = THREE.MathUtils.clamp(nz, -MAP_HALF, MAP_HALF);
@@ -1140,6 +1151,7 @@ const MAZE_URL = '/models/props/maze.glb';
  *  personagem anda por ele. Escalado p/ `size` m de lado. Visual (colisão = TODO). */
 function Maze({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: number; yaw?: number }) {
   const { scene } = useGLTF(MAZE_URL);
+  const ref = useRef<THREE.Group>(null);
   const model = useMemo(() => {
     const c = scene.clone(true);
     c.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
@@ -1150,7 +1162,12 @@ function Maze({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: numbe
     c.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
     return c;
   }, [scene, size]);
-  return <group position={[x, terrainHeight(x, z), z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
+  // Paredes do labirinto = colisão horizontal (anda nos corredores, barra na parede).
+  useEffect(() => {
+    if (!ref.current) return;
+    return registerWall(ref.current);
+  }, []);
+  return <group ref={ref} position={[x, terrainHeight(x, z), z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
 }
 useGLTF.preload(MAZE_URL);
 

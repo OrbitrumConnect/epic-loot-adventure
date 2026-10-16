@@ -85,3 +85,34 @@ export function terrainMeshTopY(x: number, z: number): number {
   }
   return best;
 }
+
+/* ---- PAREDES (labirinto): colisão horizontal simples ---- */
+const walls = new Set<THREE.Object3D>();
+
+/** Registra uma malha de PAREDE (ex.: labirinto) p/ bloqueio horizontal (BVH). */
+export function registerWall(root: THREE.Object3D): () => void {
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g = m.geometry as any;
+    if (m.isMesh && g && !g.boundsTree) g.computeBoundsTree();
+  });
+  walls.add(root);
+  return () => { walls.delete(root); };
+}
+
+/** Altura do topo da parede em (x,z) — raycast de cima. `-Infinity` se não há parede.
+ *  No corredor o raio pega o chão (baixo) ou nada; na parede pega o topo (alto). */
+export function wallHeightAt(x: number, z: number): number {
+  if (walls.size === 0) return -Infinity;
+  ORIGIN.set(x, 500, z);
+  ray.set(ORIGIN, DOWN);
+  ray.far = 700;
+  let best = -Infinity;
+  for (const root of walls) {
+    const hits = ray.intersectObject(root, true);
+    if (hits.length > 0 && hits[0]!.point.y > best) best = hits[0]!.point.y;
+  }
+  return best;
+}
