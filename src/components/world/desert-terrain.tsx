@@ -31,7 +31,7 @@ const MOUNTAIN_CAVE_URL = '/models/terrain/mountain-cave.glb';
 function makeMatte(c: THREE.Object3D, shadow: 'receive' | 'cast') {
   // Terreno quente: marrom-areia para o chão, marrom-pedra para montanhas.
   const GROUND_TINT  = new THREE.Color('#9c7a4a'); // areia quente — puxa o verde p/ marrom
-  const MOUNTAIN_TINT = new THREE.Color('#7a5c3e'); // pedra seca — reduz over-saturação avermelhada
+  const MOUNTAIN_TINT = new THREE.Color('#6e5035'); // pedra seca — reduz over-saturação avermelhada
   const isMountain = shadow === 'cast';
 
   c.traverse((o) => {
@@ -53,15 +53,13 @@ function makeMatte(c: THREE.Object3D, shadow: 'receive' | 'cast') {
       pm.metalnessMap = null;
       pm.metalness    = 0;
 
+      // Tanto montanha quanto chão: roughnessMap nullado para garantir zero brilho.
+      // O chão ao lado da montanha ficava ligeiramente brilhoso com roughnessMap ativo.
+      pm.roughnessMap = null;
       if (isMountain) {
-        // Montanhas: roughnessMap do Meshy pode ter pixels G baixos → áreas brilhantes.
-        // Nullamos e travamos em 0.95 (pedra seca natural).
-        pm.roughnessMap = null;
-        pm.roughness    = 0.95;
+        pm.roughness = 0.95; // pedra seca natural
       } else {
-        // Chão: mantemos roughnessMap para variação superficial; escalar alto o suficiente
-        // para que mesmo pixels G baixos resultem em roughness razoável.
-        pm.roughness = 1.0;
+        pm.roughness = 1.0;  // terra completamente fosca
       }
 
       pm.envMapIntensity = 0;
@@ -70,9 +68,9 @@ function makeMatte(c: THREE.Object3D, shadow: 'receive' | 'cast') {
       // Aplica AQUI, sobre o clone já separado da cena original, portanto não
       // acumula em re-renders. lerp 0.22–0.28 = sutil; preserva detalhes do albedo.
       if (isMountain) {
-        pm.color.lerp(MOUNTAIN_TINT, 0.22); // reduz avermelhado excessivo
+        pm.color.lerp(MOUNTAIN_TINT, 0.32); // reduz avermelhado excessivo (era 0.22, insuficiente)
       } else {
-        pm.color.lerp(GROUND_TINT, 0.28);   // retira cast verde-acinzentado
+        pm.color.lerp(GROUND_TINT, 0.45);   // retira cast verde-acinzentado (era 0.28, insuficiente)
       }
 
       pm.needsUpdate = true;
