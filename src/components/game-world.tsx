@@ -15,6 +15,7 @@ import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
+import { DesertPlain } from './world/desert-terrain';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
@@ -694,7 +695,7 @@ function Character({
     }
   });
 
-  const noRaycast = useCallback((raycaster: any, intersects: any[]) => {}, []);
+  const noRaycast = useCallback((raycaster: any, intersects: any[]) => { }, []);
 
   return (
     <group ref={body} position={[0, 0, 1]} raycast={noRaycast}>
@@ -709,147 +710,147 @@ function Character({
         : <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />)}
 
       <group visible={!USE_GLB_HERO}>
-      {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
-      <group ref={leftHip} position={[-0.14, 0.6, 0]}>
-        <mesh position={[0, -0.15, 0]} castShadow>
-          <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
-          <meshStandardMaterial color={c.dark} />
+        {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
+        <group ref={leftHip} position={[-0.14, 0.6, 0]}>
+          <mesh position={[0, -0.15, 0]} castShadow>
+            <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          <group ref={leftKnee} position={[0, -0.3, 0]}>
+            <AdventurerDetails c={c} part="shin" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.1, 24, 16]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            <mesh position={[0, -0.15, 0.01]} castShadow>
+              <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
+              <sphereGeometry args={[1, 24, 16]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            {/* Cano da bota (couro médio) sobre a canela escura */}
+            <mesh position={[0, -0.1, 0.02]} castShadow>
+              <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
+              <meshStandardMaterial color={c.trunk} roughness={0.9} />
+            </mesh>
+          </group>
+        </group>
+        <group ref={rightHip} position={[0.14, 0.6, 0]}>
+          <mesh position={[0, -0.15, 0]} castShadow>
+            <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          <group ref={rightKnee} position={[0, -0.3, 0]}>
+            <AdventurerDetails c={c} part="shin" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.1, 24, 16]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            <mesh position={[0, -0.15, 0.01]} castShadow>
+              <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
+              <sphereGeometry args={[1, 24, 16]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            {/* Cano da bota (couro médio) sobre a canela escura */}
+            <mesh position={[0, -0.1, 0.02]} castShadow>
+              <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
+              <meshStandardMaterial color={c.trunk} roughness={0.9} />
+            </mesh>
+          </group>
+        </group>
+
+        <AdventurerDetails c={c} part="body" />
+        <AdventurerDetails c={c} part="torso" />
+        <AdventurerDetails c={c} part="skull" />
+        <AdventurerDetails c={c} part="hair" />
+        <AdventurerDetails c={c} part="head" />
+        <AdventurerDetails c={c} part="coat" />
+        {/* Goggles follow the curved head; the leather strap wraps the skull. */}
+        <mesh position={[0, 1.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 0.92, 1]}>
+          <torusGeometry args={[0.184, 0.022, 10, 40]} />
+          <meshStandardMaterial color={c.dark} roughness={0.84} />
         </mesh>
-        <group ref={leftKnee} position={[0, -0.3, 0]}>
-          <AdventurerDetails c={c} part="shin" />
+        {[-0.085, 0.085].map(lx => (
+          <mesh key={lx} position={[lx, 1.54, 0.182]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.048, 0.048, 0.022, 28]} />
+            <meshStandardMaterial color={c.metal} metalness={0.65} roughness={0.2} emissive={c.crystal} emissiveIntensity={0.12} />
+          </mesh>
+        ))}
+
+        {/* Braço esquerdo articulado + escudo no antebraço */}
+        <group ref={leftShoulder} position={[-0.38, 1.12, 0.02]}>
+          <AdventurerDetails c={c} part="shoulder" />
           <mesh castShadow>
             <sphereGeometry args={[0.1, 24, 16]} />
-            <meshStandardMaterial color={c.dark} />
+            <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.15, 0.01]} castShadow>
-            <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
-            <meshStandardMaterial color={c.dark} />
+          {/* Placa de ombro (osso), como no sprite */}
+          <mesh position={[0, -0.14, 0]} castShadow>
+            <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
+            <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
-            <sphereGeometry args={[1, 24, 16]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          {/* Cano da bota (couro médio) sobre a canela escura */}
-          <mesh position={[0, -0.1, 0.02]} castShadow>
-            <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
-            <meshStandardMaterial color={c.trunk} roughness={0.9} />
-          </mesh>
+          <group ref={leftElbow} position={[0, -0.28, 0]}>
+            <AdventurerDetails c={c} part="bracer" />
+            <AdventurerDetails c={c} part="shield" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.08, 24, 16]} />
+              <meshStandardMaterial color={c.armor} />
+            </mesh>
+            <mesh position={[0, -0.13, 0.01]} castShadow>
+              <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
+              <meshStandardMaterial color={c.armor} />
+            </mesh>
+            <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
+              <sphereGeometry args={[1, 20, 14]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            {/* Escudo preso ao antebraço */}
+            <mesh position={[0, -0.14, 0.13]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <cylinderGeometry args={[0.287, 0.275, 0.065, 48]} />
+              <meshStandardMaterial color={c.trunk} />
+            </mesh>
+          </group>
         </group>
-      </group>
-      <group ref={rightHip} position={[0.14, 0.6, 0]}>
-        <mesh position={[0, -0.15, 0]} castShadow>
-          <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
-          <meshStandardMaterial color={c.dark} />
-        </mesh>
-        <group ref={rightKnee} position={[0, -0.3, 0]}>
-          <AdventurerDetails c={c} part="shin" />
+
+        {/* Braço direito articulado — segura a arma na mão (socket hand_R) */}
+        <group ref={rightShoulder} position={[0.38, 1.12, 0.02]}>
+          <AdventurerDetails c={c} part="shoulder" />
           <mesh castShadow>
             <sphereGeometry args={[0.1, 24, 16]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          <mesh position={[0, -0.15, 0.01]} castShadow>
-            <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
-            <sphereGeometry args={[1, 24, 16]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          {/* Cano da bota (couro médio) sobre a canela escura */}
-          <mesh position={[0, -0.1, 0.02]} castShadow>
-            <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
-            <meshStandardMaterial color={c.trunk} roughness={0.9} />
-          </mesh>
-        </group>
-      </group>
-
-      <AdventurerDetails c={c} part="body" />
-      <AdventurerDetails c={c} part="torso" />
-      <AdventurerDetails c={c} part="skull" />
-      <AdventurerDetails c={c} part="hair" />
-      <AdventurerDetails c={c} part="head" />
-      <AdventurerDetails c={c} part="coat" />
-      {/* Goggles follow the curved head; the leather strap wraps the skull. */}
-      <mesh position={[0, 1.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 0.92, 1]}>
-        <torusGeometry args={[0.184, 0.022, 10, 40]} />
-        <meshStandardMaterial color={c.dark} roughness={0.84} />
-      </mesh>
-      {[-0.085, 0.085].map(lx => (
-        <mesh key={lx} position={[lx, 1.54, 0.182]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.048, 0.048, 0.022, 28]} />
-          <meshStandardMaterial color={c.metal} metalness={0.65} roughness={0.2} emissive={c.crystal} emissiveIntensity={0.12} />
-        </mesh>
-      ))}
-
-      {/* Braço esquerdo articulado + escudo no antebraço */}
-      <group ref={leftShoulder} position={[-0.38, 1.12, 0.02]}>
-        <AdventurerDetails c={c} part="shoulder" />
-        <mesh castShadow>
-          <sphereGeometry args={[0.1, 24, 16]} />
-          <meshStandardMaterial color={c.armor} />
-        </mesh>
-        {/* Placa de ombro (osso), como no sprite */}
-        <mesh position={[0, -0.14, 0]} castShadow>
-          <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
-          <meshStandardMaterial color={c.armor} />
-        </mesh>
-        <group ref={leftElbow} position={[0, -0.28, 0]}>
-          <AdventurerDetails c={c} part="bracer" />
-          <AdventurerDetails c={c} part="shield" />
-          <mesh castShadow>
-            <sphereGeometry args={[0.08, 24, 16]} />
             <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.13, 0.01]} castShadow>
-            <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
+          {/* Placa de ombro menor, lado direito — couro escuro (contrapeso ao osso) */}
+          <mesh position={[0, -0.14, 0]} castShadow>
+            <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
             <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
-            <sphereGeometry args={[1, 20, 14]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          {/* Escudo preso ao antebraço */}
-          <mesh position={[0, -0.14, 0.13]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <cylinderGeometry args={[0.287, 0.275, 0.065, 48]} />
-            <meshStandardMaterial color={c.trunk} />
-          </mesh>
-        </group>
-      </group>
-
-      {/* Braço direito articulado — segura a arma na mão (socket hand_R) */}
-      <group ref={rightShoulder} position={[0.38, 1.12, 0.02]}>
-        <AdventurerDetails c={c} part="shoulder" />
-        <mesh castShadow>
-          <sphereGeometry args={[0.1, 24, 16]} />
-          <meshStandardMaterial color={c.armor} />
-        </mesh>
-        {/* Placa de ombro menor, lado direito — couro escuro (contrapeso ao osso) */}
-        <mesh position={[0, -0.14, 0]} castShadow>
-          <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
-          <meshStandardMaterial color={c.armor} />
-        </mesh>
-        <group ref={rightElbow} position={[0, -0.28, 0]}>
-          <AdventurerDetails c={c} part="bracer" />
-          <mesh castShadow>
-            <sphereGeometry args={[0.08, 24, 16]} />
-            <meshStandardMaterial color={c.armor} />
-          </mesh>
-          <mesh position={[0, -0.13, 0.01]} castShadow>
-            <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
-            <meshStandardMaterial color={c.armor} />
-          </mesh>
-          <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
-            <sphereGeometry args={[1, 20, 14]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          {/* Pose-base da mão; o ataque gira o grupo interno `sword`. */}
-          <group position={[0, -0.3, 0.08]} rotation={[0.5, 0, 0]}>
-            <group ref={sword}>
-              <HeldItem c={c} />
+          <group ref={rightElbow} position={[0, -0.28, 0]}>
+            <AdventurerDetails c={c} part="bracer" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.08, 24, 16]} />
+              <meshStandardMaterial color={c.armor} />
+            </mesh>
+            <mesh position={[0, -0.13, 0.01]} castShadow>
+              <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
+              <meshStandardMaterial color={c.armor} />
+            </mesh>
+            <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
+              <sphereGeometry args={[1, 20, 14]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            {/* Pose-base da mão; o ataque gira o grupo interno `sword`. */}
+            <group position={[0, -0.3, 0.08]} rotation={[0.5, 0, 0]}>
+              <group ref={sword}>
+                <HeldItem c={c} />
+              </group>
             </group>
           </group>
         </group>
-      </group>
       </group>
     </group>
   );
@@ -2004,6 +2005,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       ))}
       {/* Multiplayer: avatares dos outros jogadores (online). */}
       <RemotePlayers />
+      {/* Planície do deserto (1ª passada visual — mapa novo). */}
+      <DesertPlain size={210} />
       <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
@@ -2093,3 +2096,4 @@ export default function GameWorld(props: WorldProps) {
     </>
   );
 }
+?
