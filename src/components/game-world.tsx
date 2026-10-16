@@ -1991,8 +1991,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         { x: 18, z: 4, scale: 4.5, yaw: 0.9 }, { x: -14, z: 14, scale: 4, yaw: 2.6 },
         { x: 46, z: -36, scale: 4.6, yaw: 0.2 }, { x: 2, z: -50, scale: 5, yaw: 1.5 },
       ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url="/models/trees/tree-split.glb" x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
-      {/* Labirinto gigante numa área aberta distante (personagem anda por ele). */}
-      <Maze x={58} z={56} size={54} />
+      {/* Labirinto gigante (área aberta a oeste do lago, longe da fábrica). +30%. */}
+      <Maze x={8} z={56} size={70} />
+      {/* Postes de luz DENTRO do labirinto. */}
+      {[[8, 56], [-10, 44], [26, 44], [-10, 70], [26, 70], [8, 80]].map(([lx, lz], i) => (
+        <RoadLamp key={`maze-lamp-${i}`} x={lx!} y={terrainHeight(lx!, lz!)} z={lz!} />
+      ))}
       <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
