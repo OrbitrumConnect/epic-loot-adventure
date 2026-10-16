@@ -213,7 +213,7 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
       fl.getWorldPosition(tmpCampV);
       const near = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z) < CAMP_LIGHT_D2;
       fl.visible = near;
-      if (near) fl.intensity = (1.8 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 7) * 0.6;
+      if (near) fl.intensity = (3.6 + nightFactor() * 8) + Math.sin(clock.elapsedTime * 7) * 0.7; // +luz (Pedro)
     }
     const el = emberLight.current;
     if (el) {
@@ -242,7 +242,7 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
           <mesh geometry={kit.cone} material={kit.flame} scale={[0.5, 1.1, 0.5]} />
           <mesh geometry={kit.cone} material={kit.flame} position={[0.12, 0.25, -0.08]} scale={[0.3, 0.7, 0.3]} />
           {/* Luz de verdade: acende forte à noite. */}
-          <pointLight ref={fireLight} color="#ff8a44" intensity={5} distance={14} decay={1.5} />
+          <pointLight ref={fireLight} color="#ffa054" intensity={8} distance={20} decay={1.4} />
         </group>
       )}
       {cleared && (

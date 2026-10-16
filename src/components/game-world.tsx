@@ -1089,7 +1089,7 @@ const LIGHT_CULL_D2 = 24 * 24;
 let didInitialSpawn = false;
 
 const LIGHT_POST_URL = '/models/props/light-post.glb';
-const LIGHT_POST_H = 3.2; // altura alvo do poste (modelo Mad Max decimado ~10k tris)
+const LIGHT_POST_H = 4.2; // +30% (Pedro) — poste Mad Max mais alto
 
 function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
