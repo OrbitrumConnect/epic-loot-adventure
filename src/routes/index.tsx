@@ -41,6 +41,7 @@ import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/wo
 
 const GameWorld = lazy(() => import('@/components/game-world'));
 import { BossSpawner } from '@/components/world/boss-spawner';
+import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
 const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
@@ -351,6 +352,7 @@ function Index() {
 
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
+      <MultiplayerPanel />
       <aside className="game-sidebar" aria-label="Navegação do jogo">
         <Button variant="ghost" size="icon" className="sidebar-toggle"
           title="Esconder menu (mais espaço pro jogo)" aria-label="Esconder menu" onClick={toggleSidebar}>

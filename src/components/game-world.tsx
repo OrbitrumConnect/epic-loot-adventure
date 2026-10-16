@@ -14,6 +14,8 @@ import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
+import { RemotePlayers } from './world/remote-players';
+import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
 import { GlbContainers } from './world/glb-containers';
@@ -557,6 +559,9 @@ function Character({
     while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
     currentRotY.current += rotDiff * Math.min(15 * dt, 1);
     body.current.rotation.y = currentRotY.current;
+
+    // Multiplayer: transmite a pose do jogador local (throttla sozinho ~11Hz).
+    broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, heroAction.current);
 
     // Especial (Q/R): pulo pro 'jump', giro 360° pro 'spin'. O dano/feedback
     // acontece no store; aqui é só a animação. O soco de impacto vem dos eventos.
@@ -1997,6 +2002,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       {[[-8, 56], [-24, 44], [10, 44], [-24, 70], [10, 70], [-8, 80]].map(([lx, lz], i) => (
         <RoadLamp key={`maze-lamp-${i}`} x={lx!} y={terrainHeight(lx!, lz!)} z={lz!} />
       ))}
+      {/* Multiplayer: avatares dos outros jogadores (online). */}
+      <RemotePlayers />
       <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
