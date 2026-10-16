@@ -1455,6 +1455,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   const prevCameraMode = useRef(cameraMode);
   const isoYaw = useRef(0);            // giro 360° da câmera de cima (MOBA): botão direito / 1 dedo
   const isoDragging = useRef(false);   // arrastando o botão direito pra girar
+  const isoZoom = useRef<number | null>(null);
 
   // Câmera livre (dev): teclas, posição e vetores de rascunho (criados 1x, nunca
   // alocados por quadro). Métrica/inspeção escrevem no bridge `free-cam.ts`.
@@ -1467,7 +1468,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
   useEffect(() => {
     if (camera instanceof THREE.OrthographicCamera) {
-      camera.zoom = Math.max(12, Math.min(33, size.width / 32));
+      const defaultZoom = Math.max(12, Math.min(33, size.width / 32));
+      isoZoom.current = isoZoom.current === null
+        ? defaultZoom
+        : THREE.MathUtils.clamp(isoZoom.current, 12, Math.max(36, defaultZoom));
+      camera.zoom = isoZoom.current;
       camera.updateProjectionMatrix();
     }
   }, [camera, size.width]);
@@ -1493,12 +1498,21 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       pointerLocked.current = document.pointerLockElement === canvas;
     };
 
-    // Zoom (scroll) na terceira pessoa: distância 3–8, suavizada no frame.
-    // Na câmera livre a roda ajusta a VELOCIDADE-base de voo.
+    // Zoom: na MOBA afasta/aproxima em faixa limitada; na terceira pessoa muda
+    // a distância e na câmera livre ajusta a velocidade-base de voo.
     const onWheel = (e: WheelEvent) => {
       if (cameraMode === 'free') {
         e.preventDefault();
         adjustFreeCamSpeed(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+        return;
+      }
+      if (cameraMode === 'iso') {
+        e.preventDefault();
+        if (!(camera instanceof THREE.OrthographicCamera)) return;
+        const defaultZoom = Math.max(12, Math.min(33, size.width / 32));
+        isoZoom.current = THREE.MathUtils.clamp((isoZoom.current ?? defaultZoom) - e.deltaY * 0.025, 12, Math.max(36, defaultZoom));
+        camera.zoom = isoZoom.current;
+        camera.updateProjectionMatrix();
         return;
       }
       if (cameraMode !== 'third') return;

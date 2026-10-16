@@ -189,9 +189,11 @@ function Index() {
   const playerBase = useGameStore(s => s.playerBase);
   const deliverToBase = useGameStore(s => s.deliverToBase);
   const baseProg = playerBase ? baseLv1Progress(playerBase) : null;
-  // HUD: vida da base (soma das peças) + rótulo da onda.
-  const baseHp = playerBase ? playerBase.pieces.reduce((a, p) => a + p.hp, 0) : 0;
-  const baseMaxHp = playerBase ? playerBase.pieces.reduce((a, p) => a + p.maxHp, 0) : 0;
+  // A derrota da base é determinada pelo núcleo. Exibir a soma de muros/torres
+  // fazia a barra continuar verde mesmo depois de o núcleo cair e encerrar a base.
+  const baseCore = playerBase?.pieces.find(p => p.kind === 'core');
+  const baseHp = baseCore?.hp ?? 0;
+  const baseMaxHp = baseCore?.maxHp ?? 0;
   const waveLabel = wave.phase === 'combat'
     ? `Onda ${wave.wave} ⚔️`
     : wave.phase === 'peace'

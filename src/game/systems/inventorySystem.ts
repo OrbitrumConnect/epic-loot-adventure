@@ -44,17 +44,19 @@ export function findEmptySlot(inventory: InventoryState): number {
 
 export function canAddItem(inventory: InventoryState, itemId: string, quantity: number): boolean {
   const item = ITEMS[itemId];
-  if (!item) return false;
+  if (!item || quantity <= 0) return false;
 
   const addedWeight = item.weight * quantity;
   if (getWeight(inventory) + addedWeight > inventory.maxWeight) return false;
 
-  const existingSlot = inventory.slots.findIndex(
-    s => s.itemId === itemId && s.quantity < item.maxStack
-  );
-  if (existingSlot >= 0) return true;
-
-  return findEmptySlot(inventory) >= 0;
+  // A coleta é atômica: se o drop não couber por inteiro, não podemos retornar
+  // `true` e deixar `addItem` perder silenciosamente o excedente da pilha.
+  const stackCapacity = inventory.slots.reduce((capacity, slot) => {
+    if (slot.itemId === itemId) return capacity + Math.max(0, item.maxStack - slot.quantity);
+    if (slot.itemId === null) return capacity + item.maxStack;
+    return capacity;
+  }, 0);
+  return stackCapacity >= quantity;
 }
 
 export function addItem(inventory: InventoryState, itemId: string, quantity: number): InventoryState {
