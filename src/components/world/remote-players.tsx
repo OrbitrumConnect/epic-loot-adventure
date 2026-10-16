@@ -1,4 +1,5 @@
 import { useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import { useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import * as THREE from 'three';
@@ -15,10 +16,17 @@ function RemotePlayer({ id }: { id: string }) {
   const group = useRef<THREE.Group>(null);
   const action = useRef<HeroAction>('idle');
   const inited = useRef(false);
+  const identity = useRef<HTMLDivElement>(null);
+  const identityText = useRef('');
   useFrame(() => {
     const g = group.current;
     const p = useNet.getState().players[id];
     if (!g || !p) return;
+    const label = `${p.name} · Nv. ${Number.isFinite(p.level) ? p.level : 1}`;
+    if (identity.current && identityText.current !== label) {
+      identity.current.textContent = label;
+      identityText.current = label;
+    }
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
     if (!inited.current) { g.position.set(p.x, terrainHeight(p.x, p.z), p.z); g.rotation.y = p.yaw; inited.current = true; }
     g.position.x += (p.x - g.position.x) * 0.22;
@@ -32,6 +40,9 @@ function RemotePlayer({ id }: { id: string }) {
   return (
     <group ref={group}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />
+      <Html center position={[0, HERO_HEIGHT + 0.65, 0]} distanceFactor={12} style={{ pointerEvents: 'none' }}>
+        <div ref={identity} style={{ whiteSpace: 'nowrap', color: '#fff3c4', background: 'rgba(4, 12, 10, 0.78)', border: '1px solid rgba(229, 190, 92, 0.65)', borderRadius: 6, padding: '3px 6px', font: '700 11px system-ui', textShadow: '0 1px 2px #000' }} />
+      </Html>
     </group>
   );
 }
