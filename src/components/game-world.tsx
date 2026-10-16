@@ -2006,7 +2006,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       {/* Multiplayer: avatares dos outros jogadores (online). */}
       <RemotePlayers />
       {/* Planície do deserto (1ª passada visual — mapa novo). */}
-      <DesertPlain size={210} />
+      <DesertPlain />
       <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>

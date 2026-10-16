@@ -13,11 +13,27 @@ import { terrainHeight } from './world-kit';
  */
 const URL = '/models/terrain/desert-plain.glb';
 
-export function DesertPlain({ size = 210, x = 0, z = 0 }: { size?: number; x?: number; z?: number }) {
+export function DesertPlain({ size = 196, x = 0, z = 0, rotY = Math.PI / 2 }: { size?: number; x?: number; z?: number; rotY?: number }) {
   const { scene } = useGLTF(URL);
   const model = useMemo(() => {
     const c = scene.clone(true);
-    c.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.receiveShadow = true; });
+    c.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      m.receiveShadow = true;
+      // FOSCO: o deserto brilhava com o sol (specular). Deixa igual à planície
+      // original (reflete menos) — roughness alto, sem metal nem reflexo de ambiente.
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      for (const mat of mats) {
+        const pm = mat as THREE.MeshStandardMaterial;
+        if (pm && 'roughness' in pm) {
+          pm.roughness = 1;
+          pm.metalness = 0;
+          pm.envMapIntensity = 0;
+          pm.needsUpdate = true;
+        }
+      }
+    });
     // Escala pela largura (XZ) pro tamanho do mapa.
     const box = new THREE.Box3().setFromObject(c);
     const w = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) || 1;
@@ -39,7 +55,7 @@ export function DesertPlain({ size = 210, x = 0, z = 0 }: { size?: number; x?: n
     return c;
   }, [scene, size]);
   return (
-    <group position={[x, terrainHeight(x, z), z]}>
+    <group position={[x, terrainHeight(x, z), z]} rotation={[0, rotY, 0]}>
       <primitive object={model} />
     </group>
   );
