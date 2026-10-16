@@ -44,7 +44,6 @@ function useTerrainCollision(ref: React.RefObject<THREE.Group | null>) {
 
 export function DesertPlain({ size = 196, x = 0, z = 0, rotY = (3 * Math.PI) / 4 + (37 * Math.PI) / 180 }: { size?: number; x?: number; z?: number; rotY?: number }) {
   const { scene } = useGLTF(PLAIN_URL);
-  const ref = useRef<THREE.Group>(null);
   const model = useMemo(() => {
     const c = scene.clone(true);
     makeMatte(c, 'receive');
@@ -61,9 +60,11 @@ export function DesertPlain({ size = 196, x = 0, z = 0, rotY = (3 * Math.PI) / 4
     c.position.y -= hits.length > 0 ? hits[0]!.point.y : 0;
     return c;
   }, [scene, size]);
-  useTerrainCollision(ref);
+  // Planície = só VISUAL (chão plano). O player anda no `terrainHeight` procedural
+  // (que casa com a planície); só as montanhas dão colisão de malha (subir). Assim
+  // a planície pode mover/crescer sem erguer o player sobre acampamento/base.
   return (
-    <group ref={ref} position={[x, terrainHeight(x, z), z]} rotation={[0, rotY, 0]}>
+    <group position={[x, terrainHeight(x, z), z]} rotation={[0, rotY, 0]}>
       <primitive object={model} />
     </group>
   );
@@ -73,7 +74,7 @@ export function DesertPlain({ size = 196, x = 0, z = 0, rotY = (3 * Math.PI) / 4
  * Montanha rochosa — assenta a BASE no chão e sobe; climável (registra colisão).
  * `url` troca o modelo (rocha simples ou a montanha-caverna com passarela).
  */
-export function DesertMountain({ size = 70, x = 0, z = 0, rotY = 0, url = MOUNTAIN_URL }: { size?: number; x?: number; z?: number; rotY?: number; url?: string }) {
+export function DesertMountain({ size = 70, x = 0, z = 0, rotY = 0, yOffset = 0, url = MOUNTAIN_URL }: { size?: number; x?: number; z?: number; rotY?: number; yOffset?: number; url?: string }) {
   const { scene } = useGLTF(url);
   const ref = useRef<THREE.Group>(null);
   const model = useMemo(() => {
@@ -89,7 +90,7 @@ export function DesertMountain({ size = 70, x = 0, z = 0, rotY = 0, url = MOUNTA
   }, [scene, size]);
   useTerrainCollision(ref);
   return (
-    <group ref={ref} position={[x, terrainHeight(x, z), z]} rotation={[0, rotY, 0]}>
+    <group ref={ref} position={[x, terrainHeight(x, z) + yOffset, z]} rotation={[0, rotY, 0]}>
       <primitive object={model} />
     </group>
   );

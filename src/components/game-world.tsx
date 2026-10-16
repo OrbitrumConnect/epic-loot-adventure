@@ -2008,12 +2008,13 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       ))}
       {/* Multiplayer: avatares dos outros jogadores (online). */}
       <RemotePlayers />
-      {/* Planície do deserto (puxada pro fundo p/ a crista de pedra ir pra trás da parede). */}
-      <DesertPlain z={22} />
+      {/* Planície do deserto (puxada um pouco pro fundo; aumento LEVE só p/ não
+          abrir buraco verde na frente). */}
+      <DesertPlain size={206} z={16} />
       {/* Montanha rochosa (boca da caverna virada pro spawn) + montanha-caverna
-          (passarela) no canto. Ambas climáveis (ver terrain-collision.ts). */}
+          (passarela) no canto, baixada ~0.5. Ambas climáveis (terrain-collision.ts). */}
       <DesertMountain size={84} x={-42} z={84} rotY={3.44} />
-      <DesertMountain size={110} x={66} z={66} rotY={0.6} url={MOUNTAIN_CAVE} />
+      <DesertMountain size={110} x={66} z={66} rotY={0.6} yOffset={-0.5} url={MOUNTAIN_CAVE} />
       <GlbContainers />
       {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
           montanhas GLB novas + crista de pedra da planície entram no lugar. */}
