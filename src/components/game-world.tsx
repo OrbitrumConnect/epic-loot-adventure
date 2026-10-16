@@ -27,7 +27,7 @@ import {
   makeInstanceFadeMaterial, registerInstancedFade, useFadeGroup, type FadeSphere,
 } from './world/occlusion';
 import { TargetRoute } from './world/target-route';
-import { PlayerBase } from './world/player-base';
+import { PlayerBase, NetBases } from './world/player-base';
 import { BaseFireFX } from './world/base-fire';
 import { BaseNightLights } from './world/base-night-lights';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
@@ -2078,6 +2078,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
       <HarvestNodes c={c} />
       <PlayerBase c={c} playerRef={playerRef} paused={Boolean(props.paused)} />
+      {/* Online: base dos outros jogadores (+ transmite a local). */}
+      <NetBases c={c} />
       <BaseFireFX />
       <BaseNightLights />
       <SafeZoneMarker />
