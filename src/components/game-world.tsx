@@ -1125,6 +1125,25 @@ function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
 }
 useGLTF.preload(LIGHT_POST_URL);
 
+const MAZE_URL = '/models/props/maze.glb';
+/** Labirinto gigante (Meshy decimado ~100k tris) numa área aberta distante — o
+ *  personagem anda por ele. Escalado p/ `size` m de lado. Visual (colisão = TODO). */
+function Maze({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: number; yaw?: number }) {
+  const { scene } = useGLTF(MAZE_URL);
+  const model = useMemo(() => {
+    const c = scene.clone(true);
+    c.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+    const box = new THREE.Box3().setFromObject(c);
+    const w = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) || 1;
+    c.scale.setScalar(size / w);
+    const b2 = new THREE.Box3().setFromObject(c);
+    c.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+    return c;
+  }, [scene, size]);
+  return <group position={[x, terrainHeight(x, z), z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
+}
+useGLTF.preload(MAZE_URL);
+
 function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => void) | undefined; paused?: boolean | undefined }) {
   const size = MAP_HALF * 2 + 40;
   const geo = useMemo(() => {
@@ -1972,6 +1991,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         { x: 18, z: 4, scale: 4.5, yaw: 0.9 }, { x: -14, z: 14, scale: 4, yaw: 2.6 },
         { x: 46, z: -36, scale: 4.6, yaw: 0.2 }, { x: 2, z: -50, scale: 5, yaw: 1.5 },
       ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url="/models/trees/tree-split.glb" x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
+      {/* Labirinto gigante numa área aberta distante (personagem anda por ele). */}
+      <Maze x={58} z={56} size={54} />
       <GlbContainers />
       {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
       <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
