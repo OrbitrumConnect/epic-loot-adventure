@@ -30,6 +30,10 @@ const STAND_FIX_X = Math.PI / 2;
 const STAND_FIX_Y = 0;
 /** Velocidade do clip de ataque (combo Mixamo é longo → acelera p/ fechar a janela). */
 const ATTACK_SPEED = 1.5;
+/** Distância² (m²) além da qual o raider PARA de animar e de lançar sombra
+ *  (perf: numa horda, o maior ganho — longe ninguém nota). */
+const ACTIVE_D2 = 40 * 40;
+const tmpHeroV = new THREE.Vector3();
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
@@ -142,10 +146,13 @@ export function GlbHeroMixamo({
       .filter((c): c is THREE.AnimationClip => c != null);
   }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames]);
 
-  const { actions } = useAnimations(clips, inner);
+  const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
   /** Qual clip de ataque está tocando ('attack' combo ou 'attackBow'). */
   const playingAtk = useRef<string>('attack');
+  /** Malhas (p/ alternar sombra) + estado de proximidade (perf: gate por distância). */
+  const meshes = useRef<THREE.Mesh[]>([]);
+  const active = useRef(true);
 
   const handBone = useMemo(() => {
     // O GLTFLoader do three REMOVE o ':' dos nomes → 'mixamorig:RightHand' vira
@@ -160,10 +167,12 @@ export function GlbHeroMixamo({
   }, [cloned]);
 
   useEffect(() => {
+    const list: THREE.Mesh[] = [];
     cloned.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
+        list.push(m);
         if (m.geometry && !m.geometry.userData['_inflated']) {
           if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
           if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
@@ -171,6 +180,7 @@ export function GlbHeroMixamo({
         }
       }
     });
+    meshes.current = list;
   }, [cloned]);
 
   // Garante que algo toca assim que os clips carregam (anti T-pose eterno).
@@ -184,6 +194,20 @@ export function GlbHeroMixamo({
   }, [actions]);
 
   useFrame(() => {
+    // PERF: longe do player → pausa o mixer + tira sombra e nem processa o estado.
+    const g = inner.current;
+    if (g) {
+      g.getWorldPosition(tmpHeroV);
+      const p = useGameStore.getState().player.position;
+      const near = (p.x - tmpHeroV.x) * (p.x - tmpHeroV.x) + (p.z - tmpHeroV.z) * (p.z - tmpHeroV.z) < ACTIVE_D2;
+      if (near !== active.current) {
+        active.current = near;
+        for (const m of meshes.current) m.castShadow = near;
+        if (mixer) mixer.timeScale = near ? 1 : 0;
+      }
+      if (!near) return;
+    }
+
     const want = actionRef.current;
 
     // Ataque POR ARMA (só o player): arma de longe → anim de arco; mão → combo.
