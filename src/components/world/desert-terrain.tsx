@@ -30,7 +30,7 @@ function makeMatte(c: THREE.Object3D) {
   });
 }
 
-export function DesertPlain({ size = 196, x = 0, z = 0, rotY = (3 * Math.PI) / 4 }: { size?: number; x?: number; z?: number; rotY?: number }) {
+export function DesertPlain({ size = 196, x = 0, z = 0, rotY = (3 * Math.PI) / 4 + (37 * Math.PI) / 180 }: { size?: number; x?: number; z?: number; rotY?: number }) {
   const { scene } = useGLTF(PLAIN_URL);
   const model = useMemo(() => {
     const c = scene.clone(true);
