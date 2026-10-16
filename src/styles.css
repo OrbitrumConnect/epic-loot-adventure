@@ -204,6 +204,9 @@
 .brand svg { width: 27px; height: 34px; }
 .sidebar-label { color: var(--muted-foreground); font-size: 9px; font-weight: 700; letter-spacing: 2px; padding: 22px 25px 12px; }
 .sidebar-nav { display: flex; flex-direction: column; gap: 5px; padding: 0 12px; }
+.multiplayer-sidebar { margin: 0 0 8px; flex-direction: column; align-items: stretch; border-radius: 8px !important; }
+.multiplayer-sidebar-title { color: var(--muted-foreground); font-size: 9px; letter-spacing: 1.2px; }
+.multiplayer-sidebar input { width: 100% !important; box-sizing: border-box; }
 .nav-item { justify-content: flex-start; height: 46px; padding: 0 15px; gap: 14px; color: var(--muted-foreground); border: 1px solid transparent; font-size: 12px; }
 .nav-item[data-active=true] { color: var(--primary); background: color-mix(in oklch,var(--primary) 8%,transparent); border-color: color-mix(in oklch,var(--primary) 18%,transparent); }
 .nav-item svg { width: 18px; height: 18px; }

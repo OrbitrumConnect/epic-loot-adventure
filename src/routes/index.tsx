@@ -365,7 +365,6 @@ function Index() {
 
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
-      <MultiplayerPanel />
       {editorActive && <EditorPanel />}
       <aside className="game-sidebar" aria-label="Navegação do jogo">
         <Button variant="ghost" size="icon" className="sidebar-toggle"
@@ -389,6 +388,7 @@ function Index() {
         </nav>
         <div className="sidebar-label">COMUNIDADE</div>
         <nav className="sidebar-nav">
+          <MultiplayerPanel placement="sidebar" />
           <Button variant="ghost" className="nav-item" title="Minha tribo" data-active={panel === 'tribe'} onClick={() => open('tribe')}>
             <Users strokeWidth={1.5} /><span>Minha tribo</span>
           </Button>
