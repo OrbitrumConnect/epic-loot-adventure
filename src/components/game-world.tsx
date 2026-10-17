@@ -29,6 +29,7 @@ import {
 import { TargetRoute } from './world/target-route';
 import { PlayerBase, NetBases } from './world/player-base';
 import { BaseFireFX } from './world/base-fire';
+import { audioManager } from '@/game/audio/audio-manager';
 import { BaseNightLights } from './world/base-night-lights';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { isBuildActive } from './world/build-mode';
@@ -303,6 +304,7 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
     if (!l) return;
     // Culling por distância: longe do jogador a luz sai do shader (o fogo visual fica).
     const p = useGameStore.getState().player.position;
+    audioManager.updateCampfireDistance(Math.hypot(p.x - pos[0], p.z - pos[2]));
     l.visible = (p.x - pos[0]) * (p.x - pos[0]) + (p.z - pos[2]) * (p.z - pos[2]) < LIGHT_CULL_D2;
     // Acende forte à noite, discreta de dia (consistente com as luminárias). +20%.
     if (l.visible) l.intensity = (2.4 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 8) * 0.8;

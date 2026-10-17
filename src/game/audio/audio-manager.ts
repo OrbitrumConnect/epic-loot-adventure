@@ -88,6 +88,7 @@ class AudioManager {
     this.playing = false;
     this.ambient?.pause();
     this.combat?.pause();
+    this.campfire?.pause();
     if (this.ambient) this.ambient.volume = 0;
     if (this.combat) this.combat.volume = 0;
     if (this.raf) { cancelAnimationFrame(this.raf); this.raf = 0; }
