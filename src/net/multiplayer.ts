@@ -27,6 +27,8 @@ export type RemotePose = {
   id: string; name: string;
   /** Metadado leve de presença; prepara a identidade persistente futura. */
   level: number;
+  hp: number;
+  maxHp: number;
   x: number; z: number; yaw: number;
   action: string; t: number;
 };
@@ -147,7 +149,7 @@ export const useNet = create<NetState>((set, get) => ({
 
 /** Envia a pose do jogador local (chamar do loop; throttla sozinho a ~11Hz). */
 let lastSent = 0;
-export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number): void {
+export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number): void {
   if (!channel || !useNet.getState().connected) return;
   const now = performance.now();
   if (now - lastSent < 88) return;
@@ -155,7 +157,7 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
   const { selfId, selfName } = useNet.getState();
   void channel.send({
     type: 'broadcast', event: 'pose',
-    payload: { id: selfId, name: selfName, level, x, z, yaw, action, t: now } satisfies RemotePose,
+    payload: { id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now } satisfies RemotePose,
   });
 }
 

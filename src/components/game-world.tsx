@@ -575,7 +575,8 @@ function Character({
     body.current.rotation.y = currentRotY.current;
 
     // Multiplayer: transmite a pose do jogador local (throttla sozinho ~11Hz).
-    broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, heroAction.current, useGameStore.getState().player.level);
+    const netPlayer = useGameStore.getState().player;
+    broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, heroAction.current, netPlayer.level, netPlayer.hp, netPlayer.maxHp);
 
     // Especial (Q/R): pulo pro 'jump', giro 360° pro 'spin'. O dano/feedback
     // acontece no store; aqui é só a animação. O soco de impacto vem dos eventos.
