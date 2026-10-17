@@ -28,6 +28,7 @@ class AudioManager {
   private shot: HTMLAudioElement | null = null;
   private gun: HTMLAudioElement | null = null;
   private harvest: HTMLAudioElement | null = null;
+  private melee: HTMLAudioElement | null = null;
   private footsteps: HTMLAudioElement | null = null;
   private campfire: HTMLAudioElement | null = null;
   private campfireSampleAt = 0;
@@ -57,6 +58,7 @@ class AudioManager {
     if (!this.shot) this.shot = new Audio('/audio/arrow-hit.wav');
     if (!this.gun) this.gun = new Audio('/audio/gun-shot.mp3');
     if (!this.harvest) this.harvest = new Audio('/audio/harvest-hit.wav');
+    if (!this.melee) this.melee = new Audio('/audio/melee-hit.wav');
     if (!this.footsteps) { this.footsteps = new Audio('/audio/footsteps.wav'); this.footsteps.loop = true; }
     if (!this.campfire) { this.campfire = new Audio('/audio/campfire-crackles.wav'); this.campfire.loop = true; }
   }
@@ -126,6 +128,7 @@ class AudioManager {
   playShot() { this.ensure(); if (!this.shot) return; this.shot.volume = Math.min(0.22, this.master * 0.3); this.shot.currentTime = 0; void this.shot.play().catch(() => {}); }
   playGunShot() { this.ensure(); if (!this.gun) return; this.gun.volume = Math.min(0.26, this.master * 0.36); this.gun.currentTime = 0; void this.gun.play().catch(() => {}); }
   playHarvest() { this.ensure(); if (!this.harvest) return; this.harvest.volume = Math.min(0.16, this.master * 0.158); this.harvest.currentTime = 0; void this.harvest.play().catch(() => {}); }
+  playMelee() { this.ensure(); if (!this.melee) return; this.melee.volume = Math.min(0.16, this.master * 0.158); this.melee.currentTime = 0; void this.melee.play().catch(() => {}); }
   setFootsteps(active: boolean, sprinting = false) {
     this.ensure(); if (!this.footsteps) return;
     this.footsteps.volume = Math.min(0.16, this.master * (sprinting ? 0.211 : 0.158));
