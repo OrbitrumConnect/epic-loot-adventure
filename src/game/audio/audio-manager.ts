@@ -121,11 +121,11 @@ class AudioManager {
 
   /** Sinaliza um ataque/combate: segura a trilha de combate por alguns segundos. */
   pulseCombat(now = Date.now()) { this.combatUntil = now + COMBAT_HOLD_MS; }
-  playShot() { this.ensure(); if (!this.shot) return; this.shot.volume = Math.min(0.22, this.master * 0.3); this.shot.currentTime = 0; void this.shot.play().catch(() => {}); }
-  playHarvest() { this.ensure(); if (!this.harvest) return; this.harvest.volume = Math.min(0.2, this.master * 0.25); this.harvest.currentTime = 0; void this.harvest.play().catch(() => {}); }
+  playShot() { this.ensure(); if (!this.shot) return; this.shot.volume = Math.min(0.26, this.master * 0.36); this.shot.currentTime = 0; void this.shot.play().catch(() => {}); }
+  playHarvest() { this.ensure(); if (!this.harvest) return; this.harvest.volume = Math.min(0.24, this.master * 0.3); this.harvest.currentTime = 0; void this.harvest.play().catch(() => {}); }
   setFootsteps(active: boolean, sprinting = false) {
     this.ensure(); if (!this.footsteps) return;
-    this.footsteps.volume = Math.min(0.12, this.master * (sprinting ? 0.16 : 0.12));
+    this.footsteps.volume = Math.min(0.13, this.master * (sprinting ? 0.176 : 0.132));
     this.footsteps.playbackRate = sprinting ? 1.35 : 1;
     if (active) void this.footsteps.play().catch(() => {}); else this.footsteps.pause();
   }
