@@ -187,6 +187,13 @@ export function restoreLocalSave(save: LocalSave, initial: PersistState, now: nu
   // A arma ativa é lida pela hotbar no combate. Equipamento restaurado precisa
   // selecionar o mesmo slot, inclusive nos saves v1 anteriores a este campo de UI.
   const equipped = save.player.inventory.equipment.primary;
+  // Migração de saves antigos: slots 9–11 permanecem reservados para arco,
+  // pistola e rifle, mesmo que índices de inventário tenham mudado.
+  const hotbarSlots = [...save.player.inventory.hotbar.slots];
+  for (const [hotbarIndex, itemId] of [[8, 'bow'], [9, 'pistol'], [10, 'rifle']] as const) {
+    const invIndex = save.player.inventory.slots.findIndex(slot => slot.itemId === itemId);
+    if (invIndex >= 0) hotbarSlots[hotbarIndex] = invIndex;
+  }
   const hotbarIndex = equipped === null ? -1 : save.player.inventory.hotbar.slots.findIndex(slot =>
     slot !== null && save.player.inventory.slots[slot]?.itemId === equipped);
   for (const piece of claim?.pieces ?? []) {
@@ -197,7 +204,7 @@ export function restoreLocalSave(save: LocalSave, initial: PersistState, now: nu
     base: tickBase(city, now),
     ...(initial.ui ? { ui: { ...initial.ui, selectedHotbar: hotbarIndex < 0 ? 0 : hotbarIndex } } : {}),
     playerBase: claim, towerLastShotAt,
-    player: { ...initial.player, ...save.player, hp: save.player.maxHp, mana: save.player.maxMana,
+    player: { ...initial.player, ...save.player, inventory: { ...save.player.inventory, hotbar: { ...save.player.inventory.hotbar, slots: hotbarSlots } }, hp: save.player.maxHp, mana: save.player.maxMana,
       stamina: save.player.maxStamina, dead: false, respawnAt: 0 },
     harvestNodes: tickHarvestNodes(nodes, now), resources: initial.resources.filter(r => outside(r.position)),
   };
