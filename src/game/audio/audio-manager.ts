@@ -25,6 +25,10 @@ const urlOf = (id: TrackId) => TRACKS.find((t) => t.id === id)!.url;
 class AudioManager {
   private ambient: HTMLAudioElement | null = null;
   private combat: HTMLAudioElement | null = null;
+  private shot: HTMLAudioElement | null = null;
+  private campfire: HTMLAudioElement | null = null;
+  private campfireSampleAt = 0;
+  private nearestCampfire = Infinity;
   playing = false;
   master = 0.7;
   ambientTrack: TrackId = 'dry-ground-calls';
@@ -47,6 +51,8 @@ class AudioManager {
       this.combat.loop = true;
       this.combat.volume = 0;
     }
+    if (!this.shot) this.shot = new Audio('/audio/gun-shot.mp3');
+    if (!this.campfire) { this.campfire = new Audio('/audio/campfire-crackles.wav'); this.campfire.loop = true; }
   }
 
   subscribe(l: Listener) { this.listeners.add(l); return () => { this.listeners.delete(l); }; }
@@ -111,6 +117,17 @@ class AudioManager {
 
   /** Sinaliza um ataque/combate: segura a trilha de combate por alguns segundos. */
   pulseCombat(now = Date.now()) { this.combatUntil = now + COMBAT_HOLD_MS; }
+  playShot() { this.ensure(); if (!this.shot) return; this.shot.volume = Math.min(0.22, this.master * 0.3); this.shot.currentTime = 0; void this.shot.play().catch(() => {}); }
+  updateCampfireDistance(distance: number) {
+    this.ensure(); if (!this.campfire || !this.playing) return;
+    const now = performance.now();
+    if (now - this.campfireSampleAt > 50) this.nearestCampfire = Infinity;
+    this.campfireSampleAt = now;
+    this.nearestCampfire = Math.min(this.nearestCampfire, distance);
+    const t = Math.max(0, Math.min(1, 1 - this.nearestCampfire / 14));
+    this.campfire.volume = this.master * 0.18 * t;
+    if (t > 0) void this.campfire.play().catch(() => {}); else this.campfire.pause();
+  }
 
   private loop = () => {
     if (!this.playing || !this.ambient || !this.combat) { this.raf = 0; return; }
