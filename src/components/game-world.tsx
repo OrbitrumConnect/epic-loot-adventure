@@ -502,6 +502,7 @@ function Character({
     // Piloto / clique-pra-andar (sem WASD, seguindo um destino) corre no sprint.
     const autoFollowing = !dx && !dz && (targetVx !== 0 || targetVz !== 0);
     const sprinting = k.has('ShiftLeft') || k.has('ShiftRight') || autoFollowing;
+    audioManager.setFootsteps(velocity.current.lengthSq() > 0.02, sprinting);
     const ACCEL = 22;
     const DECEL = 28;
     const px = body.current.position.x;

@@ -50,6 +50,7 @@ import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
+import { audioManager } from '../audio/audio-manager';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
@@ -790,6 +791,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   collect: (nodeId: string) => {
     const state = get();
+    audioManager.playHarvest();
     const nodeIdx = state.resources.findIndex(r => r.id === nodeId);
     if (nodeIdx < 0) return;
 
