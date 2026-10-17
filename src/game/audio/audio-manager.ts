@@ -128,7 +128,7 @@ class AudioManager {
   playHarvest() { this.ensure(); if (!this.harvest) return; this.harvest.volume = Math.min(0.24, this.master * 0.3); this.harvest.currentTime = 0; void this.harvest.play().catch(() => {}); }
   setFootsteps(active: boolean, sprinting = false) {
     this.ensure(); if (!this.footsteps) return;
-    this.footsteps.volume = Math.min(0.13, this.master * (sprinting ? 0.176 : 0.132));
+    this.footsteps.volume = Math.min(0.16, this.master * (sprinting ? 0.211 : 0.158));
     this.footsteps.playbackRate = sprinting ? 1.35 : 1;
     if (active) void this.footsteps.play().catch(() => {}); else this.footsteps.pause();
   }
