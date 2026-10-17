@@ -165,7 +165,7 @@ export function flushPositions() {
  * (pedido do Pedro: "um controle geral que você ajusta, não eu"). 1 = normal,
  * 0.9 = 10% mais devagar, 1.1 = 10% mais rápido.
  */
-export const CREATURE_SPEED_SCALE = 1;
+export const CREATURE_SPEED_SCALE = 0.9;
 
 export type HostileTuning = {
   speed: number;

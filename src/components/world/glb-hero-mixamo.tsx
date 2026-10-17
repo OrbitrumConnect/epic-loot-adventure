@@ -72,7 +72,7 @@ export function GlbHeroMixamo({
   yaw = 0,
   autoHeight = 1.8,
   walkSync = 0.6,
-  runSync = 0.42,
+  runSync = 0.26,
   standFixX = STAND_FIX_X,
   rangedAttack = false,
   forceBow = false,
