@@ -707,6 +707,11 @@ function Index() {
                           </div>
                         );
                       })}
+                      {(() => {
+                        const slot = player.inventory.hotbar.slots[ui.selectedHotbar];
+                        const heldId = slot != null ? player.inventory.slots[slot]?.itemId ?? null : null;
+                        return <div className="attr-row" title="Alcance máximo da arma equipada neste nível"><span className="attr-name">⌁ Alcance</span><span className="attr-val">{weaponRangeFor(heldId, player.level).toFixed(1)} m</span></div>;
+                      })()}
                     </div>
                     <div className="panel-stats">
                       <span>Peso: {weight.toFixed(1)} / {player.inventory.maxWeight} kg</span>
