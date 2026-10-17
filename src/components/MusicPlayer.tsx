@@ -16,7 +16,10 @@ export function MusicPlayer() {
   const attackTick = useGameStore((s) => s.attackTick);
   const selectedHotbar = useGameStore((s) => s.ui.selectedHotbar);
   useEffect(() => { if (attackTick > 0) audioManager.pulseCombat(); }, [attackTick]);
-  useEffect(() => { if (attackTick > 0 && selectedHotbar === 8) audioManager.playShot(); }, [attackTick, selectedHotbar]);
+  useEffect(() => {
+    if (attackTick > 0 && selectedHotbar === 8) audioManager.playShot();
+    if (attackTick > 0 && (selectedHotbar === 9 || selectedHotbar === 10)) audioManager.playGunShot();
+  }, [attackTick, selectedHotbar]);
 
   const playing = audioManager.playing;
 
