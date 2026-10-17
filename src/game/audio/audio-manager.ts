@@ -131,7 +131,7 @@ class AudioManager {
   playMelee() { this.ensure(); if (!this.melee) return; this.melee.volume = Math.min(0.16, this.master * 0.158); this.melee.currentTime = 0; void this.melee.play().catch(() => {}); }
   setFootsteps(active: boolean, sprinting = false) {
     this.ensure(); if (!this.footsteps) return;
-    this.footsteps.volume = Math.min(0.16, this.master * (sprinting ? 0.211 : 0.158));
+    this.footsteps.volume = Math.min(0.16, this.master * (sprinting ? 0.211 : 0.182));
     this.footsteps.playbackRate = sprinting ? 1.35 : 1;
     if (active) void this.footsteps.play().catch(() => {}); else this.footsteps.pause();
   }
