@@ -50,7 +50,7 @@ import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
-import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
+import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
@@ -1674,7 +1674,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       playerDead: state.player.dead,
       // Com poção infinita (dev) e sem cura na hotbar, usa o slot 0 só como sinal:
       // quem executa o `heal` deve chamar `drinkPotion()`, que ignora o índice.
-      healSlot: findHealHotbarIndex(state.player.inventory) ?? (DEV_INFINITE_POTIONS ? 0 : null),
+      healSlot: findHealHotbarIndex(state.player.inventory) ?? (findBestHealItem(state.player.inventory, DEV_INFINITE_POTIONS) ? 0 : null),
+      gatherCapacity: getWeight(state.player.inventory) < state.player.inventory.maxWeight && state.player.inventory.slots.some(slot => {
+        if (slot.itemId === null) return true;
+        const item = ITEMS[slot.itemId];
+        return Boolean(item && slot.quantity < item.maxStack);
+      }),
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
       attackRange: weaponFor(

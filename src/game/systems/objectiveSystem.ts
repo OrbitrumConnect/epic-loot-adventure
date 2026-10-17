@@ -397,7 +397,7 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     // 6b. FARM: sem inimigo perto → coleta o recurso mais próximo (madeira/pedra/
     // cristal). É a prioridade do loop ocioso quando não há ameaça.
     const node = nearestNode(snapshot);
-    if (node) {
+    if (node && snapshot.gatherCapacity !== false) {
       if (getDistance(snapshot.playerPosition, node.position) <= GATHER_RANGE) {
         return { kind: 'gather', nodeId: node.id, to: { ...node.position } };
       }

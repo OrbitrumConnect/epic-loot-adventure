@@ -68,4 +68,5 @@ export type AutoSnapshot = {
   attackRange?: number;
   /** Nós de colheita do mundo novo (legado fica em `resources`). */
   harvestNodes?: { id: string; kind: string; position: Position; depleted: boolean }[];
+  gatherCapacity?: boolean;
 };
