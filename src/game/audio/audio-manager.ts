@@ -125,7 +125,7 @@ class AudioManager {
   pulseCombat(now = Date.now()) { this.combatUntil = now + COMBAT_HOLD_MS; }
   playShot() { this.ensure(); if (!this.shot) return; this.shot.volume = Math.min(0.22, this.master * 0.3); this.shot.currentTime = 0; void this.shot.play().catch(() => {}); }
   playGunShot() { this.ensure(); if (!this.gun) return; this.gun.volume = Math.min(0.26, this.master * 0.36); this.gun.currentTime = 0; void this.gun.play().catch(() => {}); }
-  playHarvest() { this.ensure(); if (!this.harvest) return; this.harvest.volume = Math.min(0.24, this.master * 0.3); this.harvest.currentTime = 0; void this.harvest.play().catch(() => {}); }
+  playHarvest() { this.ensure(); if (!this.harvest) return; this.harvest.volume = Math.min(0.16, this.master * 0.158); this.harvest.currentTime = 0; void this.harvest.play().catch(() => {}); }
   setFootsteps(active: boolean, sprinting = false) {
     this.ensure(); if (!this.footsteps) return;
     this.footsteps.volume = Math.min(0.16, this.master * (sprinting ? 0.211 : 0.158));
