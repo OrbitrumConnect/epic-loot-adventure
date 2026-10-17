@@ -119,7 +119,7 @@ class AudioManager {
   pulseCombat(now = Date.now()) { this.combatUntil = now + COMBAT_HOLD_MS; }
   playShot() { this.ensure(); if (!this.shot) return; this.shot.volume = Math.min(0.22, this.master * 0.3); this.shot.currentTime = 0; void this.shot.play().catch(() => {}); }
   updateCampfireDistance(distance: number) {
-    this.ensure(); if (!this.campfire || !this.playing) return;
+    this.ensure(); if (!this.campfire) return;
     const now = performance.now();
     if (now - this.campfireSampleAt > 50) this.nearestCampfire = Infinity;
     this.campfireSampleAt = now;
