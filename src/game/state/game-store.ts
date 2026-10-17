@@ -74,6 +74,7 @@ type GameState = {
   deathBags: DeathBag[];
   ui: UIState;
   attackTick: number;
+  rangedShotTick: number;
   /** Incrementa a cada especial (Q/R); o mundo 3D anima. `specialKind` diz qual. */
   specialTick: number;
   specialKind: 'jump' | 'spin' | null;
@@ -428,6 +429,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   resources: createInitialResources(),
   deathBags: [],
   attackTick: 0,
+  rangedShotTick: 0,
   specialTick: 0,
   specialKind: null,
   base: createInitialBase(Date.now()),
@@ -616,6 +618,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           inventory: usesBullet ? removeItem(state.player.inventory, 'ammo', 1) : state.player.inventory,
         },
         attackTick: state.attackTick + 1,
+        rangedShotTick: usingRanged ? state.rangedShotTick + 1 : state.rangedShotTick,
         ui: { ...state.ui, message: `Golpe enviado contra ${creature.name}.` },
       });
       return;
@@ -720,6 +723,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       creatures: updatedCreatures,
       deathBags: updatedBags,
       attackTick: state.attackTick + 1,
+      rangedShotTick: usingRanged ? state.rangedShotTick + 1 : state.rangedShotTick,
       feedback: pushEvents(state.feedback, drafts, stamp),
       ui: { ...state.ui, message: msg },
     });

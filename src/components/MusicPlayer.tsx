@@ -14,12 +14,13 @@ export function MusicPlayer() {
 
   // Cada ataque do jogador aquece a trilha de combate.
   const attackTick = useGameStore((s) => s.attackTick);
+  const rangedShotTick = useGameStore((s) => s.rangedShotTick);
   const selectedHotbar = useGameStore((s) => s.ui.selectedHotbar);
   useEffect(() => { if (attackTick > 0) audioManager.pulseCombat(); }, [attackTick]);
   useEffect(() => {
-    if (attackTick > 0 && selectedHotbar === 8) audioManager.playShot();
-    if (attackTick > 0 && (selectedHotbar === 9 || selectedHotbar === 10)) audioManager.playGunShot();
-  }, [attackTick, selectedHotbar]);
+    if (rangedShotTick > 0 && selectedHotbar === 8) audioManager.playShot();
+    if (rangedShotTick > 0 && (selectedHotbar === 9 || selectedHotbar === 10)) audioManager.playGunShot();
+  }, [rangedShotTick, selectedHotbar]);
 
   const playing = audioManager.playing;
 
