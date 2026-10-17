@@ -75,14 +75,14 @@ export function BaseHouse({
     const halfX = (fb.max.x - fb.min.x) / 2;
     const halfZ = (fb.max.z - fb.min.z) / 2;
 
-    // Paredes reais na altura do PEITO: fatia a malha no plano y=chest e guarda
-    // os segmentos (XZ, já centrado). Onde não há parede (porta) → sem segmento →
-    // passa. Janela (alta) e móvel (baixo) não cruzam o peito → não bloqueiam.
-    const chestY = FLOOR_H + 1.0;
+    // Fatiamos abaixo do peitoril da janela, mas acima do piso. Assim a abertura
+    // da porta continua sem segmento, enquanto uma janela alta não vira passagem
+    // para o jogador (a colisão 2D não deve depender da altura da câmera).
+    const collisionY = FLOOR_H + 0.38;
     const wallSegs: number[] = [];
     const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3();
     const cut = (p: THREE.Vector3, q: THREE.Vector3, out: number[]) => {
-      const dp = p.y - chestY, dq = q.y - chestY;
+      const dp = p.y - collisionY, dq = q.y - collisionY;
       if ((dp <= 0 && dq > 0) || (dp > 0 && dq <= 0)) {
         const t = dp / (dp - dq);
         out.push(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t);

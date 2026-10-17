@@ -429,7 +429,7 @@ function Index() {
               { name: 'Vida', val: player.hp, max: player.maxHp, icon: Heart, kind: 'health' },
               { name: 'Mana', val: player.mana, max: player.maxMana, icon: Sparkles, kind: 'mana' },
               { name: 'Vigor', val: player.stamina, max: player.maxStamina, icon: Zap, kind: 'energy' },
-              ...(playerBase ? [{ name: 'Base', val: baseHp, max: baseMaxHp, icon: ShieldCheck, kind: 'base' }] : []),
+              ...(playerBase ? [{ name: 'Núcleo', val: baseHp, max: baseMaxHp, icon: ShieldCheck, kind: 'base' }] : []),
             ].map(v => (
               <div className={`vital vital-${v.kind}`} key={v.kind}>
                 <div className="vital-label"><span><v.icon />{v.name}</span><strong>{v.val} / {v.max}</strong></div>
