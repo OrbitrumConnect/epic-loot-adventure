@@ -40,8 +40,8 @@ function RemotePlayer({ id }: { id: string }) {
   return (
     <group ref={group}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />
-      <Html center position={[0, HERO_HEIGHT + 0.65, 0]} distanceFactor={12} style={{ pointerEvents: 'none' }}>
-        <div ref={identity} style={{ whiteSpace: 'nowrap', color: '#fff3c4', background: 'rgba(4, 12, 10, 0.78)', border: '1px solid rgba(229, 190, 92, 0.65)', borderRadius: 6, padding: '3px 6px', font: '700 11px system-ui', textShadow: '0 1px 2px #000' }} />
+      <Html transform sprite center position={[0, HERO_HEIGHT + 0.65, 0]} scale={0.035} style={{ pointerEvents: 'none' }}>
+        <div ref={identity} style={{ whiteSpace: 'nowrap', color: '#fff3c4', background: 'transparent', padding: 0, font: '700 12px system-ui', textShadow: '0 1px 3px #000' }} />
       </Html>
     </group>
   );
