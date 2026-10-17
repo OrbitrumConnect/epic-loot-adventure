@@ -294,11 +294,11 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
   }, [trees]);
 
 
-  // Pedras: 85 posições (-15%, recurso mais escasso).
+  // Pedras decorativas: 60 posições.
   const rocks = useMemo(() => {
     const large: Placement[] = [];
     const small: Placement[] = [];
-    for (let i = 0; i < 85; i++) {
+    for (let i = 0; i < 60; i++) {
       const x = (rand(i + 911) - 0.5) * MAP_HALF * 1.8;
       const z = (rand(i + 1200) - 0.5) * MAP_HALF * 1.8;
       if (inLake(x, z, 1)) continue;

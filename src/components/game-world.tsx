@@ -1828,7 +1828,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   // dos nós farmáveis (harvest-nodes). Mais leve, sem ficar pelado.
   const trees = useMemo(
     () =>
-      Array.from({ length: 80 }, (_, i) => ({
+      Array.from({ length: 50 }, (_, i) => ({
         x: (rand(i + 1) - 0.5) * MAP_HALF * 2,
         z: (rand(i + 301) - 0.5) * MAP_HALF * 2,
         size: 0.65 + rand(i + 701) * 0.7,
