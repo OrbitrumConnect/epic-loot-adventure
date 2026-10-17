@@ -5,7 +5,7 @@ import type {
   FeedbackEvent,
 } from '../types';
 import { ITEMS } from '../data/items';
-import { weaponFor } from '../data/weapons';
+import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, WORLD_HALF } from '../data/camps';
@@ -579,7 +579,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (now - state.player.lastAttackAt < prof.cooldown) return;
 
     const dist = getDistance(state.player.position, creature.position);
-    if (dist > prof.range) {
+    if (dist > weaponRangeFor(heldItemId, state.player.level)) {
       set(s => ({ ui: { ...s.ui, message: `${creature.name} está longe demais.` } }));
       return;
     }

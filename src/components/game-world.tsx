@@ -21,7 +21,7 @@ import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
 import { GlbContainers } from './world/glb-containers';
-import { weaponFor } from '@/game/data/weapons';
+import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
   makeInstanceFadeMaterial, registerInstancedFade, useFadeGroup, type FadeSphere,
@@ -405,7 +405,7 @@ function Character({
     const b = body.current;
     if (b) {
       const st = useGameStore.getState();
-      const range = weaponFor(selectedItemId(st)).range + 1;
+      const range = weaponRangeFor(selectedItemId(st), st.player.level) + 1;
       let best: { x: number; z: number } | null = null;
       let bestD = Infinity;
       for (const cr of st.creatures) {

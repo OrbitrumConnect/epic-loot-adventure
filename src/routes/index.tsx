@@ -26,7 +26,7 @@ import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock, WORLD_EPOCH } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
 import { baseLv1Progress } from '@/game/systems/baseLv1';
-import { weaponFor } from '@/game/data/weapons';
+import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
 import { MusicPlayer } from '@/components/MusicPlayer';
@@ -247,7 +247,7 @@ function Index() {
     // Alcance vem da arma na mão (melee ~4 m, ranged até 22 m).
     const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
     const heldId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
-    const range = weaponFor(heldId).range;
+    const range = weaponRangeFor(heldId, player.level);
 
     // Alvo selecionado tem prioridade sobre o mais próximo.
     const selectedId = (state as unknown as { targetId?: string | null }).targetId ?? null;
