@@ -131,6 +131,7 @@ type GameActions = {
   deallocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Equipa um item da bolsa no slot certo pela categoria (arma/armadura/acessório). */
   equipItem: (itemId: string) => void;
+  dropItem: (itemId: string) => void;
   /** Tira o equipamento de um slot (volta pro "nu"). */
   unequipSlot: (slot: 'primary' | 'secondary' | 'armor' | 'accessory') => void;
   useHotbarSlot: (index: number) => void;
@@ -1039,6 +1040,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         ui: { ...s.ui, message: `${item.name} equipado.` },
       };
     });
+  },
+  dropItem: (itemId) => {
+    const state = get();
+    const quantity = getItemCount(state.player.inventory, itemId);
+    if (quantity <= 0) return;
+    const inventory = removeItem(state.player.inventory, itemId, quantity);
+    const hotbar = inventory.hotbar.slots.map(slotIndex => inventory.slots[slotIndex]?.itemId ? slotIndex : null);
+    const equipment = { ...inventory.equipment };
+    (Object.keys(equipment) as (keyof typeof equipment)[]).forEach(slot => { if (equipment[slot] === itemId) equipment[slot] = null; });
+    set({ player: { ...state.player, inventory: { ...inventory, hotbar: { ...inventory.hotbar, slots: hotbar }, equipment } }, ui: { ...state.ui, message: `${ITEMS[itemId]?.name ?? itemId} descartado.` } });
   },
 
   unequipSlot: (slot) => {
