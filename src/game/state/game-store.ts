@@ -131,7 +131,7 @@ type GameActions = {
   deallocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Equipa um item da bolsa no slot certo pela categoria (arma/armadura/acessório). */
   equipItem: (itemId: string) => void;
-  dropItem: (itemId: string) => void;
+  dropItem: (slotIndex: number) => void;
   /** Tira o equipamento de um slot (volta pro "nu"). */
   unequipSlot: (slot: 'primary' | 'secondary' | 'armor' | 'accessory') => void;
   useHotbarSlot: (index: number) => void;
@@ -1041,11 +1041,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       };
     });
   },
-  dropItem: (itemId) => {
+  dropItem: (slotIndex) => {
     const state = get();
-    const quantity = getItemCount(state.player.inventory, itemId);
+    const itemId = state.player.inventory.slots[slotIndex]?.itemId;
+    const quantity = itemId ? state.player.inventory.slots[slotIndex]!.quantity : 0;
     if (quantity <= 0) return;
-    const inventory = removeItem(state.player.inventory, itemId, quantity);
+    const inventory = { ...state.player.inventory, slots: state.player.inventory.slots.map((slot, i) => i === slotIndex ? { itemId: null, quantity: 0 } : { ...slot }) };
     const hotbar = inventory.hotbar.slots.map(slotIndex => inventory.slots[slotIndex]?.itemId ? slotIndex : null);
     const equipment = { ...inventory.equipment };
     (Object.keys(equipment) as (keyof typeof equipment)[]).forEach(slot => { if (equipment[slot] === itemId) equipment[slot] = null; });

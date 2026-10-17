@@ -705,7 +705,7 @@ function Index() {
                             <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura · ' + item.rarity : item.category}</small>
                             <em>{slot.quantity > 1 ? slot.quantity : ''}</em>
                             {equipped && <i className="equipped-tag">equipado</i>}
-                            <button type="button" className="inventory-drop" onClick={(e) => { e.stopPropagation(); dropItem(item.id); }} title={`Descartar ${item.name}`}>Descartar</button>
+                            <button type="button" className="inventory-drop" onClick={(e) => { e.stopPropagation(); dropItem(i); }} title={`Descartar ${item.name}`}>Descartar</button>
                           </div>
                         );
                       })}

@@ -135,6 +135,19 @@ export function parseLocalSave(raw: string | null): LocalSave | null {
 }
 
 export function restoreLocalSave(save: LocalSave, initial: PersistState, now: number): PersistState {
+  const normalizedSlots = save.player.inventory.slots.map(slot => ({ ...slot }));
+  for (let i = 0; i < normalizedSlots.length; i++) {
+    const source = normalizedSlots[i]!;
+    if (!source.itemId) continue;
+    const max = ITEMS[source.itemId]?.maxStack ?? 1;
+    for (let j = i + 1; j < normalizedSlots.length && source.quantity < max; j++) {
+      const other = normalizedSlots[j]!;
+      if (other.itemId !== source.itemId) continue;
+      const moved = Math.min(max - source.quantity, other.quantity);
+      source.quantity += moved; other.quantity -= moved;
+      if (other.quantity <= 0) { other.itemId = null; other.quantity = 0; }
+    }
+  }
   const defaults = createInitialBase(now);
   const city: BaseState = {
     buildings: save.base?.buildings ?? defaults.buildings,
@@ -204,7 +217,7 @@ export function restoreLocalSave(save: LocalSave, initial: PersistState, now: nu
     base: tickBase(city, now),
     ...(initial.ui ? { ui: { ...initial.ui, selectedHotbar: hotbarIndex < 0 ? 0 : hotbarIndex } } : {}),
     playerBase: claim, towerLastShotAt,
-    player: { ...initial.player, ...save.player, inventory: { ...save.player.inventory, hotbar: { ...save.player.inventory.hotbar, slots: hotbarSlots } }, hp: save.player.maxHp, mana: save.player.maxMana,
+    player: { ...initial.player, ...save.player, inventory: { ...save.player.inventory, slots: normalizedSlots, hotbar: { ...save.player.inventory.hotbar, slots: hotbarSlots } }, hp: save.player.maxHp, mana: save.player.maxMana,
       stamina: save.player.maxStamina, dead: false, respawnAt: 0 },
     harvestNodes: tickHarvestNodes(nodes, now), resources: initial.resources.filter(r => outside(r.position)),
   };
