@@ -1543,6 +1543,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const result = harvestWorldNode(
       node, state.player.inventory.equipment.primary, state.player.inventory, Date.now(),
     );
+    if (result.harvested > 0) audioManager.playHarvest();
     if (!result.ok) {
       set(s => ({ ui: { ...s.ui, message: result.message } }));
       return;
