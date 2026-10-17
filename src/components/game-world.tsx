@@ -1502,6 +1502,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     // Zoom: na MOBA afasta/aproxima em faixa limitada; na terceira pessoa muda
     // a distância e na câmera livre ajusta a velocidade-base de voo.
     const onWheel = (e: WheelEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
       if (cameraMode === 'free') {
         e.preventDefault();
         adjustFreeCamSpeed(e.deltaY < 0 ? 1.1 : 1 / 1.1);
@@ -1603,7 +1605,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     document.addEventListener('pointerlockchange', onLockChange);
     canvas.addEventListener('click', onClick);
     canvas.addEventListener('contextmenu', onContextMenu);
-    canvas.addEventListener('wheel', onWheel, { passive: false });
+    // Captura antes de overlays transparentes/HUD; o filtro acima mantém a roda
+    // da sidebar fora do controle da câmera.
+    window.addEventListener('wheel', onWheel, { passive: false, capture: true });
     canvas.addEventListener('touchstart', onTouchStart, { passive: true });
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
     canvas.addEventListener('touchend', onTouchEnd, { passive: false });
@@ -1616,7 +1620,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       document.removeEventListener('pointerlockchange', onLockChange);
       canvas.removeEventListener('click', onClick);
       canvas.removeEventListener('contextmenu', onContextMenu);
-      canvas.removeEventListener('wheel', onWheel);
+      window.removeEventListener('wheel', onWheel, true);
       canvas.removeEventListener('touchstart', onTouchStart);
       canvas.removeEventListener('touchmove', onTouchMove);
       canvas.removeEventListener('touchend', onTouchEnd);
