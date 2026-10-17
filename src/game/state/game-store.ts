@@ -612,6 +612,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (!canSimulateSharedWorld()) {
       if (heldItemId === 'bow') audioManager.playShot();
       if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
+      if (!usingRanged) audioManager.playHarvest();
       broadcastCreatureHit({ targetId, source: state.player.position, damage: finalPower });
       set({
         player: {
@@ -722,6 +723,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     if (heldItemId === 'bow') audioManager.playShot();
     if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
+    if (!usingRanged) audioManager.playHarvest();
     set({
       player: updatedPlayer,
       creatures: updatedCreatures,
