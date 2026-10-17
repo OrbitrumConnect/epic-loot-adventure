@@ -51,7 +51,7 @@ class AudioManager {
       this.combat.loop = true;
       this.combat.volume = 0;
     }
-    if (!this.shot) this.shot = new Audio('/audio/gun-shot.mp3');
+    if (!this.shot) this.shot = new Audio('/audio/arrow-hit.wav');
     if (!this.campfire) { this.campfire = new Audio('/audio/campfire-crackles.wav'); this.campfire.loop = true; }
   }
 
