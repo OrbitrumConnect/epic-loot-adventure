@@ -610,6 +610,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const finalPower = Math.round(totalPower * damageMultiplier(state.player));
 
     if (!canSimulateSharedWorld()) {
+      if (heldItemId === 'bow') audioManager.playShot();
+      if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
       broadcastCreatureHit({ targetId, source: state.player.position, damage: finalPower });
       set({
         player: {
@@ -718,6 +720,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }
     }
 
+    if (heldItemId === 'bow') audioManager.playShot();
+    if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
     set({
       player: updatedPlayer,
       creatures: updatedCreatures,
