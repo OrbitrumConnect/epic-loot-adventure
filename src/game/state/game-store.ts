@@ -674,9 +674,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           if (drop.itemId) drafts.push(lootEvent(drop.itemId, drop.quantity, creature.position));
         }
         if (loot.length > 0) {
-          const bag = createDeathBag(creature.id, creature.name, creature.position, loot);
-          updatedBags = [...state.deathBags, bag];
-          msg += bonus ? ` ✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} dropou!` : ` Loot no chão!`;
+          let collected = 0;
+          for (const drop of loot) {
+            if (!drop.itemId || !canAddItem(updatedPlayer.inventory, drop.itemId, drop.quantity)) continue;
+            updatedPlayer = { ...updatedPlayer, inventory: addItem(updatedPlayer.inventory, drop.itemId, drop.quantity) };
+            collected += drop.quantity;
+          }
+          msg += collected > 0 ? ` ${bonus ? `✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} ` : ''}recompensa adicionada.` : 'Mochila cheia; recompensa não adicionada.';
         }
       }
       updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
