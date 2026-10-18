@@ -1711,12 +1711,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }),
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
-      attackRange: weaponFor(
+      attackRange: weaponRangeFor(
         (() => {
           const s = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
           return s != null ? state.player.inventory.slots[s]?.itemId ?? null : null;
         })(),
-      ).range,
+        state.player.level,
+      ),
       harvestNodes: state.harvestNodes.map(n => ({
         id: n.id,
         kind: n.kind,

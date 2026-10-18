@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import type { Position } from '@/game/types';
 import { HARVEST_NODES } from '@/game/data/harvest-nodes';
-import { weaponFor } from '@/game/data/weapons';
+import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
 import { harvestNodeById } from './harvest-nodes';
 import { creatureById } from './hostile-ai';
@@ -148,7 +148,7 @@ export function AutoPilot({
         // está (não corre pra cima). Só anda se o bicho estiver além do alcance.
         const heldSlot = store.player.inventory.hotbar.slots[store.ui.selectedHotbar];
         const heldId = heldSlot != null ? store.player.inventory.slots[heldSlot]?.itemId ?? null : null;
-        const reach = Math.max(1, weaponFor(heldId).range - 0.4);
+        const reach = Math.max(1, weaponRangeFor(heldId, store.player.level) - 0.4);
         if (distTo(target) <= reach) {
           hold();
           // Especial quando melee e fora do cooldown (hit em área); senão ataque normal.
