@@ -23,6 +23,8 @@ import {
 } from '../systems/baseSystem';
 import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
 import type { BaseType, BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
+
+const POTION_HOTBAR_INDEX = 3;
 import { BASE_TYPES, DEFAULT_BASE_TYPE } from '../data/base-types';
 import { basePieceCost } from '../systems/baseTypeSystem';
 import { CLAIM_SIZE } from '../data/base-pieces';
@@ -1041,7 +1043,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         const invIdx = inv.slots.findIndex(sl => sl.itemId === itemId);
         if (invIdx >= 0) {
           const slots = [...hotbar.slots];
-          slots[s.ui.selectedHotbar] = invIdx;
+          // O slot 4 (índice 3) é reservado para poções e nunca pode ser
+          // sobrescrito ao equipar uma arma.
+          const target = s.ui.selectedHotbar === POTION_HOTBAR_INDEX ? 0 : s.ui.selectedHotbar;
+          slots[target] = invIdx;
+          const potionIdx = inv.slots.findIndex(sl => sl.itemId === 'health_potion');
+          if (potionIdx >= 0) slots[POTION_HOTBAR_INDEX] = potionIdx;
           hotbar = { ...hotbar, slots };
         }
       }
