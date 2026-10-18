@@ -1712,7 +1712,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Com poção infinita (dev) e sem cura na hotbar, usa o slot 0 só como sinal:
       // quem executa o `heal` deve chamar `drinkPotion()`, que ignora o índice.
       healSlot: findHealHotbarIndex(state.player.inventory) ?? (findBestHealItem(state.player.inventory, DEV_INFINITE_POTIONS) ? 0 : null),
-      gatherCapacity: getWeight(state.player.inventory) < state.player.inventory.maxWeight && state.player.inventory.slots.some(slot => {
+      // Considera a mochila cheia com tolerância para arredondamento de peso;
+      // quando cheia, o piloto deve caçar e nunca voltar a escolher uma árvore.
+      gatherCapacity: getWeight(state.player.inventory) < state.player.inventory.maxWeight - 0.01 && state.player.inventory.slots.some(slot => {
         if (slot.itemId === null) return true;
         const item = ITEMS[slot.itemId];
         return Boolean(item && slot.quantity < item.maxStack);
