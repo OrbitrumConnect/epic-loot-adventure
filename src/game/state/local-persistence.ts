@@ -16,14 +16,21 @@ export function connectLocalPersistence(store: PersistenceStore, storage: SaveSt
     if (save) {
       const restored = restoreLocalSave(save, store.getState(), now());
       const potionIdx = restored.player.inventory.slots.findIndex(s => s.itemId === 'health_potion');
+      const hotbar = [...restored.player.inventory.hotbar.slots];
+      // Recursos brutos ficam somente na mochila; nunca ocupam a hotbar.
+      for (let i = 0; i < hotbar.length; i++) {
+        const invIdx = hotbar[i];
+        if (invIdx == null) continue;
+        const item = restored.player.inventory.slots[invIdx]?.itemId;
+        if (item === 'wood' || item === 'stone') hotbar[i] = null;
+      }
       if (potionIdx >= 0) {
-        const hotbar = [...restored.player.inventory.hotbar.slots];
         hotbar[11] = potionIdx;
         store.setState({
           ...restored,
           player: { ...restored.player, inventory: { ...restored.player.inventory, hotbar: { ...restored.player.inventory.hotbar, slots: hotbar } } },
         });
-      } else store.setState(restored);
+      } else store.setState({ ...restored, player: { ...restored.player, inventory: { ...restored.player.inventory, hotbar: { ...restored.player.inventory.hotbar, slots: hotbar } } } });
     }
     else if (raw !== null) storage.removeItem(SAVE_KEY);
   } catch { /* Storage bloqueado/corrompido: mantém o protótipo local jogável. */ }
