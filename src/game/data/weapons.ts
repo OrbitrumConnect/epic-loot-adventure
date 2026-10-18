@@ -23,9 +23,9 @@ export const DEFAULT_MELEE: WeaponProfile = { type: 'melee', ranged: false, rang
 
 export const WEAPONS: Record<string, WeaponProfile> = {
   // Ranged — abaixo dos 25 m do auto-farm, então ainda exige aproximar um pouco.
-  bow:    { type: 'bow',    ranged: true, range: 8,  cooldown: 0.9, projectile: 'arrow' },
-  pistol: { type: 'pistol', ranged: true, range: 10, cooldown: 0.5, projectile: 'bullet' },
-  rifle:  { type: 'rifle',  ranged: true, range: 12, cooldown: 0.8, projectile: 'bullet' },
+  bow:    { type: 'bow',    ranged: true, range: 15, cooldown: 0.9, projectile: 'arrow' },
+  pistol: { type: 'pistol', ranged: true, range: 15, cooldown: 0.5, projectile: 'bullet' },
+  rifle:  { type: 'rifle',  ranged: true, range: 20, cooldown: 0.8, projectile: 'bullet' },
 };
 
 /** Alcance efetivo cresce com o nível e chega, no máximo, a 35 m no nível 250. */
