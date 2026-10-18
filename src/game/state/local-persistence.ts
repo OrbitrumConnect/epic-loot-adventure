@@ -13,7 +13,18 @@ export function connectLocalPersistence(store: PersistenceStore, storage: SaveSt
   try {
     const raw = storage.getItem(SAVE_KEY);
     const save = parseLocalSave(raw);
-    if (save) store.setState(restoreLocalSave(save, store.getState(), now()));
+    if (save) {
+      const restored = restoreLocalSave(save, store.getState(), now());
+      const potionIdx = restored.player.inventory.slots.findIndex(s => s.itemId === 'health_potion');
+      if (potionIdx >= 0) {
+        const hotbar = [...restored.player.inventory.hotbar.slots];
+        hotbar[11] = potionIdx;
+        store.setState({
+          ...restored,
+          player: { ...restored.player, inventory: { ...restored.player.inventory, hotbar: { ...restored.player.inventory.hotbar, slots: hotbar } } },
+        });
+      } else store.setState(restored);
+    }
     else if (raw !== null) storage.removeItem(SAVE_KEY);
   } catch { /* Storage bloqueado/corrompido: mantém o protótipo local jogável. */ }
 

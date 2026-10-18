@@ -24,7 +24,8 @@ import {
 import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
 import type { BaseType, BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
 
-const POTION_HOTBAR_INDEX = 3;
+// Slot 12 (índice 11) é reservado exclusivamente para poções.
+const POTION_HOTBAR_INDEX = 11;
 import { BASE_TYPES, DEFAULT_BASE_TYPE } from '../data/base-types';
 import { basePieceCost } from '../systems/baseTypeSystem';
 import { CLAIM_SIZE } from '../data/base-pieces';
@@ -262,7 +263,7 @@ function createInitialPlayer(): PlayerState {
     { itemId: 'ammo', quantity: 60 }, // munição inicial p/ pistola/rifle
   ]);
   // Hotbar estendida: 8 slots originais INTACTOS + arco/pistola/rifle no fim.
-  inventory.hotbar.slots = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
+  inventory.hotbar.slots = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 3];
 
   return {
     id: 'player_1',
@@ -1043,7 +1044,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         const invIdx = inv.slots.findIndex(sl => sl.itemId === itemId);
         if (invIdx >= 0) {
           const slots = [...hotbar.slots];
-          // O slot 4 (índice 3) é reservado para poções e nunca pode ser
+          // O slot 12 (índice 11) é reservado para poções e nunca pode ser
           // sobrescrito ao equipar uma arma.
           const target = s.ui.selectedHotbar === POTION_HOTBAR_INDEX ? 0 : s.ui.selectedHotbar;
           slots[target] = invIdx;
