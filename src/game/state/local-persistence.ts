@@ -24,13 +24,12 @@ export function connectLocalPersistence(store: PersistenceStore, storage: SaveSt
         const item = restored.player.inventory.slots[invIdx]?.itemId;
         if (item === 'wood' || item === 'stone') hotbar[i] = null;
       }
-      if (potionIdx >= 0) {
-        hotbar[11] = potionIdx;
-        store.setState({
-          ...restored,
-          player: { ...restored.player, inventory: { ...restored.player.inventory, hotbar: { ...restored.player.inventory.hotbar, slots: hotbar } } },
-        });
-      } else store.setState({ ...restored, player: { ...restored.player, inventory: { ...restored.player.inventory, hotbar: { ...restored.player.inventory.hotbar, slots: hotbar } } } });
+      // O slot 12 existe sempre; fica vazio até o primeiro drop de poção.
+      hotbar[11] = potionIdx >= 0 ? potionIdx : null;
+      store.setState({
+        ...restored,
+        player: { ...restored.player, inventory: { ...restored.player.inventory, hotbar: { ...restored.player.inventory.hotbar, slots: hotbar } } },
+      });
     }
     else if (raw !== null) storage.removeItem(SAVE_KEY);
   } catch { /* Storage bloqueado/corrompido: mantém o protótipo local jogável. */ }
