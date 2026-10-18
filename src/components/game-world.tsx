@@ -1259,7 +1259,9 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
   // Photographic PBR surface at a 3 m tile; macro vegetation tint stays subtle.
   const mat = useMemo(() => {
     const repeat = size / 3;
-    const groundMaps = pbrMaps('forrest_ground_01', repeat);
+    // A chapa jogável usa a textura terrosa que também aparece fora do mapa.
+    // O GLB do deserto permanece intacto e continua sendo outra camada.
+    const groundMaps = pbrMaps('worn_rock_natural_01', repeat);
     const m = new THREE.MeshStandardMaterial({ ...groundMaps, roughness: 1, normalScale: new THREE.Vector2(0.75, 0.75) });
     m.onBeforeCompile = shader => {
       shader.vertexShader = shader.vertexShader
@@ -1271,11 +1273,14 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
           #ifdef USE_MAP
             diffuseColor.rgb *= texture2D(map, vMapUv).rgb;
             // Dica leve de grama (olive dessaturado) só onde vBlend é alto.
+            // Barro/sertão: aproxima o chão jogável do tom do anel externo.
+            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.55, 0.40, 0.24 ), 0.42 );
+            diffuseColor.rgb *= vec3( 0.75, 0.66, 0.53 );
             diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.97, 1.0, 0.88 ), vBlend * 0.15 );
           #endif
         `);
     };
-    m.customProgramCacheKey = () => 'ground-pbr-v2';
+    m.customProgramCacheKey = () => 'ground-pbr-v6-sertão-earth-match-dark';
     return m;
   }, [size]);
 
