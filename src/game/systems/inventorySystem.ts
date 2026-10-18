@@ -23,7 +23,7 @@ export function createInventory(initialItems?: { itemId: string; quantity: numbe
 
 export function getWeight(inventory: InventoryState): number {
   return inventory.slots.reduce((total, slot) => {
-    if (!slot.itemId || slot.itemId === 'health_potion') return total;
+    if (!slot.itemId) return total;
     const item = ITEMS[slot.itemId];
     if (!item) return total;
     return total + item.weight * slot.quantity;
@@ -46,8 +46,7 @@ export function canAddItem(inventory: InventoryState, itemId: string, quantity: 
   const item = ITEMS[itemId];
   if (!item || quantity <= 0) return false;
 
-  // Poções usam o slot reservado e não ocupam a capacidade de carga comum.
-  const addedWeight = itemId === 'health_potion' ? 0 : item.weight * quantity;
+  const addedWeight = item.weight * quantity;
   if (getWeight(inventory) + addedWeight > inventory.maxWeight) return false;
 
   // A coleta é atômica: se o drop não couber por inteiro, não podemos retornar
