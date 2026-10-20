@@ -15,7 +15,7 @@ import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { terrainMeshY, registerWall, wallHeightAt, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
+import { registerWall, wallHeightAt, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
@@ -616,22 +616,12 @@ function Character({
     // Mesmo pra fábrica: dentro + iso → corta o teto; senão prédio inteiro.
     const facCut = factoryRoofCutY(body.current.position.x, body.current.position.z);
     factoryClip.constant = facCut !== null && cameraMode === 'iso' ? facCut : 1e9;
-    // Malha das montanhas: pega o CHÃO logo abaixo dos pés (não o topo). Quando há
-    // malha (player sobre montanha/caverna), ELA manda — inclusive piso de caverna
-    // ABAIXO do chão procedural (senão o Math.max prende o player em 0 e a "colisão
-    // acaba" dentro da cave). Fora das montanhas, terreno normal (camp/casa/fábrica).
     const bx = body.current.position.x, bz = body.current.position.z;
-    const mountainY = terrainMeshY(bx, bz, body.current.position.y);
-    // Sem caverna agora: o player NUNCA fica abaixo do chão base. Pega a superfície
-    // MAIS ALTA entre a malha (GLB/rocha), o terreno procedural, a ponte e a casa.
-    // Assim a malha do GLB só ERGUE o player (pisar em pedra), nunca o faz cair
-    // pra baixo do mapa quando a geometria do GLB fica sob o chão.
-    const groundY = Math.max(
-      mountainY > -Infinity ? mountainY : -Infinity,
-      terrainHeight(bx, bz),
-      bridgeSurfaceY(bx, bz),
-      houseFloor,
-    );
+    // O player segue a SUPERFÍCIE DE CIMA do GLB — sobe nos morros E DESCE nos vales/rio,
+    // igual aos props (mesmo glbSurfaceY = terrainMeshTopY, raycast de bem alto pega o
+    // topo da malha → acompanha o relevo pra baixo SEM cair pro fundo/undermap). Fora do
+    // GLB cai no chão procedural / ponte / casa.
+    const groundY = glbSurfaceY(bx, bz, Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor));
 
     if (!isGrounded.current) {
       jumpVelocity.current -= 15 * dt;
