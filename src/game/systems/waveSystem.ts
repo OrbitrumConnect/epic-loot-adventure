@@ -19,8 +19,20 @@ export type WaveState = {
 
 export const INITIAL_WAVE: WaveState = { phase: 'idle', wave: 0, phaseEndsAt: 0, spawnPending: 0 };
 
-export const PEACE_MS = 60_000;      // 1 min de preparo ENTRE ondas
+export const PEACE_MS = 60_000;      // 1 min de preparo ENTRE ondas (até a onda 10)
 export const FIRST_PEACE_MS = 300_000; // 5 min após FECHAR a base, antes da 1ª horda
+
+/**
+ * Tempo de PAZ após repelir a onda `wave`, escalando com o progresso (Pedro):
+ *   até 10 → 1 min | >10 → 5 min | >15 → 8 min | >20 → 10 min.
+ * Dá mais fôlego pra reconstruir/evoluir conforme as ondas ficam pesadas.
+ */
+export function peaceDurationMs(wave: number): number {
+  if (wave > 20) return 600_000; // 10 min
+  if (wave > 15) return 480_000; // 8 min
+  if (wave > 10) return 300_000; // 5 min
+  return PEACE_MS;               // 1 min
+}
 export const BASE_WAVE_ENEMIES = 4;  // referência de quantidade
 const START_MULT = 2;                // onda 1 = 2× a referência
 const STEP = 1.3;                    // +30% por onda
@@ -93,7 +105,7 @@ export function tickWaves(
     case 'combat':
       if (state.spawnPending <= 0 && aliveWaveEnemies <= 0) {
         return {
-          state: { phase: 'peace', wave: state.wave, phaseEndsAt: now + PEACE_MS, spawnPending: 0 },
+          state: { phase: 'peace', wave: state.wave, phaseEndsAt: now + peaceDurationMs(state.wave), spawnPending: 0 },
           startedWave: null,
           repelledWave: state.wave, // onda vencida → oferece as cartas de evolução
           message: `✅ Onda ${state.wave} repelida! Escolha uma evolução pra base.`,

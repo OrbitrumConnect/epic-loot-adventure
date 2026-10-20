@@ -279,7 +279,7 @@ function inLake(x: number, z: number, pad = 0): boolean {
  * a média do verde amostrado (tint). Determinístico → Vercel. GroundCover = lâminas
  * finas animadas por vento.
  * ------------------------------------------------------------------ */
-const GRASS_CAP = 33000;       // teto de tufos (instanced) — Pedro: "+40%, mais junta" (savana)
+const GRASS_CAP = 43000;       // teto de tufos (instanced) — Pedro: "+30% a mais, mais junto" (savana)
 const CLUSTER_SPREAD = 1.0;    // raio (m) do punhado — menor = tufos mais JUNTOS (savana)
 /** Esverdeado (sRGB 0-1): caqui/oliva embutido no barro. O mapa é alaranjado — areia
  *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
@@ -325,7 +325,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
           grid.push({ x: jx, z: jz });
         }
       }
-      const perSpot = 3; // tufos por mancha (densidade local — grama cheia)
+      const perSpot = 4; // tufos por mancha (densidade local — mais junto em volta das que já tem)
       const out: Placement[] = [];
       const push = (sp: { x: number; z: number }, base: number) => {
         for (let k = 0; k < perSpot; k++) {
