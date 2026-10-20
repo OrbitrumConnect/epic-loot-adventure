@@ -2095,7 +2095,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         { x: 46, z: -36, scale: 4.6, yaw: 0.2 }, { x: 2, z: -50, scale: 5, yaw: 1.5 },
       ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url="/models/trees/tree-split.glb" x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
       {/* Labirinto (área aberta a oeste do lago). -19% + mais pro oeste. */}
-      <Maze x={-8} z={56} size={57} />
+      <Maze x={-20} z={72} size={57} />
       {/* Postes de luz DENTRO do labirinto. */}
       {[[-8, 56], [-24, 44], [10, 44], [-24, 70], [10, 70], [-8, 80]].map(([lx, lz], i) => (
         <RoadLamp key={`maze-lamp-${i}`} x={lx!} y={terrainHeight(lx!, lz!)} z={lz!} />
