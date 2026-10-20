@@ -287,7 +287,7 @@ const CLUSTER_SPREAD = 1.1;    // raio (m) do punhado em torno da mancha
  *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
  *  pixels reais do rio-wasteland (histograma de g/r). */
 function isGreen(c: THREE.Color): boolean {
-  return c.g >= c.r * 0.80 && c.g >= c.b && c.g > 0.12;
+  return c.g >= c.r * 0.76 && c.g >= c.b * 0.98 && c.g > 0.10;
 }
 /** Gera a grama quando o GLB+textura carregam (retry curto até a imagem decodificar —
  *  o registro do terreno não espera a textura). Nunca limpa grama já achada. */
@@ -298,12 +298,17 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
     let cancelled = false, tries = 0;
     const attempt = () => {
       if (cancelled) return;
-      const { spots, tint } = collectGreenSurfaceSpots(isGreen, Math.ceil(GRASS_CAP / CLUSTER));
+      // Coleta TODAS as manchas verdes do mapa (não só as primeiras), pra espalhar
+      // por tudo — safe zone, encostas, etc. — e não amontoar perto do lago.
+      const { spots, tint } = collectGreenSurfaceSpots(isGreen, 6000);
       if (spots.length > 10) {
+        // Densidade por mancha ajustada ao total: muitas manchas → menos tufos cada
+        // (não estourar o teto); poucas manchas → cluster cheio. Distribui por TODAS.
+        const cluster = Math.max(1, Math.min(CLUSTER, Math.floor(GRASS_CAP / spots.length)));
         const out: Placement[] = [];
         for (let s = 0; s < spots.length && out.length < GRASS_CAP; s++) {
           const sp = spots[s]!;
-          for (let k = 0; k < CLUSTER; k++) {
+          for (let k = 0; k < cluster; k++) {
             const seed = s * 7 + k * 101;
             const h = 0.6 + rand(seed + 50) * 0.5;
             out.push({

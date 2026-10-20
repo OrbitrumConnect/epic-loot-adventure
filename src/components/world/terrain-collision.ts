@@ -209,6 +209,9 @@ export function collectGreenSurfaceSpots(
   let n = 0;
   for (const root of terrains) {
     if (spots.length >= max) break;
+    // Só o chão do mapa é fonte de grama (MapFloor marca userData.grassSource). A ponte
+    // e outros objetos do editor também são "terreno" (colisão), mas NÃO ganham mato.
+    if (!root.userData?.['grassSource']) continue;
     root.updateMatrixWorld(true);
     root.traverse((o) => {
       if (spots.length >= max) return;

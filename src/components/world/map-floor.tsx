@@ -61,6 +61,10 @@ export function MapFloor() {
   }, [scene]);
   useEffect(() => {
     if (!ref.current) return;
+    // Marca como FONTE DE GRAMA: só o chão do mapa recebe os tufos (a varredura de
+    // manchas verdes ignora tudo que não tem esta flag — ex.: a ponte, que também é
+    // registrada como terreno pra colisão, não deve ganhar mato).
+    ref.current.userData['grassSource'] = true;
     return registerTerrain(ref.current);
   }, [model]);
   const [px, py, pz] = POS;
