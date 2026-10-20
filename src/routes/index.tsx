@@ -187,6 +187,7 @@ function Index() {
   const deallocateSkill = useGameStore(s => s.deallocateSkill);
   const equipItem = useGameStore(s => s.equipItem);
   const unequipSlot = useGameStore(s => s.unequipSlot);
+  const dropItem = useGameStore(s => s.dropItem);
   const playerBase = useGameStore(s => s.playerBase);
   const deliverToBase = useGameStore(s => s.deliverToBase);
   const baseProg = playerBase ? baseLv1Progress(playerBase) : null;
@@ -706,6 +707,9 @@ function Index() {
                             <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura · ' + item.rarity : item.category}</small>
                             <em>{slot.quantity > 1 ? slot.quantity : ''}</em>
                             {equipped && <i className="equipped-tag">equipado</i>}
+                            <button type="button" className="inventory-drop"
+                              onClick={(e) => { e.stopPropagation(); if (slot.itemId) dropItem(i); }}
+                              title={`Descartar ${item.name}`} aria-label={`Descartar ${item.name}`}>Descartar</button>
                           </div>
                         );
                       })}

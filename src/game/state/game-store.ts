@@ -140,7 +140,9 @@ type GameActions = {
   equipItem: (itemId: string) => void;
   /** Tira o equipamento de um slot (volta pro "nu"). */
   unequipSlot: (slot: 'primary' | 'secondary' | 'armor' | 'accessory') => void;
-  useHotbarSlot: (index: number) => void;
+  useHotbarSlot: (index: number, opts?: { manual?: boolean }) => void;
+  /** Descarta (joga fora) o item do slot do inventário — tira da hotbar/equipamento também. */
+  dropItem: (slotIndex: number) => void;
   craftItem: (recipeId: string) => void;
   rest: () => void;
   setMode: (mode: UIState['mode']) => void;
@@ -886,7 +888,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
   },
 
-  useHotbarSlot: (index: number) => {
+  useHotbarSlot: (index: number, opts?: { manual?: boolean }) => {
     const state = get();
     const invSlotIdx = state.player.inventory.hotbar.slots[index];
     if (invSlotIdx == null) return;
@@ -896,6 +898,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     const item = ITEMS[slot.itemId];
     if (!item) return;
+
+    // Seleção MANUAL (jogador) de uma ARMA define o estilo do piloto idle: pegar
+    // pistola/rifle/arco = 'ranged'; espada/machado/picareta = 'melee'. Assim a sua
+    // escolha na hotbar MANDA (o piloto parava de usar a pistola e voltava pra espada
+    // no estilo 'auto'). NÃO fazer isso quando o PRÓPRIO piloto troca (opts.manual=false),
+    // senão a troca dele realimentaria o estilo e travaria.
+    if (opts?.manual !== false && item.equippable) {
+      const ranged = weaponFor(item.id).ranged;
+      const isWeapon = ranged || (item.attackPower ?? 0) > 0;
+      if (isWeapon) set({ pilotWeaponStyle: ranged ? 'ranged' : 'melee' });
+    }
 
     set(s => ({ ui: { ...s.ui, selectedHotbar: index } }));
 
@@ -934,6 +947,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
 
     set(s => ({ ui: { ...s.ui, selectedHotbar: index, message: `${item.name} selecionado.` } }));
+  },
+
+  dropItem: (slotIndex) => {
+    const state = get();
+    const itemId = state.player.inventory.slots[slotIndex]?.itemId;
+    const quantity = itemId ? state.player.inventory.slots[slotIndex]!.quantity : 0;
+    if (!itemId || quantity <= 0) return;
+    const inventory = { ...state.player.inventory, slots: state.player.inventory.slots.map((slot, i) => i === slotIndex ? { itemId: null, quantity: 0 } : { ...slot }) };
+    const hotbar = inventory.hotbar.slots.map(si => (si != null && inventory.slots[si]?.itemId) ? si : null);
+    const equipment = { ...inventory.equipment };
+    (Object.keys(equipment) as (keyof typeof equipment)[]).forEach(slot => { if (equipment[slot] === itemId) equipment[slot] = null; });
+    set({ player: { ...state.player, inventory: { ...inventory, hotbar: { ...inventory.hotbar, slots: hotbar }, equipment } }, ui: { ...state.ui, message: `${ITEMS[itemId]?.name ?? itemId} descartado.` } });
   },
 
   craftItem: (recipeId: string) => {

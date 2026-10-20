@@ -255,7 +255,7 @@ export function AutoPilot({
           case 'switch': {
             // Troca a arma e NÃO ataca neste tick: o ataque sai no próximo,
             // já com a arma certa na mão (o snapshot do próximo tick reflete).
-            store.useHotbarSlot(decision.hotbarIndex);
+            store.useHotbarSlot(decision.hotbarIndex, { manual: false });
             lastWeaponSwitch.current = now;
             hold();
             setPilotStatus('attack', `Trocando de arma contra ${name}`, '');
