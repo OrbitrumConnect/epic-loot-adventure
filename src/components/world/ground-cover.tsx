@@ -22,7 +22,7 @@ export function GroundCover({ placements, c, tint }: { placements: ForestPlaceme
     const low = base.clone().lerp(new THREE.Color('#000000'), 0.22);    // raiz um tom mais escura
     const high = base.clone().lerp(new THREE.Color('#ffffff'), 0.16);   // ponta levemente clara (NÃO branca)
     const color = new THREE.Color();
-    for (let blade = 0; blade < 20; blade++) { // tufo mais leve (perf) — compensa + tufos
+    for (let blade = 0; blade < 16; blade++) { // tufo mais leve (perf) — compensa + tufos
       const a = blade * 2.39996;
       const rootRadius = rand(blade + 51) * 0.2;
       const rootX = Math.cos(a) * rootRadius, rootZ = Math.sin(a) * rootRadius;
