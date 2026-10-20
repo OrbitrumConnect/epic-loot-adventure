@@ -37,10 +37,15 @@ export function BaseHouse({
   const normal = useTexture('/models/house/normal.png');
   // Casa de PEDRA (evolução nível 10). Carrega sempre; só renderiza quando evoluída.
   const stone = useGLTF('/models/house/stone-house.glb');
+  // Casa de METAL: tier topo, a partir de onda >=10 E nível >20 (Pedro 20/10).
+  const metal = useGLTF('/models/house/metal-house.glb');
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
+  const level = useGameStore((s) => s.player.level);
+  const wave = useGameStore((s) => s.wave.wave);
   // A evolução visual da base remota ainda não faz parte do payload de rede.
   // Ela continua sendo uma casa de madeira, mas fica no mesmo core da cerca.
   const baseEvolved = remote ? false : localBaseEvolved;
+  const metalTier = !remote && wave >= 10 && level > 20; // pedra -> metal no progresso
 
   const gl = useThree((s) => s.gl);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // habilita o corte do teto
@@ -50,10 +55,12 @@ export function BaseHouse({
   const clipPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6), []);
 
   const prepared = useMemo(() => {
-    // Evoluída → casa de PEDRA (GLB, material pétreo); senão → madeira (texturizada).
-    const o = (baseEvolved ? stone.scene : obj).clone();
+    // Tier: metal (onda>=10 & nível>20) → pedra (evoluída) → madeira (base).
+    const o = (metalTier ? metal.scene : baseEvolved ? stone.scene : obj).clone();
     diffuse.colorSpace = THREE.SRGBColorSpace;
-    const mat = baseEvolved
+    const mat = metalTier
+      ? new THREE.MeshStandardMaterial({ color: '#8c939c', roughness: 0.5, metalness: 0.55, side: THREE.DoubleSide, clippingPlanes: [clipPlane] })
+      : baseEvolved
       ? new THREE.MeshStandardMaterial({ color: '#9a938a', roughness: 1, metalness: 0, side: THREE.DoubleSide, clippingPlanes: [clipPlane] })
       : new THREE.MeshStandardMaterial({ map: diffuse, normalMap: normal, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, clippingPlanes: [clipPlane] });
     o.traverse((m) => {
@@ -110,7 +117,7 @@ export function BaseHouse({
       }
     });
     return { wrap, halfX, halfZ, wallSegs };
-  }, [obj, stone, baseEvolved, diffuse, normal, clipPlane]);
+  }, [obj, stone, metal, baseEvolved, metalTier, diffuse, normal, clipPlane]);
 
   // Teto some ao entrar: baixa o plano de corte pra ~2,6 m acima do piso.
   useFrame(() => {
@@ -162,3 +169,4 @@ export function BaseHouse({
 }
 
 useGLTF.preload('/models/house/stone-house.glb');
+useGLTF.preload('/models/house/metal-house.glb');

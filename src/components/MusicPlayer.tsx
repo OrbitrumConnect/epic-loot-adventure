@@ -14,9 +14,8 @@ export function MusicPlayer() {
 
   // Cada ataque do jogador aquece a trilha de combate.
   const attackTick = useGameStore((s) => s.attackTick);
-  const selectedHotbar = useGameStore((s) => s.ui.selectedHotbar);
   useEffect(() => { if (attackTick > 0) audioManager.pulseCombat(); }, [attackTick]);
-  useEffect(() => { if (attackTick > 0 && selectedHotbar === 8) audioManager.playShot(); }, [attackTick, selectedHotbar]);
+  // O som POR ARMA (flecha/tiro/melee) é tocado no game-store, no ataque. Aqui só pulsa o combate.
 
   const playing = audioManager.playing;
 
