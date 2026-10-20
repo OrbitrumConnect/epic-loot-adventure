@@ -27,6 +27,8 @@
 - **Pipelines de arte:** `art/city/` (160 sprites de construção, 20 níveis × 8) e `art/items/` (28 sprites de item). Ambos regeneráveis: Codex com `gpt-5.6-luna` esforço médio, sheets 2×2, recorte por script. Sheets brutas fora do git.
 - **Subagentes do projeto** (em `~/.claude/agents/`, fora do repo): `tribos-game-systems`, `tribos-world-3d`, `tribos-hud` — todos `claude-sonnet-5-5`, esforço médio, cada um com as regras duras do seu escopo.
 
+- [**🔊 Sistema de Áudio (referência)**](audio-sistema.md) — JÁ QUEBROU 2×: sync de snapshot gutou o `audio-manager` (removeu passos/melee/harvest/gun, trocou `shot` flecha→tiro, apagou .wav). Doc lista **arquivos + métodos + onde cada som é chamado** (game-store: arco=flecha/pistola-rifle=tiro/melee; game-world: passos; harvestAt: coleta) + checklist de restauração. **Não remover num sync.** Commit bom: `ad7bc6c`.
+
 ## Feedback
 
 - **Diário e memória sempre (Caio, 06/10)** — atualizar diário do dia e este índice a cada etapa: o que foi feito, conclusões, achados. Só adicionar.
