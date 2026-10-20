@@ -119,11 +119,13 @@ export function glbSurfaceY(x: number, z: number, fallback: number): number {
  * no UV do acerto, ou a cor do material / vertex-color como fallback.
  * Feito 1x no load (por ponto-candidato), cacheando o pixel-buffer por imagem.
  * ------------------------------------------------------------------ */
-const _pixelCache = new WeakMap<object, { data: Uint8ClampedArray; w: number; h: number } | null>();
+const _pixelCache = new WeakMap<object, { data: Uint8ClampedArray; w: number; h: number }>();
 function imagePixels(img: TexImageSource): { data: Uint8ClampedArray; w: number; h: number } | null {
   const cached = _pixelCache.get(img as object);
-  if (cached !== undefined) return cached;
-  let out: { data: Uint8ClampedArray; w: number; h: number } | null = null;
+  if (cached) return cached;
+  // IMPORTANTE: NÃO cachear falha. A textura carrega async — uma leitura antes da
+  // imagem decodificar (width=0) voltaria null; se isso fosse cacheado, nunca mais
+  // leríamos a textura (grama some de vez). Só cacheamos quando deu certo.
   try {
     const w = (img as HTMLImageElement).width, h = (img as HTMLImageElement).height;
     if (w && h) {
@@ -132,12 +134,13 @@ function imagePixels(img: TexImageSource): { data: Uint8ClampedArray; w: number;
       const ctx = cv.getContext('2d', { willReadFrequently: true });
       if (ctx) {
         ctx.drawImage(img as CanvasImageSource, 0, 0);
-        out = { data: ctx.getImageData(0, 0, w, h).data, w, h };
+        const out = { data: ctx.getImageData(0, 0, w, h).data, w, h };
+        _pixelCache.set(img as object, out);
+        return out;
       }
     }
-  } catch { out = null; } // textura cross-origin "tainted": cai no fallback de cor do material
-  _pixelCache.set(img as object, out);
-  return out;
+  } catch { /* textura "tainted"/não pronta: cai no fallback de cor do material */ }
+  return null;
 }
 
 const _sampleColor = new THREE.Color();

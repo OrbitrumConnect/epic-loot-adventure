@@ -16,8 +16,8 @@ export function GroundCover({ placements, c, tint }: { placements: ForestPlaceme
   const assets = useMemo(() => {
     const positions: number[] = [], colors: number[] = [];
     const base = tint ? tint.clone() : new THREE.Color(c.grass);
-    const low = base.clone().lerp(new THREE.Color('#000000'), 0.18);    // raiz levemente mais escura
-    const high = base.clone().lerp(new THREE.Color('#ffffff'), 0.42);   // ponta clarinha (tom vivo)
+    const low = base.clone().lerp(new THREE.Color('#000000'), 0.22);    // raiz um tom mais escura
+    const high = base.clone().lerp(new THREE.Color('#ffffff'), 0.16);   // ponta levemente clara (NÃO branca)
     const color = new THREE.Color();
     for (let blade = 0; blade < 28; blade++) {
       const a = blade * 2.39996;

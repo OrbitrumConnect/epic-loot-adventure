@@ -314,7 +314,11 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color } {
     const attempt = () => {
       if (cancelled) return;
       const r = buildGreenGrass();
-      if (r.placements.length > 40 || tries >= 15) { setRes(r); return; }
+      // Só PUBLICA quando achou grama; NUNCA limpa (um tv-bump posterior com amostra
+      // momentaneamente vazia não pode apagar a grama já encontrada). Se esgotar as
+      // tentativas sem achar, desiste em silêncio e mantém o que havia.
+      if (r.placements.length > 40) { setRes(r); return; }
+      if (tries >= 20) return;
       tries++; setTimeout(attempt, 250); // textura ainda decodificando → tenta de novo
     };
     attempt();
