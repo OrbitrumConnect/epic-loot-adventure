@@ -286,10 +286,10 @@ const CLUSTER_SPREAD = 1.3;    // raio (m) do punhado em torno da mancha
  *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
  *  pixels reais do rio-wasteland (histograma de g/r). */
 function isGreen(c: THREE.Color): boolean {
-  // Verde/oliva + verde da montanha: g não-alaranjado (g>=r*0.71) e não-azul. Exclui a
-  // areia clara (g<r*0.71). Pedro quer grama na montanha E no chão plano → pega os dois;
-  // o espalhamento (spotStride) garante cobertura no plano, não só onde achar primeiro.
-  return c.g >= c.r * 0.71 && c.g >= c.b * 0.95 && c.g > 0.09;
+  // Oliva do PLANO (amarronzado, g/r~0.70, bem perto da areia 0.69) + verde da montanha.
+  // g>=r*0.70 pega o oliva do chão plano e ainda exclui a areia clara (0.69). g>=b*0.92
+  // deixa passar o oliva-amarronzado (b um pouco maior). Pedro: grama no plano também.
+  return c.g >= c.r * 0.70 && c.g >= c.b * 0.92 && c.g > 0.08;
 }
 /** Gera a grama quando o GLB+textura carregam (retry curto até a imagem decodificar —
  *  o registro do terreno não espera a textura). Nunca limpa grama já achada. */
