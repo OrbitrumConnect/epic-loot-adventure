@@ -279,7 +279,7 @@ function inLake(x: number, z: number, pad = 0): boolean {
  * a média do verde amostrado (tint). Determinístico → Vercel. GroundCover = lâminas
  * finas animadas por vento.
  * ------------------------------------------------------------------ */
-const GRASS_CAP = 15000;       // teto de tufos (instanced) — Pedro: "farta, +35%" no plano e montanha
+const GRASS_CAP = 20000;       // teto de tufos (instanced) — Pedro: "muito mais, completo"
 const CLUSTER_SPREAD = 1.5;    // raio (m) do punhado em torno da mancha
 /** Esverdeado (sRGB 0-1): caqui/oliva embutido no barro. O mapa é alaranjado — areia
  *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
@@ -312,7 +312,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
       // (lago/rio) e pulando só a AREIA BEM CLARA (surfaceColorAt em linear): mantém as manchas
       // oliva/escuras (onde o Pedro quer grama) e deixa só a areia clara pelada.
       const grid: { x: number; z: number }[] = [];
-      const STEP = 2.5, LIM = 84;
+      const STEP = 2.0, LIM = 88;
       let gi = 0;
       for (let x = -LIM; x <= LIM; x += STEP) {
         for (let z = -LIM; z <= LIM; z += STEP, gi++) {
@@ -321,7 +321,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
           const jz = z + (rand(gi + 77) - 0.5) * STEP;
           const col = surfaceColorAt(jx, jz);
           if (!col) continue;
-          if (col.r > 0.42 && col.g < col.r * 0.74) continue; // areia clara → pula
+          if (col.r > 0.50 && col.g < col.r * 0.72) continue; // só a areia BEM clara → pula; resto vira grama
           grid.push({ x: jx, z: jz });
         }
       }
@@ -341,7 +341,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
       // PRIORIDADE ao CHÃO PLANO (grade) — é o que faltava. A montanha tem MUITO mais
       // manchas; se sorteasse uniforme, ela levava quase tudo e o plano ficava com fiapos.
       // Plano leva até ~70% do teto; a montanha preenche o resto (strided).
-      const gridCap = Math.floor(GRASS_CAP * 0.7);
+      const gridCap = Math.floor(GRASS_CAP * 0.82);
       for (let s = 0; s < grid.length && out.length < gridCap; s++) push(grid[s]!, s * 7);
       const remain = Math.max(0, GRASS_CAP - out.length);
       if (remain > 0 && meshSpots.length > 0) {
