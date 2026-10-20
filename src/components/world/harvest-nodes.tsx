@@ -29,6 +29,7 @@ import {
 } from './world-kit';
 import { GlbCrystals } from './glb-crystals';
 import { GlbRocks } from './glb-rocks';
+import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 
 const KINDS: HarvestNodeKind[] = ['tree', 'pebble', 'rock', 'iron_vein', 'gold_vein', 'crystal'];
 /** Cristal da Essência = GLB (esconde o procedural, mantém clique). */
@@ -263,6 +264,7 @@ function KindInstances({
   const deadRef = useRef<THREE.InstancedMesh>(null);
   /** `ids[i]` = id do nó na instância `i` do mesh VIVO. */
   const ids = useRef<string[]>([]);
+  const tv = useTerrainVersion(); // reassenta na superfície do GLB quando ele carrega
 
   useLayoutEffect(() => {
     const live = liveRef.current;
@@ -274,7 +276,7 @@ function KindInstances({
     for (const n of mine) {
       const r = rand(n.seed + 17);
       const yaw = rand(n.seed + 3) * Math.PI * 2;
-      const y = terrainHeight(n.position.x, n.position.z);
+      const y = glbSurfaceY(n.position.x, n.position.z, terrainHeight(n.position.x, n.position.z));
       dummy.position.set(n.position.x, y, n.position.z);
       dummy.rotation.set(0, yaw, 0);
       if (n.depleted) {
@@ -302,7 +304,7 @@ function KindInstances({
     // volume da montagem anterior.
     live.boundingSphere = null;
     dead.boundingSphere = null;
-  }, [mine, cap, kind]);
+  }, [mine, cap, kind, tv]);
 
   // Fade por instância do lote vivo: recria o atributo se o mesh foi remontado.
   useLayoutEffect(() => {
@@ -410,7 +412,7 @@ function HarvestLabel({
       document.body.style.cursor = '';
     }
     g.visible = true;
-    g.position.set(node.position.x, terrainHeight(node.position.x, node.position.z) + assets[node.kind].labelY, node.position.z);
+    g.position.set(node.position.x, glbSurfaceY(node.position.x, node.position.z, terrainHeight(node.position.x, node.position.z)) + assets[node.kind].labelY, node.position.z);
     g.quaternion.copy(state.camera.quaternion);
     const text = nodeLabelText(node);
     if (text !== lastText.current) {
