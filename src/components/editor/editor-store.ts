@@ -1,8 +1,13 @@
 import { create } from 'zustand';
+import { BAKED_EDITOR_OBJECTS } from './baked-layout';
 
 export type EditorTool = 'translate' | 'rotate' | 'scale';
 export type Transform = { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number] };
-export type EditorObject = { id: string; name: string; assetUrl: string; transform: Transform; visible: boolean; source?: 'editor' | 'map'; selectable?: boolean };
+/** Colisão do objeto colocado: nenhuma (decorativo, atravessa), chão (anda EM CIMA,
+ *  ex. ponte) ou bloquear (barra horizontal, ex. parede/pedra). Default: nenhuma —
+ *  assim prop decorativo (palmeira) não vira "escada". */
+export type EditorCollide = 'none' | 'floor' | 'block';
+export type EditorObject = { id: string; name: string; assetUrl: string; transform: Transform; visible: boolean; source?: 'editor' | 'map'; selectable?: boolean; collide?: EditorCollide };
 export const EDITOR_ASSETS = [
   { name: 'Árvore rachada', assetUrl: '/models/trees/tree-split.glb', scale: 4 },
   { name: 'Árvore ancestral', assetUrl: '/models/trees/tree-gnarled.glb', scale: 5 },
@@ -43,9 +48,12 @@ const id = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.ran
 type State = {
   active: boolean; tool: EditorTool; selectedId: string | null; objects: EditorObject[]; saved: EditorObject[]; undoStack: EditorObject[][]; redoStack: EditorObject[][]; saveNotice: string;
   setActive(active: boolean): void; setTool(tool: EditorTool): void; select(id: string | null): void; add(asset: typeof EDITOR_ASSETS[number]): void;
-  commit(next: EditorObject[]): void; update(id: string, transform: Transform): void; remove(): void; undo(): void; redo(): void; cancel(): void; saveLocal(): void;
+  commit(next: EditorObject[]): void; update(id: string, transform: Transform): void; setCollide(id: string, collide: EditorCollide): void; remove(): void; undo(): void; redo(): void; cancel(): void; saveLocal(): void;
 };
-const saved = initial();
+// Baked (layout publicado no código) como BASE; o localStorage do usuário tem prioridade
+// por id → aparece no Vercel pra todos, e quem edita continua vendo suas mudanças.
+const stored = initial();
+const saved: EditorObject[] = [...BAKED_EDITOR_OBJECTS.filter(b => !stored.some(s => s.id === b.id)), ...stored];
 const mergeCatalog = (stored: EditorObject[]) => {
   const byId = new Map(stored.map(o => [o.id, o]));
   const merged = mapCatalog.map(o => {
@@ -65,8 +73,9 @@ export const useEditorStore = create<State>((set, get) => ({
   active: false, tool: 'translate', selectedId: null, objects: mergeCatalog(copy(saved)), saved: mergeCatalog(copy(saved)), undoStack: [], redoStack: [], saveNotice: '',
   setActive: active => set({ active, selectedId: active ? get().selectedId : null }), setTool: tool => set({ tool }), select: selectedId => set({ selectedId }),
   commit: next => set(s => ({ objects: copy(next), undoStack: [...s.undoStack, copy(s.objects)].slice(-50), redoStack: [] })),
-  add: asset => { const s = get(); const n = s.objects.filter(o => o.source !== 'map').length + 1; const o: EditorObject = { id: id(), name: `${asset.name} ${n}`, assetUrl: asset.assetUrl, source: 'editor', visible: true, transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [asset.scale, asset.scale, asset.scale] } }; s.commit([...s.objects, o]); set({ selectedId: o.id }); },
+  add: asset => { const s = get(); const n = s.objects.filter(o => o.source !== 'map').length + 1; const o: EditorObject = { id: id(), name: `${asset.name} ${n}`, assetUrl: asset.assetUrl, source: 'editor', visible: true, collide: 'none', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [asset.scale, asset.scale, asset.scale] } }; s.commit([...s.objects, o]); set({ selectedId: o.id }); },
   update: (id, transform) => { const s = get(); s.commit(s.objects.map(o => o.id === id ? { ...o, transform } : o)); },
+  setCollide: (id, collide) => { const s = get(); s.commit(s.objects.map(o => o.id === id ? { ...o, collide } : o)); },
   remove: () => { const s = get(); if (!s.selectedId) return; s.commit(s.objects.filter(o => o.id !== s.selectedId)); set({ selectedId: null }); },
   undo: () => set(s => { const prev = s.undoStack.at(-1); return prev ? { objects: copy(prev), undoStack: s.undoStack.slice(0, -1), redoStack: [...s.redoStack, copy(s.objects)] } : s; }),
   redo: () => set(s => { const next = s.redoStack.at(-1); return next ? { objects: copy(next), redoStack: s.redoStack.slice(0, -1), undoStack: [...s.undoStack, copy(s.objects)] } : s; }),

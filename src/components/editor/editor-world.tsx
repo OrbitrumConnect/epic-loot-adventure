@@ -3,7 +3,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useEditorStore, type EditorObject } from './editor-store';
-import { registerTerrain } from '../world/terrain-collision';
+import { registerTerrain, registerWall } from '../world/terrain-collision';
 
 /** De-shine dos assets de mapa do Meshy (mesmo princípio do makeMatte do terreno):
  *  nulifica os mapas metal/rough e trava fosco, SEM tint (mantém a cor original).
@@ -41,13 +41,15 @@ function PlacedObject({ item }: { item: EditorObject }) {
     return box.getCenter(new THREE.Vector3());
   }, [model]);
   const ref = useRef<THREE.Group>(null);
-  // Colisão: registra a malha do GLB como CHÃO (BVH) → o player anda em cima
-  // (terrainMeshY pega a superfície mais alta). A raycast usa a matrixWorld atual,
-  // então mover/escalar no editor continua valendo sem re-registrar. Cleanup ao sair.
+  // Colisão por objeto (BVH), conforme item.collide:
+  //  'floor'  → anda EM CIMA (ponte/terreno); 'block' → barra horizontal (parede/pedra);
+  //  'none'/undefined → sem colisão (decorativo, ex. palmeira — não vira escada).
+  // Raycast usa a matrixWorld atual, então mover/escalar no editor vale sem re-registrar.
+  const collide = item.collide ?? 'none';
   useEffect(() => {
-    if (!ref.current) return;
-    return registerTerrain(ref.current);
-  }, [model]);
+    if (!ref.current || collide === 'none') return;
+    return collide === 'block' ? registerWall(ref.current) : registerTerrain(ref.current);
+  }, [model, collide]);
   const active = useEditorStore(s => s.active); const selected = useEditorStore(s => s.selectedId === item.id);
   const tool = useEditorStore(s => s.tool); const select = useEditorStore(s => s.select); const update = useEditorStore(s => s.update);
   const pick = (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); select(item.id); };
