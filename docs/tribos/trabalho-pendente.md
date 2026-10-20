@@ -36,12 +36,12 @@ Fonte dos itens e dos números: `docs/tribos/investigacao-lag-2026-10-15.md`.
       subdivide malha única nem faz culling por instância. Quem quiser o triângulo tem
       que mexer no que projeta sombra, não no tamanho do volume. Fica registrado para
       ninguém reabrir esta porta esperando os 3,6M.
-- [~] **Rever as 18 point lights** (número simultâneo, raio, `decay`). Esforço baixo.
+- [ ] **Rever as 18 point lights** (número simultâneo, raio, `decay`). Esforço baixo.
       Custo não isolado ainda — medir antes de mexer, não presumir ganho.
-- [~] **Consertar a instância paralela do `window.__celStats`.** Hoje aponta para um
+- [x] **Consertar a instância paralela do `window.__celStats`** — commit `feb1600`. Apontava para um
       módulo paralelo (HMR) e fica em 0 enquanto o render real roda, o que **impede
       medir o custo do pós cel-shade**. Só dev, risco nenhum. Destrava medição.
-- [~] **LOD/impostor na floresta.** A árvore instanciada é 272×8868 = **2,4M triângulos**,
+- [ ] **LOD/impostor na floresta.** A árvore instanciada é 272×8868 = **2,4M triângulos**,
       até 61% dos triângulos numa vista de floresta. Risco médio: mexe na silhueta da
       floresta, e o Pedro gosta do visual atual — não mudar sem mostrar antes/depois.
 - [ ] **Merge intra-personagem das partes skinned de mesmo material.** 406 draw calls,
@@ -106,3 +106,69 @@ texto** — é conflito semântico, o tipo que o git não mostra:
 
 Depois de mesclar: `npx tsc --noEmit` e `npx vitest run` obrigatórios, e conferir a
 Aberração **em tela** (tamanho e cor), porque é exatamente o ponto de sobreposição.
+
+## Atualização 2026-10-19 — retomada depois de quatro dias
+
+**O limite SEMANAL estourou em 15/10** (reseta 19/10 20h, horário de Cuiabá) e derrubou
+dois subagentes no meio do trabalho: a medição das 18 point lights e a redução de
+triângulo da árvore. Os dois voltaram para `[ ]` — nada foi commitado por eles, e marcador
+`[~]` velho mente sobre o estado. Isto é diferente do limite de 5 h que o
+`codex-retry.sh` cobre: **nenhum mecanismo de retomada ajuda contra um limite semanal**,
+porque a espera é de dias, não de minutos.
+
+O `__celStats` ficou pronto (`feb1600`), com uma descoberta maior que a própria tarefa
+registrada abaixo.
+
+### Bug pré-existente achado ao consertar o `__celStats` — vale mais que o conserto
+
+Em dev **com StrictMode**, o `useFrame` do `CelShade` nunca roda o caminho completo: cai
+sempre no early-return porque `rtRef`/`quadRef`/`bloomARef`/`bloomBRef`/`bloomQuadRef`
+ficam `null` para sempre. A cadeia: o cleanup effect anula esses cinco refs mas não os
+materials; o StrictMode invoca o effect duas vezes (mount → cleanup → mount); no segundo
+mount o resize effect faz early-return justamente porque `rtRef.current` é null, então
+não recria os render targets; e o `useMemo` não re-executa nesse remount.
+
+**Consequência: o pós cel-shade não renderiza em dev com StrictMode.** Não é só perda de
+instrumentação. Caminho provável de conserto (não executado, decisão de arquitetura):
+o resize effect recriar os RTs quando `rtRef.current` for null em vez de desistir, ou o
+cleanup só anular/descartar no unmount real.
+
+### Merge do upstream FEITO — 144 commits do Pedro
+
+Mesclado em 19/10, zero conflito de texto. `tsc` 0 e **280/280** testes (ele somou dois
+de capacidade de inventário). O que entrou de novo: multiplayer por link
+(`src/net/multiplayer.ts`, `remote-players.tsx`), editor/admin com Supabase
+(`src/components/editor/`, duas migrations), skin do herói refeita no Blender
+(`glb-hero-mixamo.tsx`), terreno de deserto, biblioteca de assets de mapa, `three-mesh-bvh`
+e `@supabase/supabase-js` como dependências novas.
+
+**O `tsc` do `upstream/main` (e8212f0) estava quebrado**, e não por causa do merge:
+`landmark-tree.tsx:38` usa `e.target` no `onMouseUp` do `TransformControls`, cujo tipo no
+drei 10.7.9 é `(e?: THREE.Event) => void` — parâmetro opcional. Arquivo byte-idêntico ao
+dele, nunca toquei nele, e o meu merge só mexeu em docs, texturas, `game-world.tsx` e
+`cel-shade.tsx`. Pus uma guarda de uma linha (`e?.target` com `?.object`) porque
+bloqueava toda verificação; não desfaz nada da intenção dele, o `if (!o) return` já
+estava logo depois. **Avisar o Pedro** — se ele não roda `tsc` antes de empurrar, vai
+repetir.
+
+### Contradições nos diários dele — resolver antes de mexer nessas áreas
+
+Não são minhas para decidir, mas quem encostar nisso precisa saber:
+
+- **Alcance máximo da arma**: 50 m no diário de 17/10, teto de 35 m no de 18/10.
+- **Velocidade do herói**: 3.2/4.8 e 2.0/4.8 no mesmo diário de 15/10.
+- **Altura da Aberração**: `fixedScale` medido (dele) contra `HERO_HEIGHT * 1.3` (nosso,
+  pedido do Caio para acompanhar o herói). **A versão dele foi a que ficou.** Se o Caio
+  ainda quer o tamanho acompanhando o herói, isto precisa voltar à mesa — não reintroduzir
+  por conta própria.
+- **`wukong.glb`**: o diário de 15/10 manda apagar, e o commit `12e7918` já apagou.
+  Pendência morta, não refazer.
+
+### Estado do que o Pedro construiu, pelas palavras dele
+
+- Skin do herói (`hero-preview.glb`): **pronta**, confirmada em tela por ele em 19/10.
+- Multiplayer por link: **funcional**; migration `game_rooms` aplicada, código das RPCs
+  ainda pendente.
+- Editor ADM: **sem tabelas** em 16/10, status incerto em 18/10.
+- Terreno de deserto: aplicado, **aguardando validação visual**.
+- Biblioteca de assets de mapa: **só planejada**.

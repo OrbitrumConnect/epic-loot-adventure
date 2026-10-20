@@ -35,7 +35,7 @@ export function LandmarkTree({ x, z, scale = 5.5, yaw = 0, url = GNARLED, editor
       <group position={[-pivot.center.x, -pivot.center.y, -pivot.center.z]}><primitive object={tree} /></group>
     </group>;
   if (!active || !selected || !editorId) return group;
-  return <TransformControls mode={tool} onMouseUp={e => { const o = (e.target as unknown as { object?: THREE.Object3D }).object; if (!o) return; update(editorId, { position: [o.position.x - pivot.center.x * o.scale.x, o.position.y - BASE_BELOW * o.scale.x - pivot.center.y * o.scale.x - terrainHeight(o.position.x, o.position.z), o.position.z - pivot.center.z * o.scale.x], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); }}>{group}</TransformControls>;
+  return <TransformControls mode={tool} onMouseUp={e => { const o = (e?.target as unknown as { object?: THREE.Object3D } | undefined)?.object; if (!o) return; update(editorId, { position: [o.position.x - pivot.center.x * o.scale.x, o.position.y - BASE_BELOW * o.scale.x - pivot.center.y * o.scale.x - terrainHeight(o.position.x, o.position.z), o.position.z - pivot.center.z * o.scale.x], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); }}>{group}</TransformControls>;
 }
 
 useGLTF.preload(GNARLED);
