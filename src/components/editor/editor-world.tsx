@@ -1,9 +1,19 @@
 import { TransformControls, useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
-import { useEditorStore, type EditorObject } from './editor-store';
+import { useEditorStore, type EditorObject, type EditorCollide } from './editor-store';
 import { registerTerrain, registerWall } from '../world/terrain-collision';
+
+/** Isola cada objeto: um GLB ausente (ex.: asset NÃO commitado → 404 no Vercel) faz
+ *  `useGLTF` dar throw. Sem isto o throw sobe e DERRUBA o Canvas inteiro (tela de erro).
+ *  Com o boundary, o objeto que falhou só não aparece — o resto do mundo continua. */
+class AssetBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  override componentDidCatch() { /* asset ausente não é fatal: engole e renderiza nada */ }
+  override render() { return this.state.failed ? null : this.props.children; }
+}
 
 /** De-shine dos assets de mapa do Meshy (mesmo princípio do makeMatte do terreno):
  *  nulifica os mapas metal/rough e trava fosco, SEM tint (mantém a cor original).
@@ -45,7 +55,12 @@ function PlacedObject({ item }: { item: EditorObject }) {
   //  'floor'  → anda EM CIMA (ponte/terreno); 'block' → barra horizontal (parede/pedra);
   //  'none'/undefined → sem colisão (decorativo, ex. palmeira — não vira escada).
   // Raycast usa a matrixWorld atual, então mover/escalar no editor vale sem re-registrar.
-  const collide = item.collide ?? 'none';
+  // Ponte de sucata é feita pra ANDAR EM CIMA → força 'floor' mesmo que o objeto
+  // salvo tenha vindo com 'none' (o usuário não precisa marcar nada). Respeita uma
+  // escolha explícita diferente de 'none' (ex.: quis 'block').
+  const isBridge = item.assetUrl.includes('scrap-bridge');
+  const explicit: EditorCollide | undefined = item.collide && item.collide !== 'none' ? item.collide : undefined;
+  const collide: EditorCollide = explicit ?? (isBridge ? 'floor' : 'none');
   useEffect(() => {
     if (!ref.current || collide === 'none') return;
     return collide === 'block' ? registerWall(ref.current) : registerTerrain(ref.current);
@@ -63,4 +78,9 @@ function PlacedObject({ item }: { item: EditorObject }) {
   const sync = () => { const o = ref.current; if (!o) return; update(item.id, { position: [o.position.x - pivot.x * o.scale.x, o.position.y - pivot.y * o.scale.y, o.position.z - pivot.z * o.scale.z], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); };
   return <TransformControls mode={tool} onMouseUp={sync}>{group}</TransformControls>;
 }
-export function EditorWorldLayer() { const objects = useEditorStore(s => s.objects); return <>{objects.filter(item => item.source !== 'map').map(item => <PlacedObject key={item.id} item={item} />)}</>; }
+export function EditorWorldLayer() {
+  const objects = useEditorStore(s => s.objects);
+  return <>{objects.filter(item => item.source !== 'map').map(item => (
+    <AssetBoundary key={item.id}><Suspense fallback={null}><PlacedObject item={item} /></Suspense></AssetBoundary>
+  ))}</>;
+}

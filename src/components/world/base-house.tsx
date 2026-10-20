@@ -37,8 +37,10 @@ export function BaseHouse({
   const normal = useTexture('/models/house/normal.png');
   // Casa de PEDRA (evolução nível 10). Carrega sempre; só renderiza quando evoluída.
   const stone = useGLTF('/models/house/stone-house.glb');
-  // Casa de METAL: tier topo, a partir de onda >=10 E nível >20 (Pedro 20/10).
-  const metal = useGLTF('/models/house/metal-house.glb');
+  // Casa de METAL: tier topo (onda >=10 E nível >20). Ainda NÃO temos um GLB de metal
+  // dedicado — reusamos a geometria da pedra com material metálico (prata). Quando
+  // existir /models/house/metal-house.glb, trocar a fonte aqui. NÃO dar useGLTF num
+  // arquivo inexistente: ele faz throw e derruba o Canvas inteiro (404).
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
   const localBaseMetal = useGameStore((s) => s.baseMetal ?? false);
   // A evolução visual da base remota ainda não faz parte do payload de rede.
@@ -55,7 +57,8 @@ export function BaseHouse({
 
   const prepared = useMemo(() => {
     // Tier: metal (onda>=10 & nível>20) → pedra (evoluída) → madeira (base).
-    const o = (metalTier ? metal.scene : baseEvolved ? stone.scene : obj).clone();
+    // Metal reusa a geometria da pedra (não há GLB de metal) com material metálico.
+    const o = (metalTier || baseEvolved ? stone.scene : obj).clone();
     diffuse.colorSpace = THREE.SRGBColorSpace;
     const mat = metalTier
       ? new THREE.MeshStandardMaterial({ color: '#8c939c', roughness: 0.5, metalness: 0.55, side: THREE.DoubleSide, clippingPlanes: [clipPlane] })
@@ -116,7 +119,7 @@ export function BaseHouse({
       }
     });
     return { wrap, halfX, halfZ, wallSegs };
-  }, [obj, stone, metal, baseEvolved, metalTier, diffuse, normal, clipPlane]);
+  }, [obj, stone, baseEvolved, metalTier, diffuse, normal, clipPlane]);
 
   // Teto some ao entrar: baixa o plano de corte pra ~2,6 m acima do piso.
   useFrame(() => {
@@ -168,4 +171,3 @@ export function BaseHouse({
 }
 
 useGLTF.preload('/models/house/stone-house.glb');
-useGLTF.preload('/models/house/metal-house.glb');
