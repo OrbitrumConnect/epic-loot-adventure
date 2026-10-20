@@ -19,7 +19,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
-import { terrainMeshTopY } from './terrain-collision';
+import { glbSurfaceY } from './terrain-collision';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
@@ -292,7 +292,7 @@ export function useHostileAI(opts: HostileOptions) {
               : cr,
           ),
         }));
-        g.position.set(home.x, terrainHeight(home.x, home.z), home.z);
+        g.position.set(home.x, glbSurfaceY(home.x, home.z, terrainHeight(home.x, home.z)), home.z);
         g.scale.copy(baseScale.current);
         death.current.startedAt = -Infinity;
         hitTime.current = -Infinity;
@@ -496,10 +496,11 @@ export function useHostileAI(opts: HostileOptions) {
     g.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
     // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno — e
     // SOBE na superfície das montanhas (malha) quando está sobre elas.
-    g.position.y = Math.max(
-      terrainHeight(g.position.x, g.position.z),
-      houseFloorSurfaceY(g.position.x, g.position.z),
-      terrainMeshTopY(g.position.x, g.position.z),
+    // Segue a superfície do GLB (sobe nos morros E DESCE nos vales/rio), igual ao
+    // player e aos props. Sem GLB, cai no chão procedural / assoalho da casa.
+    g.position.y = glbSurfaceY(
+      g.position.x, g.position.z,
+      Math.max(terrainHeight(g.position.x, g.position.z), houseFloorSurfaceY(g.position.x, g.position.z)),
     );
 
     const behavior: CreatureBehavior = flee

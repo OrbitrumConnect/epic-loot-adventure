@@ -12,7 +12,7 @@ import { CAMP_PLACEMENTS, CAMPS } from '@/game/data/camps';
  * — fica em terreno aberto. Metade ganha um tint de outra cor (variedade).
  */
 const URL = '/models/props/container.glb';
-const COUNT = 8;
+const COUNT = 0;                // Pedro 20/10: containers REMOVIDOS (era 8) p/ o mapa novo. Religar = subir o número.
 const TARGET_H = 3.0;            // +15% (era 2.6)
 const ALT_TINT = '#5a7d9a';     // 2ª cor (azul-aço) p/ metade dos containers
 

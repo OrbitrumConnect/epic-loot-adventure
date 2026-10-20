@@ -15,8 +15,8 @@ import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { DesertPlain, DesertMountain, MOUNTAIN_CAVE } from './world/desert-terrain';
-import { terrainMeshY, registerWall, wallHeightAt } from './world/terrain-collision';
+import { registerWall, wallHeightAt, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
+import { MapFloor } from './world/map-floor';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
@@ -61,7 +61,7 @@ import {
 } from './world/free-cam';
 import { FreeCamOverlay } from './world/free-cam-overlay';
 import { EditorWorldLayer } from './editor/editor-world';
-import { isEditorActive } from './editor/editor-store';
+import { isEditorActive, useEditorStore as useEditorStoreCam } from './editor/editor-store';
 
 export type WorldProps = {
   mode: string;
@@ -81,7 +81,12 @@ export type CameraMode = 'iso' | 'third' | 'free';
 // uma rampa curta sobe do terreno até o deck pra não ter degrau brusco.
 const BRIDGE = { cx: -2, cz: 2.5, cos: Math.cos(0.64), sin: Math.sin(0.64), halfLen: 3.75, halfWidth: 1.35, deckTop: 0.67, ramp: 1.4 };
 
+/** Ponte de madeira no meio do mapa. Pedro 20/10: OFF (visual + superfície caminhável).
+ *  Reversível: true volta a ponte. */
+const SHOW_BRIDGE = false;
+
 function bridgeSurfaceY(px: number, pz: number): number {
+  if (!SHOW_BRIDGE) return -Infinity;
   const dx = px - BRIDGE.cx;
   const dz = pz - BRIDGE.cz;
   const lx = dx * BRIDGE.cos - dz * BRIDGE.sin;
@@ -330,6 +335,32 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
 const USE_GLB_HERO = true;
 /** Survivor Red (rig Mixamo) no lugar do Kael (rig Unreal/UAL). Reversível: false volta o Kael. */
 const USE_RED_HERO = true;
+
+/** Chão central jogável (PlaneGeometry texturado). Pedro 20/10: OFF p/ avaliar o mapa
+ *  novo em GLB. NÃO afeta ficar em pé — personagens/coisas usam `terrainHeight` (matemático).
+ *  Reversível: true volta o chão. O backdrop distante (`DistantLandscape`) não é afetado. */
+const SHOW_CENTRAL_GROUND = false;
+
+/** Água velha (rio/lagos em posições fixas antigas). Pedro 20/10: OFF — substituída por
+ *  um plano de água no nível do GLB, que aparece só nas partes baixas/azuis (o rio real
+ *  do mapa). Reversível: true volta a água antiga. */
+const SHOW_OLD_WATER = false;
+/** Estrada antiga (jpg que cortava o mapa). Pedro 20/10: OFF — não assentava no relevo
+ *  do GLB e a textura ficava torta. O GLB já tem seus caminhos. Reversível: true volta. */
+const SHOW_OLD_ROAD = false;
+/** Plano de água do mapa. O mapeamento da textura mostrou a água azul CENTRAL (perto do
+ *  spawn). Nível ~0.2 (piso seco ~0.7, água ~-0.2 → aparece só nos baixios). Centro e
+ *  tamanho ajustáveis — hoje cobre o rio central; o shape do rio vem da geometria do GLB
+ *  (só mostra onde afunda abaixo do nível). */
+const MAP_WATER_Y = -2.0;                             // superfície da água: ~0.6m acima do leito (-2.6). Nesse nível baixo, o plano
+                                                      // só mostra água onde o GLB AFUNDA (lago central + praias nas margens); terra seca fica por cima.
+const MAP_WATER_CENTER: [number, number] = [0, 0];   // cobre o mapa todo; a forma (lago + praias) vem da geometria do GLB
+const MAP_WATER_SIZE = 210;                           // lado do plano (m) — alcança as margens/praias
+
+/** Labirinto FIXO no mapa. Pedro 20/10: OFF — agora é colocado/ajustado pelo Editor ADM
+ *  (Biblioteca GLB → "Labirinto"). Reversível: true volta o maze fixo. NOTA: o maze do
+ *  editor usa colisão de CHÃO (anda em cima), não de parede (corredor) como o fixo. */
+const SHOW_HARDCODED_MAZE = false;
 
 function Character({
   c, attack, movement, onPosition, paused, playerRef, cameraYawRef, cameraMode,
@@ -607,15 +638,12 @@ function Character({
     // Mesmo pra fábrica: dentro + iso → corta o teto; senão prédio inteiro.
     const facCut = factoryRoofCutY(body.current.position.x, body.current.position.z);
     factoryClip.constant = facCut !== null && cameraMode === 'iso' ? facCut : 1e9;
-    // Malha das montanhas: pega o CHÃO logo abaixo dos pés (não o topo). Quando há
-    // malha (player sobre montanha/caverna), ELA manda — inclusive piso de caverna
-    // ABAIXO do chão procedural (senão o Math.max prende o player em 0 e a "colisão
-    // acaba" dentro da cave). Fora das montanhas, terreno normal (camp/casa/fábrica).
     const bx = body.current.position.x, bz = body.current.position.z;
-    const mountainY = terrainMeshY(bx, bz, body.current.position.y);
-    const groundY = mountainY > -Infinity
-      ? mountainY
-      : Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor);
+    // O player segue a SUPERFÍCIE DE CIMA do GLB — sobe nos morros E DESCE nos vales/rio,
+    // igual aos props (mesmo glbSurfaceY = terrainMeshTopY, raycast de bem alto pega o
+    // topo da malha → acompanha o relevo pra baixo SEM cair pro fundo/undermap). Fora do
+    // GLB cai no chão procedural / ponte / casa.
+    const groundY = glbSurfaceY(bx, bz, Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor));
 
     if (!isGrounded.current) {
       jumpVelocity.current -= 15 * dt;
@@ -1055,7 +1083,8 @@ function Moon() {
  * (a barreira vive em `pushOutSafeZone`, na IA hostil). Só visual, sem custo.
  */
 function SafeZoneMarker() {
-  const y = terrainHeight(SAFE_ZONE.x, SAFE_ZONE.z) + 0.05;
+  const tv = useTerrainVersion();
+  const y = useMemo(() => glbSurfaceY(SAFE_ZONE.x, SAFE_ZONE.z, terrainHeight(SAFE_ZONE.x, SAFE_ZONE.z)) + 0.05, [tv]);
   return (
     <group position={[SAFE_ZONE.x, y, SAFE_ZONE.z]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
@@ -1188,7 +1217,9 @@ function Maze({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: numbe
     if (!ref.current) return;
     return registerWall(ref.current);
   }, []);
-  return <group ref={ref} position={[x, terrainHeight(x, z), z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
+  const tv = useTerrainVersion();
+  const y = useMemo(() => glbSurfaceY(x, z, terrainHeight(x, z)), [x, z, tv]);
+  return <group ref={ref} position={[x, y, z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
 }
 useGLTF.preload(MAZE_URL);
 
@@ -1484,6 +1515,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   const isoYaw = useRef(0);            // giro 360° da câmera de cima (MOBA): botão direito / 1 dedo
   const isoDragging = useRef(false);   // arrastando o botão direito pra girar
   const isoZoom = useRef<number | null>(null);
+  const editorPan = useRef(new THREE.Vector3()); // deslocamento da câmera MOBA no modo edit (pan)
+  const editorPanning = useRef(false);           // arrastando (botão direito) p/ mover a câmera no editor
+  const prevSel = useRef<string | null>(null);   // último objeto selecionado (p/ focar a câmera ao trocar)
 
   // Câmera livre (dev): teclas, posição e vetores de rascunho (criados 1x, nunca
   // alocados por quadro). Métrica/inspeção escrevem no bridge `free-cam.ts`.
@@ -1509,6 +1543,16 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     const canvas = gl.domElement;
 
     const onMouseMove = (e: MouseEvent) => {
+      // Editor: arrastar c/ botão DIREITO move a câmera de cima pelo mapa (pan), desacoplada do player.
+      if (editorPanning.current) {
+        const a = isoYaw.current;
+        const z = isoZoom.current ?? 20;
+        const speed = 1.6 / z; // mais zoom → pan mais fino
+        const dx = -e.movementX * speed, dz = -e.movementY * speed;
+        editorPan.current.x += dx * Math.cos(a) - dz * Math.sin(a);
+        editorPan.current.z += dx * Math.sin(a) + dz * Math.cos(a);
+        return;
+      }
       // Câmera de cima (MOBA): arrastar c/ botão DIREITO gira 360° ao redor do boneco.
       if (isoDragging.current) {
         isoYaw.current -= e.movementX * 0.006;
@@ -1558,7 +1602,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     };
 
     const onMouseDown = (e: MouseEvent) => {
-      if (isEditorActive()) return;
+      if (isEditorActive()) {
+        // No editor, câmera MOBA (iso): botão DIREITO arrasta pra mover a câmera pelo mapa.
+        if (e.button === 2 && cameraMode === 'iso') editorPanning.current = true;
+        return;
+      }
       // Botão DIREITO no modo de cima: inicia o giro 360° da câmera (não ataca/anda).
       if (e.button === 2 && cameraMode === 'iso') { isoDragging.current = true; return; }
       // Câmera livre (Caio): clique nunca ataca — a inspeção é pela mira central.
@@ -1575,7 +1623,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     };
 
     const onMouseUp = (e: MouseEvent) => {
-      if (e.button === 2) isoDragging.current = false;
+      if (e.button === 2) { isoDragging.current = false; editorPanning.current = false; }
     };
     // Botão direito gira a câmera no modo de cima → suprime o menu de contexto do navegador.
     const onContextMenu = (e: MouseEvent) => { if (cameraMode === 'iso') e.preventDefault(); };
@@ -1710,11 +1758,25 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       const a = isoYaw.current;
       const rx = 24 * Math.cos(a) - 24 * Math.sin(a);
       const rz = 24 * Math.sin(a) + 24 * Math.cos(a);
-      const wantPos = new THREE.Vector3(px + rx, 29, pz + rz);
+      // Modo edit: `editorPan` desacopla a câmera do player p/ navegar/editar de cima.
+      // Fora do editor zera → volta a centrar no player (sem regressão).
+      if (!isEditorActive()) { editorPan.current.set(0, 0, 0); prevSel.current = null; }
+      else {
+        // Focar ao SELECIONAR: ao trocar de objeto, centra a câmera nele (como no Max/
+        // Blender) — resolve "clico, seleciono e fico preso" quando o objeto está longe.
+        const ed = useEditorStoreCam.getState();
+        if (ed.selectedId !== prevSel.current) {
+          prevSel.current = ed.selectedId;
+          const o = ed.objects.find(x => x.id === ed.selectedId);
+          if (o) editorPan.current.set(o.transform.position[0] - px, 0, o.transform.position[2] - pz);
+        }
+      }
+      const cx = px + editorPan.current.x, cz = pz + editorPan.current.z;
+      const wantPos = new THREE.Vector3(cx + rx, 29, cz + rz);
       const lerpFactor = modeChanged ? 1 : 0.06;
       camTarget.current.lerp(wantPos, lerpFactor);
       camera.position.copy(camTarget.current);
-      camLookAt.current.lerp(new THREE.Vector3(px, py, pz), lerpFactor);
+      camLookAt.current.lerp(new THREE.Vector3(cx, py, cz), lerpFactor);
       camera.lookAt(camLookAt.current);
     } else if (cameraMode === 'free') {
       const free = getFreeCam();
@@ -1917,6 +1979,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   const roadTex = useMemo(() => groundTexture('/assets/style/ground/road.webp', 1), []);
 
   // Luminárias ao longo da estrada, espaçadas ~14 m, deslocadas pra beira.
+  const lampTv = useTerrainVersion(); // reassenta os postes quando o GLB carrega
   const lamps = useMemo(() => {
     const curve = new THREE.CatmullRomCurve3(ROAD_POINTS.map(([x, z]) => new THREE.Vector3(x, 0, z)));
     const pts = curve.getPoints(120);
@@ -1930,11 +1993,13 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         const d = b.clone().sub(a).normalize();
         const lx = b.x + -d.z * 1.6;
         const lz = b.z + d.x * 1.6;
-        out.push({ x: lx, y: terrainHeight(lx, lz), z: lz });
+        if (LAKE_CENTERS.some(l => (lx - l.x) ** 2 + (lz - l.z) ** 2 < (l.r + 2) ** 2)) continue; // poste na água do GLB → pula
+        out.push({ x: lx, y: glbSurfaceY(lx, lz, terrainHeight(lx, lz)), z: lz });
       }
     }
     return out;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lampTv]);
 
   // Rio: fita que segue RIVER_POINTS, ondulando na frente do nascedouro e
   // desembocando no laginho. Cada vértice acompanha a altura do terreno (ou a
@@ -1984,33 +2049,44 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <Sun />
       <Atmosphere c={c} paused={props.paused} />
 
-      <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
+      {SHOW_CENTRAL_GROUND && <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />}
+      {/* Chão principal do mapa FIXO (rio-wasteland) — determinístico, vai pro Vercel.
+          Remova a cópia colocada pelo Editor (localStorage) pra não duplicar. */}
+      <MapFloor />
       <EditorWorldLayer />
 
-      <mesh geometry={path} receiveShadow>
+      {SHOW_OLD_ROAD && <mesh geometry={path} receiveShadow>
         <meshStandardMaterial map={roadTex} bumpMap={roadTex} bumpScale={0.045} roughness={0.92} side={THREE.DoubleSide} />
-      </mesh>
+      </mesh>}
 
       {/* Luminárias da estrada — acendem ao anoitecer */}
       {lamps.map((l, i) => <RoadLamp key={`lamp${i}`} {...l} />)}
 
-      {/* Lakes — local water discs sitting at the terrain edge height */}
-      {LAKE_CENTERS.map((lake, i) => (
-        <mesh key={`lake${i}`} position={[lake.x, lakeWaterY(lake), lake.z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[lake.r * 0.92, 32]} />
-          <WaterMaterial color={c.water} time={waterTime} />
-        </mesh>
-      ))}
-
-      {/* River — fita ondulada que desemboca no laginho */}
-      <mesh geometry={river} receiveShadow>
-        <WaterMaterial color={c.water} time={waterTime} river />
+      {/* Água do MAPA: plano no nível do GLB, centrado na área azul CENTRAL (mapeada na
+          textura). Aparece só onde o GLB afunda abaixo do nível (o rio); o chão seco
+          esconde o resto. Centro/tamanho em MAP_WATER_CENTER/SIZE. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[MAP_WATER_CENTER[0], MAP_WATER_Y, MAP_WATER_CENTER[1]]} renderOrder={1}>
+        <planeGeometry args={[MAP_WATER_SIZE, MAP_WATER_SIZE]} />
+        <WaterMaterial color={c.water} time={waterTime} />
       </mesh>
-      <RiverBanks c={c} />
+
+      {/* Água antiga (rio/lagos fixos) — OFF; posições não batiam com o GLB. */}
+      {SHOW_OLD_WATER && <>
+        {LAKE_CENTERS.map((lake, i) => (
+          <mesh key={`lake${i}`} position={[lake.x, lakeWaterY(lake), lake.z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[lake.r * 0.92, 32]} />
+            <WaterMaterial color={c.water} time={waterTime} />
+          </mesh>
+        ))}
+        <mesh geometry={river} receiveShadow>
+          <WaterMaterial color={c.water} time={waterTime} river />
+        </mesh>
+        <RiverBanks c={c} />
+      </>}
       <DistantLandscape c={c} />
 
       {/* Bridge — tabuado elevado com vigas, pilares e guarda-corpo; leva a estrada por cima do córrego, na frente do nascedouro */}
-      <group position={[-2, 0, 2.5]} rotation={[0, 0.64, 0]}>
+      {SHOW_BRIDGE && <group position={[-2, 0, 2.5]} rotation={[0, 0.64, 0]}>
         {/* Tabuado (anda ao longo do X local, atravessando a água) */}
         {Array.from({ length: 16 }, (_, i) => (
           <mesh key={`plank${i}`} position={[(i - 7.5) * 0.5, 0.6, 0]} receiveShadow castShadow>
@@ -2047,7 +2123,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
             ))}
           </group>
         ))}
-      </group>
+      </group>}
 
       <Billboards trees={trees} c={c} />
       {showAshlandPilot && <AshlandPilot />}
@@ -2072,20 +2148,18 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         { x: 46, z: -36, scale: 4.6, yaw: 0.2 }, { x: 2, z: -50, scale: 5, yaw: 1.5 },
       ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url="/models/trees/tree-split.glb" x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
       {/* Labirinto (área aberta a oeste do lago). -19% + mais pro oeste. */}
-      <Maze x={-8} z={56} size={57} />
-      {/* Postes de luz DENTRO do labirinto. */}
-      {[[-8, 56], [-24, 44], [10, 44], [-24, 70], [10, 70], [-8, 80]].map(([lx, lz], i) => (
-        <RoadLamp key={`maze-lamp-${i}`} x={lx!} y={terrainHeight(lx!, lz!)} z={lz!} />
+      {SHOW_HARDCODED_MAZE && <Maze x={-20} z={72} size={57} />}
+      {/* Postes de luz DENTRO do labirinto — saem junto com o maze fixo (OFF). */}
+      {SHOW_HARDCODED_MAZE && [[-8, 56], [-24, 44], [10, 44], [-24, 70], [10, 70], [-8, 80]].map(([lx, lz], i) => (
+        <RoadLamp key={`maze-lamp-${i}`} x={lx!} y={glbSurfaceY(lx!, lz!, terrainHeight(lx!, lz!))} z={lz!} />
       ))}
       {/* Multiplayer: avatares dos outros jogadores (online). */}
       <RemotePlayers />
-      {/* Planície do deserto (puxada um pouco pro fundo; aumento LEVE só p/ não
-          abrir buraco verde na frente). */}
-      <DesertPlain size={206} z={36} yOffset={-1.0} />
-      <DesertMountain x={-57.4} z={91.1} yOffset={-0.5} url="/models/terrain/mountain.glb" transform={{ position: [-57.4, -0.5, 91.1], rotation: [0, -3.5, 0], scale: [5.6, 6.6, 4.2] }} />
-      <DesertMountain x={-86.3} z={50} yOffset={-0.5} url={MOUNTAIN_CAVE} transform={{ position: [-86.3, -0.5, 50], rotation: [0, -7.2, 0], scale: [7.7, 8.7, 7.1] }} />
-      {/* Montanha rochosa (boca da caverna virada pro spawn) + montanha-caverna
-          (passarela) no canto. Baixadas p/ o chão original prevalecer em cima. Climáveis. */}
+      {/* Terrenos GLB (planície do deserto + 2 montanhas) REMOVIDOS por hora (Pedro 19/10):
+          ficavam nas bordas / abaixo do chão original e serão trocados pelo novo mapa.
+          O chão real continua sendo o `terrainHeight` procedural (bichos e player usam ele);
+          sem as montanhas registradas, o player cai sempre no terrainHeight (igual aos bichos).
+          Histórico no git (commit e8212f0) p/ restaurar se precisar. */}
       <GlbContainers />
       {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
           montanhas GLB novas + crista de pedra da planície entram no lugar. */}

@@ -21,6 +21,9 @@ export const PLAYER_SPAWN: Position = { x: 7, z: -26 };
 export const LAKE_CENTERS: { x: number; z: number; r: number }[] = [
   { x: 55, z: 55, r: 16 },
   { x: -60, z: -15, r: 12 },
+  // Lago central do GLB novo (rio-wasteland): exclui farm nodes/postes da água.
+  // Pedro 20/10. (Só exclusão — a água visual é o plano em MAP_WATER_*.)
+  { x: 25, z: 25, r: 32 },
 ];
 
 /**
@@ -250,10 +253,10 @@ export const CAMP_IDS = Object.keys(CAMPS);
 
 /** Onde cada acampamento fica no mundo. O tier 1 é o mais perto do nascedouro. */
 export const CAMP_PLACEMENTS: CampPlacement[] = [
-  { id: 'raider_outpost', defId: 'raider_outpost', position: { x: 23, z: 7 } },
+  { id: 'raider_outpost', defId: 'raider_outpost', position: { x: 28, z: -21 } }, // movido de (23,7): caía dentro do lago do GLB (Y=-2.6); (28,-21) é seco (Y~0.3)
   { id: 'blackclaw_camp', defId: 'blackclaw_camp', position: { x: -54, z: 42 } },
   { id: 'crackedbone_warband', defId: 'crackedbone_warband', position: { x: 55, z: -50 } },
-  { id: 'stonefist_stronghold', defId: 'stonefist_stronghold', position: { x: -60, z: -58 } },
+  { id: 'stonefist_stronghold', defId: 'stonefist_stronghold', position: { x: -42, z: -49 } }, // movido de (-60,-58) rumo ao centro: fugir da montanha pontuda do GLB; (-42,-49) é plano (Y~1.5), ~12m da montanha
 ];
 
 // ---------------------------------------------------------------------------

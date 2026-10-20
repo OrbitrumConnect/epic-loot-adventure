@@ -52,4 +52,5 @@ art/**/__pycache__/
 .env.*.local
 
 # Assets de mapa pesados (passam do limite 100MB do GitHub) — hospedar a parte
-public/models/map/
+public/models/map/*
+!public/models/map/rio-wasteland-iconic.glb

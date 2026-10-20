@@ -85,11 +85,11 @@ describe('playerBase · claim', () => {
   });
 
   it('recusa sobre acampamento', () => {
-    // Posto dos Saqueadores em (23, 7): quadrado centrado nele.
-    const c = checkClaim({ gx: 7, gz: 3 }, CLAIM_SIZE, EMPTY, NOW);
+    // Posto dos Saqueadores em (28, -21): quadrado centrado nele.
+    const c = checkClaim({ gx: 8, gz: -16 }, CLAIM_SIZE, EMPTY, NOW);
     expect(c.ok).toBe(false);
     expect(c.issues).toContain('sobre-acampamento');
-    expect(claimBase({ gx: 7, gz: 3 }, CLAIM_SIZE, OWNER, EMPTY, NOW).base).toBeNull();
+    expect(claimBase({ gx: 8, gz: -16 }, CLAIM_SIZE, OWNER, EMPTY, NOW).base).toBeNull();
   });
 
   it('recusa sobre as ruínas', () => {

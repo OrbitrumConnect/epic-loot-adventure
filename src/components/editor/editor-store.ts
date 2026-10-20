@@ -7,6 +7,7 @@ export const EDITOR_ASSETS = [
   { name: 'Árvore rachada', assetUrl: '/models/trees/tree-split.glb', scale: 4 },
   { name: 'Árvore ancestral', assetUrl: '/models/trees/tree-gnarled.glb', scale: 5 },
   { name: 'Torre de vigia', assetUrl: '/models/watchtower/watchtower.glb', scale: 1 },
+  { name: 'Labirinto', assetUrl: '/models/props/maze.glb', scale: 14 },
   { name: 'Montanha oeste', assetUrl: '/models/terrain/mountain.glb', scale: 1 },
   { name: 'Montanha caverna', assetUrl: '/models/terrain/mountain-cave.glb', scale: 1 },
   // Novos assets de mapa (Meshy). De-shine aplicado no PlacedObject p/ assets /models/map/.

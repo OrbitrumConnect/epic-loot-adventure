@@ -19,6 +19,7 @@ import type { CampState, CampStructure } from '@/game/types';
 import { addObjective, campDefinition } from './objective-bridge';
 import { useFadeGroup, type FadeSphere } from './occlusion';
 import { hashId, markPointerConsumed, mixColor, rand, terrainHeight, type Palette } from './world-kit';
+import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { WatchtowerModel } from './glb-watchtower';
 import { useGameStore } from '@/game/state/game-store';
@@ -394,7 +395,9 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
 
   const cx = camp.position.x;
   const cz = camp.position.z;
-  const markerY = terrainHeight(cx, cz);
+  // Assenta o acampamento na superfície do GLB (recomputa quando o GLB carrega).
+  const tv = useTerrainVersion();
+  const markerY = useMemo(() => glbSurfaceY(cx, cz, terrainHeight(cx, cz)), [cx, cz, tv]);
 
   return (
     <group position={[cx, 0, cz]}>
@@ -424,7 +427,7 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
           <CampPiece
             key={`${s.kind}-${i}-${camp.cleared ? 1 : 0}`}
             spheres={FADE_SPHERES[s.kind] ?? null}
-            position={[s.offset.x, terrainHeight(wx, wz), s.offset.z]}
+            position={[s.offset.x, glbSurfaceY(wx, wz, terrainHeight(wx, wz)), s.offset.z]}
             rotation={[0, s.rotation, 0]}
             scale={s.scale}
             onPointerDown={queueClear}

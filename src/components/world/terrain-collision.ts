@@ -11,6 +11,7 @@
  * o raycast de cima pega a superfície do TOPO, então hoje isto dá subir/andar,
  * não entrar embaixo.
  */
+import { useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
@@ -23,7 +24,23 @@ import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-
 
 const terrains = new Set<THREE.Object3D>();
 
-/** Registra um terreno (planície/montanha) p/ colisão de malha; constrói o BVH
+// Versão do terreno: muda sempre que um GLB de terreno (re)entra/sai. Os props
+// (árvore/pedra/cristal/camp/fábrica) assinam via useTerrainVersion e recomputam
+// a altura quando o GLB carrega (ele registra async, depois do mount dos props).
+let terrainVersion = 0;
+const terrainListeners = new Set<() => void>();
+function bumpTerrain() { terrainVersion++; for (const l of terrainListeners) l(); }
+
+/** Hook: re-renderiza o componente quando o conjunto de terrenos muda. */
+export function useTerrainVersion(): number {
+  return useSyncExternalStore(
+    (cb) => { terrainListeners.add(cb); return () => { terrainListeners.delete(cb); }; },
+    () => terrainVersion,
+    () => terrainVersion,
+  );
+}
+
+/** Registra um terreno (planície/montanha/GLB) p/ colisão de malha; constrói o BVH
  *  de cada geometria. Devolve o cleanup pra desregistrar ao desmontar. */
 export function registerTerrain(root: THREE.Object3D): () => void {
   root.updateMatrixWorld(true);
@@ -34,7 +51,8 @@ export function registerTerrain(root: THREE.Object3D): () => void {
     if (m.isMesh && g && !g.boundsTree) g.computeBoundsTree();
   });
   terrains.add(root);
-  return () => { terrains.delete(root); };
+  bumpTerrain();
+  return () => { terrains.delete(root); bumpTerrain(); };
 }
 
 const ray = new THREE.Raycaster();
@@ -84,6 +102,15 @@ export function terrainMeshTopY(x: number, z: number): number {
     if (hits.length > 0 && hits[0]!.point.y > best) best = hits[0]!.point.y;
   }
   return best;
+}
+
+/** Altura da superfície do GLB de terreno em (x,z) p/ ASSENTAR props (árvore/pedra/
+ *  cristal/camp/fábrica). Retorna o topo da malha se houver GLB ali, senão `fallback`
+ *  (normalmente `terrainHeight`). Usar junto com `useTerrainVersion` p/ recomputar
+ *  quando o GLB (que carrega async) entra. */
+export function glbSurfaceY(x: number, z: number, fallback: number): number {
+  const m = terrainMeshTopY(x, z);
+  return m > -Infinity ? m : fallback;
 }
 
 /* ---- PAREDES (labirinto): colisão horizontal simples ---- */
