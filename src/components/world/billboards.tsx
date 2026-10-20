@@ -279,7 +279,7 @@ function inLake(x: number, z: number, pad = 0): boolean {
  * a média do verde amostrado (tint). Determinístico → Vercel. GroundCover = lâminas
  * finas animadas por vento.
  * ------------------------------------------------------------------ */
-const GRASS_CAP = 52000;       // teto de tufos (instanced) — Pedro: "+30/40% no plano" (savana)
+const GRASS_CAP = 62000;       // teto de tufos (instanced) — Pedro: "espalhar mais, lado a lado até a beirada"
 const CLUSTER_SPREAD = 1.0;    // raio (m) do punhado — menor = tufos mais JUNTOS (savana)
 /** Esverdeado (sRGB 0-1): caqui/oliva embutido no barro. O mapa é alaranjado — areia
  *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
@@ -312,7 +312,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
       // (lago/rio) e pulando só a AREIA BEM CLARA (surfaceColorAt em linear): mantém as manchas
       // oliva/escuras (onde o Pedro quer grama) e deixa só a areia clara pelada.
       const grid: { x: number; z: number }[] = [];
-      const STEP = 1.5, LIM = 88;
+      const STEP = 1.2, LIM = 88;
       let gi = 0;
       for (let x = -LIM; x <= LIM; x += STEP) {
         for (let z = -LIM; z <= LIM; z += STEP, gi++) {
@@ -321,7 +321,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
           const jz = z + (rand(gi + 77) - 0.5) * STEP;
           const col = surfaceColorAt(jx, jz);
           if (!col) continue;
-          if (col.r > 0.58 && col.g < col.r * 0.70) continue; // pula só a areia MUITO clara; mantém mais chão → +grama no plano
+          if (col.r > 0.64 && col.g < col.r * 0.68) continue; // pula só a areia BEM clara mesmo; pega até a beirada perto da areia
           grid.push({ x: jx, z: jz });
         }
       }
