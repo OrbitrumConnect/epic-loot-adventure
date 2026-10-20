@@ -611,15 +611,20 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
 
-    const equippedWeapon = state.player.inventory.equipment.primary;
-    const weaponPower = equippedWeapon ? (ITEMS[equippedWeapon]?.attackPower ?? 0) : 0;
+    // Poder da arma ATIVA = a que está na MÃO (hotbar), não o slot
+    // `equipment.primary`. Antes o ramo melee lia `equipment.primary`, que começa
+    // `null` e só é preenchido quando o jogador/piloto SELECIONA o slot
+    // (`useHotbarSlot`). Com a espada inicial na mão mas `primary` ainda `null`, o
+    // golpe saía só com `playerBaseAttack` (10 no nível 1): contra a Couraça de
+    // Espinhos (armor 18 → redução 9, 2070 HP) o dano caía ao piso de 1-2 e a barra
+    // não andava — daí o "não ataca com arma nenhuma". O ramo ranged já lia a arma
+    // da mão; agora o melee faz igual, então a arma empunhada sempre entra no dano.
+    const heldWeaponPower = heldItemId ? (ITEMS[heldItemId]?.attackPower ?? 0) : 0;
     const TORCH_FIRE_BONUS = 9;
     const base = playerBaseAttack(state.player.level);
-    const totalPower = usingRanged
-      ? base + (heldItemId ? ITEMS[heldItemId]?.attackPower ?? 0 : 0)
-      : usingTorch
-        ? base + TORCH_FIRE_BONUS
-        : base + weaponPower;
+    const totalPower = usingTorch
+      ? base + TORCH_FIRE_BONUS
+      : base + heldWeaponPower;
 
     // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
     const finalPower = Math.round(totalPower * damageMultiplier(state.player));
@@ -773,9 +778,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
 
     const usingTorch = heldId === 'torch';
-    const equipped = state.player.inventory.equipment.primary;
-    const weaponPower = equipped ? (ITEMS[equipped]?.attackPower ?? 0) : 0;
-    const base = playerBaseAttack(state.player.level) + (usingTorch ? 9 : weaponPower);
+    // Mesmo conserto do `attack`: a arma da MÃO entra no dano, não `equipment.primary`
+    // (que pode estar `null` enquanto o slot não foi selecionado via `useHotbarSlot`).
+    const heldWeaponPower = heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0;
+    const base = playerBaseAttack(state.player.level) + (usingTorch ? 9 : heldWeaponPower);
     const dmgMult = damageMultiplier(state.player);
     const critStats = playerCritStats(state.player);
     // Jump: dano alto, raio menor. Spin: 360°, raio maior, dano menor.
