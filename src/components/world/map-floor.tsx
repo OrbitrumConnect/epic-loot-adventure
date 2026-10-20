@@ -48,6 +48,10 @@ export function MapFloor() {
   const { model, pivot } = useMemo(() => {
     const clone = scene.clone(true);
     matte(clone);
+    // Sombra: o chão RECEBE sombra (projetada por player/props/criaturas) — era isso que
+    // sumiu ao trocar o mapa. Não CASTA (relevo castando pesa e não acrescenta muito),
+    // mantendo a sombra leve pra performance (Pedro).
+    clone.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.receiveShadow = true; m.castShadow = false; } });
     const box = new THREE.Box3().setFromObject(clone);
     const span = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) || 1;
     clone.scale.setScalar(4 / span);
@@ -57,6 +61,10 @@ export function MapFloor() {
   }, [scene]);
   useEffect(() => {
     if (!ref.current) return;
+    // Marca como FONTE DE GRAMA: só o chão do mapa recebe os tufos (a varredura de
+    // manchas verdes ignora tudo que não tem esta flag — ex.: a ponte, que também é
+    // registrada como terreno pra colisão, não deve ganhar mato).
+    ref.current.userData['grassSource'] = true;
     return registerTerrain(ref.current);
   }, [model]);
   const [px, py, pz] = POS;
