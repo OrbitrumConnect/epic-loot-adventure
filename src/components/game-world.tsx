@@ -1962,6 +1962,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   const roadTex = useMemo(() => groundTexture('/assets/style/ground/road.webp', 1), []);
 
   // Luminárias ao longo da estrada, espaçadas ~14 m, deslocadas pra beira.
+  const lampTv = useTerrainVersion(); // reassenta os postes quando o GLB carrega
   const lamps = useMemo(() => {
     const curve = new THREE.CatmullRomCurve3(ROAD_POINTS.map(([x, z]) => new THREE.Vector3(x, 0, z)));
     const pts = curve.getPoints(120);
@@ -1975,11 +1976,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         const d = b.clone().sub(a).normalize();
         const lx = b.x + -d.z * 1.6;
         const lz = b.z + d.x * 1.6;
-        out.push({ x: lx, y: terrainHeight(lx, lz), z: lz });
+        out.push({ x: lx, y: glbSurfaceY(lx, lz, terrainHeight(lx, lz)), z: lz });
       }
     }
     return out;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lampTv]);
 
   // Rio: fita que segue RIVER_POINTS, ondulando na frente do nascedouro e
   // desembocando no laginho. Cada vértice acompanha a altura do terreno (ou a
@@ -2129,9 +2131,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url="/models/trees/tree-split.glb" x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
       {/* Labirinto (área aberta a oeste do lago). -19% + mais pro oeste. */}
       {SHOW_HARDCODED_MAZE && <Maze x={-20} z={72} size={57} />}
-      {/* Postes de luz DENTRO do labirinto. */}
-      {[[-8, 56], [-24, 44], [10, 44], [-24, 70], [10, 70], [-8, 80]].map(([lx, lz], i) => (
-        <RoadLamp key={`maze-lamp-${i}`} x={lx!} y={terrainHeight(lx!, lz!)} z={lz!} />
+      {/* Postes de luz DENTRO do labirinto — saem junto com o maze fixo (OFF). */}
+      {SHOW_HARDCODED_MAZE && [[-8, 56], [-24, 44], [10, 44], [-24, 70], [10, 70], [-8, 80]].map(([lx, lz], i) => (
+        <RoadLamp key={`maze-lamp-${i}`} x={lx!} y={glbSurfaceY(lx!, lz!, terrainHeight(lx!, lz!))} z={lz!} />
       ))}
       {/* Multiplayer: avatares dos outros jogadores (online). */}
       <RemotePlayers />
