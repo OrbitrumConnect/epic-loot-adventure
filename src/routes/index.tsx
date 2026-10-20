@@ -20,6 +20,7 @@ import { PiecePicker } from '@/components/hud/base-picker';
 import { canOpenCityView } from '@/game/systems/playerBaseSystem';
 import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
 import { HuntBanner } from '@/components/hud/hunt-banner';
+import { PilotWeaponControl } from '@/components/hud/pilot-weapon-control';
 import { ITEMS } from '@/game/data/items';
 import { getWeight, getUsedSlots, getItemCount } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
@@ -618,6 +619,7 @@ function Index() {
                 <span>{autoHuntRadius} m</span>
               </label>
             )}
+            {idleMode && <PilotWeaponControl />}
             <Button variant="ghost" size="sm" className="pilot-toggle" title="Alternar piloto automático · G"
               onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>
               {idleMode ? 'Assumir' : 'Piloto'}

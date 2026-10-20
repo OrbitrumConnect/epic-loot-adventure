@@ -4,6 +4,7 @@ import type {
 } from '../types';
 import { ITEMS } from '../data/items';
 import { getDistance } from './combatSystem';
+import { pickWeaponFor, type AutoWeapon } from './weaponChoiceSystem';
 
 // ---------------------------------------------------------------------------
 // Limiares do piloto automático (expostos para a UI e para os testes)
@@ -43,6 +44,30 @@ export const DANGER_MARGIN = 10;
  *  nível dentro deste raio (bem maior que AUTO_ENGAGE_RADIUS pra não travar
  *  parado dentro da zona segura quando os inimigos ficam na borda). */
 export const IDLE_HUNT_RADIUS = 45;
+
+/** Farm ocioso: o piloto só vai até um recurso dentro deste raio. Sem ele, o
+ *  recurso mais próximo (de qualquer lugar do mapa) arrastava o piloto pra longe
+ *  e matava a caça. Menor que IDLE_HUNT_RADIUS de propósito: perto farma, longe
+ *  caça o que está por perto em vez de atravessar o mundo atrás de um nó. */
+export const FARM_RADIUS = 30;
+
+/** Janela (ms) em que o jogador conta como "sob ataque" depois de levar dano.
+ *  Dentro dela, combate tem prioridade sobre farm. */
+export const RECENT_DAMAGE_WINDOW_MS = 6000;
+/** Tomou dano há pouco → o piloto revida no hostil vivo mais próximo até este
+ *  raio, ANTES de farmar, mesmo que o bicho não esteja em `chase`/`attack`. */
+export const AGGRO_RESPONSE_RADIUS = 20;
+
+/** Histerese do raio de combate: entra num raio R, só desiste quando o alvo
+ *  passa de R * este fator. Evita o liga-desliga de combate na borda do raio. */
+export const COMBAT_EXIT_FACTOR = 1.4;
+/** Alvo pegajoso: o piloto só troca o alvo que já enfrenta por um novo se o novo
+ *  estiver a no máximo esta fração da distância do atual (= 25% mais perto). */
+export const TARGET_SWITCH_IMPROVEMENT = 0.75;
+/** Banda morta de `engage`: uma vez atacando, continua atacando até o alvo
+ *  passar do alcance * este fator (senão `attack`/`move` alternavam a cada tique
+ *  quando o bicho oscilava na borda do alcance). */
+export const ENGAGE_BAND_FACTOR = 1.25;
 
 /** O que `tickObjectives` precisa ler. `AutoSnapshot` satisfaz este formato. */
 export type ObjectiveWorld = {
@@ -424,15 +449,21 @@ function awayFromDanger(position: Position, dangers: Position[]): boolean {
 }
 
 /** Recurso vivo (não esgotado) mais próximo do jogador — pro farm automático.
- *  `dangers` vazio não filtra nada; com brutamontes rondando, só considera nó
- *  fora do raio dele. */
-function nearestNode(snapshot: AutoSnapshot, dangers: Position[] = []): AutoSnapshot['resources'][number] | null {
+ *  Só considera nós dentro de `radius` (default FARM_RADIUS): farm não pode
+ *  arrastar o piloto pelo mapa inteiro e matar a caça. `dangers` vazio não filtra
+ *  nada; com brutamontes rondando, só considera nó fora do raio dele. */
+function nearestNode(
+  snapshot: AutoSnapshot,
+  dangers: Position[] = [],
+  radius: number = FARM_RADIUS,
+): AutoSnapshot['resources'][number] | null {
   let best: AutoSnapshot['resources'][number] | null = null;
   let bestDist = Infinity;
   for (const node of snapshot.resources) {
     if (node.depleted) continue;
     if (dangers.length > 0 && !awayFromDanger(node.position, dangers)) continue;
     const dist = getDistance(snapshot.playerPosition, node.position);
+    if (dist > radius) continue;
     if (dist < bestDist) {
       bestDist = dist;
       best = node;
@@ -441,18 +472,70 @@ function nearestNode(snapshot: AutoSnapshot, dangers: Position[] = []): AutoSnap
   return best;
 }
 
+/**
+ * Alcance de ataque COERENTE com a arma que o piloto vai realmente usar contra
+ * um alvo a `dist` metros — não o máximo da hotbar. `pickWeaponFor` (mesma fonte
+ * do executor) decide a arma, respeitando o `pilotWeaponStyle`; o alcance dela é
+ * o que separa "atacar daqui" de "andar". Sem `weapons` (snapshots de teste
+ * antigos), cai no `attackRange`/`ATTACK_RANGE` de antes.
+ */
+function reachFor(snapshot: AutoSnapshot, dist: number): number {
+  const weapons = snapshot.weapons as AutoWeapon[] | undefined;
+  if (weapons && weapons.length > 0) {
+    const pick = pickWeaponFor(dist, weapons, snapshot.pilotWeaponStyle ?? 'auto');
+    if (pick) return pick.range;
+  }
+  return snapshot.attackRange ?? ATTACK_RANGE;
+}
+
 function engage(
   snapshot: AutoSnapshot,
   creature: { id: string; position: Position },
   label: string,
 ): AutoIntent {
-  // Com arma de longe, o alcance vem da arma: o piloto atira de longe em vez
-  // de colar no bicho. Melee usa ATTACK_RANGE.
-  const range = snapshot.attackRange ?? ATTACK_RANGE;
-  if (getDistance(snapshot.playerPosition, creature.position) <= range) {
+  const dist = getDistance(snapshot.playerPosition, creature.position);
+  const range = reachFor(snapshot, dist);
+  // Banda morta: se o tique anterior já atacava ESTE alvo, segura o ataque até
+  // ele passar de `range * ENGAGE_BAND_FACTOR`. Sem isso `attack`/`move`
+  // alternavam a cada tique quando o bicho oscilava na borda do alcance.
+  const prev = snapshot.previousIntent;
+  const wasAttacking = prev?.kind === 'attack' && prev.creatureId === creature.id;
+  const effectiveRange = wasAttacking ? range * ENGAGE_BAND_FACTOR : range;
+  if (dist <= effectiveRange) {
     return { kind: 'attack', creatureId: creature.id, to: { ...creature.position } };
   }
   return { kind: 'move', to: { ...creature.position }, reason: label };
+}
+
+/**
+ * Alvo pegajoso: dá preferência ao alvo que o piloto JÁ enfrentava no tique
+ * anterior (via `previousIntent.kind === 'attack'`), pra não ficar trocando de
+ * presa quando duas estão quase à mesma distância.
+ *   - solta o alvo antigo se ele morreu ou saiu de `exitRadius` (= raio de
+ *     entrada * COMBAT_EXIT_FACTOR);
+ *   - troca pelo candidato novo só se ele estiver >= 25% mais perto
+ *     (TARGET_SWITCH_IMPROVEMENT);
+ *   - senão, mantém o antigo (mesmo que o seletor tenha achado outro mais perto
+ *     por uma margem pequena).
+ * Sem `previousIntent` de ataque, devolve o candidato sem mexer.
+ */
+function stickTarget(
+  snapshot: AutoSnapshot,
+  candidate: AutoSnapshot['creatures'][number] | null,
+  exitRadius: number,
+): AutoSnapshot['creatures'][number] | null {
+  const prev = snapshot.previousIntent;
+  const prevId = prev?.kind === 'attack' ? prev.creatureId : null;
+  if (prevId == null) return candidate;
+  const prevCreature = snapshot.creatures.find(c => c.id === prevId);
+  if (!prevCreature || !isCreatureAlive(prevCreature)) return candidate;
+  const prevDist = getDistance(snapshot.playerPosition, prevCreature.position);
+  if (prevDist > exitRadius) return candidate; // saiu da banda de combate: solta.
+  if (!candidate || candidate.id === prevCreature.id) return prevCreature;
+  const candDist = getDistance(snapshot.playerPosition, candidate.position);
+  // O novo só vence se for bem mais perto que o antigo.
+  if (candDist <= prevDist * TARGET_SWITCH_IMPROVEMENT) return candidate;
+  return prevCreature;
 }
 
 /**
@@ -515,6 +598,19 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     if (foe) return engage(snapshot, foe, 'Defendendo a base');
   }
 
+  // 4c. SOB ATAQUE — se o jogador levou dano há menos de RECENT_DAMAGE_WINDOW_MS
+  // e há hostil vivo dentro de AGGRO_RESPONSE_RADIUS, REVIDA antes de farmar,
+  // independe do `behavior` do bicho. Não persegue hostil forte demais quando
+  // ocioso (sem fila) — nesse caso deixa o passo de fuga/caça cuidar.
+  const dmgAt = snapshot.playerLastDamagedAt;
+  if (dmgAt != null && now - dmgAt <= RECENT_DAMAGE_WINDOW_MS) {
+    const aggressor = nearestHostileWithin(snapshot, AGGRO_RESPONSE_RADIUS);
+    if (aggressor && (active != null || !isTooStrong(aggressor, playerLevel))) {
+      const sticky = stickTarget(snapshot, aggressor, AGGRO_RESPONSE_RADIUS * COMBAT_EXIT_FACTOR);
+      return engage(snapshot, sticky ?? aggressor, 'Revidando o ataque');
+    }
+  }
+
   // 5
   if (!active) {
     // Prioridade do loop OCIOSO sem fila (nesta ordem):
@@ -539,7 +635,8 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
 
     // 2. DEFESA: inimigo (não forte demais) coladinho → ataca. SÓ hostil.
     const foe = weakestTargetWithin(snapshot, AUTO_ENGAGE_RADIUS, playerLevel, true);
-    if (foe) return engage(snapshot, foe, 'Defendendo a base');
+    const stickyFoe = stickTarget(snapshot, foe, AUTO_ENGAGE_RADIUS * COMBAT_EXIT_FACTOR);
+    if (stickyFoe) return engage(snapshot, stickyFoe, 'Defendendo a base');
 
     // 3. FARM: coleta o nó mais próximo (alcance da própria definição do nó).
     const node = nearestNode(snapshot, dangers);
@@ -554,7 +651,8 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     // 4. CAÇA AUTÔNOMA: hostil de menor nível até IDLE_HUNT_RADIUS (ignora forte
     // demais). É o conserto do bug: o piloto não trava parado na zona segura.
     const prey = weakestTargetWithin(snapshot, IDLE_HUNT_RADIUS, playerLevel, true, dangers);
-    if (prey) return engage(snapshot, prey, 'Caçando por perto');
+    const stickyPrey = stickTarget(snapshot, prey, IDLE_HUNT_RADIUS * COMBAT_EXIT_FACTOR);
+    if (stickyPrey) return engage(snapshot, stickyPrey, 'Caçando por perto');
 
     // 5. CAÇA PACÍFICA (comida) só se o jogador ligou o raio de caça.
     const huntBase = snapshot.autoHuntRadius ?? 0;

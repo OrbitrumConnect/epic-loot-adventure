@@ -85,6 +85,17 @@ export type AutoSnapshot = {
     attackPower: number;
     hasAmmo: boolean;
   }[];
+  /** Preferência de arma do piloto escolhida pelo jogador. Ausente = 'auto'
+   *  (comportamento por distância de hoje). 'ranged' força arma à distância
+   *  sempre que houver munição; 'melee' força corpo a corpo. */
+  pilotWeaponStyle?: 'auto' | 'melee' | 'ranged';
+  /** Instante (ms) do último dano sofrido pelo jogador. O piloto prioriza
+   *  combate sobre farm por uma janela curta depois de ser atingido. */
+  playerLastDamagedAt?: number;
+  /** Intenção decidida no tique ANTERIOR, realimentada pelo executor. Dá
+   *  histerese ao piloto (banda morta de combate, alvo pegajoso). Ausente = sem
+   *  memória (primeiro tique ou executor que não realimenta). */
+  previousIntent?: AutoIntent;
   /** Índice da hotbar da arma na MÃO agora (`ui.selectedHotbar`). */
   heldHotbarIndex?: number;
   /** Alcance (m) da arma na mão — o valor antigo de `attackRange`. */

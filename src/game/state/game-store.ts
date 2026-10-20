@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import type {
   PlayerState, CreatureState, ResourceNode, DeathBag, UIState, BaseState, BaseResult, BuildingId,
-  CampState, ObjectiveQueueState, ObjectiveKind, AutoMode, AutoSnapshot, Position, HarvestNodeState,
-  FeedbackEvent,
+  CampState, ObjectiveQueueState, ObjectiveKind, AutoMode, AutoSnapshot, AutoIntent, Position,
+  HarvestNodeState, FeedbackEvent,
 } from '../types';
 import { ITEMS } from '../data/items';
 import { weaponFor, weaponRangeFor } from '../data/weapons';
-import { maxAttackRange, type AutoWeapon } from '../systems/weaponChoiceSystem';
+import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
 import { audioManager } from '../audio/audio-manager';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
@@ -111,6 +111,11 @@ type GameState = {
   autoPotion: boolean;
   /** Raio (m) que o piloto ocioso usa pra caçar o bicho mais próximo (5–25; 0 = desligado). */
   autoHuntRadius: number;
+  /** Preferência de arma do piloto escolhida pelo jogador: 'auto' (default),
+   *  'melee' ou 'ranged'. Entra no snapshot pra `pickWeaponFor` respeitar. */
+  pilotWeaponStyle: PilotWeaponStyle;
+  /** Última intenção do piloto, realimentada pelo executor pra dar histerese. */
+  pilotLastIntent: AutoIntent | null;
   /** Eventos efêmeros (dano, XP, loot) para o mundo 3D e o HUD. Somem pelo `ttl`. */
   feedback: FeedbackEvent[];
 };
@@ -193,6 +198,10 @@ type GameActions = {
   harvestAt: (nodeId: string) => void;
   toggleAutoPotion: () => void;
   setAutoHuntRadius: (radius: number) => void;
+  setPilotWeaponStyle: (style: PilotWeaponStyle) => void;
+  /** O executor do piloto (auto-pilot.tsx) realimenta a intenção do tique pra dar
+   *  histerese à decisão do tique seguinte (banda morta, alvo pegajoso). */
+  recordPilotIntent: (intent: AutoIntent | null) => void;
   addHuntArea: (x: number, z: number) => void;
   drinkPotion: () => void;
   tickWorld: () => void;
@@ -452,6 +461,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   harvestNodes: createHarvestNodes(),
   autoPotion: true,
   autoHuntRadius: 35,
+  pilotWeaponStyle: 'auto',
+  pilotLastIntent: null,
   feedback: [],
   ui: {
     mode: 'world',
@@ -703,6 +714,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       updatedPlayer = {
         ...updatedPlayer,
         hp: Math.max(0, updatedPlayer.hp - dmgToPlayer),
+        // Sinal de agressão sofrida (ver RECENT_DAMAGE_WINDOW_MS): combate > farm.
+        lastDamagedAt: stamp,
       };
       msg += ` Você recebeu ${dmgToPlayer} de dano.`;
       drafts.push(damageEvent(updatedPlayer.id, dmgToPlayer, state.player.position, { onPlayer: true }));
@@ -1495,6 +1508,26 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }));
   },
 
+  setPilotWeaponStyle: (style) => {
+    set(s => ({
+      pilotWeaponStyle: style,
+      ui: {
+        ...s.ui,
+        message: style === 'ranged'
+          ? 'Piloto: priorizando armas à distância.'
+          : style === 'melee'
+            ? 'Piloto: priorizando corpo a corpo.'
+            : 'Piloto: arma automática por distância.',
+      },
+    }));
+  },
+
+  recordPilotIntent: (intent) => {
+    // Só grava se mudou a referência, pra não disparar re-render à toa.
+    if (get().pilotLastIntent === intent) return;
+    set({ pilotLastIntent: intent });
+  },
+
   drinkPotion: () => {
     const state = get();
     if (state.player.dead) return;
@@ -1516,8 +1549,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   reportDamage: (targetId, amount, position, onPlayer) => {
     if (amount <= 0) return;
+    const now = Date.now();
     set(s => ({
-      feedback: pushEvent(s.feedback, damageEvent(targetId, Math.round(amount), position, { onPlayer }), Date.now()),
+      feedback: pushEvent(s.feedback, damageEvent(targetId, Math.round(amount), position, { onPlayer }), now),
+      // Dano no jogador = sinal de agressão: o piloto prioriza combate sobre farm
+      // por uma janela curta (ver RECENT_DAMAGE_WINDOW_MS em objectiveSystem).
+      ...(onPlayer ? { player: { ...s.player, lastDamagedAt: now } } : {}),
     }));
   },
 
@@ -1720,6 +1757,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }),
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
+      pilotWeaponStyle: state.pilotWeaponStyle,
+      ...(state.player.lastDamagedAt != null ? { playerLastDamagedAt: state.player.lastDamagedAt } : {}),
+      ...(state.pilotLastIntent != null ? { previousIntent: state.pilotLastIntent } : {}),
       playerLevel: state.player.level,
       ...(() => {
         const inv = state.player.inventory;

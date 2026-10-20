@@ -14,6 +14,14 @@ import type { WeaponType } from '../data/weapons';
 /** Até esta distância (m) o piloto prefere corpo a corpo, se houver melee usável. */
 export const MELEE_PREF_RANGE = 3.0;
 
+/**
+ * Preferência de arma do piloto, escolhida pelo jogador no HUD:
+ *   - 'auto'   → comportamento por distância de hoje (melee coladinho, ranged longe);
+ *   - 'ranged' → prioriza arma à distância com munição, mesmo colado no bicho;
+ *   - 'melee'  → prioriza corpo a corpo, mesmo de longe (aproxima pra bater).
+ */
+export type PilotWeaponStyle = 'auto' | 'melee' | 'ranged';
+
 export type AutoWeapon = {
   /** Índice na hotbar (0-based) — o que `useHotbarSlot` recebe. */
   hotbarIndex: number;
@@ -91,16 +99,31 @@ export function maxAttackRange(weapons: AutoWeapon[], fallback: number): number 
 }
 
 /**
- * Arma pra atacar um alvo a `dist` metros, respeitando a mecânica:
- *   - `dist <= MELEE_PREF_RANGE` e há melee usável → melhor melee;
- *   - `dist > MELEE_PREF_RANGE` → entre as ranged usáveis que cobrem `dist`, a de
- *     maior DPS;
- *   - nenhuma ranged cobre a distância (ou falta munição) → melhor melee usável
- *     (o piloto vai se aproximar);
- *   - só há ranged e nenhuma cobre → a de maior alcance (pra aproximar e atirar);
+ * Arma pra atacar um alvo a `dist` metros, respeitando a mecânica e o `style`:
+ *
+ *   'auto' (default, comportamento de hoje):
+ *     - `dist <= MELEE_PREF_RANGE` e há melee usável → melhor melee;
+ *     - `dist > MELEE_PREF_RANGE` → entre as ranged usáveis que cobrem `dist`, a
+ *       de maior DPS;
+ *     - nenhuma ranged cobre a distância (ou falta munição) → melhor melee usável
+ *       (o piloto vai se aproximar);
+ *     - só há ranged e nenhuma cobre → a de maior alcance (aproxima e atira).
+ *
+ *   'ranged': se existe QUALQUER ranged usável (com munição), ela ganha mesmo
+ *     colado no bicho (ignora MELEE_PREF_RANGE) — a que cobre `dist` com maior
+ *     DPS, ou a de maior alcance pra aproximar. Só cai no melee se não houver
+ *     nenhuma ranged usável.
+ *
+ *   'melee': se existe melee usável, ele ganha mesmo de longe (aproxima pra
+ *     bater). Só usa ranged se não houver melee usável.
+ *
  *   - lista usável vazia → `null`.
  */
-export function pickWeaponFor(dist: number, weapons: AutoWeapon[]): AutoWeapon | null {
+export function pickWeaponFor(
+  dist: number,
+  weapons: AutoWeapon[],
+  style: PilotWeaponStyle = 'auto',
+): AutoWeapon | null {
   const usable = weapons.filter(w => w.hasAmmo);
   if (usable.length === 0) return null;
 
@@ -109,6 +132,26 @@ export function pickWeaponFor(dist: number, weapons: AutoWeapon[]): AutoWeapon |
 
   const bestMelee = bestMeleeOf(melees);
 
+  if (style === 'ranged') {
+    // Ranged manda: cobre a distância (maior DPS) ou a de maior alcance pra
+    // aproximar e atirar. Só cai no melee se não houver ranged usável.
+    const cover = bestRangedCovering(ranged, dist);
+    if (cover) return cover;
+    const longest = longestRangedOf(ranged);
+    if (longest) return longest;
+    return bestMelee;
+  }
+
+  if (style === 'melee') {
+    // Corpo a corpo manda, mesmo de longe (o piloto aproxima). Só usa ranged se
+    // não houver melee usável.
+    if (bestMelee) return bestMelee;
+    const cover = bestRangedCovering(ranged, dist);
+    if (cover) return cover;
+    return longestRangedOf(ranged);
+  }
+
+  // 'auto' (comportamento de hoje).
   // Coladinho: melee preferido, se existir.
   if (dist <= MELEE_PREF_RANGE && bestMelee) return bestMelee;
 

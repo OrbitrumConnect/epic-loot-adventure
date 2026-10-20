@@ -54,4 +54,7 @@ export type PlayerState = {
   huntValue?: number;
   /** Quantas vezes cada espécie já foi abatida (diminishing returns do loot). Ausente = {}. */
   huntSeen?: Record<string, number>;
+  /** Instante (ms, `Date.now()`) do último dano SOFRIDO pelo jogador. Sinal de
+   *  agressão que o piloto usa pra priorizar combate sobre farm. Ausente = nunca. */
+  lastDamagedAt?: number;
 };

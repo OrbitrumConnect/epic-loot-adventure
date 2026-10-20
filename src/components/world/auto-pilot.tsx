@@ -20,12 +20,18 @@ import { HARVEST_NODES } from '@/game/data/harvest-nodes';
 import { effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
 import { harvestNodeById } from './harvest-nodes';
 import { creatureById } from './hostile-ai';
-import { decidePilotAttack } from './pilot-combat';
+import {
+  approachStandoff, createIntentRecorder, decidePilotAttack, firingReach, kiteRetreatPoint,
+} from './pilot-combat';
 import { buildAutoSnapshot, decideIntent, getObjectives, setAutoMode, tickWorld } from './objective-bridge';
 import { setPilotStatus } from './pilot-status';
 import { MAP_HALF } from './world-kit';
 
 const TICK = 0.25;
+/** Ticks de recuo sem ganhar distância antes de desistir do kiting e lutar. */
+const KITE_STALL_TICKS = 3;
+/** Margem (m) para o recuo contar como "abriu distância" neste tick. */
+const KITE_PROGRESS_EPS = 0.01;
 const GATHER_REACH = 2.4;
 /** Raio em volta da base onde o piloto para e descansa. */
 const REST_REACH = 3;
@@ -48,6 +54,28 @@ export function AutoPilot({
   const lastRest = useRef(0);
   const lastWeaponSwitch = useRef(0);
   const wasIdle = useRef(false);
+  // Banda morta do combate: ligado quando o piloto já está parado atirando, pra
+  // não voltar a andar por uma oscilação de 0,4 m na borda do alcance.
+  const engaged = useRef(false);
+  // Kiting (estilo 'ranged'): histerese do recuo.
+  const kiting = useRef(false);
+  // Anti-degeneração do kiting: contra um bicho tão rápido quanto o piloto o
+  // recuo não abre distância. Medimos isso aqui (o módulo puro não tem estado):
+  // `kitePrevDist` guarda a distância do tick anterior; `kiteStall` conta ticks
+  // de recuo que NÃO afastaram; ao passar de `KITE_STALL_TICKS` o piloto desiste
+  // do recuo e luta até o fim deste combate (`kiteGaveUp`, pegajoso).
+  const kitePrevDist = useRef<number | null>(null);
+  const kiteStall = useRef(0);
+  const kiteGaveUp = useRef(false);
+  // Alvo do kiting: trocar de inimigo zera a desistência (tenta recuar do novo).
+  const kiteTargetId = useRef<string | null>(null);
+  // Grava o intent no store SÓ quando muda de conteúdo (evita set() a cada tick).
+  const recordIntent = useRef<ReturnType<typeof createIntentRecorder> | null>(null);
+  if (recordIntent.current == null) {
+    recordIntent.current = createIntentRecorder(
+      (i) => useGameStore.getState().recordPilotIntent(i),
+    );
+  }
 
   // Qualquer tecla de movimento do jogador derruba o piloto.
   useEffect(() => {
@@ -56,6 +84,7 @@ export function AutoPilot({
       if (getObjectives().mode !== 'idle') return;
       setAutoMode('manual');
       wasIdle.current = false;
+      recordIntent.current?.(null);
       const p = playerRef.current;
       if (p) movement.current.copy(p.position);
       setPilotStatus('off', 'Piloto desligado', 'você assumiu o controle');
@@ -112,6 +141,7 @@ export function AutoPilot({
       // Saiu do idle (tecla G, botão do HUD, fim da fila): larga o destino do
       // piloto para o jogador não continuar andando sozinho.
       if (wasIdle.current) { hold(); wasIdle.current = false; }
+      recordIntent.current?.(null);
       setPilotStatus('off', 'Modo manual', '');
       return;
     }
@@ -120,6 +150,18 @@ export function AutoPilot({
     const now = Date.now();
     const snapshot = buildAutoSnapshot();
     const intent = decideIntent(snapshot, now);
+    // Realimenta a histerese/alvo pegajoso de decideIntent no próximo tick.
+    recordIntent.current?.(intent);
+
+    // Saiu do combate → zera a banda morta e a medição de kiting (recomeça do
+    // zero no próximo alvo: volta a tentar recuar antes de concluir "é rápido").
+    if (intent.kind !== 'attack') {
+      engaged.current = false;
+      kiting.current = false;
+      kitePrevDist.current = null;
+      kiteStall.current = 0;
+      kiteGaveUp.current = false;
+    }
 
     switch (intent.kind) {
       case 'idle': {
@@ -155,6 +197,24 @@ export function AutoPilot({
         const target = creature && creature.behavior !== 'dead' ? creature.position : intent.to;
         const distToTarget = distTo(target);
 
+        // Mede o travamento do recuo (ver refs kite*). Trocou de alvo → zera.
+        if (kiteTargetId.current !== intent.creatureId) {
+          kiteTargetId.current = intent.creatureId;
+          kiteStall.current = 0;
+          kiteGaveUp.current = false;
+          kitePrevDist.current = null;
+        }
+        if (kiting.current && kitePrevDist.current != null) {
+          // Recuando: só conta como progresso se AFASTOU além da margem. Bicho
+          // rápido faz a distância encolher/estagnar → acumula travamento.
+          if (distToTarget > kitePrevDist.current + KITE_PROGRESS_EPS) kiteStall.current = 0;
+          else kiteStall.current += 1;
+        } else if (!kiting.current) {
+          kiteStall.current = 0;
+        }
+        if (kiteStall.current >= KITE_STALL_TICKS) kiteGaveUp.current = true;
+        kitePrevDist.current = distToTarget;
+
         // Arma na mão (do snapshot): define o `reach` (atirar daqui vs andar) e a
         // cadência. Se o slot da mão não for arma, cai no melee padrão.
         const weapons = snapshot.weapons ?? [];
@@ -180,7 +240,16 @@ export function AutoPilot({
           lastAttack: lastAttack.current,
           switchDebounceMs: 1000,
           specialReady,
+          engaged: engaged.current,
+          style: snapshot.pilotWeaponStyle,
+          kiting: kiting.current,
+          kiteStalled: kiteGaveUp.current,
         });
+        kiting.current = decision.action === 'retreat';
+
+        // Banda morta: "engajado" = parado no alcance atirando/esperando.
+        // Aproximar ou trocar de arma tira do estado de parada.
+        engaged.current = decision.action !== 'approach' && decision.action !== 'switch';
 
         switch (decision.action) {
           case 'switch': {
@@ -210,8 +279,27 @@ export function AutoPilot({
             setPilotStatus('attack', `Atacando ${name}`, '');
             break;
           }
+          case 'retreat': {
+            // Kiting: afasta do bicho até a faixa de tiro e NÃO ataca neste tick.
+            goTo(kiteRetreatPoint(
+              { x: player.position.x, z: player.position.z },
+              { x: target.x, z: target.z },
+              firingReach(heldRange),
+            ));
+            setPilotStatus('move', `Mantendo distância de ${name}`, '');
+            break;
+          }
           case 'approach': {
-            goTo(target);
+            // Para no PONTO DE TIRO (standoff), não em cima do bicho: com arma de
+            // longe o piloto atira à distância e a inércia do sprint não o empurra
+            // pro corpo-a-corpo. `reach` = alcance de tiro da arma na mão.
+            const reach = firingReach(heldRange);
+            const stop = approachStandoff(
+              { x: player.position.x, z: player.position.z },
+              { x: target.x, z: target.z },
+              reach,
+            );
+            goTo(stop);
             setPilotStatus('move', `Fechando em ${name}`, '');
             break;
           }

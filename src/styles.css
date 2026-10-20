@@ -739,3 +739,10 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .editor-panel section { display:grid; gap:6px; margin-top:10px; } .editor-panel label { color:var(--muted-foreground); font-size:10px; text-transform:uppercase; } .editor-panel p { margin:0; color:var(--muted-foreground); } .editor-tools,.editor-panel footer { display:flex; gap:6px; margin-top:10px; } .editor-panel footer button:last-child { margin-left:auto; } .editor-transform { display:grid; grid-template-columns:54px repeat(3,1fr); gap:4px; align-items:center; } .editor-transform input { min-width:0; border:1px solid var(--border); border-radius:3px; background:transparent; color:inherit; padding:4px; }
 .editor-save-notice { margin-top: 8px; color: var(--world-leaf-light); font-size: 10px; text-align: center; }
 .editor-search { display:flex; align-items:center; gap:5px; border:1px solid var(--border); border-radius:4px; padding:4px 6px; } .editor-search svg { width:13px; height:13px; color:var(--muted-foreground); } .editor-search input { min-width:0; width:100%; border:0; outline:0; background:transparent; color:inherit; font-size:11px; } .editor-panel section > button[data-active=true] { border-color:var(--primary); color:var(--primary); }
+
+/* Estilo de arma do piloto automático — segmento compacto na faixa do piloto (aditivo) */
+.pilot-weapon { display: flex; align-items: center; gap: 4px; color: var(--muted-foreground); white-space: nowrap; }
+.pilot-weapon svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--muted-foreground); }
+.pilot-weapon-opt { height: 22px; padding: 0 7px; border: 1px solid color-mix(in oklch,var(--foreground) 18%,transparent); border-radius: 3px; background: transparent; color: var(--muted-foreground); font-size: 9px; letter-spacing: .5px; cursor: pointer; }
+.pilot-weapon-opt:hover { border-color: color-mix(in oklch,var(--primary) 35%,transparent); color: var(--world-ink); }
+.pilot-weapon-opt[data-active=true] { border-color: var(--primary); color: var(--primary); background: color-mix(in oklch,var(--primary) 14%,transparent); font-weight: 700; }
