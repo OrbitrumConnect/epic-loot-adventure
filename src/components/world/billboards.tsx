@@ -279,8 +279,8 @@ function inLake(x: number, z: number, pad = 0): boolean {
  * a média do verde amostrado (tint). Determinístico → Vercel. GroundCover = lâminas
  * finas animadas por vento.
  * ------------------------------------------------------------------ */
-const GRASS_CAP = 24000;       // teto de tufos (instanced) — Pedro: "muito mais, +20%"
-const CLUSTER_SPREAD = 1.5;    // raio (m) do punhado em torno da mancha
+const GRASS_CAP = 33000;       // teto de tufos (instanced) — Pedro: "+40%, mais junta" (savana)
+const CLUSTER_SPREAD = 1.0;    // raio (m) do punhado — menor = tufos mais JUNTOS (savana)
 /** Esverdeado (sRGB 0-1): caqui/oliva embutido no barro. O mapa é alaranjado — areia
  *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
  *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
@@ -312,7 +312,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
       // (lago/rio) e pulando só a AREIA BEM CLARA (surfaceColorAt em linear): mantém as manchas
       // oliva/escuras (onde o Pedro quer grama) e deixa só a areia clara pelada.
       const grid: { x: number; z: number }[] = [];
-      const STEP = 2.0, LIM = 88;
+      const STEP = 1.8, LIM = 88;
       let gi = 0;
       for (let x = -LIM; x <= LIM; x += STEP) {
         for (let z = -LIM; z <= LIM; z += STEP, gi++) {
@@ -330,7 +330,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
       const push = (sp: { x: number; z: number }, base: number) => {
         for (let k = 0; k < perSpot; k++) {
           const seed = base + k * 101;
-          const h = 0.72 + rand(seed + 50) * 0.56; // ~20% menor/mais baixa (Pedro)
+          const h = 0.42 + rand(seed + 50) * 0.5; // mais BAIXA e variada (savana) — algumas curtas
           out.push({
             x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
             z: sp.z + (rand(seed + 99) - 0.5) * 2 * CLUSTER_SPREAD,
