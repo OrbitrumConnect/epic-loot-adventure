@@ -1977,6 +1977,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         const d = b.clone().sub(a).normalize();
         const lx = b.x + -d.z * 1.6;
         const lz = b.z + d.x * 1.6;
+        if (LAKE_CENTERS.some(l => (lx - l.x) ** 2 + (lz - l.z) ** 2 < (l.r + 2) ** 2)) continue; // poste na água do GLB → pula
         out.push({ x: lx, y: glbSurfaceY(lx, lz, terrainHeight(lx, lz)), z: lz });
       }
     }

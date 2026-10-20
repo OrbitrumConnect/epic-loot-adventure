@@ -21,6 +21,9 @@ export const PLAYER_SPAWN: Position = { x: 7, z: -26 };
 export const LAKE_CENTERS: { x: number; z: number; r: number }[] = [
   { x: 55, z: 55, r: 16 },
   { x: -60, z: -15, r: 12 },
+  // Lago central do GLB novo (rio-wasteland): exclui farm nodes/postes da água.
+  // Pedro 20/10. (Só exclusão — a água visual é o plano em MAP_WATER_*.)
+  { x: 25, z: 25, r: 32 },
 ];
 
 /**
