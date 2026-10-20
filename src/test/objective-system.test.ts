@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import type { AutoSnapshot, ObjectiveKind, ObjectiveQueueState, Position } from '@/game/types';
 import {
-  ARRIVAL_RADIUS, ATTACK_RANGE, GATHER_RANGE, RETREAT_HP_RATIO, SELF_DEFENSE_RADIUS,
+  ARRIVAL_RADIUS, ATTACK_RANGE, FLEE_RADIUS, GATHER_RANGE, IDLE_HUNT_RADIUS,
+  RETREAT_HP_RATIO, SELF_DEFENSE_RADIUS,
   addObjective, clearObjectives, createQueue, decideIntent, findHealHotbarIndex,
   getActiveObjective, hasPendingObjective, removeObjective, reorderObjective, setMode, setRepeat,
   tickObjectives,
 } from '@/game/systems/objectiveSystem';
 import { createInventory } from '@/game/systems/inventorySystem';
+import { creatureLevel } from '@/game/systems/progressionSystem';
+import { CREATURES } from '@/game/data/creatures';
 
 const T0 = 3_000_000;
 const ORIGIN: Position = { x: 0, z: 0 };
@@ -414,5 +417,117 @@ describe('objectiveSystem · decideIntent', () => {
     const b = decideIntent(snap, T0 + 999_999);
     expect(a).toEqual(b);
     expect(decideIntent(snap, T0)).toEqual(a);
+  });
+});
+
+describe('progressionSystem · creatureLevel', () => {
+  it('ordena do mais fraco ao mais forte (determinístico, inteiro >= 1)', () => {
+    const rabbit = creatureLevel(CREATURES['rabbit']!);
+    const deer = creatureLevel(CREATURES['deer']!);
+    const wolf = creatureLevel(CREATURES['wolf']!);
+    const raider = creatureLevel(CREATURES['raider_warrior']!);
+    const warlord = creatureLevel(CREATURES['raider_warlord']!);
+    expect(rabbit).toBeGreaterThanOrEqual(1);
+    expect(Number.isInteger(wolf)).toBe(true);
+    expect(rabbit).toBeLessThan(wolf);
+    expect(deer).toBeLessThan(wolf);
+    expect(wolf).toBeLessThan(raider);
+    expect(raider).toBeLessThan(warlord);
+  });
+});
+
+describe('objectiveSystem · caça autônoma por nível', () => {
+  // Ambos FORA do raio de defesa (>AUTO_ENGAGE_RADIUS) pra exercitar a caça idle.
+  it('ocioso: prefere o alvo de MENOR nível, mesmo que mais longe', () => {
+    const intent = decideIntent(snapshot({
+      playerLevel: 5,
+      creatures: [
+        { id: 'fraco', position: { x: 40, z: 0 }, behavior: 'idle', hp: 50, hostile: true, level: 2 },
+        { id: 'forte', position: { x: 15, z: 0 }, behavior: 'idle', hp: 50, hostile: true, level: 3 },
+      ],
+    }), T0);
+    expect(intent.kind).toBe('move');
+    if (intent.kind === 'move') expect(intent.to).toEqual({ x: 40, z: 0 });
+  });
+
+  it('ocioso: empate de nível desempata pelo mais próximo', () => {
+    const intent = decideIntent(snapshot({
+      playerLevel: 5,
+      creatures: [
+        { id: 'longe', position: { x: 40, z: 0 }, behavior: 'idle', hp: 50, hostile: true, level: 2 },
+        { id: 'perto', position: { x: 15, z: 0 }, behavior: 'idle', hp: 50, hostile: true, level: 2 },
+      ],
+    }), T0);
+    expect(intent.kind).toBe('move');
+    if (intent.kind === 'move') expect(intent.to).toEqual({ x: 15, z: 0 });
+  });
+
+  it('ocioso: caça o hostil até IDLE_HUNT_RADIUS; além disso fica idle', () => {
+    const within = decideIntent(snapshot({
+      playerLevel: 5,
+      creatures: [
+        { id: 'alvo', position: { x: IDLE_HUNT_RADIUS - 2, z: 0 }, behavior: 'idle', hp: 50, hostile: true, level: 2 },
+      ],
+    }), T0);
+    expect(within.kind).toBe('move');
+
+    const beyond = decideIntent(snapshot({
+      playerLevel: 5,
+      creatures: [
+        { id: 'alvo', position: { x: IDLE_HUNT_RADIUS + 5, z: 0 }, behavior: 'idle', hp: 50, hostile: true, level: 2 },
+      ],
+    }), T0);
+    expect(beyond.kind).toBe('idle');
+  });
+
+  it('ocioso: nunca escolhe hostil forte demais pra caçar → idle', () => {
+    const intent = decideIntent(snapshot({
+      playerLevel: 1,
+      creatures: [
+        { id: 'boss', position: { x: 20, z: 0 }, behavior: 'idle', hp: 500, hostile: true, level: 10 },
+      ],
+    }), T0);
+    expect(intent.kind).toBe('idle');
+  });
+
+  it('ocioso: foge de perseguidor forte demais dentro de FLEE_RADIUS', () => {
+    const intent = decideIntent(snapshot({
+      playerLevel: 1,
+      homePosition: { x: 0, z: 1 },
+      creatures: [
+        { id: 'boss', position: { x: FLEE_RADIUS - 1, z: 0 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
+      ],
+    }), T0);
+    expect(intent.kind).toBe('retreat');
+    if (intent.kind === 'retreat') {
+      expect(intent.to).toEqual({ x: 0, z: 1 });
+      expect(intent.reason).toContain('forte demais');
+    }
+  });
+
+  it('objetivo explícito IGNORA o filtro de nível (ordem do jogador)', () => {
+    const queue = tickObjectives(
+      queueWith([{ kind: 'hunt_creature', targetId: 'boss', label: 'caçar chefe' }]),
+      { ...emptyWorld, creatures: [{ id: 'boss', behavior: 'idle', hp: 500 }] },
+      T0,
+    ).queue;
+    const intent = decideIntent(snapshot({
+      playerLevel: 1,
+      objectives: queue,
+      creatures: [{ id: 'boss', position: { x: ATTACK_RANGE - 0.1, z: 0 }, behavior: 'idle', hp: 500, hostile: true, level: 10 }],
+    }), T0);
+    expect(intent).toMatchObject({ kind: 'attack', creatureId: 'boss' });
+  });
+
+  it('bolsa cheia e nada a fazer → retreat pra base (não fica inerte)', () => {
+    const intent = decideIntent(snapshot({
+      gatherCapacity: false,
+      homePosition: { x: 0, z: 1 },
+    }), T0);
+    expect(intent.kind).toBe('retreat');
+    if (intent.kind === 'retreat') {
+      expect(intent.to).toEqual({ x: 0, z: 1 });
+      expect(intent.reason).toContain('Bolsa cheia');
+    }
   });
 });

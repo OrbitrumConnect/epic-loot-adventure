@@ -1,0 +1,65 @@
+[
+  {
+    "path": "public/models/ranger/T_Ranger_BaseColor.png",
+    "before": 6630927,
+    "after": 2407075,
+    "resolution": 2048,
+    "mode": "RGB"
+  },
+  {
+    "path": "public/models/ranger/T_Ranger_Normal.png",
+    "before": 12713653,
+    "after": 928115,
+    "resolution": 1024,
+    "mode": "RGB"
+  },
+  {
+    "path": "public/models/ranger/T_Ranger_ORM.png",
+    "before": 10792085,
+    "after": 783160,
+    "resolution": 1024,
+    "mode": "RGB"
+  },
+  {
+    "path": "public/models/raiders/T_Ranger_BaseColor.png",
+    "before": 6630927,
+    "after": 2407075,
+    "resolution": 2048,
+    "mode": "RGB"
+  },
+  {
+    "path": "public/models/raiders/T_Ranger_Normal.png",
+    "before": 12713653,
+    "after": 928115,
+    "resolution": 1024,
+    "mode": "RGB"
+  },
+  {
+    "path": "public/models/raiders/T_Ranger_ORM.png",
+    "before": 10792085,
+    "after": 783160,
+    "resolution": 1024,
+    "mode": "RGB"
+  },
+  {
+    "path": "public/models/raiders/T_Peasant_BaseColor.png",
+    "before": 5055760,
+    "after": 1778852,
+    "resolution": 2048,
+    "mode": "RGB"
+  },
+  {
+    "path": "public/models/raiders/T_Peasant_Normal.png",
+    "before": 14110336,
+    "after": 859385,
+    "resolution": 1024,
+    "mode": "RGB"
+  },
+  {
+    "path": "public/models/raiders/T_Peasant_ORM.png",
+    "before": 9903835,
+    "after": 650144,
+    "resolution": 1024,
+    "mode": "RGB"
+  }
+]

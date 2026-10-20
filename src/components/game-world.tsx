@@ -977,14 +977,30 @@ function DayNightLighting({ c }: { c: Palette }) {
     // o autoUpdate e marco needsUpdate a ~15 Hz (ver abaixo) — corta ~75% dos
     // passes de sombra (o mais caro da cena, com ~70 criaturas) sem perda visível.
     const d = dir.current;
-    if (d) { d.shadow.autoUpdate = false; d.shadow.needsUpdate = true; }
+    if (d) {
+      d.shadow.autoUpdate = false;
+      d.shadow.needsUpdate = true;
+      // O target da luz direcional precisa estar no grafo da cena para que seu
+      // matrixWorld seja atualizado no render — sem isso a shadow-camera não
+      // acompanha o jogador (ver useFrame abaixo).
+      scene.add(d.target);
+    }
+    return () => { if (d) scene.remove(d.target); };
   }, [scene]);
 
   const shadowAccum = useRef(0);
   useFrame((_s, delta) => {
     const s = dayNight();
     if (dir.current) {
-      dir.current.position.set(s.sunPos[0], s.sunPos[1], s.sunPos[2]);
+      // A shadow-camera cobre um volume pequeno (ver shadow-camera-* no JSX).
+      // Para a sombra não sumir quando o jogador se afasta da origem, a luz e
+      // seu target acompanham o jogador, preservando a DIREÇÃO do sol (sunPos):
+      //   target  = (px, 0, pz)                  (centro do volume no jogador)
+      //   posição = (px, 0, pz) + sunPos          (mesmo vetor-direção de antes)
+      // Sem alocação: só .set() em objetos já existentes; leitura via getState().
+      const pp = useGameStore.getState().player.position;
+      dir.current.position.set(pp.x + s.sunPos[0], s.sunPos[1], pp.z + s.sunPos[2]);
+      dir.current.target.position.set(pp.x, 0, pp.z);
       dir.current.color.set(s.sunColor);
       dir.current.intensity = s.sunIntensity;
     }
@@ -1016,10 +1032,10 @@ function DayNightLighting({ c }: { c: Palette }) {
         color={c.light}
         castShadow
         shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-60}
-        shadow-camera-right={60}
-        shadow-camera-top={60}
-        shadow-camera-bottom={-60}
+        shadow-camera-left={-24}
+        shadow-camera-right={24}
+        shadow-camera-top={24}
+        shadow-camera-bottom={-24}
         shadow-bias={-0.001}
         shadow-normalBias={0.035}
         shadow-camera-far={180}

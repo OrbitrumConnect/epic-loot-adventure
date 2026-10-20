@@ -40,11 +40,32 @@ import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
  *  - `sunU`/`sunV`: posição de tela do disco (0..1 = dentro do quadro).
  *  - `glowU`/`glowV`: âncora do halo já clampada à borda; `glowFall`: peso dela.
  */
-export const celStats = {
-  composerMs: 0, postMs: 0, converted: 0,
-  sceneDrawCalls: 0, sceneTriangles: 0,
-  sunU: 0, sunV: 0, sunVis: 0, glowU: 0, glowV: 0, glowFall: 0, day: 1,
+type CelStats = {
+  composerMs: number; postMs: number; converted: number;
+  sceneDrawCalls: number; sceneTriangles: number;
+  sunU: number; sunV: number; sunVis: number;
+  glowU: number; glowV: number; glowFall: number; day: number;
 };
+
+// Fonte ÚNICA da identidade: adota o objeto que já vive no `window` (se houver)
+// em vez de espelhá-lo. Assim qualquer reavaliação de módulo (HMR do Vite) volta
+// a escrever no MESMO objeto que o console lê — antes, o módulo novo escrevia num
+// `celStats` novo enquanto `window.__celStats` seguia apontando para o antigo, e
+// a medição do pós dava 0 permanente. Identidade estável; zero alocação por quadro.
+function adoptCelStats(): CelStats {
+  const fresh: CelStats = {
+    composerMs: 0, postMs: 0, converted: 0,
+    sceneDrawCalls: 0, sceneTriangles: 0,
+    sunU: 0, sunV: 0, sunVis: 0, glowU: 0, glowV: 0, glowFall: 0, day: 1,
+  };
+  if (typeof window === 'undefined') return fresh;
+  const w = window as any;
+  if (w.__celStats) return w.__celStats as CelStats;
+  w.__celStats = fresh;
+  return fresh;
+}
+
+export const celStats: CelStats = adoptCelStats(); // HMR-safe: identidade no window
 
 function makeSceneRT(w: number, h: number): THREE.WebGLRenderTarget {
   const rt = new THREE.WebGLRenderTarget(w, h, {

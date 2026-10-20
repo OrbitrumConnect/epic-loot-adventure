@@ -52,9 +52,13 @@ export type AutoSnapshot = {
   playerDead: boolean;
   /** Índice da hotbar com uma cura utilizável, ou null. */
   healSlot: number | null;
-  creatures: { id: string; position: Position; behavior: string; hp: number; hostile?: boolean }[];
+  /** Nível do jogador (filtro de alvo da caça autônoma). Ausente = 1. */
+  playerLevel?: number;
+  /** `level` ausente = 1 (retrocompatível com snapshots de teste). */
+  creatures: { id: string; position: Position; behavior: string; hp: number; hostile?: boolean; level?: number }[];
   camps: { id: string; position: Position; radius: number; creatureIds: string[]; cleared: boolean }[];
-  resources: { id: string; position: Position; depleted: boolean }[];
+  /** `kind`/`range` opcionais: nó de colheita novo carrega o alcance da definição. */
+  resources: { id: string; position: Position; depleted: boolean; kind?: string; range?: number }[];
   objectives: ObjectiveQueueState;
   homePosition: Position;
   /** Onda em COMBATE (cerco à base) → o piloto prioriza DEFENDER: ataca o hostil
