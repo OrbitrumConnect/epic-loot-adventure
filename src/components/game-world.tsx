@@ -1067,7 +1067,8 @@ function Moon() {
  * (a barreira vive em `pushOutSafeZone`, na IA hostil). Só visual, sem custo.
  */
 function SafeZoneMarker() {
-  const y = terrainHeight(SAFE_ZONE.x, SAFE_ZONE.z) + 0.05;
+  const tv = useTerrainVersion();
+  const y = useMemo(() => glbSurfaceY(SAFE_ZONE.x, SAFE_ZONE.z, terrainHeight(SAFE_ZONE.x, SAFE_ZONE.z)) + 0.05, [tv]);
   return (
     <group position={[SAFE_ZONE.x, y, SAFE_ZONE.z]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
