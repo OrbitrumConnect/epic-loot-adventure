@@ -42,9 +42,8 @@ const STATIC_BOSS: Record<string, { url: string; height: number; yaw?: number; t
 /** Raiders com skin GLB (humanoides). Reversível: false volta pro procedural. */
 const USE_GLB_BOSS = true;
 /** Gasmask REVERTIDO (Pedro: tosco, vinha com uma TV junto + rig Valve torto).
- *  Batedor volta pro Quaternius que anima bem. Mantido OFF por segurança. */
-const USE_GLB_GASMASK = false;
-const GASMASK_URL = '/models/raiders/gasmask.glb';
+ *  Batedor volta pro Quaternius que anima bem. USE_GLB_GASMASK/GASMASK_URL removidos:
+ *  eram dead code (nunca lidos em lugar nenhum) e o GLB não existe em disco (404). */
 const IMP_URL = '/models/Imp.glb';
 const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
