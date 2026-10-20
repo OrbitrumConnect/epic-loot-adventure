@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { terrainHeight } from './world-kit';
+import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { houseCollider, housePlayerInside } from './house-collider';
 import { AssetBoundary } from './asset-boundary';
 import type { BasePiece } from '@/game/types/playerbase';
@@ -51,6 +52,9 @@ function BaseHouseInner({
 
   const gl = useThree((s) => s.gl);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // habilita o corte do teto
+  // Assenta a base no CHÃO REAL do GLB (não no procedural): reassenta quando o GLB carrega.
+  const tv = useTerrainVersion();
+  const baseGroundY = (x: number, z: number) => glbSurfaceY(x, z, terrainHeight(x, z));
 
   // Plano de corte horizontal (normal apontando pra baixo): mantém y <= constant.
   // constant alto = casa inteira; ao entrar, baixa pra remover o teto e ver dentro.
@@ -147,7 +151,7 @@ function BaseHouseInner({
       if (!remote) houseCollider.current = null;
       return;
     }
-    const floorY = terrainHeight(ctr.x, ctr.z) + FLOOR_H;
+    const floorY = baseGroundY(ctr.x, ctr.z) + FLOOR_H;
     houseCollider.current = {
       cx: ctr.x,
       cz: ctr.z,
@@ -159,11 +163,11 @@ function BaseHouseInner({
     return () => {
       houseCollider.current = null;
     };
-  }, [ctr?.x, ctr?.z, prepared.halfX, prepared.halfZ, prepared.wallSegs, remote]);
+  }, [ctr?.x, ctr?.z, prepared.halfX, prepared.halfZ, prepared.wallSegs, remote, tv]);
 
   if (!ctr) return null;
   return (
-    <group position={[ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z]}>
+    <group position={[ctr.x, baseGroundY(ctr.x, ctr.z), ctr.z]}>
       <primitive object={prepared.wrap} />
       {/* Luz interna quente (o telhado bloqueia o sol) */}
       {!remote && <pointLight ref={lightRef} position={[0, TARGET_H * 0.55, 0]} intensity={9} distance={TARGET_H * 2.6} decay={1.4} color="#ffe0b0" />}
