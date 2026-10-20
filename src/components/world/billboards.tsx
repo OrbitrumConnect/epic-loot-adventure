@@ -30,8 +30,8 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import * as THREE from 'three';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
-import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, type Palette } from './world-kit';
-import { glbSurfaceY, collectGreenSurfaceSpots, useTerrainVersion } from './terrain-collision';
+import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, riverDistance, RIVER_HALF_WIDTH, type Palette } from './world-kit';
+import { glbSurfaceY, collectGreenSurfaceSpots, surfaceColorAt, useTerrainVersion } from './terrain-collision';
 import { ForestRocks, ForestTrees } from './forest-models';
 import { LivingTrees } from './living-trees';
 import { GroundCover } from './ground-cover';
@@ -300,32 +300,49 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
     let cancelled = false, tries = 0;
     const attempt = () => {
       if (cancelled) return;
-      // Coleta o mapa INTEIRO (cap alto) — varre tudo, inclusive safe zone/cantos (antes
-      // parava em 6000 e nunca chegava lá). Depois distribui os tufos por TODAS as manchas
-      // com um passo (spotStride), não só as primeiras (ficava amontoado perto do lago).
-      const { spots, tint } = collectGreenSurfaceSpots(isGreen, 100000);
-      if (spots.length > 10) {
-        const perSpot = 3; // tufos por mancha escolhida (densidade local — grama cheia)
-        const targetSpots = Math.ceil(GRASS_CAP / perSpot);
-        const spotStride = Math.max(1, Math.floor(spots.length / targetSpots));
-        const out: Placement[] = [];
-        for (let s = 0; s < spots.length && out.length < GRASS_CAP; s += spotStride) {
-          const sp = spots[s]!;
-          for (let k = 0; k < perSpot; k++) {
-            const seed = s * 7 + k * 101;
-            const h = 0.9 + rand(seed + 50) * 0.7;
-            out.push({
-              x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
-              z: sp.z + (rand(seed + 99) - 0.5) * 2 * CLUSTER_SPREAD,
-              w: h * 1.2, h, yaw: rand(seed + 3) * Math.PI * 2,
-            });
-          }
-        }
-        setRes({ placements: out, tint: tint ?? undefined });
-        return;
+      // (A) Manchas detectadas na malha (montanha + verde forte das bordas). Também serve
+      // de SINAL de que a textura decodificou: só acha verde quando os pixels estão prontos.
+      const { spots: meshSpots, tint } = collectGreenSurfaceSpots(isGreen, 100000);
+      if (meshSpots.length <= 10) {           // textura ainda não pronta → tenta de novo
+        if (tries >= 20) return;
+        tries++; setTimeout(attempt, 250); return;
       }
-      if (tries >= 20) return;
-      tries++; setTimeout(attempt, 250); // textura ainda decodificando → tenta de novo
+      // (B) CHÃO PLANO CENTRAL: no centro o oliva tem a MESMA cor numérica da areia, então o
+      // detector da malha não o separa. Cubro o plano com uma grade jitterada, pulando água
+      // (lago/rio) e pulando só a AREIA BEM CLARA (surfaceColorAt em linear): mantém as manchas
+      // oliva/escuras (onde o Pedro quer grama) e deixa só a areia clara pelada.
+      const grid: { x: number; z: number }[] = [];
+      const STEP = 2.5, LIM = 84;
+      let gi = 0;
+      for (let x = -LIM; x <= LIM; x += STEP) {
+        for (let z = -LIM; z <= LIM; z += STEP, gi++) {
+          if (inLake(x, z, 1) || riverDistance(x, z) < RIVER_HALF_WIDTH + 2) continue;
+          const jx = x + (rand(gi + 11) - 0.5) * STEP;
+          const jz = z + (rand(gi + 77) - 0.5) * STEP;
+          const col = surfaceColorAt(jx, jz);
+          if (!col) continue;
+          if (col.r > 0.42 && col.g < col.r * 0.74) continue; // areia clara → pula
+          grid.push({ x: jx, z: jz });
+        }
+      }
+      const spots = [...grid, ...meshSpots];
+      const perSpot = 3; // tufos por mancha (densidade local — grama cheia)
+      const targetSpots = Math.ceil(GRASS_CAP / perSpot);
+      const spotStride = Math.max(1, Math.floor(spots.length / targetSpots));
+      const out: Placement[] = [];
+      for (let s = 0; s < spots.length && out.length < GRASS_CAP; s += spotStride) {
+        const sp = spots[s]!;
+        for (let k = 0; k < perSpot; k++) {
+          const seed = s * 7 + k * 101;
+          const h = 0.9 + rand(seed + 50) * 0.7;
+          out.push({
+            x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
+            z: sp.z + (rand(seed + 99) - 0.5) * 2 * CLUSTER_SPREAD,
+            w: h * 1.2, h, yaw: rand(seed + 3) * Math.PI * 2,
+          });
+        }
+      }
+      setRes({ placements: out, tint: tint ?? undefined });
     };
     attempt();
     return () => { cancelled = true; };
