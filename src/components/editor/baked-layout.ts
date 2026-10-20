@@ -29,4 +29,23 @@ export const BAKED_EDITOR_OBJECTS: EditorObject[] = [
     source: 'editor', selectable: true, visible: true, collide: 'floor',
     transform: { position: [6.5, -4.046, 38], rotation: [0, -2, 0], scale: [8.7, 8.6, 8.7] },
   },
+  // Coqueiros (GLB otimizado 161MB→6.3MB). Oásis ao redor do lago central (25,25). O Pedro
+  // colocou coqueiros na água no localhost (não vai pro Vercel) e deu carta branca pra eu
+  // fixar — posições minhas, ajustáveis no Editor. Base no chão com POS.y=8 (escala 4),
+  // colisão 'none' (decorativo, não escalável). Se flutuar/afundar, ajustar o Y no painel.
+  {
+    id: 'baked-palms-01', name: 'Coqueiros 1', assetUrl: '/models/map/desert-palm-cluster.glb',
+    source: 'editor', selectable: true, visible: true, collide: 'none',
+    transform: { position: [45, 8, 30], rotation: [0, 0.4, 0], scale: [4, 4, 4] },
+  },
+  {
+    id: 'baked-palms-02', name: 'Coqueiros 2', assetUrl: '/models/map/desert-palm-cluster.glb',
+    source: 'editor', selectable: true, visible: true, collide: 'none',
+    transform: { position: [20, 8, 52], rotation: [0, 2.1, 0], scale: [4, 4, 4] },
+  },
+  {
+    id: 'baked-palms-03', name: 'Coqueiros 3', assetUrl: '/models/map/desert-palm-cluster.glb',
+    source: 'editor', selectable: true, visible: true, collide: 'none',
+    transform: { position: [48, 8, 8], rotation: [0, -1.2, 0], scale: [4, 4, 4] },
+  },
 ];
