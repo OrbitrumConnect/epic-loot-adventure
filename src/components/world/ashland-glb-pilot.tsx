@@ -6,16 +6,15 @@ import weaponUrl from "../../../art/packs/01-ashland-lowpoly/models/ash-cleaver.
 import heroUrl from "../../../art/packs/01-ashland-lowpoly/models/ashland-survivor.glb?url";
 import enemyUrl from "../../../art/packs/01-ashland-lowpoly/models/ashland-stalker.glb?url";
 import { terrainHeight } from "./world-kit";
+import { AssetBoundary } from "./asset-boundary";
 
-function Model({
-  source,
-  clip,
-  position,
-}: {
+type ModelProps = {
   source: string;
   clip?: string;
   position: [number, number, number];
-}) {
+};
+
+function ModelInner({ source, clip, position }: ModelProps) {
   const root = useRef<THREE.Group>(null);
   const { scene, animations } = useGLTF(source);
   const { actions } = useAnimations(animations, root);
@@ -41,6 +40,18 @@ function Model({
     <group ref={root} position={position}>
       <primitive object={scene} />
     </group>
+  );
+}
+
+/** Um modelo GLB do piloto, blindado: fetch falho vira fallback `null` sem
+ *  derrubar os outros modelos nem a cena. */
+function Model(props: ModelProps) {
+  return (
+    <AssetBoundary label="AshlandPilotModel" fallback={null}>
+      <Suspense fallback={null}>
+        <ModelInner {...props} />
+      </Suspense>
+    </AssetBoundary>
   );
 }
 

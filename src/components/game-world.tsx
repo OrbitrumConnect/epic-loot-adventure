@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrthographicCamera, PerspectiveCamera, Stats, useGLTF } from '@react-three/drei';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
@@ -36,6 +36,7 @@ import { isBuildActive } from './world/build-mode';
 import { Camps, Enemies, MultiplayerWorldSync } from './world/world-entities';
 import { Billboards, groundTexture } from './world/billboards';
 import { AshlandPilot } from './world/ashland-glb-pilot';
+import { AssetBoundary } from './world/asset-boundary';
 import { CelShade } from './world/cel-shade';
 import { Atmosphere } from './world/atmosphere';
 import { EnvironmentLight } from './world/environment-light';
@@ -1163,7 +1164,7 @@ let didInitialSpawn = false;
 const LIGHT_POST_URL = '/models/props/light-post.glb';
 const LIGHT_POST_H = 4.2; // +30% (Pedro) — poste Mad Max mais alto
 
-function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
+function RoadLampInner({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
   const { scene } = useGLTF(LIGHT_POST_URL);
   // Modelo GLB escalado + fincado no chão + centrado (clone por instância; GLB cacheado).
@@ -1195,12 +1196,22 @@ function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
     </group>
   );
 }
+/** Poste de luz blindado: fetch falho do GLB vira fallback `null`. */
+function RoadLamp(props: { x: number; y: number; z: number }) {
+  return (
+    <AssetBoundary label="RoadLamp" fallback={null}>
+      <Suspense fallback={null}>
+        <RoadLampInner {...props} />
+      </Suspense>
+    </AssetBoundary>
+  );
+}
 useGLTF.preload(LIGHT_POST_URL);
 
 const MAZE_URL = '/models/props/maze.glb';
 /** Labirinto gigante (Meshy decimado ~100k tris) numa área aberta distante — o
  *  personagem anda por ele. Escalado p/ `size` m de lado. Visual (colisão = TODO). */
-function Maze({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: number; yaw?: number }) {
+function MazeInner({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: number; yaw?: number }) {
   const { scene } = useGLTF(MAZE_URL);
   const ref = useRef<THREE.Group>(null);
   const model = useMemo(() => {
@@ -1221,6 +1232,16 @@ function Maze({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: numbe
   const tv = useTerrainVersion();
   const y = useMemo(() => glbSurfaceY(x, z, terrainHeight(x, z)), [x, z, tv]);
   return <group ref={ref} position={[x, y, z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
+}
+/** Labirinto blindado: fetch falho do GLB vira fallback `null`. */
+function Maze(props: { x: number; z: number; size?: number; yaw?: number }) {
+  return (
+    <AssetBoundary label="Maze" fallback={null}>
+      <Suspense fallback={null}>
+        <MazeInner {...props} />
+      </Suspense>
+    </AssetBoundary>
+  );
 }
 useGLTF.preload(MAZE_URL);
 
@@ -2242,7 +2263,11 @@ export default function GameWorld(props: WorldProps) {
         ) : (
           <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={160} />
         )}
-        <WorldScene {...props} c={c} cameraMode={cameraMode} />
+        {/* Rede de segurança: qualquer erro de cena/asset que escape dos boundaries
+            internos para aqui (em vez de derrubar o root error boundary do router). */}
+        <AssetBoundary label="WorldScene" fallback={null}>
+          <WorldScene {...props} c={c} cameraMode={cameraMode} />
+        </AssetBoundary>
         {/* Medidor de FPS — SÓ em dev (localhost); nunca vai pra produção. */}
         {import.meta.env.DEV && <Stats />}
       </Canvas>

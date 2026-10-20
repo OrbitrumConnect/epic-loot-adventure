@@ -1,12 +1,13 @@
 import { useLoader, useFrame, useThree } from '@react-three/fiber';
 import { useTexture, useGLTF } from '@react-three/drei';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { terrainHeight } from './world-kit';
 import { houseCollider, housePlayerInside } from './house-collider';
+import { AssetBoundary } from './asset-boundary';
 import type { BasePiece } from '@/game/types/playerbase';
 
 /**
@@ -26,7 +27,7 @@ const FLOOR_H = TARGET_H * 0.133 * VSTRETCH;
 /** Distância² (m²) além da qual a luz interna da casa sai do shader. */
 const HOUSE_LIGHT_D2 = 22 * 22;
 
-export function BaseHouse({
+function BaseHouseInner({
   pieces: remotePieces,
   remote = false,
 }: { pieces?: BasePiece[] | null; remote?: boolean } = {}) {
@@ -165,6 +166,18 @@ export function BaseHouse({
       {/* Luz interna quente (o telhado bloqueia o sol) */}
       {!remote && <pointLight ref={lightRef} position={[0, TARGET_H * 0.55, 0]} intensity={9} distance={TARGET_H * 2.6} decay={1.4} color="#ffe0b0" />}
     </group>
+  );
+}
+
+/** Casa central da base, blindada: falha de fetch de qualquer asset (OBJ/GLB/textura)
+ *  vira fallback `null` em vez de derrubar a cena/aplicação. */
+export function BaseHouse(props: { pieces?: BasePiece[] | null; remote?: boolean } = {}) {
+  return (
+    <AssetBoundary label="BaseHouse" fallback={null}>
+      <Suspense fallback={null}>
+        <BaseHouseInner {...props} />
+      </Suspense>
+    </AssetBoundary>
   );
 }
 

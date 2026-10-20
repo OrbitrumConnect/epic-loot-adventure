@@ -13,7 +13,8 @@
  */
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
-import { useCallback, useMemo, useRef } from 'react';
+import { Suspense, useCallback, useMemo, useRef } from 'react';
+import { AssetBoundary } from './asset-boundary';
 import * as THREE from 'three';
 import type { CampState, CampStructure } from '@/game/types';
 import { addObjective, campDefinition } from './objective-bridge';
@@ -348,7 +349,7 @@ const CAMP_URL = '/models/props/raider-camp.glb';
 const CAMP_YAW_EXTRA: Record<string, number> = {
   blackclaw_camp: (160 * Math.PI) / 180,
 };
-function GlbCampModel({ radius, y, yaw }: { radius: number; y: number; yaw: number }) {
+function GlbCampModelInner({ radius, y, yaw }: { radius: number; y: number; yaw: number }) {
   const { scene } = useGLTF(CAMP_URL);
   const model = useMemo(() => {
     const cl = scene.clone(true);
@@ -361,6 +362,16 @@ function GlbCampModel({ radius, y, yaw }: { radius: number; y: number; yaw: numb
     return cl;
   }, [scene, radius]);
   return <group position={[0, y, 0]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
+}
+/** GLB do acampamento blindado: fetch falho vira fallback `null` sem derrubar a cena. */
+function GlbCampModel(props: { radius: number; y: number; yaw: number }) {
+  return (
+    <AssetBoundary label="CampModel" fallback={null}>
+      <Suspense fallback={null}>
+        <GlbCampModelInner {...props} />
+      </Suspense>
+    </AssetBoundary>
+  );
 }
 useGLTF.preload(CAMP_URL);
 

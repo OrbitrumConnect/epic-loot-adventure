@@ -45,6 +45,23 @@ function safeStringify(value: unknown): string {
   }
 }
 
+const ABORT_CODES = new Set(["ECONNRESET", "ECONNABORTED", "ERR_STREAM_PREMATURE_CLOSE", "ABORT_ERR"]);
+
+// Client gave up on the request (reload, navigation, keep-alive close). Not an app error.
+// Compares the whole message, never `includes`, so app errors mentioning "abort" stay errors.
+export function isClientAbortError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < CAUSE_DEPTH_LIMIT && current != null; depth++) {
+    if (typeof current !== "object") return false;
+    const { code, message } = current as { code?: unknown; message?: unknown };
+    if (current instanceof Error && current.name === "AbortError") return true;
+    if (typeof message === "string" && message.trim().toLowerCase() === "aborted") return true;
+    if (typeof code === "string" && ABORT_CODES.has(code)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 function isErrorLike(value: unknown): value is Error {
   return value instanceof Error;
 }
@@ -54,6 +71,10 @@ function isErrorLike(value: unknown): value is Error {
 // recorded for consumeLastCapturedError and expanded before serialization.
 const originalConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
+  if (args.some((arg) => isErrorLike(arg) && isClientAbortError(arg))) {
+    console.warn("[ssr] request aborted by client");
+    return;
+  }
   const expanded = args.map((arg) => {
     if (!isErrorLike(arg)) return arg;
     record(arg);

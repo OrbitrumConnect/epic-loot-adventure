@@ -1,9 +1,10 @@
 import { TransformControls, useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useEditorStore, type EditorObject } from './editor-store';
 import { registerTerrain, registerWall } from '../world/terrain-collision';
+import { AssetBoundary } from '../world/asset-boundary';
 
 /** De-shine dos assets de mapa do Meshy (mesmo princípio do makeMatte do terreno):
  *  nulifica os mapas metal/rough e trava fosco, SEM tint (mantém a cor original).
@@ -24,7 +25,7 @@ function matte(root: THREE.Object3D) {
   });
 }
 
-function PlacedObject({ item }: { item: EditorObject }) {
+function PlacedObjectInner({ item }: { item: EditorObject }) {
   const { scene } = useGLTF(item.assetUrl);
   const model = useMemo(() => {
     const clone = scene.clone(true);
@@ -62,5 +63,16 @@ function PlacedObject({ item }: { item: EditorObject }) {
   // que DERRUBAVA o arraste. Lê a pose final e grava uma vez.
   const sync = () => { const o = ref.current; if (!o) return; update(item.id, { position: [o.position.x - pivot.x * o.scale.x, o.position.y - pivot.y * o.scale.y, o.position.z - pivot.z * o.scale.z], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); };
   return <TransformControls mode={tool} onMouseUp={sync}>{group}</TransformControls>;
+}
+/** Objeto do editor blindado: fetch falho do GLB vira fallback `null` sem derrubar
+ *  os outros objetos nem a cena. */
+function PlacedObject({ item }: { item: EditorObject }) {
+  return (
+    <AssetBoundary label={`EditorObject:${item.assetUrl}`} fallback={null}>
+      <Suspense fallback={null}>
+        <PlacedObjectInner item={item} />
+      </Suspense>
+    </AssetBoundary>
+  );
 }
 export function EditorWorldLayer() { const objects = useEditorStore(s => s.objects); return <>{objects.filter(item => item.source !== 'map').map(item => <PlacedObject key={item.id} item={item} />)}</>; }

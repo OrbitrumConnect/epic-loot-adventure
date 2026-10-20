@@ -1,9 +1,10 @@
 import { TransformControls, useGLTF } from '@react-three/drei';
-import { useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { terrainHeight } from './world-kit';
 import { registerTerrain } from './terrain-collision';
 import { useEditorStore } from '../editor/editor-store';
+import { AssetBoundary } from './asset-boundary';
 
 /**
  * Terreno do deserto (modelos Meshy decimados) — planície (chão novo) + montanhas
@@ -90,7 +91,8 @@ function useTerrainCollision(ref: React.RefObject<THREE.Group | null>) {
   }, []);
 }
 
-export function DesertPlain({ size = 196, x = 0, z = 0, yOffset = 0, rotY = (3 * Math.PI) / 4 + (37 * Math.PI) / 180 }: { size?: number; x?: number; z?: number; yOffset?: number; rotY?: number }) {
+type DesertPlainProps = { size?: number; x?: number; z?: number; yOffset?: number; rotY?: number };
+function DesertPlainInner({ size = 196, x = 0, z = 0, yOffset = 0, rotY = (3 * Math.PI) / 4 + (37 * Math.PI) / 180 }: DesertPlainProps) {
   const { scene } = useGLTF(PLAIN_URL);
   const model = useMemo(() => {
     const c = scene.clone(true);
@@ -122,7 +124,8 @@ export function DesertPlain({ size = 196, x = 0, z = 0, yOffset = 0, rotY = (3 *
  * Montanha rochosa — assenta a BASE no chão e sobe; climável (registra colisão).
  * `url` troca o modelo (rocha simples ou a montanha-caverna com passarela).
  */
-export function DesertMountain({ size = 12, x = 0, z = 0, rotY = 0, yOffset = 0, url = MOUNTAIN_URL, editorId, transform }: { size?: number; x?: number; z?: number; rotY?: number; yOffset?: number; url?: string; editorId?: string; transform?: { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number] } }) {
+type DesertMountainProps = { size?: number; x?: number; z?: number; rotY?: number; yOffset?: number; url?: string; editorId?: string; transform?: { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number] } };
+function DesertMountainInner({ size = 12, x = 0, z = 0, rotY = 0, yOffset = 0, url = MOUNTAIN_URL, editorId, transform }: DesertMountainProps) {
   const { scene } = useGLTF(url);
   const ref = useRef<THREE.Group>(null);
   useTerrainCollision(ref);
@@ -152,6 +155,28 @@ export function DesertMountain({ size = 12, x = 0, z = 0, rotY = 0, yOffset = 0,
   );
   if (active && selected && editorId) return <TransformControls mode={tool} onMouseUp={() => { const o = ref.current; if (!o) return; update(editorId, { position: [o.position.x, o.position.y, o.position.z], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); }}>{group}</TransformControls>;
   return group;
+}
+
+/** Planície do deserto blindada: fetch falho do GLB vira fallback `null`. */
+export function DesertPlain(props: DesertPlainProps) {
+  return (
+    <AssetBoundary label="DesertPlain" fallback={null}>
+      <Suspense fallback={null}>
+        <DesertPlainInner {...props} />
+      </Suspense>
+    </AssetBoundary>
+  );
+}
+
+/** Montanha do deserto blindada: fetch falho do GLB vira fallback `null`. */
+export function DesertMountain(props: DesertMountainProps) {
+  return (
+    <AssetBoundary label="DesertMountain" fallback={null}>
+      <Suspense fallback={null}>
+        <DesertMountainInner {...props} />
+      </Suspense>
+    </AssetBoundary>
+  );
 }
 
 export const MOUNTAIN_CAVE = MOUNTAIN_CAVE_URL;
