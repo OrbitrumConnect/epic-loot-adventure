@@ -279,8 +279,8 @@ function inLake(x: number, z: number, pad = 0): boolean {
  * a média do verde amostrado (tint). Determinístico → Vercel. GroundCover = lâminas
  * finas animadas por vento.
  * ------------------------------------------------------------------ */
-const GRASS_CAP = 9000;        // teto de tufos (instanced, barato) — Pedro: "bastante, farta"
-const CLUSTER_SPREAD = 1.3;    // raio (m) do punhado em torno da mancha
+const GRASS_CAP = 15000;       // teto de tufos (instanced) — Pedro: "farta, +35%" no plano e montanha
+const CLUSTER_SPREAD = 1.5;    // raio (m) do punhado em torno da mancha
 /** Esverdeado (sRGB 0-1): caqui/oliva embutido no barro. O mapa é alaranjado — areia
  *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
  *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
@@ -303,9 +303,9 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
       // Coleta o mapa INTEIRO (cap alto) — varre tudo, inclusive safe zone/cantos (antes
       // parava em 6000 e nunca chegava lá). Depois distribui os tufos por TODAS as manchas
       // com um passo (spotStride), não só as primeiras (ficava amontoado perto do lago).
-      const { spots, tint } = collectGreenSurfaceSpots(isGreen, 60000);
+      const { spots, tint } = collectGreenSurfaceSpots(isGreen, 100000);
       if (spots.length > 10) {
-        const perSpot = 2; // tufos por mancha escolhida (densidade local)
+        const perSpot = 3; // tufos por mancha escolhida (densidade local — grama cheia)
         const targetSpots = Math.ceil(GRASS_CAP / perSpot);
         const spotStride = Math.max(1, Math.floor(spots.length / targetSpots));
         const out: Placement[] = [];
@@ -313,11 +313,11 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
           const sp = spots[s]!;
           for (let k = 0; k < perSpot; k++) {
             const seed = s * 7 + k * 101;
-            const h = 0.75 + rand(seed + 50) * 0.6;
+            const h = 0.9 + rand(seed + 50) * 0.7;
             out.push({
               x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
               z: sp.z + (rand(seed + 99) - 0.5) * 2 * CLUSTER_SPREAD,
-              w: h * 1.15, h, yaw: rand(seed + 3) * Math.PI * 2,
+              w: h * 1.2, h, yaw: rand(seed + 3) * Math.PI * 2,
             });
           }
         }
