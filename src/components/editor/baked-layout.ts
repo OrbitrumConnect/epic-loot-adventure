@@ -16,5 +16,17 @@ import type { EditorObject } from './editor-store';
  * tem prioridade sobre o baked (pra você continuar ajustando).
  */
 export const BAKED_EDITOR_OBJECTS: EditorObject[] = [
-  // (vazio por enquanto — cole o layout aqui e commite)
+  // Pontes de sucata (GLB otimizado 34MB→1.7MB). Transforms EXATOS que o Pedro leu no
+  // painel do Editor ADM (20/10). Colisão 'floor' = andável. Fixas no código → Vercel.
+  // Obs.: o painel só mostrou 2 eixos de escala; o Z foi igualado ao X (ajuste se esticar).
+  {
+    id: 'baked-bridge-01', name: 'Ponte de sucata 1', assetUrl: '/models/map/wasteland-scrap-bridge.glb',
+    source: 'editor', selectable: true, visible: true, collide: 'floor',
+    transform: { position: [10.8, -4.234, 6.9], rotation: [0, 1.7, 0], scale: [9.2, 8.2, 9.2] },
+  },
+  {
+    id: 'baked-bridge-02', name: 'Ponte de sucata 2', assetUrl: '/models/map/wasteland-scrap-bridge.glb',
+    source: 'editor', selectable: true, visible: true, collide: 'floor',
+    transform: { position: [6.5, -4.046, 38], rotation: [0, -2, 0], scale: [8.7, 8.6, 8.7] },
+  },
 ];
