@@ -16,11 +16,13 @@ export const EDITOR_ASSETS = [
   { name: 'Montanha oeste', assetUrl: '/models/terrain/mountain.glb', scale: 1 },
   { name: 'Montanha caverna', assetUrl: '/models/terrain/mountain-cave.glb', scale: 1 },
   // Novos assets de mapa (Meshy). De-shine aplicado no PlacedObject p/ assets /models/map/.
-  // 7 entradas removidas (rio-wasteland-master, wasteland-scrap-bridge, desert-palm-cluster,
-  // savannah-grass-sparse/low, metal-house, palm-farm): apontavam p/ arquivo que NÃO existe
-  // em public/models/map/ (404 no FileLoader) e não há substituto em disco. Removidas em vez
-  // de deixadas quebradas no catálogo do Editor ADM.
+  // 6 entradas removidas (rio-wasteland-master, desert-palm-cluster, savannah-grass-sparse/low,
+  // metal-house, palm-farm): apontavam p/ arquivo que NÃO existe em public/models/map/ (404 no
+  // FileLoader) e não há substituto em disco. Removidas em vez de deixadas quebradas no catálogo
+  // do Editor ADM. A ponte (wasteland-scrap-bridge) foi restaurada: o Pedro trouxe o GLB (otimizado,
+  // 1,6 MB) no upstream/main, então a entrada voltou a apontar para arquivo existente.
   { name: 'Rio devastado (icônico)', assetUrl: '/models/map/rio-wasteland-iconic.glb', scale: 20 },
+  { name: 'Ponte de sucata', assetUrl: '/models/map/wasteland-scrap-bridge.glb', scale: 8 },
   // stone-house: arquivo real vive em /models/house/ (confirmado com test -f), não /models/map/.
   { name: 'Casa de pedra', assetUrl: '/models/house/stone-house.glb', scale: 6 },
 ] as const;
