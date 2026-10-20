@@ -287,7 +287,7 @@ const CLUSTER_SPREAD = 1.1;    // raio (m) do punhado em torno da mancha
  *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
  *  pixels reais do rio-wasteland (histograma de g/r). */
 function isGreen(c: THREE.Color): boolean {
-  return c.g >= c.r * 0.76 && c.g >= c.b * 0.98 && c.g > 0.10;
+  return c.g >= c.r * 0.71 && c.g >= c.b * 0.95 && c.g > 0.10;
 }
 /** Gera a grama quando o GLB+textura carregam (retry curto até a imagem decodificar —
  *  o registro do terreno não espera a textura). Nunca limpa grama já achada. */

@@ -229,15 +229,24 @@ export function collectGreenSurfaceSpots(
       const tris = idx ? idx.count / 3 : pos.count / 3;
       // Stride: a malha do mapa tem ~760k triângulos. Testar ~1 a cada N espalha os
       // tufos pelo mapa (em vez de amontoar nos primeiros) e limita o custo (1x no load).
-      const stride = Math.max(1, Math.floor(tris / 90000));
+      const stride = Math.max(1, Math.floor(tris / 200000));
       for (let t = 0; t < tris && spots.length < max; t += stride) {
         const i0 = idx ? idx.getX(t * 3) : t * 3;
         const i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
         const i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
-        const u = (uv.getX(i0) + uv.getX(i1) + uv.getX(i2)) / 3;
-        const v = (uv.getY(i0) + uv.getY(i1) + uv.getY(i2)) / 3;
-        texColorAt(px, tex, u, v, _gcol);
-        if (!isGreen(_gcol)) continue;
+        const u0 = uv.getX(i0), v0 = uv.getY(i0);
+        const u1 = uv.getX(i1), v1 = uv.getY(i1);
+        const u2 = uv.getX(i2), v2 = uv.getY(i2);
+        const cu = (u0 + u1 + u2) / 3, cv = (v0 + v1 + v2) / 3;
+        // Amostra 3 vértices + centro: as manchas verde/oliva são MAIORES que um triângulo
+        // e o centro sozinho perdia as bordas. Verde se QUALQUER ponto for verde → cobre bem.
+        const green =
+          isGreen(texColorAt(px, tex, cu, cv, _gcol)) ||
+          isGreen(texColorAt(px, tex, u0, v0, _gcol)) ||
+          isGreen(texColorAt(px, tex, u1, v1, _gcol)) ||
+          isGreen(texColorAt(px, tex, u2, v2, _gcol));
+        if (!green) continue;
+        texColorAt(px, tex, cu, cv, _gcol); // cor do centro p/ o tint
         _gsum.add(_gcol); n++;
         _ga.fromBufferAttribute(pos, i0).applyMatrix4(m.matrixWorld);
         _gb.fromBufferAttribute(pos, i1).applyMatrix4(m.matrixWorld);
