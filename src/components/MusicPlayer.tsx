@@ -14,7 +14,9 @@ export function MusicPlayer() {
 
   // Cada ataque do jogador aquece a trilha de combate.
   const attackTick = useGameStore((s) => s.attackTick);
+  const selectedHotbar = useGameStore((s) => s.ui.selectedHotbar);
   useEffect(() => { if (attackTick > 0) audioManager.pulseCombat(); }, [attackTick]);
+  useEffect(() => { if (attackTick > 0 && selectedHotbar === 8) audioManager.playShot(); }, [attackTick, selectedHotbar]);
 
   const playing = audioManager.playing;
 

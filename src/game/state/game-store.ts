@@ -5,7 +5,7 @@ import type {
   FeedbackEvent,
 } from '../types';
 import { ITEMS } from '../data/items';
-import { weaponFor } from '../data/weapons';
+import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, WORLD_HALF } from '../data/camps';
@@ -50,7 +50,7 @@ import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
-import { drinkBestPotion, shouldAutoDrink } from '../systems/potionSystem';
+import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
@@ -61,6 +61,7 @@ import {
   pushEvents, shotEvent, xpEvent,
 } from '../systems/feedbackSystem';
 import type { FeedbackDraft } from '../systems/feedbackSystem';
+import { broadcastCreatureHit, canSimulateSharedWorld } from '@/net/multiplayer';
 
 /** Para onde o piloto automático recua e para onde aponta um `travel` sem alvo. */
 export const HOME_POSITION: Position = { x: 7, z: -26 };
@@ -87,6 +88,8 @@ type GameState = {
   wave: WaveState;
   /** Nível da base: sobe 1 a cada onda repelida (evolução por cartas). */
   baseLevel: number;
+  /** Casa da base evoluiu p/ PEDRA (nível 10 + custo). Só troca a skin; dimensão/colisão iguais. */
+  baseEvolved: boolean;
   /** Quantas vezes cada evolução foi escolhida (stacks). */
   baseUpgrades: Record<UpgradeId, number>;
   /** 3 cartas oferecidas após repelir uma onda; null = sem escolha pendente. */
@@ -149,6 +152,8 @@ type GameActions = {
   tickBase: () => void;
   placeBuilding: (defId: BuildingId, plotIndex: number) => void;
   upgradeBuilding: (instanceId: string) => void;
+  /** Evolui a casa da base p/ PEDRA (exige nível 10 + madeira/pedra). */
+  evolveBaseToStone: () => void;
   enqueueUnit: (instanceId: string, unitId: string) => void;
   cancelQueueItem: (instanceId: string, itemId: string) => void;
   sendExpedition: (expeditionId: string, scouts: number) => void;
@@ -333,7 +338,7 @@ function createInitialCreatures(): CreatureState[] {
   ];
 }
 
-const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_puglin', 'raider_brute', 'raider_shaman'] as const;
+const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_puglin', 'raider_brute', 'raider_shaman', 'pelter'] as const;
 
 /** Nº de bosses na onda — cresce com as ondas (teto 5). */
 function waveBossCount(wave: number): number {
@@ -350,7 +355,7 @@ function waveBossCount(wave: number): number {
  */
 function waveBossSpecies(wave: number, index: number): string {
   if (wave >= 6) {
-    if (index === 0) return 'raider_kaiju';
+    if (index === 0) return 'raider_mushroom'; // kaiju removido (Aberração já faz o papel)
     const pool = ['raider_mushroom', 'raider_samurai', 'raider_warlord'];
     return pool[index % pool.length]!;
   }
@@ -430,6 +435,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   powerLastTickAt: 0,
   wave: INITIAL_WAVE,
   baseLevel: 1,
+  baseEvolved: false,
   baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
   upgradeChoices: null,
   orbitExpiresWave: 0,
@@ -573,7 +579,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (now - state.player.lastAttackAt < prof.cooldown) return;
 
     const dist = getDistance(state.player.position, creature.position);
-    if (dist > prof.range) {
+    if (dist > weaponRangeFor(heldItemId, state.player.level)) {
       set(s => ({ ui: { ...s.ui, message: `${creature.name} está longe demais.` } }));
       return;
     }
@@ -598,6 +604,23 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
     const finalPower = Math.round(totalPower * damageMultiplier(state.player));
+
+    // Em sala convidada o inimigo pertence ao anfitrião. O convidado conserva
+    // apenas o próprio cooldown/munição e envia a intenção do golpe; a vida
+    // comum volta no snapshot do anfitrião para todos os jogadores.
+    if (!canSimulateSharedWorld()) {
+      broadcastCreatureHit({ targetId, source: state.player.position, damage: finalPower });
+      set({
+        player: {
+          ...state.player,
+          lastAttackAt: now,
+          inventory: usesBullet ? removeItem(state.player.inventory, 'ammo', 1) : state.player.inventory,
+        },
+        attackTick: state.attackTick + 1,
+        ui: { ...state.ui, message: `Golpe enviado contra ${creature.name}.` },
+      });
+      return;
+    }
 
     const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name, playerCritStats(state.player));
 
@@ -924,7 +947,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (state.creatures.some(c => c.id.startsWith('boss_') && c.behavior !== 'dead')) return;
     // Sorteia o boss que ronda o MAPA: Colosso, Fúngico, Samurai ou Kaiju —
     // os mesmos das ondas aparecem soltos no vale também (pedido do Pedro).
-    const POOL = ['raider_warlord', 'raider_mushroom', 'raider_samurai', 'raider_kaiju'];
+    const POOL = ['raider_warlord', 'raider_mushroom', 'raider_samurai']; // kaiju removido
     const sp = POOL[Math.floor(Math.random() * POOL.length)]!;
     const def = CREATURES[sp];
     if (!def) return;
@@ -1104,6 +1127,25 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   upgradeBuilding: (instanceId) => {
     const result = startUpgrade(get().base, instanceId, Date.now());
     applyBaseResult(set, result);
+  },
+
+  evolveBaseToStone: () => {
+    const s = get();
+    if (s.baseEvolved) return;
+    const LEVEL = 10, WOOD = 100, STONE = 200;
+    if ((s.player.level ?? 1) < LEVEL) {
+      set({ ui: { ...s.ui, message: `Casa de pedra: precisa ser nível ${LEVEL}.` } });
+      return;
+    }
+    const inv = s.player.inventory;
+    const w = getItemCount(inv, 'wood'), st = getItemCount(inv, 'stone');
+    if (w < WOOD || st < STONE) {
+      set({ ui: { ...s.ui, message: `Falta material: ${WOOD} madeira + ${STONE} pedra (tem ${w}/${st}).` } });
+      return;
+    }
+    let nextInv = removeItem(inv, 'wood', WOOD);
+    nextInv = removeItem(nextInv, 'stone', STONE);
+    set({ baseEvolved: true, player: syncCarry({ ...s.player, inventory: nextInv }), ui: { ...s.ui, message: 'Casa evoluída para PEDRA! 🏰' } });
   },
 
   enqueueUnit: (instanceId, unitId) => {
@@ -1635,7 +1677,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       playerDead: state.player.dead,
       // Com poção infinita (dev) e sem cura na hotbar, usa o slot 0 só como sinal:
       // quem executa o `heal` deve chamar `drinkPotion()`, que ignora o índice.
-      healSlot: findHealHotbarIndex(state.player.inventory) ?? (DEV_INFINITE_POTIONS ? 0 : null),
+      healSlot: findHealHotbarIndex(state.player.inventory) ?? (findBestHealItem(state.player.inventory, DEV_INFINITE_POTIONS) ? 0 : null),
+      gatherCapacity: getWeight(state.player.inventory) < state.player.inventory.maxWeight && state.player.inventory.slots.some(slot => {
+        if (slot.itemId === null) return true;
+        const item = ITEMS[slot.itemId];
+        return Boolean(item && slot.quantity < item.maxStack);
+      }),
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
       attackRange: weaponFor(

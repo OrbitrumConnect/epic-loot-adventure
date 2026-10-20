@@ -42,7 +42,7 @@ export function GlbCreature({
 }: {
   url: string;
   movingRef: React.MutableRefObject<boolean>;
-  height?: number;
+  height?: number | undefined;
   yaw?: number;
   /** Cor base (os GLB "demo" vêm sem baseColor → brancos; tinta dá cor natural). */
   tint?: string | undefined;

@@ -8,8 +8,16 @@ import type { BasePiece } from '@/game/types/playerbase';
 /** O render apenas agenda; seleção, cooldown e dano pertencem ao sistema/store. */
 export function TowerRuntime({ paused }: { paused: boolean }) {
   const cache = useRef<{ pieces: BasePiece[] | null; towers: TowerSource[] }>({ pieces: null, towers: [] });
-  useFrame(() => {
-    if (paused) return;
+  const accum = useRef(0);
+  useFrame((_, delta) => {
+    if (paused) {
+      accum.current = 0;
+      return;
+    }
+    accum.current += Math.min(delta, 0.1);
+    if (accum.current < 0.05) return;
+    accum.current %= 0.05;
+
     const state = useGameStore.getState();
     const pieces = state.playerBase?.pieces ?? null;
     const current = cache.current;

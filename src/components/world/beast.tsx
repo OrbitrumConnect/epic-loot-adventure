@@ -13,12 +13,12 @@ import { CREATURES } from '@/game/data/creatures';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING, type HostileTuning } from './hostile-ai';
-import { HERO_HEIGHT, mixColor, terrainHeight, type Palette } from './world-kit';
+import { mixColor, terrainHeight, type Palette } from './world-kit';
 import { GlbCreature } from './glb-creature';
 
 /** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
  *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
-const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number; fixedScale?: number }> = {
+const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number; tint?: string; groundBias?: number; fixedScale?: number }> = {
   // groundBias negativo = desce (os "demo" skinned flutuam ~30cm: bind-pose ≠ anim).
   rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a', groundBias: -0.12 },
   deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c', groundBias: -0.3 },
@@ -31,17 +31,17 @@ const GLB_CREATURE: Record<string, { url: string; height: number; yaw?: number; 
   goose: { url: '/models/animals/goose.glb', height: 0.61, yaw: 0, groundBias: -0.05 },
   pheasant: { url: '/models/animals/pheasant.glb', height: 0.74, yaw: 0, groundBias: -0.05 },
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
-  // Monstros (anim própria). eel rasteja (tamanho ~boss 1); monster ~3m.
-  eel: { url: '/models/animals/eel.glb', height: 3.2, yaw: Math.PI, groundBias: 0 }, // -20% + vira 180° (vinha de costas)
-  // Aberração: 1,3x a altura do HERÓI, derivada da fonte única. Se o jogador
-  // mudar de tamanho, ela acompanha sozinha — pedido explícito do owner.
-  monster: { url: '/models/animals/monster.glb', height: HERO_HEIGHT * 1.3, yaw: 0, groundBias: 0 },
-  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 }, // 91MB->6.9MB (quantize)
-  // Humanoides hostis (Mixamo walk próprio). yaw pode precisar flip (vinha de costas).
-  civilian: { url: '/models/animals/civilian.glb', height: 1.8, yaw: 0, groundBias: 0.9 }, // Mixamo: vira p/ frente + sobe (pé enterrava)
-  zombie: { url: '/models/animals/zombie.glb', height: 1.8, yaw: 0, groundBias: 0.9 },
-  pelter: { url: '/models/animals/pelter.glb', height: 2.5, yaw: Math.PI, groundBias: 0 },
-  flintmaw: { url: '/models/animals/flintmaw.glb', height: 2, yaw: Math.PI, groundBias: 0.3 }, // meio voador
+  // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
+  // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
+  eel: { url: '/models/animals/eel.glb', fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m + DUPLA-FACE no arquivo (sumia ao virar/single-sided); fixedScale MEDIDO (~4m alto)
+  // Aberração: minha versão (albedo + fixedScale MEDIDO) — a do Caio (height 1,3x)
+  // ficou ENORME. real 296m -> ~2.5m.
+  monster: { url: '/models/animals/monster.glb', fixedScale: 0.0085, yaw: 0, groundBias: 0 },
+  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // fora do spawn (quantize)
+  civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // spawn 0 (removido): demo azul + T-pose
+  zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4, tint: '#7a8a66' },     // tint esverdeado
+  pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.57, yaw: Math.PI, groundBias: -1.1 }, // mech complexo: grounding oscila; -1.1 traz pro chão (bind vs anim)
+  flintmaw: { url: '/models/animals/flintmaw.glb', fixedScale: 1.1, yaw: 0, groundBias: 0.3 }, // yaw 0 = vira de frente (vinha de costas ao atacar); voa ~1m (Pedro aprovou)
 };
 
 type V3 = [number, number, number];

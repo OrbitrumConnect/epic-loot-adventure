@@ -13,19 +13,19 @@ import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
 import { GlbHero, type HeroAction } from './glb-hero';
+import { GlbHeroMixamo } from './glb-hero-mixamo';
 import { GlbStaticBoss } from './glb-static-boss';
 import { GlbCreature } from './glb-creature';
 
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
-const CREATURE_BOSS: Record<string, { url: string; height: number; yaw?: number; tint?: string; groundBias?: number }> = {
-  // Mushroom = Pigman (tem idle/walk/run PRÓPRIOS → anda de verdade). 21MB→3.3MB.
-  raider_mushroom: { url: '/models/bosses/pigman.glb', height: 4.5, yaw: Math.PI },
+const CREATURE_BOSS: Record<string, { url: string; height?: number; fixedScale?: number; yaw?: number; tint?: string; groundBias?: number }> = {
+  // Mushroom: pigman REMOVIDO (ficou zoado) → volta pro Imp via RAIDER_GLB (funciona).
   // Kaiju = Wukong via GlbCreature (NÃO GlbHero): height normaliza o tamanho (estava
   // gigante) e usa a textura própria (estava azul/normal-map). Toca o idle embutido.
-  // Kaiju = Aberração GIGANTE (monster.glb): renderiza certo (textura+anim+bbox ok),
-  // leve, distinto do demônio. Wukong aposentado (16 texturas PBR -> azul; não normaliza).
-  raider_kaiju: { url: '/models/animals/monster.glb', height: 8, yaw: Math.PI },
+  // Kaiju = Aberração gigante (monster.glb REPROCESSADO sem quantize → normaliza +
+  // textura webp carrega). height 8 = boss grande. Distinto do demônio.
+  // kaiju REMOVIDO (Pedro: a Aberração já faz o papel).
 };
 
 /** Bosses de modelo SEM osso — movimento PROCEDURAL (glb-static-boss).
@@ -56,10 +56,19 @@ const RAIDER_GLB: Record<string, string> = {
   raider_mushroom: IMP_URL, // boss maior — mesmo rig que já temos, só escala
   raider_kaiju: IMP_URL,    // fallback (nunca usado: CREATURE_BOSS tem o kaiju)
   raider_puglin: '/models/raiders/puglin.glb', // minion Unreal → UAL (anda+ataca)
-  raider_samurai: '/models/raiders/Male_Peasant.gltf', // humanoide animado (bossScale 1.7)
-  raider_scout: '/models/raiders/Male_Peasant.gltf',
   raider_warrior: '/models/raiders/Female_Peasant.gltf',
   raider_shaman: '/models/raiders/Female_Ranger.gltf',
+};
+/** Raiders com rig MIXAMO (Meshy): usam o GlbHeroMixamo + os clips Mixamo
+ *  compartilhados (idle/walk/run/attack). standFixX: FBX convertido = +90°;
+ *  GLB direto do Meshy já é Y-up = 0. */
+const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean }> = {
+  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.9 },     // spiked, 2x (Pedro)
+  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8 },       // pirata
+  raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3 },  // brutamontes (maior)
+  raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true },// arqueiro: só ataque de longe
+  raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9 },      // swamp winged hybrid
+  raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 4.5 }, // alien giant brute (boss) — grandão 4.5m
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
@@ -124,9 +133,9 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     scale: 0.95, bodyWidth: 0.55, bodyDepth: 0.33, weapon: 'staff',
     hood: true, shoulders: false, charm: true,
     tuning: {
-      ...base, speed: 3.4, aggroRange: 13, attackRange: 3.2, leashRange: 13,
+      ...base, speed: 3.4, aggroRange: 15, attackRange: 10, leashRange: 16,
       chaseTimeout: 12, provokeRange: 24, walkSpeedChase: 14, walkSpeedIdle: 7,
-      hitVerb: 'amaldiçoou',
+      hitVerb: 'flechou', // arqueiro: ataca de LONGE (10m)
     },
   },
   // Puglin (kit Bestiary, esqueleto Unreal → anima com a UAL igual o warlord):
@@ -418,7 +427,7 @@ export function Raider({
   const d = spec.bodyDepth;
   // Boss GLB próprio (estático ou criatura) dimensiona rótulo/anel pela altura real.
   const sbDef = STATIC_BOSS[speciesId] ?? CREATURE_BOSS[speciesId];
-  const labelScale = sbDef ? sbDef.height / 2 : s;
+  const labelScale = sbDef ? (sbDef.height ?? 4) / 2 : s;
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
@@ -429,12 +438,26 @@ export function Raider({
         // Boss de MONSTRO com rig+anim próprios (insectoid) → renderer de criatura.
         const cb = CREATURE_BOSS[speciesId];
         if (cb) {
-          return <GlbCreature url={cb.url} movingRef={bossMoving} height={cb.height} yaw={cb.yaw ?? Math.PI} tint={cb.tint} groundBias={cb.groundBias ?? 0} />;
+          return <GlbCreature url={cb.url} movingRef={bossMoving} height={cb.height} fixedScale={cb.fixedScale} yaw={cb.yaw ?? Math.PI} tint={cb.tint} groundBias={cb.groundBias ?? 0} />;
         }
         // Boss de modelo SEM osso → movimento PROCEDURAL (glb-static-boss).
         const sb = STATIC_BOSS[speciesId];
         if (sb) {
           return <GlbStaticBoss url={sb.url} actionRef={bossAction} height={sb.height} yaw={sb.yaw ?? 0} tint={sb.tint} groundBias={sb.groundBias ?? 0} />;
+        }
+        // Raider com rig MIXAMO (Meshy: spiked/pirata) → GlbHeroMixamo + clips Mixamo.
+        const mx = MIXAMO_RAIDER[speciesId];
+        if (mx) {
+          return (
+            <GlbHeroMixamo
+              charUrl={mx.url}
+              actionRef={bossAction}
+              autoHeight={mx.height}
+              standFixX={mx.standFixX}
+              forceBow={mx.forceBow ?? false}
+              yaw={BOSS_GLB_YAW}
+            />
+          );
         }
         // Demais raiders/bosses: rig Universal + UAL (anima pernas).
         return (

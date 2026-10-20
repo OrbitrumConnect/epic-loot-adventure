@@ -26,7 +26,7 @@ import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock, WORLD_EPOCH } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
 import { baseLv1Progress } from '@/game/systems/baseLv1';
-import { weaponFor } from '@/game/data/weapons';
+import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
 import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
 import { MusicPlayer } from '@/components/MusicPlayer';
@@ -41,6 +41,9 @@ import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/wo
 
 const GameWorld = lazy(() => import('@/components/game-world'));
 import { BossSpawner } from '@/components/world/boss-spawner';
+import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
+import { EditorPanel } from '@/components/editor/editor-panel';
+import { useEditorStore } from '@/components/editor/editor-store';
 const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
@@ -88,6 +91,8 @@ const navigation = [
 
 function Index() {
   const [ready, setReady] = useState(false);
+  const editorActive = useEditorStore(s => s.active);
+  const setEditorActive = useEditorStore(s => s.setActive);
   const [cameraMode, setCameraMode] = useState<'iso' | 'third' | 'free'>('iso');
   const [deathCountdown, setDeathCountdown] = useState(0);
   // V alterna só entre os modos de JOGO (iso/third). Se a câmera livre de
@@ -184,9 +189,11 @@ function Index() {
   const playerBase = useGameStore(s => s.playerBase);
   const deliverToBase = useGameStore(s => s.deliverToBase);
   const baseProg = playerBase ? baseLv1Progress(playerBase) : null;
-  // HUD: vida da base (soma das peças) + rótulo da onda.
-  const baseHp = playerBase ? playerBase.pieces.reduce((a, p) => a + p.hp, 0) : 0;
-  const baseMaxHp = playerBase ? playerBase.pieces.reduce((a, p) => a + p.maxHp, 0) : 0;
+  // A derrota da base é determinada pelo núcleo. Exibir a soma de muros/torres
+  // fazia a barra continuar verde mesmo depois de o núcleo cair e encerrar a base.
+  const baseCore = playerBase?.pieces.find(p => p.kind === 'core');
+  const baseHp = baseCore?.hp ?? 0;
+  const baseMaxHp = baseCore?.maxHp ?? 0;
   const waveLabel = wave.phase === 'combat'
     ? `Onda ${wave.wave} ⚔️`
     : wave.phase === 'peace'
@@ -240,7 +247,7 @@ function Index() {
     // Alcance vem da arma na mão (melee ~4 m, ranged até 22 m).
     const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
     const heldId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
-    const range = weaponFor(heldId).range;
+    const range = weaponRangeFor(heldId, player.level);
 
     // Alvo selecionado tem prioridade sobre o mais próximo.
     const selectedId = (state as unknown as { targetId?: string | null }).targetId ?? null;
@@ -265,6 +272,13 @@ function Index() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
+      if (e.code === 'F8') {
+        e.preventDefault();
+        setEditorActive(!editorActive);
+        setCameraMode(editorActive ? 'iso' : 'free');
+        return;
+      }
+      if (editorActive) return;
       // 1–9 → slots 0–8; 0 → slot 9. Demais slots (ex.: rifle) por clique.
       if (/^[0-9]$/.test(e.key)) useHotbarSlot(e.key === '0' ? 9 : Number(e.key) - 1);
       // Na câmera livre, E/Q/R/Espaço pilotam a câmera (no game-world), não o
@@ -300,7 +314,7 @@ function Index() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, cameraMode, ui.panel, inCity]);
+  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, cameraMode, ui.panel, inCity, editorActive, setEditorActive]);
 
   function open(id: string) {
     setPanelMessage('');
@@ -351,6 +365,7 @@ function Index() {
 
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
+      {editorActive && <EditorPanel />}
       <aside className="game-sidebar" aria-label="Navegação do jogo">
         <Button variant="ghost" size="icon" className="sidebar-toggle"
           title="Esconder menu (mais espaço pro jogo)" aria-label="Esconder menu" onClick={toggleSidebar}>
@@ -373,6 +388,7 @@ function Index() {
         </nav>
         <div className="sidebar-label">COMUNIDADE</div>
         <nav className="sidebar-nav">
+          <MultiplayerPanel placement="sidebar" />
           <Button variant="ghost" className="nav-item" title="Minha tribo" data-active={panel === 'tribe'} onClick={() => open('tribe')}>
             <Users strokeWidth={1.5} /><span>Minha tribo</span>
           </Button>
@@ -413,7 +429,7 @@ function Index() {
               { name: 'Vida', val: player.hp, max: player.maxHp, icon: Heart, kind: 'health' },
               { name: 'Mana', val: player.mana, max: player.maxMana, icon: Sparkles, kind: 'mana' },
               { name: 'Vigor', val: player.stamina, max: player.maxStamina, icon: Zap, kind: 'energy' },
-              ...(playerBase ? [{ name: 'Base', val: baseHp, max: baseMaxHp, icon: ShieldCheck, kind: 'base' }] : []),
+              ...(playerBase ? [{ name: 'Núcleo', val: baseHp, max: baseMaxHp, icon: ShieldCheck, kind: 'base' }] : []),
             ].map(v => (
               <div className={`vital vital-${v.kind}`} key={v.kind}>
                 <div className="vital-label"><span><v.icon />{v.name}</span><strong>{v.val} / {v.max}</strong></div>
@@ -442,7 +458,7 @@ function Index() {
           )}
           {ready && !inCity && (
             <Suspense fallback={<div className="world-loading">Entrando no vale…</div>}>
-              <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel)} onAttack={hitNearest} cameraMode={cameraMode} />
+              <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel) || editorActive} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
           {ready && ui.mode === 'world' && <BossSpawner />}
@@ -691,6 +707,11 @@ function Index() {
                           </div>
                         );
                       })}
+                      {(() => {
+                        const slot = player.inventory.hotbar.slots[ui.selectedHotbar];
+                        const heldId = slot != null ? player.inventory.slots[slot]?.itemId ?? null : null;
+                        return <div className="attr-row" title="Alcance máximo da arma equipada neste nível"><span className="attr-name">⌁ Alcance</span><span className="attr-val">{weaponRangeFor(heldId, player.level).toFixed(1)} m</span></div>;
+                      })()}
                     </div>
                     <div className="panel-stats">
                       <span>Peso: {weight.toFixed(1)} / {player.inventory.maxWeight} kg</span>
@@ -704,7 +725,7 @@ function Index() {
                           {player.skillPoints ?? 0} ponto{(player.skillPoints ?? 0) === 1 ? '' : 's'}
                         </span>
                       </div>
-                      {([
+                      {([ 
                         { key: 'damage', icon: '⚔', label: 'Dano', hint: 'Multiplica o dano de ataque' },
                         { key: 'dexterity', icon: '✦', label: 'Destreza', hint: 'Reduz a cadência do especial' },
                         { key: 'carry', icon: '🎒', label: 'Capacidade', hint: 'Aumenta o peso que a bolsa carrega' },

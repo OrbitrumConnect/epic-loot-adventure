@@ -28,6 +28,13 @@ export const WEAPONS: Record<string, WeaponProfile> = {
   rifle:  { type: 'rifle',  ranged: true, range: 12, cooldown: 0.8, projectile: 'bullet' },
 };
 
+/** Alcance efetivo cresce com o nível e chega, no máximo, a 50 m no nível 250. */
+export function weaponRangeFor(itemId: string | null | undefined, level = 1): number {
+  const base = weaponFor(itemId).range;
+  const t = Math.min(1, Math.max(0, (Math.floor(level) - 1) / 249));
+  return Math.round((base + (50 - base) * t) * 10) / 10;
+}
+
 /** Perfil da arma de um item (ou o melee padrão). */
 export function weaponFor(itemId: string | null | undefined): WeaponProfile {
   return (itemId ? WEAPONS[itemId] : undefined) ?? DEFAULT_MELEE;

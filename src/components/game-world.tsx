@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { OrthographicCamera, PerspectiveCamera, Stats } from '@react-three/drei';
+import { OrthographicCamera, PerspectiveCamera, Stats, useGLTF } from '@react-three/drei';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
@@ -12,22 +12,28 @@ import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
+import { GlbHeroMixamo } from './world/glb-hero-mixamo';
+import { LandmarkTree } from './world/landmark-tree';
+import { RemotePlayers } from './world/remote-players';
+import { DesertPlain, DesertMountain, MOUNTAIN_CAVE } from './world/desert-terrain';
+import { terrainMeshY, registerWall, wallHeightAt } from './world/terrain-collision';
+import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
 import { GlbContainers } from './world/glb-containers';
-import { WatchtowerModel } from './world/glb-watchtower';
-import { weaponFor } from '@/game/data/weapons';
+import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { OcclusionFader } from './world/occlusion-fader';
 import {
   makeInstanceFadeMaterial, registerInstancedFade, useFadeGroup, type FadeSphere,
 } from './world/occlusion';
 import { TargetRoute } from './world/target-route';
-import { PlayerBase } from './world/player-base';
+import { PlayerBase, NetBases } from './world/player-base';
 import { BaseFireFX } from './world/base-fire';
+import { audioManager } from '@/game/audio/audio-manager';
 import { BaseNightLights } from './world/base-night-lights';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { isBuildActive } from './world/build-mode';
-import { Camps, Enemies } from './world/world-entities';
+import { Camps, Enemies, MultiplayerWorldSync } from './world/world-entities';
 import { Billboards, groundTexture } from './world/billboards';
 import { AshlandPilot } from './world/ashland-glb-pilot';
 import { CelShade } from './world/cel-shade';
@@ -54,6 +60,8 @@ import {
   FREE_SPEED_MIN, FREE_SPEED_MAX, type FreeCamInspect,
 } from './world/free-cam';
 import { FreeCamOverlay } from './world/free-cam-overlay';
+import { EditorWorldLayer } from './editor/editor-world';
+import { isEditorActive } from './editor/editor-store';
 
 export type WorldProps = {
   mode: string;
@@ -296,6 +304,7 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
     if (!l) return;
     // Culling por distância: longe do jogador a luz sai do shader (o fogo visual fica).
     const p = useGameStore.getState().player.position;
+    audioManager.updateCampfireDistance(Math.hypot(p.x - pos[0], p.z - pos[2]));
     l.visible = (p.x - pos[0]) * (p.x - pos[0]) + (p.z - pos[2]) * (p.z - pos[2]) < LIGHT_CULL_D2;
     // Acende forte à noite, discreta de dia (consistente com as luminárias). +20%.
     if (l.visible) l.intensity = (2.4 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 8) * 0.8;
@@ -319,6 +328,8 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
 
 /** Liga o herói GLB (Quaternius) no lugar do boneco de blocos. Reversível pela flag. */
 const USE_GLB_HERO = true;
+/** Survivor Red (rig Mixamo) no lugar do Kael (rig Unreal/UAL). Reversível: false volta o Kael. */
+const USE_RED_HERO = true;
 
 function Character({
   c, attack, movement, onPosition, paused, playerRef, cameraYawRef, cameraMode,
@@ -396,7 +407,7 @@ function Character({
     const b = body.current;
     if (b) {
       const st = useGameStore.getState();
-      const range = weaponFor(selectedItemId(st)).range + 1;
+      const range = weaponRangeFor(selectedItemId(st), st.player.level) + 1;
       let best: { x: number; z: number } | null = null;
       let bestD = Infinity;
       for (const cr of st.creatures) {
@@ -497,8 +508,8 @@ function Character({
     const pz = body.current.position.z;
     const inLake = LAKE_CENTERS.some(l => (px - l.x) ** 2 + (pz - l.z) ** 2 < l.r * l.r);
     const moveBonus = 1 + effectiveAttributes(useGameStore.getState().player).moveSpeed / 100;
-    // Andar/correr -10% (pedido do Pedro): correr 6.5→5.85, andar 4.5→4.05.
-    const MAX_SPEED = (sprinting ? 5.85 : 4.05) * (inLake ? 0.4 : 1) * moveBonus;
+    // Andar/correr com redução de 10%: correr 4.8→4.32, andar 2.0→1.8.
+    const MAX_SPEED = (sprinting ? 4.32 : 1.8) * (inLake ? 0.4 : 1) * moveBonus;
 
     if (targetVx !== 0 || targetVz !== 0) {
       const len = Math.sqrt(targetVx * targetVx + targetVz * targetVz);
@@ -515,7 +526,13 @@ function Character({
     }
 
     const moving = velocity.current.length() > 0.1;
-    heroAction.current = attackPhase.current !== 'idle' ? 'attack' : moving ? 'walk' : 'idle';
+    heroAction.current = attackPhase.current !== 'idle'
+      ? 'attack'
+      : !isGrounded.current
+        ? 'jump'
+        : moving
+          ? (sprinting ? 'run' : 'walk')
+          : 'idle';
     heroSpeed.current = velocity.current.length();
 
     let nx = body.current.position.x + velocity.current.x * dt;
@@ -535,6 +552,17 @@ function Character({
     [nx, nz] = pushOutBasePieces(nx, nz, PLAYER_RADIUS);
     // Paredes das fábricas: sólidas (entra pela abertura).
     [nx, nz] = pushOutFactoryWalls(nx, nz, PLAYER_RADIUS);
+    // Paredes do LABIRINTO: no XZ do player, se a malha da parede está alta (acima
+    // do chão + 0.8m) = parede → bloqueia. Testa por eixo pra DESLIZAR (não travar).
+    {
+      const ox = body.current.position.x, oz = body.current.position.z;
+      const inWall = (wx: number, wz: number) => wallHeightAt(wx, wz) > terrainHeight(wx, wz) + 0.8;
+      if (inWall(nx, nz)) {
+        if (!inWall(nx, oz)) nz = oz;
+        else if (!inWall(ox, nz)) nx = ox;
+        else { nx = ox; nz = oz; }
+      }
+    }
 
     body.current.position.x = THREE.MathUtils.clamp(nx, -MAP_HALF, MAP_HALF);
     body.current.position.z = THREE.MathUtils.clamp(nz, -MAP_HALF, MAP_HALF);
@@ -547,6 +575,10 @@ function Character({
     while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
     currentRotY.current += rotDiff * Math.min(15 * dt, 1);
     body.current.rotation.y = currentRotY.current;
+
+    // Multiplayer: transmite a pose do jogador local (throttla sozinho ~11Hz).
+    const netPlayer = useGameStore.getState().player;
+    broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, heroAction.current, netPlayer.level, netPlayer.hp, netPlayer.maxHp);
 
     // Especial (Q/R): pulo pro 'jump', giro 360° pro 'spin'. O dano/feedback
     // acontece no store; aqui é só a animação. O soco de impacto vem dos eventos.
@@ -575,11 +607,15 @@ function Character({
     // Mesmo pra fábrica: dentro + iso → corta o teto; senão prédio inteiro.
     const facCut = factoryRoofCutY(body.current.position.x, body.current.position.z);
     factoryClip.constant = facCut !== null && cameraMode === 'iso' ? facCut : 1e9;
-    const groundY = Math.max(
-      terrainHeight(body.current.position.x, body.current.position.z),
-      bridgeSurfaceY(body.current.position.x, body.current.position.z),
-      houseFloor,
-    );
+    // Malha das montanhas: pega o CHÃO logo abaixo dos pés (não o topo). Quando há
+    // malha (player sobre montanha/caverna), ELA manda — inclusive piso de caverna
+    // ABAIXO do chão procedural (senão o Math.max prende o player em 0 e a "colisão
+    // acaba" dentro da cave). Fora das montanhas, terreno normal (camp/casa/fábrica).
+    const bx = body.current.position.x, bz = body.current.position.z;
+    const mountainY = terrainMeshY(bx, bz, body.current.position.y);
+    const groundY = mountainY > -Infinity
+      ? mountainY
+      : Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor);
 
     if (!isGrounded.current) {
       jumpVelocity.current -= 15 * dt;
@@ -679,7 +715,7 @@ function Character({
     }
   });
 
-  const noRaycast = useCallback((raycaster: any, intersects: any[]) => {}, []);
+  const noRaycast = useCallback((raycaster: any, intersects: any[]) => { }, []);
 
   return (
     <group ref={body} position={[0, 0, 1]} raycast={noRaycast}>
@@ -689,150 +725,152 @@ function Character({
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
 
-      {USE_GLB_HERO && <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />}
+      {USE_GLB_HERO && (USE_RED_HERO
+        ? <GlbHeroMixamo actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT * 1.04} rangedAttack weapon={<HeldItem c={c} />} />
+        : <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />)}
 
       <group visible={!USE_GLB_HERO}>
-      {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
-      <group ref={leftHip} position={[-0.14, 0.6, 0]}>
-        <mesh position={[0, -0.15, 0]} castShadow>
-          <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
-          <meshStandardMaterial color={c.dark} />
+        {/* Pernas articuladas: quadril → coxa → joelho → canela → pé */}
+        <group ref={leftHip} position={[-0.14, 0.6, 0]}>
+          <mesh position={[0, -0.15, 0]} castShadow>
+            <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          <group ref={leftKnee} position={[0, -0.3, 0]}>
+            <AdventurerDetails c={c} part="shin" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.1, 24, 16]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            <mesh position={[0, -0.15, 0.01]} castShadow>
+              <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
+              <sphereGeometry args={[1, 24, 16]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            {/* Cano da bota (couro médio) sobre a canela escura */}
+            <mesh position={[0, -0.1, 0.02]} castShadow>
+              <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
+              <meshStandardMaterial color={c.trunk} roughness={0.9} />
+            </mesh>
+          </group>
+        </group>
+        <group ref={rightHip} position={[0.14, 0.6, 0]}>
+          <mesh position={[0, -0.15, 0]} castShadow>
+            <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
+            <meshStandardMaterial color={c.dark} />
+          </mesh>
+          <group ref={rightKnee} position={[0, -0.3, 0]}>
+            <AdventurerDetails c={c} part="shin" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.1, 24, 16]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            <mesh position={[0, -0.15, 0.01]} castShadow>
+              <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
+              <sphereGeometry args={[1, 24, 16]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            {/* Cano da bota (couro médio) sobre a canela escura */}
+            <mesh position={[0, -0.1, 0.02]} castShadow>
+              <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
+              <meshStandardMaterial color={c.trunk} roughness={0.9} />
+            </mesh>
+          </group>
+        </group>
+
+        <AdventurerDetails c={c} part="body" />
+        <AdventurerDetails c={c} part="torso" />
+        <AdventurerDetails c={c} part="skull" />
+        <AdventurerDetails c={c} part="hair" />
+        <AdventurerDetails c={c} part="head" />
+        <AdventurerDetails c={c} part="coat" />
+        {/* Goggles follow the curved head; the leather strap wraps the skull. */}
+        <mesh position={[0, 1.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 0.92, 1]}>
+          <torusGeometry args={[0.184, 0.022, 10, 40]} />
+          <meshStandardMaterial color={c.dark} roughness={0.84} />
         </mesh>
-        <group ref={leftKnee} position={[0, -0.3, 0]}>
-          <AdventurerDetails c={c} part="shin" />
+        {[-0.085, 0.085].map(lx => (
+          <mesh key={lx} position={[lx, 1.54, 0.182]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.048, 0.048, 0.022, 28]} />
+            <meshStandardMaterial color={c.metal} metalness={0.65} roughness={0.2} emissive={c.crystal} emissiveIntensity={0.12} />
+          </mesh>
+        ))}
+
+        {/* Braço esquerdo articulado + escudo no antebraço */}
+        <group ref={leftShoulder} position={[-0.38, 1.12, 0.02]}>
+          <AdventurerDetails c={c} part="shoulder" />
           <mesh castShadow>
             <sphereGeometry args={[0.1, 24, 16]} />
-            <meshStandardMaterial color={c.dark} />
+            <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.15, 0.01]} castShadow>
-            <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
-            <meshStandardMaterial color={c.dark} />
+          {/* Placa de ombro (osso), como no sprite */}
+          <mesh position={[0, -0.14, 0]} castShadow>
+            <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
+            <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
-            <sphereGeometry args={[1, 24, 16]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          {/* Cano da bota (couro médio) sobre a canela escura */}
-          <mesh position={[0, -0.1, 0.02]} castShadow>
-            <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
-            <meshStandardMaterial color={c.trunk} roughness={0.9} />
-          </mesh>
+          <group ref={leftElbow} position={[0, -0.28, 0]}>
+            <AdventurerDetails c={c} part="bracer" />
+            <AdventurerDetails c={c} part="shield" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.08, 24, 16]} />
+              <meshStandardMaterial color={c.armor} />
+            </mesh>
+            <mesh position={[0, -0.13, 0.01]} castShadow>
+              <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
+              <meshStandardMaterial color={c.armor} />
+            </mesh>
+            <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
+              <sphereGeometry args={[1, 20, 14]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            {/* Escudo preso ao antebraço */}
+            <mesh position={[0, -0.14, 0.13]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <cylinderGeometry args={[0.287, 0.275, 0.065, 48]} />
+              <meshStandardMaterial color={c.trunk} />
+            </mesh>
+          </group>
         </group>
-      </group>
-      <group ref={rightHip} position={[0.14, 0.6, 0]}>
-        <mesh position={[0, -0.15, 0]} castShadow>
-          <capsuleGeometry args={[0.095, 0.15, 8, 20]} />
-          <meshStandardMaterial color={c.dark} />
-        </mesh>
-        <group ref={rightKnee} position={[0, -0.3, 0]}>
-          <AdventurerDetails c={c} part="shin" />
+
+        {/* Braço direito articulado — segura a arma na mão (socket hand_R) */}
+        <group ref={rightShoulder} position={[0.38, 1.12, 0.02]}>
+          <AdventurerDetails c={c} part="shoulder" />
           <mesh castShadow>
             <sphereGeometry args={[0.1, 24, 16]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          <mesh position={[0, -0.15, 0.01]} castShadow>
-            <capsuleGeometry args={[0.078, 0.14, 8, 20]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          <mesh position={[0, -0.28, 0.07]} scale={[0.091, 0.059, 0.156]} castShadow>
-            <sphereGeometry args={[1, 24, 16]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          {/* Cano da bota (couro médio) sobre a canela escura */}
-          <mesh position={[0, -0.1, 0.02]} castShadow>
-            <cylinderGeometry args={[0.091, 0.082, 0.16, 24]} />
-            <meshStandardMaterial color={c.trunk} roughness={0.9} />
-          </mesh>
-        </group>
-      </group>
-
-      <AdventurerDetails c={c} part="body" />
-      <AdventurerDetails c={c} part="torso" />
-      <AdventurerDetails c={c} part="skull" />
-      <AdventurerDetails c={c} part="hair" />
-      <AdventurerDetails c={c} part="head" />
-      <AdventurerDetails c={c} part="coat" />
-      {/* Goggles follow the curved head; the leather strap wraps the skull. */}
-      <mesh position={[0, 1.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 0.92, 1]}>
-        <torusGeometry args={[0.184, 0.022, 10, 40]} />
-        <meshStandardMaterial color={c.dark} roughness={0.84} />
-      </mesh>
-      {[-0.085, 0.085].map(lx => (
-        <mesh key={lx} position={[lx, 1.54, 0.182]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.048, 0.048, 0.022, 28]} />
-          <meshStandardMaterial color={c.metal} metalness={0.65} roughness={0.2} emissive={c.crystal} emissiveIntensity={0.12} />
-        </mesh>
-      ))}
-
-      {/* Braço esquerdo articulado + escudo no antebraço */}
-      <group ref={leftShoulder} position={[-0.38, 1.12, 0.02]}>
-        <AdventurerDetails c={c} part="shoulder" />
-        <mesh castShadow>
-          <sphereGeometry args={[0.1, 24, 16]} />
-          <meshStandardMaterial color={c.armor} />
-        </mesh>
-        {/* Placa de ombro (osso), como no sprite */}
-        <mesh position={[0, -0.14, 0]} castShadow>
-          <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
-          <meshStandardMaterial color={c.armor} />
-        </mesh>
-        <group ref={leftElbow} position={[0, -0.28, 0]}>
-          <AdventurerDetails c={c} part="bracer" />
-          <AdventurerDetails c={c} part="shield" />
-          <mesh castShadow>
-            <sphereGeometry args={[0.08, 24, 16]} />
             <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.13, 0.01]} castShadow>
-            <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
+          {/* Placa de ombro menor, lado direito — couro escuro (contrapeso ao osso) */}
+          <mesh position={[0, -0.14, 0]} castShadow>
+            <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
             <meshStandardMaterial color={c.armor} />
           </mesh>
-          <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
-            <sphereGeometry args={[1, 20, 14]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          {/* Escudo preso ao antebraço */}
-          <mesh position={[0, -0.14, 0.13]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <cylinderGeometry args={[0.287, 0.275, 0.065, 48]} />
-            <meshStandardMaterial color={c.trunk} />
-          </mesh>
-        </group>
-      </group>
-
-      {/* Braço direito articulado — segura a arma na mão (socket hand_R) */}
-      <group ref={rightShoulder} position={[0.38, 1.12, 0.02]}>
-        <AdventurerDetails c={c} part="shoulder" />
-        <mesh castShadow>
-          <sphereGeometry args={[0.1, 24, 16]} />
-          <meshStandardMaterial color={c.armor} />
-        </mesh>
-        {/* Placa de ombro menor, lado direito — couro escuro (contrapeso ao osso) */}
-        <mesh position={[0, -0.14, 0]} castShadow>
-          <capsuleGeometry args={[0.078, 0.16, 8, 20]} />
-          <meshStandardMaterial color={c.armor} />
-        </mesh>
-        <group ref={rightElbow} position={[0, -0.28, 0]}>
-          <AdventurerDetails c={c} part="bracer" />
-          <mesh castShadow>
-            <sphereGeometry args={[0.08, 24, 16]} />
-            <meshStandardMaterial color={c.armor} />
-          </mesh>
-          <mesh position={[0, -0.13, 0.01]} castShadow>
-            <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
-            <meshStandardMaterial color={c.armor} />
-          </mesh>
-          <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
-            <sphereGeometry args={[1, 20, 14]} />
-            <meshStandardMaterial color={c.dark} />
-          </mesh>
-          {/* Pose-base da mão; o ataque gira o grupo interno `sword`. */}
-          <group position={[0, -0.3, 0.08]} rotation={[0.5, 0, 0]}>
-            <group ref={sword}>
-              <HeldItem c={c} />
+          <group ref={rightElbow} position={[0, -0.28, 0]}>
+            <AdventurerDetails c={c} part="bracer" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.08, 24, 16]} />
+              <meshStandardMaterial color={c.armor} />
+            </mesh>
+            <mesh position={[0, -0.13, 0.01]} castShadow>
+              <capsuleGeometry args={[0.068, 0.14, 8, 20]} />
+              <meshStandardMaterial color={c.armor} />
+            </mesh>
+            <mesh position={[0, -0.27, 0.02]} scale={[0.059, 0.069, 0.066]} castShadow>
+              <sphereGeometry args={[1, 20, 14]} />
+              <meshStandardMaterial color={c.dark} />
+            </mesh>
+            {/* Pose-base da mão; o ataque gira o grupo interno `sword`. */}
+            <group position={[0, -0.3, 0.08]} rotation={[0.5, 0, 0]}>
+              <group ref={sword}>
+                <HeldItem c={c} />
+              </group>
             </group>
           </group>
         </group>
-      </group>
       </group>
     </group>
   );
@@ -1092,18 +1130,29 @@ const LIGHT_CULL_D2 = 24 * 24;
  *  Reinicia a cada reload de página = cada login entra na zona segura. */
 let didInitialSpawn = false;
 
+const LIGHT_POST_URL = '/models/props/light-post.glb';
+const LIGHT_POST_H = 4.2; // +30% (Pedro) — poste Mad Max mais alto
+
 function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
-  const bulb = useRef<THREE.MeshStandardMaterial>(null);
+  const { scene } = useGLTF(LIGHT_POST_URL);
+  // Modelo GLB escalado + fincado no chão + centrado (clone por instância; GLB cacheado).
+  const model = useMemo(() => {
+    const c = scene.clone(true);
+    c.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.castShadow = true; });
+    const box = new THREE.Box3().setFromObject(c);
+    const h = box.max.y - box.min.y || 1;
+    c.scale.setScalar(LIGHT_POST_H / h);
+    const b2 = new THREE.Box3().setFromObject(c);
+    c.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+    return c;
+  }, [scene]);
   useFrame(() => {
     const nf = nightFactor();
     const flick = 0.9 + Math.sin(performance.now() * 0.006 + x * 1.3) * 0.1;
-    if (bulb.current) bulb.current.emissiveIntensity = nf * 2.4 * flick;
     const l = light.current;
     if (!l) return;
-    // Culling de luz: de dia (nf~0) ou longe do jogador, a luz SAI do shader
-    // (visible=false). O alcance é 13 m, então acima de ~22 m ela não ilumina
-    // nada perto — cortar é invisível e tira ~90% das luzes do custo por frame.
+    // Culling de luz: de dia (nf~0) ou longe do jogador, a luz SAI do shader.
     const p = useGameStore.getState().player.position;
     const near = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < LIGHT_CULL_D2;
     l.visible = nf > 0.04 && near;
@@ -1111,18 +1160,37 @@ function RoadLamp({ x, y, z }: { x: number; y: number; z: number }) {
   });
   return (
     <group position={[x, y, z]}>
-      <mesh position={[0, 1.3, 0]} castShadow>
-        <cylinderGeometry args={[0.07, 0.1, 2.6, 6]} />
-        <meshStandardMaterial color="#3a3a42" />
-      </mesh>
-      <mesh position={[0, 2.68, 0]}>
-        <boxGeometry args={[0.26, 0.32, 0.26]} />
-        <meshStandardMaterial ref={bulb} color="#ffd98a" emissive="#ffb040" emissiveIntensity={0} />
-      </mesh>
-      <pointLight ref={light} position={[0, 2.6, 0]} color="#ffcf87" intensity={0} distance={13} decay={1.6} />
+      <primitive object={model} />
+      <pointLight ref={light} position={[0, LIGHT_POST_H * 0.9, 0]} color="#ffcf87" intensity={0} distance={13} decay={1.6} />
     </group>
   );
 }
+useGLTF.preload(LIGHT_POST_URL);
+
+const MAZE_URL = '/models/props/maze.glb';
+/** Labirinto gigante (Meshy decimado ~100k tris) numa área aberta distante — o
+ *  personagem anda por ele. Escalado p/ `size` m de lado. Visual (colisão = TODO). */
+function Maze({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: number; yaw?: number }) {
+  const { scene } = useGLTF(MAZE_URL);
+  const ref = useRef<THREE.Group>(null);
+  const model = useMemo(() => {
+    const c = scene.clone(true);
+    c.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+    const box = new THREE.Box3().setFromObject(c);
+    const w = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) || 1;
+    c.scale.setScalar(size / w);
+    const b2 = new THREE.Box3().setFromObject(c);
+    c.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+    return c;
+  }, [scene, size]);
+  // Paredes do labirinto = colisão horizontal (anda nos corredores, barra na parede).
+  useEffect(() => {
+    if (!ref.current) return;
+    return registerWall(ref.current);
+  }, []);
+  return <group ref={ref} position={[x, terrainHeight(x, z), z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
+}
+useGLTF.preload(MAZE_URL);
 
 function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => void) | undefined; paused?: boolean | undefined }) {
   const size = MAP_HALF * 2 + 40;
@@ -1206,7 +1274,9 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
   // Photographic PBR surface at a 3 m tile; macro vegetation tint stays subtle.
   const mat = useMemo(() => {
     const repeat = size / 3;
-    const groundMaps = pbrMaps('forrest_ground_01', repeat);
+    // A chapa jogável usa a textura terrosa que também aparece fora do mapa.
+    // O GLB do deserto permanece intacto e continua sendo outra camada.
+    const groundMaps = pbrMaps('worn_rock_natural_01', repeat);
     const m = new THREE.MeshStandardMaterial({ ...groundMaps, roughness: 1, normalScale: new THREE.Vector2(0.75, 0.75) });
     m.onBeforeCompile = shader => {
       shader.vertexShader = shader.vertexShader
@@ -1217,12 +1287,19 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
         .replace('#include <map_fragment>', /* glsl */ `
           #ifdef USE_MAP
             diffuseColor.rgb *= texture2D(map, vMapUv).rgb;
+            // A textura original continua visível, mas recebe uma mistura
+            // uniforme de areia/barro para reduzir o verde excessivo do chão.
+            // O relevo, a malha e a colisão permanecem exatamente iguais.
+            // Barro/sertão discreto: aquece e escurece o marrom sem puxar para vermelho.
+            diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.55, 0.40, 0.24 ), 0.42 );
+            // Aproxima o chão jogável do tom do anel externo, sem mudar relevo ou água.
+            diffuseColor.rgb *= vec3( 0.75, 0.66, 0.53 );
             // Dica leve de grama (olive dessaturado) só onde vBlend é alto.
             diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.97, 1.0, 0.88 ), vBlend * 0.15 );
           #endif
         `);
     };
-    m.customProgramCacheKey = () => 'ground-pbr-v2';
+    m.customProgramCacheKey = () => 'ground-pbr-v6-sertão-earth-match-dark';
     return m;
   }, [size]);
 
@@ -1404,6 +1481,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   const camDistTarget = useRef(5);
   const pointerLocked = useRef(false);
   const prevCameraMode = useRef(cameraMode);
+  const isoYaw = useRef(0);            // giro 360° da câmera de cima (MOBA): botão direito / 1 dedo
+  const isoDragging = useRef(false);   // arrastando o botão direito pra girar
+  const isoZoom = useRef<number | null>(null);
 
   // Câmera livre (dev): teclas, posição e vetores de rascunho (criados 1x, nunca
   // alocados por quadro). Métrica/inspeção escrevem no bridge `free-cam.ts`.
@@ -1416,7 +1496,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
   useEffect(() => {
     if (camera instanceof THREE.OrthographicCamera) {
-      camera.zoom = Math.max(12, Math.min(33, size.width / 32));
+      const defaultZoom = Math.max(12, Math.min(33, size.width / 32));
+      isoZoom.current = isoZoom.current === null
+        ? defaultZoom
+        : THREE.MathUtils.clamp(isoZoom.current, 12, Math.max(36, defaultZoom));
+      camera.zoom = isoZoom.current;
       camera.updateProjectionMatrix();
     }
   }, [camera, size.width]);
@@ -1425,6 +1509,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     const canvas = gl.domElement;
 
     const onMouseMove = (e: MouseEvent) => {
+      // Câmera de cima (MOBA): arrastar c/ botão DIREITO gira 360° ao redor do boneco.
+      if (isoDragging.current) {
+        isoYaw.current -= e.movementX * 0.006;
+        return;
+      }
       if (!pointerLocked.current) return;
       const sensitivity = 0.0025;
       cameraYaw.current -= e.movementX * sensitivity;
@@ -1437,12 +1526,23 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       pointerLocked.current = document.pointerLockElement === canvas;
     };
 
-    // Zoom (scroll) na terceira pessoa: distância 3–8, suavizada no frame.
-    // Na câmera livre a roda ajusta a VELOCIDADE-base de voo.
+    // Zoom: na MOBA afasta/aproxima em faixa limitada; na terceira pessoa muda
+    // a distância e na câmera livre ajusta a velocidade-base de voo.
     const onWheel = (e: WheelEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
       if (cameraMode === 'free') {
         e.preventDefault();
         adjustFreeCamSpeed(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+        return;
+      }
+      if (cameraMode === 'iso') {
+        e.preventDefault();
+        if (!(camera instanceof THREE.OrthographicCamera)) return;
+        const defaultZoom = Math.max(12, Math.min(33, size.width / 32));
+        isoZoom.current = THREE.MathUtils.clamp((isoZoom.current ?? defaultZoom) - e.deltaY * 0.025, 12, Math.max(36, defaultZoom));
+        camera.zoom = isoZoom.current;
+        camera.updateProjectionMatrix();
         return;
       }
       if (cameraMode !== 'third') return;
@@ -1451,13 +1551,17 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     };
 
     const onClick = () => {
+      if (isEditorActive()) return;
       if ((cameraMode === 'third' || cameraMode === 'free') && !pointerLocked.current && !props.paused && !isBuildActive()) {
         canvas.requestPointerLock();
       }
     };
 
     const onMouseDown = (e: MouseEvent) => {
-      // Câmera livre: clique nunca ataca — a inspeção é pela mira central.
+      if (isEditorActive()) return;
+      // Botão DIREITO no modo de cima: inicia o giro 360° da câmera (não ataca/anda).
+      if (e.button === 2 && cameraMode === 'iso') { isoDragging.current = true; return; }
+      // Câmera livre (Caio): clique nunca ataca — a inspeção é pela mira central.
       if (cameraMode === 'free') return;
       // Clique já consumido por um inimigo / estrutura / recurso não ataca.
       if (wasPointerConsumed(e)) return;
@@ -1469,6 +1573,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         }
       }
     };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 2) isoDragging.current = false;
+    };
+    // Botão direito gira a câmera no modo de cima → suprime o menu de contexto do navegador.
+    const onContextMenu = (e: MouseEvent) => { if (cameraMode === 'iso') e.preventDefault(); };
 
     // Touch (mobile): arrastar 1 dedo gira a câmera no 3ª pessoa; TAP no chão
     // anda até o ponto (modo manual). Reusa a infra de "clique-pra-andar": basta
@@ -1500,6 +1610,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         cameraYaw.current -= (t.clientX - lastTX) * sensitivity;
         cameraPitch.current = THREE.MathUtils.clamp(cameraPitch.current - (t.clientY - lastTY) * sensitivity, -1.0, 0.65);
         e.preventDefault(); // enquanto gira: evita scroll/zoom da página
+      } else if (cameraMode === 'iso' && moved) {
+        // Câmera de cima: arrastar 1 dedo gira 360° (o TAP continua andando até o ponto).
+        isoYaw.current -= (t.clientX - lastTX) * 0.006;
+        e.preventDefault();
       }
       lastTX = t.clientX; lastTY = t.clientY;
     };
@@ -1514,9 +1628,13 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mouseup', onMouseUp);
     document.addEventListener('pointerlockchange', onLockChange);
     canvas.addEventListener('click', onClick);
-    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('contextmenu', onContextMenu);
+    // Captura antes de overlays transparentes/HUD; o filtro acima mantém a roda
+    // da sidebar fora do controle da câmera.
+    window.addEventListener('wheel', onWheel, { passive: false, capture: true });
     canvas.addEventListener('touchstart', onTouchStart, { passive: true });
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
     canvas.addEventListener('touchend', onTouchEnd, { passive: false });
@@ -1525,9 +1643,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     return () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('pointerlockchange', onLockChange);
       canvas.removeEventListener('click', onClick);
-      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+      window.removeEventListener('wheel', onWheel, true);
       canvas.removeEventListener('touchstart', onTouchStart);
       canvas.removeEventListener('touchmove', onTouchMove);
       canvas.removeEventListener('touchend', onTouchEnd);
@@ -1537,6 +1657,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   }, [gl, cameraMode, props.paused]);
 
   useEffect(() => {
+    isoDragging.current = false; // ao trocar de modo, nunca fica "preso" girando
     if (cameraMode === 'iso' && pointerLocked.current) {
       document.exitPointerLock();
     }
@@ -1549,7 +1670,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     setFreeCamActive(cameraMode === 'free');
     if (cameraMode !== 'free') { freeKeys.current.clear(); freeInit.current = false; return undefined; }
     const FREE_CODES = new Set([
-      'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'Space',
+      'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyC', 'Space',
       'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight',
     ]);
     const down = (e: KeyboardEvent) => {
@@ -1584,8 +1705,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     prevCameraMode.current = cameraMode;
 
     if (cameraMode === 'iso') {
-      const isoOffset = new THREE.Vector3(24, 29, 24);
-      const wantPos = new THREE.Vector3(px + isoOffset.x, isoOffset.y, pz + isoOffset.z);
+      // Offset horizontal (24,24) GIRADO por isoYaw → vê os outros lados (360°).
+      // Altura fixa em 29. Com isoYaw=0 é idêntico ao ângulo atual (sem regressão).
+      const a = isoYaw.current;
+      const rx = 24 * Math.cos(a) - 24 * Math.sin(a);
+      const rz = 24 * Math.sin(a) + 24 * Math.cos(a);
+      const wantPos = new THREE.Vector3(px + rx, 29, pz + rz);
       const lerpFactor = modeChanged ? 1 : 0.06;
       camTarget.current.lerp(wantPos, lerpFactor);
       camera.position.copy(camTarget.current);
@@ -1613,8 +1738,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
       const k = freeKeys.current;
       const mf = Number(k.has('KeyW')) - Number(k.has('KeyS'));
-      const mr = Number(k.has('KeyD')) - Number(k.has('KeyA'));
-      const mu = Number(k.has('KeyE') || k.has('Space')) - Number(k.has('KeyQ') || k.has('ControlLeft') || k.has('ControlRight'));
+      // Lateral da câmera: A = direita e D = esquerda no referencial atual do mundo.
+      // Invertido aqui para corresponder ao arrasto visual da câmera livre.
+      const mr = Number(k.has('KeyA')) - Number(k.has('KeyD'));
+      const mu = Number(k.has('KeyE') || k.has('Space')) - Number(k.has('KeyQ') || k.has('KeyC') || k.has('ControlLeft') || k.has('ControlRight'));
       let speed = free.speed;
       if (k.has('ShiftLeft') || k.has('ShiftRight')) speed *= 3;
       if (k.has('AltLeft') || k.has('AltRight')) speed *= 0.25;
@@ -1732,7 +1859,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   // dos nós farmáveis (harvest-nodes). Mais leve, sem ficar pelado.
   const trees = useMemo(
     () =>
-      Array.from({ length: 80 }, (_, i) => ({
+      Array.from({ length: 50 }, (_, i) => ({
         x: (rand(i + 1) - 0.5) * MAP_HALF * 2,
         z: (rand(i + 301) - 0.5) * MAP_HALF * 2,
         size: 0.65 + rand(i + 701) * 0.7,
@@ -1858,6 +1985,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <Atmosphere c={c} paused={props.paused} />
 
       <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
+      <EditorWorldLayer />
 
       <mesh geometry={path} receiveShadow>
         <meshStandardMaterial map={roadTex} bumpMap={roadTex} bumpScale={0.045} roughness={0.92} side={THREE.DoubleSide} />
@@ -1926,11 +2054,41 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
       <Factory />
       <FactoryRubble c={c} />
+      {/* Árvores-marco gigantes (gnarled): uma perto do nascedouro + ~5 espalhadas (não muito longe). */}
+      {[
+        { x: 11, z: -22, scale: 6 },      // perto do centro do nascedouro
+        { x: -18, z: -10, scale: 5.5, yaw: 0.8 },
+        { x: 34, z: -48, scale: 6.5, yaw: 2.1 },
+        { x: -32, z: -42, scale: 5, yaw: 1.3 },
+        { x: 42, z: 8, scale: 6, yaw: 3.0 },
+        { x: -40, z: 24, scale: 5.5, yaw: 0.4 },
+      ].map((t, i) => <LandmarkTree key={`tree-g-${i}`} editorId={`map-tree-gnarled-0${i + 1}`} x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
+      {/* ~10 árvores split-trunk espalhadas perto do nascedouro (a "outra" árvore). */}
+      {[
+        { x: 20, z: -12, scale: 4.5 }, { x: -10, z: -40, scale: 5, yaw: 1.1 },
+        { x: 28, z: -30, scale: 4, yaw: 2.3 }, { x: -24, z: -20, scale: 4.8, yaw: 0.5 },
+        { x: 38, z: -14, scale: 4.2, yaw: 3.1 }, { x: -36, z: -4, scale: 5, yaw: 1.8 },
+        { x: 18, z: 4, scale: 4.5, yaw: 0.9 }, { x: -14, z: 14, scale: 4, yaw: 2.6 },
+        { x: 46, z: -36, scale: 4.6, yaw: 0.2 }, { x: 2, z: -50, scale: 5, yaw: 1.5 },
+      ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url="/models/trees/tree-split.glb" x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
+      {/* Labirinto (área aberta a oeste do lago). -19% + mais pro oeste. */}
+      <Maze x={-8} z={56} size={57} />
+      {/* Postes de luz DENTRO do labirinto. */}
+      {[[-8, 56], [-24, 44], [10, 44], [-24, 70], [10, 70], [-8, 80]].map(([lx, lz], i) => (
+        <RoadLamp key={`maze-lamp-${i}`} x={lx!} y={terrainHeight(lx!, lz!)} z={lz!} />
+      ))}
+      {/* Multiplayer: avatares dos outros jogadores (online). */}
+      <RemotePlayers />
+      {/* Planície do deserto (puxada um pouco pro fundo; aumento LEVE só p/ não
+          abrir buraco verde na frente). */}
+      <DesertPlain size={206} z={36} yOffset={-1.0} />
+      <DesertMountain x={-57.4} z={91.1} yOffset={-0.5} url="/models/terrain/mountain.glb" transform={{ position: [-57.4, -0.5, 91.1], rotation: [0, -3.5, 0], scale: [5.6, 6.6, 4.2] }} />
+      <DesertMountain x={-86.3} z={50} yOffset={-0.5} url={MOUNTAIN_CAVE} transform={{ position: [-86.3, -0.5, 50], rotation: [0, -7.2, 0], scale: [7.7, 8.7, 7.1] }} />
+      {/* Montanha rochosa (boca da caverna virada pro spawn) + montanha-caverna
+          (passarela) no canto. Baixadas p/ o chão original prevalecer em cima. Climáveis. */}
       <GlbContainers />
-      {/* Atalaia no TOPO da montanha (vigia, fora dos acampamentos). */}
-      <group position={[SNOW_MOUNTAIN.x, terrainHeight(SNOW_MOUNTAIN.x, SNOW_MOUNTAIN.z), SNOW_MOUNTAIN.z]}>
-        <WatchtowerModel height={6} />
-      </group>
+      {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
+          montanhas GLB novas + crista de pedra da planície entram no lugar. */}
       <Campfire c={c} position={[-1, 0, 4]} />
       <Campfire c={c} position={[10, 0, -6]} />
       <Campfire c={c} position={[-15, 0, -12]} />
@@ -1973,10 +2131,13 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
       <HarvestNodes c={c} />
       <PlayerBase c={c} playerRef={playerRef} paused={Boolean(props.paused)} />
+      {/* Online: base dos outros jogadores (+ transmite a local). */}
+      <NetBases c={c} />
       <BaseFireFX />
       <BaseNightLights />
       <SafeZoneMarker />
       <Camps c={c} />
+      <MultiplayerWorldSync />
       <Enemies c={c} playerRef={playerRef} />
 
       <TargetRoute playerRef={playerRef} />

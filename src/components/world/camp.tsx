@@ -12,6 +12,7 @@
  * caída, paleta puxada para `--world-dark`.
  */
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import { useCallback, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { CampState, CampStructure } from '@/game/types';
@@ -212,7 +213,7 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
       fl.getWorldPosition(tmpCampV);
       const near = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z) < CAMP_LIGHT_D2;
       fl.visible = near;
-      if (near) fl.intensity = (1.8 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 7) * 0.6;
+      if (near) fl.intensity = (3.6 + nightFactor() * 8) + Math.sin(clock.elapsedTime * 7) * 0.7; // +luz (Pedro)
     }
     const el = emberLight.current;
     if (el) {
@@ -241,7 +242,7 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
           <mesh geometry={kit.cone} material={kit.flame} scale={[0.5, 1.1, 0.5]} />
           <mesh geometry={kit.cone} material={kit.flame} position={[0.12, 0.25, -0.08]} scale={[0.3, 0.7, 0.3]} />
           {/* Luz de verdade: acende forte à noite. */}
-          <pointLight ref={fireLight} color="#ff8a44" intensity={5} distance={14} decay={1.5} />
+          <pointLight ref={fireLight} color="#ffa054" intensity={8} distance={20} decay={1.4} />
         </group>
       )}
       {cleared && (
@@ -338,6 +339,30 @@ function CampPiece({ spheres, children, ...rest }: {
 /* ------------------------------------------------------------------ *
  * Acampamento
  * ------------------------------------------------------------------ */
+/** Modelo GLB do acampamento (Meshy decimado ~99k tris) — escalado pro RAIO do
+ *  camp (preenche o círculo) e fincado no chão. Troca o visual procedural feio. */
+const CAMP_URL = '/models/props/raider-camp.glb';
+/** Giro EXTRA de camps específicos (o padrão é um hash por id). Pedro: o camp perto
+ *  do labirinto/estradinha estava virado errado → gira pra ficar de frente pra estrada. */
+const CAMP_YAW_EXTRA: Record<string, number> = {
+  blackclaw_camp: (160 * Math.PI) / 180,
+};
+function GlbCampModel({ radius, y, yaw }: { radius: number; y: number; yaw: number }) {
+  const { scene } = useGLTF(CAMP_URL);
+  const model = useMemo(() => {
+    const cl = scene.clone(true);
+    cl.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+    const box = new THREE.Box3().setFromObject(cl);
+    const w = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) || 1;
+    cl.scale.setScalar((radius * 2.1) / w); // preenche o raio do acampamento
+    const b2 = new THREE.Box3().setFromObject(cl);
+    cl.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+    return cl;
+  }, [scene, radius]);
+  return <group position={[0, y, 0]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
+}
+useGLTF.preload(CAMP_URL);
+
 export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
   const kit = useMemo(() => campKit(c, camp.cleared), [c, camp.cleared]);
   const flame = useRef<THREE.Group>(null);
@@ -388,7 +413,11 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
         />
       </mesh>
 
-      {(() => { let tw = 0; return structures.filter((s) => s.kind !== 'watchtower' || tw++ < 1); })().map((s, i) => {
+      {/* Skin novo: GLB do acampamento (escalado pro raio). */}
+      <GlbCampModel radius={radius} y={markerY} yaw={(hashId(camp.id) % 360) * (Math.PI / 180) + (CAMP_YAW_EXTRA[camp.id] ?? 0)} />
+
+      {/* Do procedural fica SÓ a fogueira (fogo + luz); o resto é o GLB. */}
+      {structures.filter((s) => s.kind === 'bonfire').map((s, i) => {
         const wx = cx + s.offset.x;
         const wz = cz + s.offset.z;
         return (

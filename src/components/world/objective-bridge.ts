@@ -7,6 +7,7 @@
  * laço de quadro nem o HUD precisam saber de onde cada coisa vem.
  */
 import { useGameStore } from '@/game/state/game-store';
+import { canSimulateSharedWorld } from '@/net/multiplayer';
 import { getCampDefinition } from '@/game/data/camps';
 import { decideIntent as decide } from '@/game/systems/objectiveSystem';
 import type {
@@ -59,7 +60,7 @@ export function toggleRepeat() {
 }
 
 export function tickWorld() {
-  useGameStore.getState().tickWorld();
+  if (canSimulateSharedWorld()) useGameStore.getState().tickWorld();
 }
 
 export function buildAutoSnapshot(): AutoSnapshot {

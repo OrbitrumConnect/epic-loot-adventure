@@ -99,7 +99,7 @@ export const HERO_HEIGHT = 1.869;
  * anel (igual o círculo dos acampamentos). Mesma ideia de `pushOut*` da base:
  * empurra qualquer corpo hostil para a borda do círculo.
  */
-export const SAFE_ZONE = { x: 2, z: -28, radius: 7 } as const;
+export const SAFE_ZONE = { x: 2, z: -28, radius: 11 } as const;
 
 /** Empurra (x,z) para fora da zona segura, somando o raio do corpo. Fora dela, nada muda. */
 export function pushOutSafeZone(x: number, z: number, bodyRadius = 0): [number, number] {
@@ -166,15 +166,22 @@ const FACTORY_PAD_CORE = 0.42;          // miolo plano (~9,2 m, cobre o prédio)
  *  relevo já é baixo) → o pad quase não mexe = sem platô/degrau. Longe de água.
  *  Uma no lugar da ruína do meio. Cada uma achata no SEU nível; o rio é preservado. */
 const FACTORY_POS: { x: number; z: number; rot: number }[] = [
-  { x: 19, z: -24, rot: 0.4 },   // LESTE da clareira: fora da zona segura e do rio; pad ainda achata spawn + ruína (7,-8)
-  { x: 78, z: 24, rot: 1.9 },    // beirada leste
-  { x: 26, z: -76, rot: -0.8 },  // beirada sul
-  { x: -80, z: -38, rot: 2.6 },  // beirada oeste
+  { x: 42, z: -76, rot: -0.8 },  // deslocada para o lado, longe do acampamento
+  { x: 78, z: 24, rot: 1.9 },    // extremo oposto do mapa
 ];
 /** padY = altura natural no centro; o footprint inteiro é achatado nela. */
 export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));
 
+/**
+ * Montanha antiga ZERADA (Pedro 16/10): o relevo procedural do canto NO foi
+ * nivelado porque as montanhas GLB novas (Desert_rocky_mountain, climáveis, com
+ * caverna) entram no lugar + a crista de pedra da própria planície vai atrás.
+ * Deixar `false` nivela o canto; `true` restaura a cadeia procedural antiga.
+ */
+const OLD_SNOW_MOUNTAIN = false;
+
 export function snowMountainBump(x: number, z: number): number {
+  if (!OLD_SNOW_MOUNTAIN) return 0; // montanha antiga zerada — ver nota acima
   // MAX dos domos (cadeia conectada; vales entre picos ficam mais baixos).
   let h = 0;
   for (const p of SNOW_PEAKS) {

@@ -28,6 +28,8 @@ import { GlbWatchTowers } from './glb-watchtower';
 import { GlbTrainingCamps } from './glb-training-camp';
 import { TowerRuntime } from './tower-runtime';
 import { PowerOrbit } from './power-orbit';
+import { useNet, broadcastBase, MP_ENABLED } from '@/net/multiplayer';
+import { useShallow } from 'zustand/react/shallow';
 
 /** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
 const USE_GLB_BASE = false;
@@ -87,7 +89,13 @@ function crackKeyFor(kind: BasePieceKind, tier: number): CrackBatch['key'] | nul
   return null;
 }
 
-function BaseStructures({ c }: { c: Palette }) {
+function BaseStructures({ c, piecesSource, interactive = true }: {
+  c: Palette;
+  /** Fonte das peças. Ausente = base LOCAL do store (comportamento original).
+   *  Presente = base de outro jogador (online) — mesma geometria, sem clique. */
+  piecesSource?: () => BasePiece[] | null;
+  interactive?: boolean;
+}) {
   const built = useMemo(() => {
     const assets = buildPieceAssets(c);
     const crackGeo = buildCrackGeometries();
@@ -139,8 +147,7 @@ function BaseStructures({ c }: { c: Palette }) {
   const last = useRef<BasePiece[] | null | undefined>(undefined);
 
   useFrame(() => {
-    const base = useGameStore.getState().playerBase;
-    const pieces = base ? base.pieces : null;
+    const pieces = piecesSource ? piecesSource() : (useGameStore.getState().playerBase?.pieces ?? null);
     if (pieces === last.current) return;
     last.current = pieces;
 
@@ -204,9 +211,9 @@ function BaseStructures({ c }: { c: Palette }) {
         <primitive
           key={`${b.kind}${b.tier}`}
           object={b.mesh}
-          onPointerDown={(e: { button: number; instanceId?: number }) => {
+          onPointerDown={interactive ? (e: { button: number; instanceId?: number }) => {
             if (e.button === 0) inspect(b, e.instanceId);
-          }}
+          } : undefined}
         />
       ))}
       {built.cracks.map(cr => <primitive key={cr.key} object={cr.mesh} />)}
@@ -793,6 +800,49 @@ export function PlayerBase({
       <PowerOrbit paused={paused} />
       <BaseHouse />
       <BuildLayer c={c} playerRef={playerRef} paused={paused} />
+    </>
+  );
+}
+
+/* ================================================================== *
+ * ONLINE: transmite a base local e renderiza as bases dos outros jogadores.
+ * Reusa BaseStructures (mesma geometria) sem clique. Zero efeito solo/sem sala.
+ * (Torres/centro-de-treino das bases remotas ficam pra depois — aqui vão muro,
+ *  porta, telhado e a cama.)
+ * ================================================================== */
+export function NetBases({ c }: { c: Palette }) {
+  // Transmite a base local: ao mudar (identidade das peças) + heartbeat p/ quem entra depois.
+  useEffect(() => {
+    if (!MP_ENABLED) return;
+    let lastPieces: BasePiece[] | null | undefined = undefined;
+    const unsub = useGameStore.subscribe(() => {
+      if (!useNet.getState().connected) return;
+      const base = useGameStore.getState().playerBase;
+      const pieces = base?.pieces ?? null;
+      if (pieces !== lastPieces) { lastPieces = pieces; broadcastBase(base); }
+    });
+    const hb = setInterval(() => {
+      if (useNet.getState().connected) broadcastBase(useGameStore.getState().playerBase);
+    }, 5000);
+    return () => { unsub(); clearInterval(hb); };
+  }, []);
+
+  const ids = useNet(useShallow((s) => Object.keys(s.bases)));
+  return (
+    <>
+      {ids.map((id) => <RemoteBase key={`remote-base-${id}`} id={id} c={c} />)}
+    </>
+  );
+}
+
+/** A mesma base do anfitrião/convidado: cerca, peças e a casa central. */
+function RemoteBase({ id, c }: { id: string; c: Palette }) {
+  const base = useNet((s) => s.bases[id] ?? null);
+  if (!base) return null;
+  return (
+    <>
+      <BaseStructures c={c} interactive={false} piecesSource={() => useNet.getState().bases[id]?.pieces ?? null} />
+      <BaseHouse pieces={base.pieces} remote />
     </>
   );
 }

@@ -9,7 +9,9 @@ export function DistantLandscape({ c }: { c: Palette }) {
     const positions: number[] = [], uv: number[] = [], colors: number[] = [], indices: number[] = [];
     const segments = 192, rows = 32;
     const stone = new THREE.Color(c['rock-light']).lerp(new THREE.Color('white'), 0.75);
-    const moss = new THREE.Color(c.leaf).lerp(new THREE.Color('white'), 0.6);
+    // Mescla com o CHÃO caminhável (grass, meio desértico) + mantém um pouco de
+    // verde (leaf) → montanha coerente com o mapa, não verdão (pedido do Pedro).
+    const moss = new THREE.Color(c.grass).lerp(new THREE.Color(c.leaf), 0.4).lerp(new THREE.Color('white'), 0.5);
     const color = new THREE.Color();
     for (let row = 0; row <= rows; row++) {
       const t = row / rows;

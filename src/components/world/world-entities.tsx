@@ -8,7 +8,7 @@
  * quadro continua lendo `getState()` dentro do laço.
  */
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { Beast } from './beast';
@@ -18,6 +18,7 @@ import { getCamps } from './objective-bridge';
 import { isRaider, Raider } from './raider';
 import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
+import { broadcastWorld, MP_ENABLED, registerCreatureHitHandler, useNet } from '@/net/multiplayer';
 
 const SYNC_INTERVAL = 0.2;
 
@@ -77,6 +78,52 @@ export function Enemies({ c, playerRef }: { c: Palette; playerRef: React.RefObje
       )}
     </>
   );
+}
+
+/**
+ * Sincroniza os inimigos de uma sala sem tocar no modo solo. O criador do link
+ * é a única simulação; convidados recebem o mesmo roster, vida e posição.
+ */
+export function MultiplayerWorldSync() {
+  const connected = useNet((s) => s.connected);
+  const isHost = useNet((s) => s.isHost);
+  const remoteWorld = useNet((s) => s.world);
+
+  useEffect(() => {
+    if (!MP_ENABLED || !connected || !isHost) return;
+    const send = () => broadcastWorld(useGameStore.getState().creatures);
+    send();
+    const timer = window.setInterval(send, 450);
+    return () => window.clearInterval(timer);
+  }, [connected, isHost]);
+
+  useEffect(() => {
+    if (!MP_ENABLED || !connected || isHost || !remoteWorld) return;
+    useGameStore.setState({ creatures: remoteWorld });
+  }, [connected, isHost, remoteWorld]);
+
+  useEffect(() => {
+    if (!MP_ENABLED || !connected || !isHost) return;
+    registerCreatureHitHandler((hit) => {
+      const state = useGameStore.getState();
+      const creature = state.creatures.find((c) => c.id === hit.targetId);
+      if (!creature || creature.behavior === 'dead') return;
+      const dx = creature.position.x - hit.source.x;
+      const dz = creature.position.z - hit.source.z;
+      // Limite largo cobre armas à distância, sem aceitar dano do outro lado do mapa.
+      if (dx * dx + dz * dz > 24 * 24) return;
+      const damage = Math.max(1, Math.round(hit.damage) - creature.armor);
+      const hp = Math.max(0, creature.hp - damage);
+      useGameStore.setState((current) => ({
+        creatures: current.creatures.map((c) => c.id !== creature.id ? c : hp === 0
+          ? { ...c, hp: 0, behavior: 'dead', respawnAt: Date.now() + 20_000 }
+          : { ...c, hp, behavior: 'chase' }),
+      }));
+    });
+    return () => registerCreatureHitHandler(null);
+  }, [connected, isHost]);
+
+  return null;
 }
 
 export function Camps({ c }: { c: Palette }) {

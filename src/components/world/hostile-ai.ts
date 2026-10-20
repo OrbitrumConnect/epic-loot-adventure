@@ -19,11 +19,13 @@ import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
+import { terrainMeshTopY } from './terrain-collision';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece } from './base-targets';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
+import { canSimulateSharedWorld } from '@/net/multiplayer';
 
 /**
  * Clique num inimigo: esquerdo seleciona, Shift+esquerdo enfileira uma caçada.
@@ -95,6 +97,10 @@ export function labelScaleFor(camera: THREE.Camera, viewportHeight: number, dist
 const LABEL_RANGE = 12;
 /** Raio do corpo da criatura para a colisão com a base (aprox., igual ao player). */
 const CREATURE_RADIUS = 0.5;
+/** Separação entre criaturas (anti-empilhamento): empurra quando 2 ficam a menos
+ *  disto; força do empurrão. Evita "10 bichos dentro de 1" cercando o jogador. */
+const SEP_RADIUS = 1.1;
+const SEP_STRENGTH = 3.2;
 /** Largura-alvo da barra em pixels, para ser legível nas duas câmeras. */
 const BAR_PIXELS = 84;
 
@@ -133,6 +139,9 @@ export function queuePosition(id: string, x: number, z: number, behavior: Creatu
 }
 
 export function flushPositions() {
+  // Em sala online o convidado recebe as posições do anfitrião; não pode
+  // sobrescrevê-las com uma IA local divergente.
+  if (!canSimulateSharedWorld()) { pending.clear(); return; }
   if (pending.size === 0) return;
   useGameStore.setState(s => ({
     creatures: s.creatures.map(cr => {
@@ -158,7 +167,7 @@ export function flushPositions() {
  * (pedido do Pedro: "um controle geral que você ajusta, não eu"). 1 = normal,
  * 0.9 = 10% mais devagar, 1.1 = 10% mais rápido.
  */
-export const CREATURE_SPEED_SCALE = 1;
+export const CREATURE_SPEED_SCALE = 0.9;
 
 export type HostileTuning = {
   speed: number;
@@ -453,6 +462,28 @@ export function useHostileAI(opts: HostileOptions) {
       moving = true;
     }
 
+    // SEPARAÇÃO entre criaturas (anti-empilhamento): empurra pra longe de quem
+    // está colado, usando as posições vivas dos `creatureAnchors`. Assim a horda
+    // não vira "10 bichos dentro de 1" te cercando bugado — eles se espalham.
+    {
+      let sx = 0, sz = 0;
+      for (const [oid, oa] of creatureAnchors) {
+        if (oid === creatureId || !oa.alive) continue;
+        const dx = targetX - oa.x, dz = targetZ - oa.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < SEP_RADIUS * SEP_RADIUS && d2 > 1e-4) {
+          const d = Math.sqrt(d2);
+          const push = (SEP_RADIUS - d) / SEP_RADIUS; // mais forte quanto mais perto
+          sx += (dx / d) * push;
+          sz += (dz / d) * push;
+        }
+      }
+      if (sx !== 0 || sz !== 0) {
+        targetX += sx * SEP_STRENGTH * dt;
+        targetZ += sz * SEP_STRENGTH * dt;
+      }
+    }
+
     // Colisão da base (mesma do player): cerca + paredes da casa bloqueiam a
     // criatura; o portão/vão da porta deixa passar. Ela encosta e ATACA o muro
     // (nearestBasePiece acima), aí avança quando a peça cai. Sem reinventar.
@@ -463,8 +494,13 @@ export function useHostileAI(opts: HostileOptions) {
     [targetX, targetZ] = pushOutSafeZone(targetX, targetZ, CREATURE_RADIUS);
     g.position.x = THREE.MathUtils.clamp(targetX, -MAP_HALF, MAP_HALF);
     g.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
-    // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno.
-    g.position.y = Math.max(terrainHeight(g.position.x, g.position.z), houseFloorSurfaceY(g.position.x, g.position.z));
+    // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno — e
+    // SOBE na superfície das montanhas (malha) quando está sobre elas.
+    g.position.y = Math.max(
+      terrainHeight(g.position.x, g.position.z),
+      houseFloorSurfaceY(g.position.x, g.position.z),
+      terrainMeshTopY(g.position.x, g.position.z),
+    );
 
     const behavior: CreatureBehavior = flee
       ? 'flee'

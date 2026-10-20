@@ -1,5 +1,5 @@
 import { useLoader, useFrame, useThree } from '@react-three/fiber';
-import { useTexture } from '@react-three/drei';
+import { useTexture, useGLTF } from '@react-three/drei';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -7,6 +7,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { terrainHeight } from './world-kit';
 import { houseCollider, housePlayerInside } from './house-collider';
+import type { BasePiece } from '@/game/types/playerbase';
 
 /**
  * Casa completa (WoodHouse.obj + textura) como PRÉDIO central da base — 1 modelo
@@ -25,11 +26,21 @@ const FLOOR_H = TARGET_H * 0.133 * VSTRETCH;
 /** Distância² (m²) além da qual a luz interna da casa sai do shader. */
 const HOUSE_LIGHT_D2 = 22 * 22;
 
-export function BaseHouse() {
-  const pieces = useGameStore((s) => s.playerBase?.pieces);
+export function BaseHouse({
+  pieces: remotePieces,
+  remote = false,
+}: { pieces?: BasePiece[] | null; remote?: boolean } = {}) {
+  const localPieces = useGameStore((s) => s.playerBase?.pieces);
+  const pieces = remotePieces === undefined ? localPieces : remotePieces;
   const obj = useLoader(OBJLoader, '/models/house/WoodHouse.obj');
   const diffuse = useTexture('/models/house/Diffuse.png');
   const normal = useTexture('/models/house/normal.png');
+  // Casa de PEDRA (evolução nível 10). Carrega sempre; só renderiza quando evoluída.
+  const stone = useGLTF('/models/house/stone-house.glb');
+  const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
+  // A evolução visual da base remota ainda não faz parte do payload de rede.
+  // Ela continua sendo uma casa de madeira, mas fica no mesmo core da cerca.
+  const baseEvolved = remote ? false : localBaseEvolved;
 
   const gl = useThree((s) => s.gl);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // habilita o corte do teto
@@ -39,9 +50,12 @@ export function BaseHouse() {
   const clipPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6), []);
 
   const prepared = useMemo(() => {
-    const o = obj.clone();
+    // Evoluída → casa de PEDRA (GLB, material pétreo); senão → madeira (texturizada).
+    const o = (baseEvolved ? stone.scene : obj).clone();
     diffuse.colorSpace = THREE.SRGBColorSpace;
-    const mat = new THREE.MeshStandardMaterial({ map: diffuse, normalMap: normal, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, clippingPlanes: [clipPlane] });
+    const mat = baseEvolved
+      ? new THREE.MeshStandardMaterial({ color: '#9a938a', roughness: 1, metalness: 0, side: THREE.DoubleSide, clippingPlanes: [clipPlane] })
+      : new THREE.MeshStandardMaterial({ map: diffuse, normalMap: normal, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, clippingPlanes: [clipPlane] });
     o.traverse((m) => {
       const mesh = m as THREE.Mesh;
       if (mesh.isMesh) {
@@ -63,14 +77,14 @@ export function BaseHouse() {
     const halfX = (fb.max.x - fb.min.x) / 2;
     const halfZ = (fb.max.z - fb.min.z) / 2;
 
-    // Paredes reais na altura do PEITO: fatia a malha no plano y=chest e guarda
-    // os segmentos (XZ, já centrado). Onde não há parede (porta) → sem segmento →
-    // passa. Janela (alta) e móvel (baixo) não cruzam o peito → não bloqueiam.
-    const chestY = FLOOR_H + 1.0;
+    // Fatiamos abaixo do peitoril da janela, mas acima do piso. Assim a abertura
+    // da porta continua sem segmento, enquanto uma janela alta não vira passagem
+    // para o jogador (a colisão 2D não deve depender da altura da câmera).
+    const collisionY = FLOOR_H + 0.38;
     const wallSegs: number[] = [];
     const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3();
     const cut = (p: THREE.Vector3, q: THREE.Vector3, out: number[]) => {
-      const dp = p.y - chestY, dq = q.y - chestY;
+      const dp = p.y - collisionY, dq = q.y - collisionY;
       if ((dp <= 0 && dq > 0) || (dp > 0 && dq <= 0)) {
         const t = dp / (dp - dq);
         out.push(p.x + (q.x - p.x) * t, p.z + (q.z - p.z) * t);
@@ -96,7 +110,7 @@ export function BaseHouse() {
       }
     });
     return { wrap, halfX, halfZ, wallSegs };
-  }, [obj, diffuse, normal, clipPlane]);
+  }, [obj, stone, baseEvolved, diffuse, normal, clipPlane]);
 
   // Teto some ao entrar: baixa o plano de corte pra ~2,6 m acima do piso.
   useFrame(() => {
@@ -119,8 +133,8 @@ export function BaseHouse() {
 
   // Publica footprint + piso pro loop de física (chão caminhável + paredes sólidas).
   useEffect(() => {
-    if (!ctr) {
-      houseCollider.current = null;
+    if (remote || !ctr) {
+      if (!remote) houseCollider.current = null;
       return;
     }
     const floorY = terrainHeight(ctr.x, ctr.z) + FLOOR_H;
@@ -135,14 +149,16 @@ export function BaseHouse() {
     return () => {
       houseCollider.current = null;
     };
-  }, [ctr?.x, ctr?.z, prepared.halfX, prepared.halfZ, prepared.wallSegs]);
+  }, [ctr?.x, ctr?.z, prepared.halfX, prepared.halfZ, prepared.wallSegs, remote]);
 
   if (!ctr) return null;
   return (
     <group position={[ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z]}>
       <primitive object={prepared.wrap} />
       {/* Luz interna quente (o telhado bloqueia o sol) */}
-      <pointLight ref={lightRef} position={[0, TARGET_H * 0.55, 0]} intensity={9} distance={TARGET_H * 2.6} decay={1.4} color="#ffe0b0" />
+      {!remote && <pointLight ref={lightRef} position={[0, TARGET_H * 0.55, 0]} intensity={9} distance={TARGET_H * 2.6} decay={1.4} color="#ffe0b0" />}
     </group>
   );
 }
+
+useGLTF.preload('/models/house/stone-house.glb');
