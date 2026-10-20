@@ -279,15 +279,17 @@ function inLake(x: number, z: number, pad = 0): boolean {
  * a média do verde amostrado (tint). Determinístico → Vercel. GroundCover = lâminas
  * finas animadas por vento.
  * ------------------------------------------------------------------ */
-const GRASS_CAP = 4500;        // teto de tufos (instanced, barato) — Pedro: "bastante"
-const CLUSTER = 5;             // tufos por mancha verde (adensa a mancha)
-const CLUSTER_SPREAD = 1.1;    // raio (m) do punhado em torno da mancha
+const GRASS_CAP = 9000;        // teto de tufos (instanced, barato) — Pedro: "bastante, farta"
+const CLUSTER_SPREAD = 1.3;    // raio (m) do punhado em torno da mancha
 /** Esverdeado (sRGB 0-1): caqui/oliva embutido no barro. O mapa é alaranjado — areia
  *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
  *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
  *  pixels reais do rio-wasteland (histograma de g/r). */
 function isGreen(c: THREE.Color): boolean {
-  return c.g >= c.r * 0.71 && c.g >= c.b * 0.95 && c.g > 0.10;
+  // Verde/oliva + verde da montanha: g não-alaranjado (g>=r*0.71) e não-azul. Exclui a
+  // areia clara (g<r*0.71). Pedro quer grama na montanha E no chão plano → pega os dois;
+  // o espalhamento (spotStride) garante cobertura no plano, não só onde achar primeiro.
+  return c.g >= c.r * 0.71 && c.g >= c.b * 0.95 && c.g > 0.09;
 }
 /** Gera a grama quando o GLB+textura carregam (retry curto até a imagem decodificar —
  *  o registro do terreno não espera a textura). Nunca limpa grama já achada. */
@@ -298,23 +300,24 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
     let cancelled = false, tries = 0;
     const attempt = () => {
       if (cancelled) return;
-      // Coleta TODAS as manchas verdes do mapa (não só as primeiras), pra espalhar
-      // por tudo — safe zone, encostas, etc. — e não amontoar perto do lago.
-      const { spots, tint } = collectGreenSurfaceSpots(isGreen, 6000);
+      // Coleta o mapa INTEIRO (cap alto) — varre tudo, inclusive safe zone/cantos (antes
+      // parava em 6000 e nunca chegava lá). Depois distribui os tufos por TODAS as manchas
+      // com um passo (spotStride), não só as primeiras (ficava amontoado perto do lago).
+      const { spots, tint } = collectGreenSurfaceSpots(isGreen, 60000);
       if (spots.length > 10) {
-        // Densidade por mancha ajustada ao total: muitas manchas → menos tufos cada
-        // (não estourar o teto); poucas manchas → cluster cheio. Distribui por TODAS.
-        const cluster = Math.max(1, Math.min(CLUSTER, Math.floor(GRASS_CAP / spots.length)));
+        const perSpot = 2; // tufos por mancha escolhida (densidade local)
+        const targetSpots = Math.ceil(GRASS_CAP / perSpot);
+        const spotStride = Math.max(1, Math.floor(spots.length / targetSpots));
         const out: Placement[] = [];
-        for (let s = 0; s < spots.length && out.length < GRASS_CAP; s++) {
+        for (let s = 0; s < spots.length && out.length < GRASS_CAP; s += spotStride) {
           const sp = spots[s]!;
-          for (let k = 0; k < cluster; k++) {
+          for (let k = 0; k < perSpot; k++) {
             const seed = s * 7 + k * 101;
-            const h = 0.6 + rand(seed + 50) * 0.5;
+            const h = 0.75 + rand(seed + 50) * 0.6;
             out.push({
               x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
               z: sp.z + (rand(seed + 99) - 0.5) * 2 * CLUSTER_SPREAD,
-              w: h * 1.1, h, yaw: rand(seed + 3) * Math.PI * 2,
+              w: h * 1.15, h, yaw: rand(seed + 3) * Math.PI * 2,
             });
           }
         }
