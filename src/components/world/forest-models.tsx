@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import treeUrl from '../../../art/packs/01-ashland-lowpoly/models/ashroot-tree.glb?url';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { rand, terrainHeight, type Palette } from './world-kit';
+import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { pbrMaps } from './pbr-materials';
 
 export type ForestPlacement = { x: number; z: number; w: number; h: number; yaw: number };
@@ -38,12 +39,13 @@ export function ForestBatch({ geometry, material, placements, spheres, yOffset =
   // aFade belongs to a batch, never to the cached GLTF geometry.
   const ownGeometry = useMemo(() => geometry.clone(), [geometry]);
   useEffect(() => () => ownGeometry.dispose(), [ownGeometry]);
+  const tv = useTerrainVersion();
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
     const dummy = new THREE.Object3D();
     placements.forEach((p, i) => {
-      dummy.position.set(p.x, terrainHeight(p.x, p.z) + yOffset, p.z);
+      dummy.position.set(p.x, glbSurfaceY(p.x, p.z, terrainHeight(p.x, p.z)) + yOffset, p.z);
       dummy.rotation.set(0, p.yaw + rand(p.x * 9 + p.z) * Math.PI * 2, 0);
       dummy.scale.set(p.w, p.h, p.w);
       dummy.updateMatrix();
@@ -53,7 +55,7 @@ export function ForestBatch({ geometry, material, placements, spheres, yOffset =
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
     return registerInstancedFade(mesh, spheres);
-  }, [placements, spheres, ownGeometry, yOffset]);
+  }, [placements, spheres, ownGeometry, yOffset, tv]);
   return <instancedMesh ref={ref} args={[ownGeometry, material, Math.max(1, placements.length)]} castShadow receiveShadow />;
 }
 

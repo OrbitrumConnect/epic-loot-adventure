@@ -253,7 +253,7 @@ export const CAMP_PLACEMENTS: CampPlacement[] = [
   { id: 'raider_outpost', defId: 'raider_outpost', position: { x: 23, z: 7 } },
   { id: 'blackclaw_camp', defId: 'blackclaw_camp', position: { x: -54, z: 42 } },
   { id: 'crackedbone_warband', defId: 'crackedbone_warband', position: { x: 55, z: -50 } },
-  { id: 'stonefist_stronghold', defId: 'stonefist_stronghold', position: { x: -60, z: -58 } },
+  { id: 'stonefist_stronghold', defId: 'stonefist_stronghold', position: { x: -42, z: -49 } }, // movido de (-60,-58) rumo ao centro: fugir da montanha pontuda do GLB; (-42,-49) é plano (Y~1.5), ~12m da montanha
 ];
 
 // ---------------------------------------------------------------------------

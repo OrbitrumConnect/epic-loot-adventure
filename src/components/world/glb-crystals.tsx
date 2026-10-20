@@ -4,6 +4,7 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { terrainHeight } from './world-kit';
+import { glbSurfaceY } from './terrain-collision';
 
 /**
  * Cristal da Essência como GLB BONITO — mas o modelo é PESADO (~92k tris!). Então
@@ -59,7 +60,7 @@ export function GlbCrystals() {
       const n = live[i];
       if (n) {
         g.visible = true;
-        g.position.set(n.position.x, terrainHeight(n.position.x, n.position.z), n.position.z);
+        g.position.set(n.position.x, glbSurfaceY(n.position.x, n.position.z, terrainHeight(n.position.x, n.position.z)), n.position.z);
         g.rotation.y = (n.seed % 360) * (Math.PI / 180);
       } else {
         g.visible = false;

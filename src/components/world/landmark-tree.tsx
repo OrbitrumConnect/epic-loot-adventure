@@ -2,6 +2,7 @@ import { TransformControls, useGLTF } from '@react-three/drei';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { terrainHeight } from './world-kit';
+import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { useEditorStore } from '../editor/editor-store';
 
 /**
@@ -26,7 +27,10 @@ export function LandmarkTree({ x, z, scale = 5.5, yaw = 0, url = GNARLED, editor
   const edited = useEditorStore(s => editorId ? s.objects.find(o => o.id === editorId) : undefined);
   const tx = edited?.transform.position[0] ?? x; const ty = edited?.transform.position[1] ?? 0; const tz = edited?.transform.position[2] ?? z;
   const rs = edited?.transform.scale[0] ?? scale; const ry = edited?.transform.rotation[1] ?? yaw;
-  const y = terrainHeight(tx, tz);
+  // Assenta na superfície do GLB de terreno (recomputa quando o GLB carrega); fora
+  // do GLB cai no terrainHeight procedural.
+  const tv = useTerrainVersion();
+  const y = useMemo(() => glbSurfaceY(tx, tz, terrainHeight(tx, tz)), [tx, tz, tv]);
   const active = useEditorStore(s => s.active); const selected = useEditorStore(s => s.selectedId === editorId); const select = useEditorStore(s => s.select); const tool = useEditorStore(s => s.tool); const update = useEditorStore(s => s.update);
   // The catalog transform represents the asset origin/base. Keep the model's
   // bounding-box pivot offset inside the wrapper so the gizmo stays on the
@@ -35,7 +39,7 @@ export function LandmarkTree({ x, z, scale = 5.5, yaw = 0, url = GNARLED, editor
       <group position={[-pivot.center.x, -pivot.center.y, -pivot.center.z]}><primitive object={tree} /></group>
     </group>;
   if (!active || !selected || !editorId) return group;
-  return <TransformControls mode={tool} onMouseUp={e => { const o = (e.target as unknown as { object?: THREE.Object3D }).object; if (!o) return; update(editorId, { position: [o.position.x - pivot.center.x * o.scale.x, o.position.y - BASE_BELOW * o.scale.x - pivot.center.y * o.scale.x - terrainHeight(o.position.x, o.position.z), o.position.z - pivot.center.z * o.scale.x], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); }}>{group}</TransformControls>;
+  return <TransformControls mode={tool} onMouseUp={e => { const o = (e?.target as unknown as { object?: THREE.Object3D } | undefined)?.object; if (!o) return; update(editorId, { position: [o.position.x - pivot.center.x * o.scale.x, o.position.y - BASE_BELOW * o.scale.x - pivot.center.y * o.scale.x - glbSurfaceY(o.position.x, o.position.z, terrainHeight(o.position.x, o.position.z)), o.position.z - pivot.center.z * o.scale.x], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); }}>{group}</TransformControls>;
 }
 
 useGLTF.preload(GNARLED);

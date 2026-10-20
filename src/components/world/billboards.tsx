@@ -31,6 +31,7 @@ import * as THREE from 'three';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, type Palette } from './world-kit';
+import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { ForestRocks, ForestTrees } from './forest-models';
 import { LivingTrees } from './living-trees';
 import { GroundCover } from './ground-cover';
@@ -210,12 +211,13 @@ function BillboardField({
     registerMat(mat);
   }, [mat, registerMat]);
 
+  const tv = useTerrainVersion();
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
     for (let i = 0; i < placements.length; i++) {
       const p = placements[i]!;
-      dummy.position.set(p.x, terrainHeight(p.x, p.z), p.z);
+      dummy.position.set(p.x, glbSurfaceY(p.x, p.z, terrainHeight(p.x, p.z)), p.z);
       dummy.rotation.set(0, p.yaw, 0);
       dummy.scale.set(p.w, p.h, 1);
       dummy.updateMatrix();
@@ -224,7 +226,7 @@ function BillboardField({
     mesh.count = placements.length;
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
-  }, [placements]);
+  }, [placements, tv]);
 
   useLayoutEffect(() => {
     const mesh = ref.current;

@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { FACTORY_SITES, terrainHeight } from './world-kit';
+import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { factoryColliders, factoryClip } from './factory-collider';
 
 /**
@@ -21,6 +22,7 @@ export function Factory() {
   const { scene } = useGLTF(URL);
   const gl = useThree((s) => s.gl);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // corte do teto
+  const tv = useTerrainVersion(); // re-assenta na superfície do GLB quando ele carrega
 
   const proto = useMemo(() => {
     const o = scene.clone(true);
@@ -114,12 +116,12 @@ export function Factory() {
         cx: f.x, cz: f.z,
         halfX: Math.abs(proto.halfX * cos) + Math.abs(proto.halfZ * sin),
         halfZ: Math.abs(proto.halfX * sin) + Math.abs(proto.halfZ * cos),
-        baseY: terrainHeight(f.x, f.z) - FACTORY_SINK,
+        baseY: glbSurfaceY(f.x, f.z, terrainHeight(f.x, f.z)) - FACTORY_SINK,
         wallSegs: segs,
       });
     }
     return () => { factoryColliders.length = 0; };
-  }, [proto]);
+  }, [proto, tv]);
 
   return (
     <>
@@ -127,7 +129,7 @@ export function Factory() {
         <primitive
           key={i}
           object={proto.wrap.clone()}
-          position={[f.x, terrainHeight(f.x, f.z) - FACTORY_SINK, f.z]}
+          position={[f.x, glbSurfaceY(f.x, f.z, terrainHeight(f.x, f.z)) - FACTORY_SINK, f.z]}
           rotation={[0, f.rot, 0]}
         />
       ))}

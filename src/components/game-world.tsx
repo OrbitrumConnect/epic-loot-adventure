@@ -15,7 +15,7 @@ import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { terrainMeshY, registerWall, wallHeightAt } from './world/terrain-collision';
+import { terrainMeshY, registerWall, wallHeightAt, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
@@ -1188,7 +1188,9 @@ function Maze({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: numbe
     if (!ref.current) return;
     return registerWall(ref.current);
   }, []);
-  return <group ref={ref} position={[x, terrainHeight(x, z), z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
+  const tv = useTerrainVersion();
+  const y = useMemo(() => glbSurfaceY(x, z, terrainHeight(x, z)), [x, z, tv]);
+  return <group ref={ref} position={[x, y, z]} rotation={[0, yaw, 0]}><primitive object={model} /></group>;
 }
 useGLTF.preload(MAZE_URL);
 
