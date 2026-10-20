@@ -181,6 +181,4 @@ export function DesertMountain(props: DesertMountainProps) {
 
 export const MOUNTAIN_CAVE = MOUNTAIN_CAVE_URL;
 
-useGLTF.preload(PLAIN_URL);
-useGLTF.preload(MOUNTAIN_URL);
-useGLTF.preload(MOUNTAIN_CAVE_URL);
+// Preload sob demanda: os GLBs carregam via useGLTF na montagem (Suspense + AssetBoundary).

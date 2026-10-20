@@ -373,7 +373,7 @@ function GlbCampModel(props: { radius: number; y: number; yaw: number }) {
     </AssetBoundary>
   );
 }
-useGLTF.preload(CAMP_URL);
+// Preload sob demanda: useGLTF carrega CAMP_URL na montagem (Suspense + AssetBoundary).
 
 export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
   const kit = useMemo(() => campKit(c, camp.cleared), [c, camp.cleared]);

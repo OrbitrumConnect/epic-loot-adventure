@@ -183,4 +183,4 @@ export function BaseHouse(props: { pieces?: BasePiece[] | null; remote?: boolean
   );
 }
 
-useGLTF.preload('/models/house/stone-house.glb');
+// Preload sob demanda: useGLTF carrega stone-house.glb na montagem (Suspense + AssetBoundary).

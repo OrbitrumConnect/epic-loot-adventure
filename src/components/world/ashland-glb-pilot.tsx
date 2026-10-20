@@ -81,7 +81,5 @@ export function AshlandPilot() {
   );
 }
 
-useGLTF.preload(treeUrl);
-useGLTF.preload(weaponUrl);
-useGLTF.preload(heroUrl);
-useGLTF.preload(enemyUrl);
+// Preload sob demanda: os GLBs carregam via useGLTF na montagem do componente
+// (Suspense + AssetBoundary). Sem preload de import p/ não baixar no boot fora de cena.

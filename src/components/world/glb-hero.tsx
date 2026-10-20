@@ -195,5 +195,5 @@ export function GlbHero({
   );
 }
 
-useGLTF.preload(CHAR_URL);
-useGLTF.preload(ANIM_URL);
+// Preload sob demanda: GlbHero (rig ranger) só monta se USE_RED_HERO=false; sem preload
+// de import p/ não baixar o ranger no boot quando o herói ativo é o Mixamo (red).

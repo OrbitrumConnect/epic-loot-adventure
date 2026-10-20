@@ -42,5 +42,4 @@ export function LandmarkTree({ x, z, scale = 5.5, yaw = 0, url = GNARLED, editor
   return <TransformControls mode={tool} onMouseUp={e => { const o = (e?.target as unknown as { object?: THREE.Object3D } | undefined)?.object; if (!o) return; update(editorId, { position: [o.position.x - pivot.center.x * o.scale.x, o.position.y - BASE_BELOW * o.scale.x - pivot.center.y * o.scale.x - glbSurfaceY(o.position.x, o.position.z, terrainHeight(o.position.x, o.position.z)), o.position.z - pivot.center.z * o.scale.x], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); }}>{group}</TransformControls>;
 }
 
-useGLTF.preload(GNARLED);
-useGLTF.preload('/models/trees/tree-split.glb');
+// Preload sob demanda: as árvores carregam via useGLTF na montagem (Suspense + AssetBoundary).

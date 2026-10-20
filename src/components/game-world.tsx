@@ -337,6 +337,14 @@ const USE_GLB_HERO = true;
 /** Survivor Red (rig Mixamo) no lugar do Kael (rig Unreal/UAL). Reversível: false volta o Kael. */
 const USE_RED_HERO = true;
 
+/** Medidor de FPS da drei: só em DEV e OPT-IN via `?stats` na URL (ex.: http://localhost:8000/?stats).
+ *  Default desligado — o <Stats /> roda a cada quadro e é custo que só existe em dev, o ambiente
+ *  que mais sofre com lag. Avaliado uma vez no load do módulo. */
+const SHOW_STATS =
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).has('stats');
+
 /** Chão central jogável (PlaneGeometry texturado). Pedro 20/10: OFF p/ avaliar o mapa
  *  novo em GLB. NÃO afeta ficar em pé — personagens/coisas usam `terrainHeight` (matemático).
  *  Reversível: true volta o chão. O backdrop distante (`DistantLandscape`) não é afetado. */
@@ -1206,7 +1214,8 @@ function RoadLamp(props: { x: number; y: number; z: number }) {
     </AssetBoundary>
   );
 }
-useGLTF.preload(LIGHT_POST_URL);
+// Preload sob demanda: RoadLampInner carrega LIGHT_POST_URL via useGLTF na montagem
+// (Suspense + AssetBoundary). Sem preload de import p/ não baixar no boot se não entra em cena.
 
 const MAZE_URL = '/models/props/maze.glb';
 /** Labirinto gigante (Meshy decimado ~100k tris) numa área aberta distante — o
@@ -1243,7 +1252,7 @@ function Maze(props: { x: number; z: number; size?: number; yaw?: number }) {
     </AssetBoundary>
   );
 }
-useGLTF.preload(MAZE_URL);
+// Preload sob demanda: MazeInner carrega MAZE_URL via useGLTF na montagem (Suspense + AssetBoundary).
 
 function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => void) | undefined; paused?: boolean | undefined }) {
   const size = MAP_HALF * 2 + 40;
@@ -1548,6 +1557,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   const freeInit = useRef(false);
   const freeLook = useRef(new THREE.Vector3());
   const probe = useRef(new THREE.Vector3());
+  // Vetores reutilizados no useFrame da câmera (evita `new THREE.Vector3` por quadro).
+  // Os ramos editor/terceira-pessoa são mutuamente exclusivos por quadro → podem compartilhar.
+  const tmpWant = useRef(new THREE.Vector3());
+  const tmpLook = useRef(new THREE.Vector3());
   const metricAccum = useRef({ frames: 0, time: 0, next: 0 });
 
   useEffect(() => {
@@ -1794,11 +1807,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         }
       }
       const cx = px + editorPan.current.x, cz = pz + editorPan.current.z;
-      const wantPos = new THREE.Vector3(cx + rx, 29, cz + rz);
+      const wantPos = tmpWant.current.set(cx + rx, 29, cz + rz);
       const lerpFactor = modeChanged ? 1 : 0.06;
       camTarget.current.lerp(wantPos, lerpFactor);
       camera.position.copy(camTarget.current);
-      camLookAt.current.lerp(new THREE.Vector3(cx, py, cz), lerpFactor);
+      camLookAt.current.lerp(tmpLook.current.set(cx, py, cz), lerpFactor);
       camera.lookAt(camLookAt.current);
     } else if (cameraMode === 'free') {
       const free = getFreeCam();
@@ -1876,7 +1889,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       const camX = px - Math.sin(yaw) * Math.cos(pitch) * dist + Math.cos(yaw) * shoulderOffset;
       const camY = py + 2.8 - Math.sin(pitch) * dist;
       const camZ = pz - Math.cos(yaw) * Math.cos(pitch) * dist - Math.sin(yaw) * shoulderOffset;
-      let wantPos = new THREE.Vector3(camX, camY, camZ);
+      const wantPos = tmpWant.current.set(camX, camY, camZ);
 
       // Colisão de câmera: marcha da cabeça até a posição desejada; se um morro
       // bloqueia a linha, para no último ponto livre (aproxima). Libera → volta suave.
@@ -1890,7 +1903,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
           const sz = hz + (camZ - hz) * t;
           if (sy < terrainHeight(sx, sz) + 0.3) {
             const safeT = (i - 1) / steps;
-            wantPos = new THREE.Vector3(hx + (camX - hx) * safeT, hy + (camY - hy) * safeT, hz + (camZ - hz) * safeT);
+            // Reusa o mesmo vetor: `wantPos` só é lido depois do laço (lerp abaixo).
+            wantPos.set(hx + (camX - hx) * safeT, hy + (camY - hy) * safeT, hz + (camZ - hz) * safeT);
             break;
           }
         }
@@ -1910,7 +1924,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       const lookX = px + Math.sin(yaw) * lookAhead;
       const lookZ = pz + Math.cos(yaw) * lookAhead;
       const lookY = py + 1.2 + Math.sin(pitch) * 2;
-      camLookAt.current.lerp(new THREE.Vector3(lookX, lookY, lookZ), 0.12);
+      camLookAt.current.lerp(tmpLook.current.set(lookX, lookY, lookZ), 0.12);
       camera.lookAt(camLookAt.current);
     }
 
@@ -2268,8 +2282,8 @@ export default function GameWorld(props: WorldProps) {
         <AssetBoundary label="WorldScene" fallback={null}>
           <WorldScene {...props} c={c} cameraMode={cameraMode} />
         </AssetBoundary>
-        {/* Medidor de FPS — SÓ em dev (localhost); nunca vai pra produção. */}
-        {import.meta.env.DEV && <Stats />}
+        {/* Medidor de FPS — SÓ em dev E opt-in via `?stats` na URL; nunca vai pra produção. */}
+        {SHOW_STATS && <Stats />}
       </Canvas>
       {/* HUD da câmera livre (fora do Canvas; só renderiza com o modo ativo). */}
       <FreeCamOverlay />

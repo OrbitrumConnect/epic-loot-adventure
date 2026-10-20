@@ -137,4 +137,4 @@ export function Factory() {
   );
 }
 
-useGLTF.preload(URL);
+// Preload sob demanda: useGLTF carrega URL na montagem (Suspense + AssetBoundary).

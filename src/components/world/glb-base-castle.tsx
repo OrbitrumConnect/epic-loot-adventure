@@ -82,8 +82,4 @@ export function GlbBaseCastle({ scale = 1, yawOffset = Math.PI / 2 }: { scale?: 
   return <>{nodes.map((o, i) => <primitive key={i} object={o} />)}</>;
 }
 
-useGLTF.preload(U.wall);
-useGLTF.preload(U.tbase);
-useGLTF.preload(U.tmid);
-useGLTF.preload(U.troof);
-useGLTF.preload(U.gate);
+// Preload sob demanda: as peças do castelo carregam via useGLTF na montagem (Suspense + AssetBoundary).

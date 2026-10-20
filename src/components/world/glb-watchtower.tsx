@@ -117,6 +117,5 @@ export function GlbWatchTowers() {
   );
 }
 
-useGLTF.preload(WATCH_URL);
-useGLTF.preload(LOUD_URL);
-ORNAMENT_URLS.forEach(url => useGLTF.preload(url));
+// Preload sob demanda: watchtower/loudspeaker/ornamentos carregam via useGLTF na montagem
+// (Suspense + AssetBoundary). Sem preload de import p/ não baixar no boot fora de cena.
