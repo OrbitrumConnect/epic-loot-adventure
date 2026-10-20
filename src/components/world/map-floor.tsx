@@ -27,6 +27,16 @@ function matte(root: THREE.Object3D) {
       pm.metalnessMap = null; pm.metalness = 0;
       pm.roughnessMap = null; pm.roughness = 1;
       pm.envMapIntensity = 0;
+      // Nitidez da textura (ela veio pequena e o mapa foi esticado): anisotropia alta
+      // + mipmaps trilineares tiram o serrilhado/borrão na vista rasante. Resolução
+      // REAL só re-exportando a textura maior — isto é o máximo sem trocar o arquivo.
+      if (pm.map) {
+        pm.map.anisotropy = 16;
+        pm.map.minFilter = THREE.LinearMipmapLinearFilter;
+        pm.map.magFilter = THREE.LinearFilter;
+        pm.map.generateMipmaps = true;
+        pm.map.needsUpdate = true;
+      }
       pm.needsUpdate = true;
     }
   });

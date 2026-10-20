@@ -353,7 +353,7 @@ const SHOW_OLD_ROAD = false;
  *  spawn). Nível ~0.2 (piso seco ~0.7, água ~-0.2 → aparece só nos baixios). Centro e
  *  tamanho ajustáveis — hoje cobre o rio central; o shape do rio vem da geometria do GLB
  *  (só mostra onde afunda abaixo do nível). */
-const MAP_WATER_Y = -2.0;                             // superfície da água: ~0.6m acima do leito (-2.6). Nesse nível baixo, o plano
+const MAP_WATER_Y = -2.35;                            // superfície da água: ~0.25m acima do leito (-2.6). Abaixado 35cm (não encostar na ponte/margem)
                                                       // só mostra água onde o GLB AFUNDA (lago central + praias nas margens); terra seca fica por cima.
 const MAP_WATER_CENTER: [number, number] = [0, 0];   // cobre o mapa todo; a forma (lago + praias) vem da geometria do GLB
 const MAP_WATER_SIZE = 210;                           // lado do plano (m) — alcança as margens/praias

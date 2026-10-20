@@ -26,12 +26,12 @@
  * shader em vez de blending, pra não quebrar a ordenação opaca.
  */
 import { useFrame } from '@react-three/fiber';
-import { Suspense, useLayoutEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, type Palette } from './world-kit';
-import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
+import { glbSurfaceY, surfaceColorAt, useTerrainVersion } from './terrain-collision';
 import { ForestRocks, ForestTrees } from './forest-models';
 import { LivingTrees } from './living-trees';
 import { GroundCover } from './ground-cover';
@@ -271,6 +271,63 @@ function inLake(x: number, z: number, pad = 0): boolean {
 }
 
 /* ------------------------------------------------------------------ *
+ * GRAMA nas áreas VERDES do mapa (Pedro): grade jitterada densa sobre o
+ * mapa; em cada ponto amostra a cor real da malha do GLB (surfaceColorAt)
+ * e só fica onde é verde. Tufo = GroundCover (lâminas finas animadas), tom
+ * casando com a média do verde amostrado (tint). Determinístico → Vercel.
+ * ------------------------------------------------------------------ */
+const GRASS_STEP = 2.4;        // espaçamento da grade (m) — densidade
+const GRASS_CAP = 2200;        // teto de tufos (instanced, barato)
+/** Verde "de grama": canal G domina R e B (em espaço linear). */
+function isGreen(c: THREE.Color): boolean {
+  return c.g > c.r * 1.06 && c.g > c.b * 1.12 && c.g > 0.02;
+}
+function buildGreenGrass(): { placements: Placement[]; tint?: THREE.Color } {
+  const out: Placement[] = [];
+  const sum = new THREE.Color(0, 0, 0);
+  let n = 0, i = 0;
+  for (let x = -MAP_HALF; x <= MAP_HALF; x += GRASS_STEP) {
+    for (let z = -MAP_HALF; z <= MAP_HALF; z += GRASS_STEP, i++) {
+      if (inLake(x, z, 1)) continue;
+      const jx = x + (rand(i + 7) - 0.5) * GRASS_STEP;
+      const jz = z + (rand(i + 99) - 0.5) * GRASS_STEP;
+      const col = surfaceColorAt(jx, jz);
+      if (!col || !isGreen(col)) continue;
+      sum.add(col); n++;
+      if (out.length < GRASS_CAP) {
+        const h = 0.7 + rand(i + 50) * 0.5;
+        out.push({ x: jx, z: jz, w: h * 1.1, h, yaw: rand(i + 3) * Math.PI * 2 });
+      }
+    }
+  }
+  if (n === 0) return { placements: [] };
+  const tint = sum.multiplyScalar(1 / n); // média do verde da malha (já em linear)
+  return { placements: out, tint };
+}
+/** Gera a grama verde quando o GLB+textura carregam (retry curto até a imagem
+ *  decodificar — o registro do terreno não espera a textura). */
+function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color } {
+  const tv = useTerrainVersion();
+  const [res, setRes] = useState<{ placements: Placement[]; tint?: THREE.Color }>({ placements: [] });
+  useEffect(() => {
+    let cancelled = false, tries = 0;
+    const attempt = () => {
+      if (cancelled) return;
+      const r = buildGreenGrass();
+      // Só PUBLICA quando achou grama; NUNCA limpa (um tv-bump posterior com amostra
+      // momentaneamente vazia não pode apagar a grama já encontrada). Se esgotar as
+      // tentativas sem achar, desiste em silêncio e mantém o que havia.
+      if (r.placements.length > 40) { setRes(r); return; }
+      if (tries >= 20) return;
+      tries++; setTimeout(attempt, 250); // textura ainda decodificando → tenta de novo
+    };
+    attempt();
+    return () => { cancelled = true; };
+  }, [tv]);
+  return res;
+}
+
+/* ------------------------------------------------------------------ *
  * Componente público — substitui Tree/RockInstances/GrassPatches.
  * ------------------------------------------------------------------ */
 export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette }) {
@@ -312,19 +369,9 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
     return { large, small };
   }, []);
 
-  // Grama: tufos espalhados (mesmas sementes do GrassPatches antigo, nº menor
-  // porque o sprite é bem mais cheio que o cone de 3 lados).
-  const grass = useMemo(() => {
-    const out: Placement[] = [];
-    for (let i = 0; i < 700; i++) {
-      const x = (rand(i + 1400) - 0.5) * MAP_HALF * 2;
-      const z = (rand(i + 1900) - 0.5) * MAP_HALF * 2;
-      if (inLake(x, z, 0.5)) continue;
-      const h = 0.45 + rand(i + 50) * 0.4;
-      out.push({ x, z, w: h * 1.2, h, yaw: 0 });
-    }
-    return out;
-  }, []);
+  // Grama: densa e SÓ nas áreas verdes do GLB (amostra a cor da malha), com tom
+  // casando com a média do verde do mapa. Substitui o espalhamento aleatório antigo.
+  const { placements: grass, tint: grassTint } = useGreenGrass();
 
   useFrame(({ clock }) => {
     windTime.value = clock.elapsedTime;
@@ -352,7 +399,7 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
       {/* Arbusto de outono (billboard branco/vermelho) REMOVIDO — não ficou bom. */}
       <ForestRocks placements={rocks.large} c={c} />
       <ForestRocks placements={rocks.small} c={c} />
-      <GroundCover placements={grass} c={c} />
+      <GroundCover placements={grass} c={c} tint={grassTint} />
       {/* Entulho/debris (billboard 2D) REMOVIDO — chapado e girava (Pedro).
           Substituído por containers 3D (glb-containers) no game-world. */}
     </>

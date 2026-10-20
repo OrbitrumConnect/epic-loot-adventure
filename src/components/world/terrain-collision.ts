@@ -113,6 +113,70 @@ export function glbSurfaceY(x: number, z: number, fallback: number): number {
   return m > -Infinity ? m : fallback;
 }
 
+/* ------------------------------------------------------------------ *
+ * Amostra de COR da superfície (pra espalhar grama só na malha VERDE).
+ * Raycast de cima → primeiro acerto; lê a cor do pixel da textura (map)
+ * no UV do acerto, ou a cor do material / vertex-color como fallback.
+ * Feito 1x no load (por ponto-candidato), cacheando o pixel-buffer por imagem.
+ * ------------------------------------------------------------------ */
+const _pixelCache = new WeakMap<object, { data: Uint8ClampedArray; w: number; h: number }>();
+function imagePixels(img: TexImageSource): { data: Uint8ClampedArray; w: number; h: number } | null {
+  const cached = _pixelCache.get(img as object);
+  if (cached) return cached;
+  // IMPORTANTE: NÃO cachear falha. A textura carrega async — uma leitura antes da
+  // imagem decodificar (width=0) voltaria null; se isso fosse cacheado, nunca mais
+  // leríamos a textura (grama some de vez). Só cacheamos quando deu certo.
+  try {
+    const w = (img as HTMLImageElement).width, h = (img as HTMLImageElement).height;
+    if (w && h) {
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d', { willReadFrequently: true });
+      if (ctx) {
+        ctx.drawImage(img as CanvasImageSource, 0, 0);
+        const out = { data: ctx.getImageData(0, 0, w, h).data, w, h };
+        _pixelCache.set(img as object, out);
+        return out;
+      }
+    }
+  } catch { /* textura "tainted"/não pronta: cai no fallback de cor do material */ }
+  return null;
+}
+
+const _sampleColor = new THREE.Color();
+/** Cor da superfície do terreno em (x,z) (ou null se não há malha ali). */
+export function surfaceColorAt(x: number, z: number): THREE.Color | null {
+  if (terrains.size === 0) return null;
+  ORIGIN.set(x, 500, z);
+  ray.set(ORIGIN, DOWN);
+  ray.far = 700;
+  let best: THREE.Intersection | null = null;
+  for (const root of terrains) {
+    const hits = ray.intersectObject(root, true);
+    if (hits.length > 0 && (!best || hits[0]!.point.y > best.point.y)) best = hits[0]!;
+  }
+  if (!best) return null;
+  const mesh = best.object as THREE.Mesh;
+  const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial | undefined;
+  const tex = mat?.map;
+  if (tex?.image && best.uv) {
+    const px = imagePixels(tex.image as TexImageSource);
+    if (px) {
+      let u = best.uv.x - Math.floor(best.uv.x); // wrap (RepeatWrapping)
+      let v = best.uv.y - Math.floor(best.uv.y);
+      if (tex.flipY) v = 1 - v;
+      const ix = Math.min(px.w - 1, Math.max(0, Math.floor(u * px.w)));
+      const iy = Math.min(px.h - 1, Math.max(0, Math.floor(v * px.h)));
+      const i = (iy * px.w + ix) * 4;
+      _sampleColor.setRGB(px.data[i]! / 255, px.data[i + 1]! / 255, px.data[i + 2]! / 255);
+      _sampleColor.convertSRGBToLinear(); // textura é sRGB; trabalhamos em linear
+      return _sampleColor;
+    }
+  }
+  if (mat?.color) return _sampleColor.copy(mat.color);
+  return null;
+}
+
 /* ---- PAREDES (labirinto): colisão horizontal simples ---- */
 const walls = new Set<THREE.Object3D>();
 

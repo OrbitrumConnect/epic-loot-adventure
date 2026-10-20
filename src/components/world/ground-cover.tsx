@@ -7,12 +7,17 @@ import type { FadeSphere } from './occlusion';
 
 const spheres: FadeSphere[] = [];
 
-/** Folded, curved blades form real silhouettes in both game cameras. */
-export function GroundCover({ placements, c }: { placements: ForestPlacement[]; c: Palette }) {
+/** Folded, curved blades form real silhouettes in both game cameras.
+ *  `tint` (opcional) = tom de verde base (ex.: média amostrada do GLB do mapa) pra a
+ *  grama casar com o chão. Sem tint usa o token c.grass. Gradiente CLARO (Pedro: a
+ *  grama antiga estava escura) — raiz um tom abaixo, ponta puxada pro branco. */
+export function GroundCover({ placements, c, tint }: { placements: ForestPlacement[]; c: Palette; tint?: THREE.Color | undefined }) {
+  const tintKey = tint ? tint.getHexString() : '';
   const assets = useMemo(() => {
     const positions: number[] = [], colors: number[] = [];
-    const low = new THREE.Color(c.pine);
-    const high = new THREE.Color(c.grass).lerp(new THREE.Color(c.leaf), 0.45);
+    const base = tint ? tint.clone() : new THREE.Color(c.grass);
+    const low = base.clone().lerp(new THREE.Color('#000000'), 0.22);    // raiz um tom mais escura
+    const high = base.clone().lerp(new THREE.Color('#ffffff'), 0.16);   // ponta levemente clara (NÃO branca)
     const color = new THREE.Color();
     for (let blade = 0; blade < 28; blade++) {
       const a = blade * 2.39996;
@@ -55,7 +60,7 @@ export function GroundCover({ placements, c }: { placements: ForestPlacement[]; 
     };
     material.customProgramCacheKey = () => 'ground-cover-wind-fade-v1';
     return { geometry, material, time };
-  }, [c]);
+  }, [c, tintKey]);
   useFrame(({ clock }) => { assets.time.value = clock.elapsedTime; });
   useEffect(() => () => { assets.geometry.dispose(); assets.material.dispose(); }, [assets]);
   return <ForestBatch geometry={assets.geometry} material={assets.material} placements={placements} spheres={spheres} />;

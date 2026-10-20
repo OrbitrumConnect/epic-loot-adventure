@@ -38,15 +38,16 @@ function BaseHouseInner({
   const normal = useTexture('/models/house/normal.png');
   // Casa de PEDRA (evolução nível 10). Carrega sempre; só renderiza quando evoluída.
   const stone = useGLTF('/models/house/stone-house.glb');
-  // Casa de METAL: tier topo, a partir de onda >=10 E nível >20 (Pedro 20/10).
-  const metal = useGLTF('/models/house/metal-house.glb');
+  // Casa de METAL: tier topo (onda >=10 E nível >20). Ainda NÃO temos um GLB de metal
+  // dedicado — reusamos a geometria da pedra com material metálico (prata). Quando
+  // existir /models/house/metal-house.glb, trocar a fonte aqui. NÃO dar useGLTF num
+  // arquivo inexistente: ele faz throw e derruba o Canvas inteiro (404).
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
-  const level = useGameStore((s) => s.player.level);
-  const wave = useGameStore((s) => s.wave.wave);
+  const localBaseMetal = useGameStore((s) => s.baseMetal ?? false);
   // A evolução visual da base remota ainda não faz parte do payload de rede.
   // Ela continua sendo uma casa de madeira, mas fica no mesmo core da cerca.
   const baseEvolved = remote ? false : localBaseEvolved;
-  const metalTier = !remote && wave >= 10 && level > 20; // pedra -> metal no progresso
+  const metalTier = !remote && localBaseMetal; // pedra -> metal após pagar o upgrade (nível>20)
 
   const gl = useThree((s) => s.gl);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // habilita o corte do teto
@@ -57,7 +58,8 @@ function BaseHouseInner({
 
   const prepared = useMemo(() => {
     // Tier: metal (onda>=10 & nível>20) → pedra (evoluída) → madeira (base).
-    const o = (metalTier ? metal.scene : baseEvolved ? stone.scene : obj).clone();
+    // Metal reusa a geometria da pedra (não há GLB de metal) com material metálico.
+    const o = (metalTier || baseEvolved ? stone.scene : obj).clone();
     diffuse.colorSpace = THREE.SRGBColorSpace;
     const mat = metalTier
       ? new THREE.MeshStandardMaterial({ color: '#8c939c', roughness: 0.5, metalness: 0.55, side: THREE.DoubleSide, clippingPlanes: [clipPlane] })
@@ -118,7 +120,7 @@ function BaseHouseInner({
       }
     });
     return { wrap, halfX, halfZ, wallSegs };
-  }, [obj, stone, metal, baseEvolved, metalTier, diffuse, normal, clipPlane]);
+  }, [obj, stone, baseEvolved, metalTier, diffuse, normal, clipPlane]);
 
   // Teto some ao entrar: baixa o plano de corte pra ~2,6 m acima do piso.
   useFrame(() => {
@@ -182,4 +184,3 @@ export function BaseHouse(props: { pieces?: BasePiece[] | null; remote?: boolean
 }
 
 useGLTF.preload('/models/house/stone-house.glb');
-useGLTF.preload('/models/house/metal-house.glb');

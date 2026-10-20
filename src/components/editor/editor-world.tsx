@@ -2,9 +2,14 @@ import { TransformControls, useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { useEditorStore, type EditorObject } from './editor-store';
+import { useEditorStore, type EditorObject, type EditorCollide } from './editor-store';
 import { registerTerrain, registerWall } from '../world/terrain-collision';
 import { AssetBoundary } from '../world/asset-boundary';
+
+// Isola cada objeto: um GLB ausente (ex.: asset NÃO commitado → 404 no Vercel) faz
+// `useGLTF` dar throw. Sem boundary o throw sobe e DERRUBA o Canvas inteiro (tela de
+// erro). O `AssetBoundary` compartilhado (../world/asset-boundary) cuida disso, com
+// label pra log — ele substitui a classe local que existia aqui.
 
 /** De-shine dos assets de mapa do Meshy (mesmo princípio do makeMatte do terreno):
  *  nulifica os mapas metal/rough e trava fosco, SEM tint (mantém a cor original).
@@ -46,7 +51,12 @@ function PlacedObjectInner({ item }: { item: EditorObject }) {
   //  'floor'  → anda EM CIMA (ponte/terreno); 'block' → barra horizontal (parede/pedra);
   //  'none'/undefined → sem colisão (decorativo, ex. palmeira — não vira escada).
   // Raycast usa a matrixWorld atual, então mover/escalar no editor vale sem re-registrar.
-  const collide = item.collide ?? 'none';
+  // Ponte de sucata é feita pra ANDAR EM CIMA → força 'floor' mesmo que o objeto
+  // salvo tenha vindo com 'none' (o usuário não precisa marcar nada). Respeita uma
+  // escolha explícita diferente de 'none' (ex.: quis 'block').
+  const isBridge = item.assetUrl.includes('scrap-bridge');
+  const explicit: EditorCollide | undefined = item.collide && item.collide !== 'none' ? item.collide : undefined;
+  const collide: EditorCollide = explicit ?? (isBridge ? 'floor' : 'none');
   useEffect(() => {
     if (!ref.current || collide === 'none') return;
     return collide === 'block' ? registerWall(ref.current) : registerTerrain(ref.current);
@@ -75,4 +85,8 @@ function PlacedObject({ item }: { item: EditorObject }) {
     </AssetBoundary>
   );
 }
-export function EditorWorldLayer() { const objects = useEditorStore(s => s.objects); return <>{objects.filter(item => item.source !== 'map').map(item => <PlacedObject key={item.id} item={item} />)}</>; }
+
+export function EditorWorldLayer() {
+  const objects = useEditorStore(s => s.objects);
+  return <>{objects.filter(item => item.source !== 'map').map(item => <PlacedObject key={item.id} item={item} />)}</>;
+}
