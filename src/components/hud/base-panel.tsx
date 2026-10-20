@@ -86,6 +86,8 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
   const upgradeBuilding = useGameStore(s => s.upgradeBuilding);
   const evolveBaseToStone = useGameStore(s => s.evolveBaseToStone);
   const baseEvolved = useGameStore(s => s.baseEvolved);
+  const evolveBaseToMetal = useGameStore(s => s.evolveBaseToMetal);
+  const baseMetal = useGameStore(s => s.baseMetal);
   const playerLevel = useGameStore(s => s.player.level);
   const build = useBuildSelection();
   const key = BUILD_MODE_KEY_LABEL;
@@ -303,6 +305,18 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
             aria-label="Evoluir casa para pedra"
             onClick={() => evolveBaseToStone()}>
             <Hammer />{baseEvolved ? 'Pedra' : 'Evoluir'}
+          </Button>
+        </div>
+        <div className="base-tower-upgrade">
+          <div>
+            <strong>Evoluir Casa (Metal)</strong>
+            <small>{baseMetal ? 'Casa de metal ativa ✓' : `Pedra + nível >20 + 230 madeira + 460 pedra (2.3x). Seu nível: ${playerLevel}`}</small>
+          </div>
+          <Button size="sm" variant="outline" disabled={baseMetal || !baseEvolved || playerLevel <= 20}
+            title={baseMetal ? 'Já é de metal' : !baseEvolved ? 'Precisa ser de pedra antes' : playerLevel <= 20 ? 'Precisa ser acima do nível 20' : 'Evoluir para casa de metal'}
+            aria-label="Evoluir casa para metal"
+            onClick={() => evolveBaseToMetal()}>
+            <Hammer />{baseMetal ? 'Metal' : 'Evoluir'}
           </Button>
         </div>
       </section>

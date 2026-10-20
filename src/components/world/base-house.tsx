@@ -40,12 +40,11 @@ export function BaseHouse({
   // Casa de METAL: tier topo, a partir de onda >=10 E nível >20 (Pedro 20/10).
   const metal = useGLTF('/models/house/metal-house.glb');
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
-  const level = useGameStore((s) => s.player.level);
-  const wave = useGameStore((s) => s.wave.wave);
+  const localBaseMetal = useGameStore((s) => s.baseMetal ?? false);
   // A evolução visual da base remota ainda não faz parte do payload de rede.
   // Ela continua sendo uma casa de madeira, mas fica no mesmo core da cerca.
   const baseEvolved = remote ? false : localBaseEvolved;
-  const metalTier = !remote && wave >= 10 && level > 20; // pedra -> metal no progresso
+  const metalTier = !remote && localBaseMetal; // pedra -> metal após pagar o upgrade (nível>20)
 
   const gl = useThree((s) => s.gl);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // habilita o corte do teto
