@@ -17,15 +17,10 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import type { Position } from '@/game/types';
 import { HARVEST_NODES } from '@/game/data/harvest-nodes';
-import { ITEMS } from '@/game/data/items';
-import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
-import { getItemCount } from '@/game/systems/inventorySystem';
-
-/** Snapshot completo da store (estado + ações), como `getState()` devolve. */
-type StoreSnapshot = ReturnType<typeof useGameStore.getState>;
 import { harvestNodeById } from './harvest-nodes';
 import { creatureById } from './hostile-ai';
+import { decidePilotAttack } from './pilot-combat';
 import { buildAutoSnapshot, decideIntent, getObjectives, setAutoMode, tickWorld } from './objective-bridge';
 import { setPilotStatus } from './pilot-status';
 import { MAP_HALF } from './world-kit';
@@ -38,47 +33,6 @@ const MANUAL_KEYS = [
   'KeyW', 'KeyA', 'KeyS', 'KeyD',
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
 ];
-
-/**
- * Qual slot da hotbar o piloto deve empunhar para atacar um alvo a `dist` metros.
- *  - colado (dist <= alcance melee): a melee de MAIOR ataque;
- *  - longe (além do alcance melee) e há ranged com munição: a ranged de MAIOR alcance útil;
- *  - sem ranged viável: cai na melhor melee para fechar a distância.
- * Munição: arma de BALA (pistola/rifle) só conta se há `ammo` no inventário
- * (o arco usa flecha, é livre). Devolve o índice da hotbar ou `null` (nada a trocar).
- */
-type WeaponCand = { index: number; ranged: boolean; range: number; power: number };
-function pickWeaponIndex(st: StoreSnapshot, dist: number): number | null {
-  const inv = st.player.inventory;
-  const hotbar = inv.hotbar.slots;
-  const level = st.player.level;
-  const ammo = getItemCount(inv, 'ammo');
-  const cands: WeaponCand[] = [];
-  for (let i = 0; i < hotbar.length; i++) {
-    const slotIdx = hotbar[i];
-    if (slotIdx == null) continue;
-    const itemId = inv.slots[slotIdx]?.itemId ?? null;
-    if (!itemId) continue;
-    const item = ITEMS[itemId];
-    if (!item || !item.equippable) continue;
-    const prof = weaponFor(itemId);
-    const power = item.attackPower ?? 0;
-    if (!prof.ranged && power <= 0) continue;              // não é arma (ex.: tocha sem ataque)
-    if (prof.ranged && prof.projectile === 'bullet' && ammo <= 0) continue; // sem munição
-    cands.push({ index: i, ranged: prof.ranged, range: weaponRangeFor(itemId, level), power });
-  }
-  if (cands.length === 0) return null;
-  const bestMelee = cands.filter(c => !c.ranged)
-    .reduce<WeaponCand | null>((a, b) => (!a || b.power > a.power ? b : a), null);
-  const bestRanged = cands.filter(c => c.ranged)
-    .reduce<WeaponCand | null>((a, b) => (!a || b.range > a.range ? b : a), null);
-  const meleeThresh = bestMelee ? bestMelee.range : 4;
-  let pick: WeaponCand | null;
-  if (dist <= meleeThresh && bestMelee) pick = bestMelee;
-  else if (bestRanged) pick = bestRanged;
-  else pick = bestMelee ?? bestRanged;
-  return pick ? pick.index : null;
-}
 
 export function AutoPilot({
   playerRef, movement, paused,
@@ -164,7 +118,8 @@ export function AutoPilot({
     wasIdle.current = true;
 
     const now = Date.now();
-    const intent = decideIntent(buildAutoSnapshot(), now);
+    const snapshot = buildAutoSnapshot();
+    const intent = decideIntent(snapshot, now);
 
     switch (intent.kind) {
       case 'idle': {
@@ -199,42 +154,69 @@ export function AutoPilot({
         const name = creature?.name ?? 'inimigo';
         const target = creature && creature.behavior !== 'dead' ? creature.position : intent.to;
         const distToTarget = distTo(target);
-        // Troca automática de arma conforme a distância (debounce ~1 s pra não
-        // alternar a cada tick): colado → melee de maior ataque; longe → ranged
-        // de maior alcance COM munição. A seleção passa pela ação pública da store.
-        if (now - lastWeaponSwitch.current > 1000) {
-          const idx = pickWeaponIndex(store, distToTarget);
-          if (idx != null && idx !== store.ui.selectedHotbar) {
-            store.useHotbarSlot(idx);
+
+        // Arma na mão (do snapshot): define o `reach` (atirar daqui vs andar) e a
+        // cadência. Se o slot da mão não for arma, cai no melee padrão.
+        const weapons = snapshot.weapons ?? [];
+        const heldHotbarIndex = snapshot.heldHotbarIndex ?? store.ui.selectedHotbar;
+        const held = weapons.find(w => w.hotbarIndex === heldHotbarIndex) ?? null;
+        const heldRange = held?.range ?? snapshot.heldRange ?? 4;
+        const heldIsMelee = held ? held.type === 'melee' : true;
+        const heldCooldownMs = (held?.cooldown ?? 0.45) * 1000;
+        const nowS = now / 1000;
+        const specialReady = heldIsMelee
+          && nowS - (store.player.lastSpecialAt ?? 0) >= effectiveSpecialCooldown(store.player);
+
+        // Decisão pura: trocar / especial / atacar / esperar / aproximar.
+        const decision = decidePilotAttack({
+          dist: distToTarget,
+          weapons,
+          heldHotbarIndex,
+          heldRange,
+          heldIsMelee,
+          heldCooldownMs,
+          now,
+          lastWeaponSwitch: lastWeaponSwitch.current,
+          lastAttack: lastAttack.current,
+          switchDebounceMs: 1000,
+          specialReady,
+        });
+
+        switch (decision.action) {
+          case 'switch': {
+            // Troca a arma e NÃO ataca neste tick: o ataque sai no próximo,
+            // já com a arma certa na mão (o snapshot do próximo tick reflete).
+            store.useHotbarSlot(decision.hotbarIndex);
             lastWeaponSwitch.current = now;
+            hold();
+            setPilotStatus('attack', `Trocando de arma contra ${name}`, '');
+            break;
           }
-        }
-        // Estado FRESCO após a troca (useHotbarSlot já mexeu em ui/equipment).
-        const live = useGameStore.getState();
-        // Alcance vem da arma na mão: com arma de longe o piloto ATIRA de onde
-        // está (não corre pra cima). Só anda se o bicho estiver além do alcance.
-        const heldSlot = live.player.inventory.hotbar.slots[live.ui.selectedHotbar];
-        const heldId = heldSlot != null ? live.player.inventory.slots[heldSlot]?.itemId ?? null : null;
-        const reach = Math.max(1, weaponFor(heldId).range - 0.4);
-        if (distToTarget <= reach) {
-          hold();
-          // Especial quando melee e fora do cooldown (hit em área); senão ataque normal.
-          const nowS = Date.now() / 1000;
-          const canSpecial = !weaponFor(heldId).ranged
-            && nowS - (live.player.lastSpecialAt ?? 0) >= effectiveSpecialCooldown(live.player);
-          if (canSpecial) {
+          case 'special': {
+            hold();
             store.specialAttack('spin');
             setPilotStatus('attack', `Especial em ${name}`, '');
-          } else if (now - lastAttack.current > 450) {
+            break;
+          }
+          case 'attack': {
+            hold();
             lastAttack.current = now;
             store.attack(intent.creatureId);
             setPilotStatus('attack', `Atacando ${name}`, '');
-          } else {
-            setPilotStatus('attack', `Atacando ${name}`, '');
+            break;
           }
-        } else {
-          goTo(target);
-          setPilotStatus('move', `Fechando em ${name}`, '');
+          case 'wait': {
+            hold();
+            setPilotStatus('attack', `Atacando ${name}`, '');
+            break;
+          }
+          case 'approach': {
+            goTo(target);
+            setPilotStatus('move', `Fechando em ${name}`, '');
+            break;
+          }
+          default:
+            break;
         }
         break;
       }

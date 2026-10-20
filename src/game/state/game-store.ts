@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { ITEMS } from '../data/items';
 import { weaponFor, weaponRangeFor } from '../data/weapons';
+import { maxAttackRange, type AutoWeapon } from '../systems/weaponChoiceSystem';
 import { audioManager } from '../audio/audio-manager';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
@@ -1720,14 +1721,57 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
       playerLevel: state.player.level,
-      // Alcance EFETIVO da arma (escala com o nível, igual ao combate real).
-      attackRange: weaponRangeFor(
-        (() => {
-          const s = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
-          return s != null ? state.player.inventory.slots[s]?.itemId ?? null : null;
-        })(),
-        state.player.level,
-      ),
+      ...(() => {
+        const inv = state.player.inventory;
+        const level = state.player.level;
+        const ammoCount = getItemCount(inv, 'ammo');
+
+        // Toda a hotbar vira candidata a arma do piloto: melee (espada/machado/
+        // picareta/tocha) + ranged (arco/pistola/rifle). Poção/comida/recurso ficam
+        // de fora. A munição decide o ranged: bala acabou → arco (flecha livre) entra.
+        const weapons: AutoWeapon[] = [];
+        inv.hotbar.slots.forEach((invIndex, hotbarIndex) => {
+          if (invIndex == null) return;
+          const slot = inv.slots[invIndex];
+          if (!slot?.itemId || slot.quantity <= 0) return;
+          const item = ITEMS[slot.itemId];
+          if (!item) return;
+          const prof = weaponFor(slot.itemId);
+          // Arma do piloto = item EMPUNHÁVEL (`equippable`) que dê dano de arma:
+          // ranged conhecida OU attackPower > 0. A tocha e o `ancestral_strike`
+          // ficam de fora: não são empunháveis como arma (equippable:false), logo
+          // `useHotbarSlot` neles não troca `equipment.primary` e o dano não sai.
+          // Armadura é equippable mas sem attackPower/ranged → também fica de fora.
+          const isWeapon = item.equippable === true && (prof.ranged || (item.attackPower ?? 0) > 0);
+          if (!isWeapon) return;
+          // Melee = sempre usável; ranged de BALA precisa de munição; flecha é livre.
+          const hasAmmo = !prof.ranged || prof.projectile !== 'bullet' || ammoCount > 0;
+          weapons.push({
+            hotbarIndex,
+            itemId: slot.itemId,
+            type: prof.type,
+            range: weaponRangeFor(slot.itemId, level),
+            cooldown: prof.cooldown,
+            attackPower: item.attackPower ?? 0,
+            hasAmmo,
+          });
+        });
+
+        const heldHotbarIndex = state.ui.selectedHotbar;
+        const heldSlot = inv.hotbar.slots[heldHotbarIndex];
+        const heldItemId = heldSlot != null ? inv.slots[heldSlot]?.itemId ?? null : null;
+        // Valor de hoje: alcance da arma na MÃO (escala com o nível, igual ao combate).
+        const heldRange = weaponRangeFor(heldItemId, level);
+
+        return {
+          weapons,
+          heldHotbarIndex,
+          heldRange,
+          // Alcance EFETIVO = o da melhor arma disponível, não só a arma na mão.
+          // Assim o piloto emite `attack` de longe quando há ranged com munição.
+          attackRange: maxAttackRange(weapons, heldRange),
+        };
+      })(),
       harvestNodes: state.harvestNodes.map(n => ({
         id: n.id,
         kind: n.kind,

@@ -26,6 +26,8 @@ export const WEAPONS: Record<string, WeaponProfile> = {
   bow:    { type: 'bow',    ranged: true, range: 8,  cooldown: 0.9, projectile: 'arrow' },
   pistol: { type: 'pistol', ranged: true, range: 10, cooldown: 0.5, projectile: 'bullet' },
   rifle:  { type: 'rifle',  ranged: true, range: 12, cooldown: 0.8, projectile: 'bullet' },
+  // Arco de drop: melhor que o `bow` básico (alcance 9, cadência 0,85 s).
+  hunter_bow: { type: 'bow', ranged: true, range: 9, cooldown: 0.85, projectile: 'arrow' },
 };
 
 /** Alcance efetivo cresce com o nível e chega, no máximo, a 50 m no nível 250. */

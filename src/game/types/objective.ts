@@ -71,8 +71,24 @@ export type AutoSnapshot = {
   autoPotion?: boolean;
   /** Raio (m) pra caçar o bicho mais próximo quando ocioso. 0/ausente = não caça sozinho. */
   autoHuntRadius?: number;
-  /** Alcance de ataque da arma na mão (m). Ranged atira de longe. Ausente = melee. */
+  /** Alcance de ataque EFETIVO (m): o maior entre as armas usáveis da hotbar, pra
+   *  o piloto atirar de longe com arco/pistola/rifle. Ausente = melee. */
   attackRange?: number;
+  /** Armas da hotbar que o piloto pode empunhar (melee + ranged com munição).
+   *  Estruturalmente igual a `AutoWeapon` de `systems/weaponChoiceSystem`. */
+  weapons?: {
+    hotbarIndex: number;
+    itemId: string;
+    type: 'melee' | 'bow' | 'pistol' | 'rifle';
+    range: number;
+    cooldown: number;
+    attackPower: number;
+    hasAmmo: boolean;
+  }[];
+  /** Índice da hotbar da arma na MÃO agora (`ui.selectedHotbar`). */
+  heldHotbarIndex?: number;
+  /** Alcance (m) da arma na mão — o valor antigo de `attackRange`. */
+  heldRange?: number;
   /** Nós de colheita do mundo novo (legado fica em `resources`). */
   harvestNodes?: { id: string; kind: string; position: Position; depleted: boolean }[];
   gatherCapacity?: boolean;
