@@ -80,6 +80,10 @@ export function Enemies({ c, playerRef }: { c: Palette; playerRef: React.RefObje
   );
 }
 
+/**
+ * Sincroniza os inimigos de uma sala sem tocar no modo solo. O criador do link
+ * é a única simulação; convidados recebem o mesmo roster, vida e posição.
+ */
 export function MultiplayerWorldSync() {
   const connected = useNet((s) => s.connected);
   const isHost = useNet((s) => s.isHost);
@@ -106,6 +110,7 @@ export function MultiplayerWorldSync() {
       if (!creature || creature.behavior === 'dead') return;
       const dx = creature.position.x - hit.source.x;
       const dz = creature.position.z - hit.source.z;
+      // Limite largo cobre armas à distância, sem aceitar dano do outro lado do mapa.
       if (dx * dx + dz * dz > 24 * 24) return;
       const damage = Math.max(1, Math.round(hit.damage) - creature.armor);
       const hp = Math.max(0, creature.hp - damage);

@@ -23,19 +23,21 @@ function RemotePlayer({ id }: { id: string }) {
   const initial = useNet.getState().players[id];
   const title = `${initial?.name ?? 'Viajante'} · Nv. ${initial?.level ?? 1}`;
   const texture = useMemo(() => labelTexture(title, '#fff3c4'), [title]);
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const g = group.current;
     const p = useNet.getState().players[id];
     if (!g || !p) return;
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
     if (!inited.current) { g.position.set(p.x, terrainHeight(p.x, p.z), p.z); g.rotation.y = p.yaw; inited.current = true; }
-    g.position.x += (p.x - g.position.x) * 0.22;
-    g.position.z += (p.z - g.position.z) * 0.22;
+    const dt = Math.min(delta, 0.1);
+    const t = 1 - Math.exp(-15 * dt);
+    g.position.x += (p.x - g.position.x) * t;
+    g.position.z += (p.z - g.position.z) * t;
     g.position.y = terrainHeight(g.position.x, g.position.z);
     let dy = p.yaw - g.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
-    g.rotation.y += dy * 0.22;
+    g.rotation.y += dy * t;
     const player = useGameStore.getState().player.position;
     const dist = Math.hypot(player.x - g.position.x, player.z - g.position.z);
     if (labelGroup.current) {

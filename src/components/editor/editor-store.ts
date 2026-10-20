@@ -9,6 +9,16 @@ export const EDITOR_ASSETS = [
   { name: 'Torre de vigia', assetUrl: '/models/watchtower/watchtower.glb', scale: 1 },
   { name: 'Montanha oeste', assetUrl: '/models/terrain/mountain.glb', scale: 1 },
   { name: 'Montanha caverna', assetUrl: '/models/terrain/mountain-cave.glb', scale: 1 },
+  // Novos assets de mapa (Meshy). De-shine aplicado no PlacedObject p/ assets /models/map/.
+  { name: 'Rio devastado (base)', assetUrl: '/models/map/rio-wasteland-master.glb', scale: 20 },
+  { name: 'Rio devastado (icônico)', assetUrl: '/models/map/rio-wasteland-iconic.glb', scale: 20 },
+  { name: 'Ponte de sucata', assetUrl: '/models/map/wasteland-scrap-bridge.glb', scale: 8 },
+  { name: 'Palmeiras (grupo)', assetUrl: '/models/map/desert-palm-cluster.glb', scale: 10 },
+  { name: 'Grama esparsa', assetUrl: '/models/map/savannah-grass-sparse.glb', scale: 15 },
+  { name: 'Grama baixa', assetUrl: '/models/map/savannah-grass-low.glb', scale: 15 },
+  { name: 'Casa de metal', assetUrl: '/models/map/metal-house.glb', scale: 6 },
+  { name: 'Casa de pedra', assetUrl: '/models/map/stone-house.glb', scale: 6 },
+  { name: 'Fazenda de palmeiras', assetUrl: '/models/map/palm-farm.glb', scale: 10 },
 ] as const;
 const KEY = 'tribos.editor.local.v1';
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;

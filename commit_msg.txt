@@ -1,0 +1,8 @@
+fix(terrain): harmonize earthy palette
+
+- null metalnessMap before metalness=0 (Three.js multiplies scalar x map pixel B)
+- null roughnessMap on mountains, roughness=0.95 (guaranteed matte rock)
+- keep roughnessMap on ground, roughness=1.0 (natural surface variation)
+- warm color lerp once at load: ground toward sandy-brown, mountain toward dry-stone
+- normalMap and albedo map preserved (relief and texture intact)
+- no logic, collision, lighting, fog or character materials changed

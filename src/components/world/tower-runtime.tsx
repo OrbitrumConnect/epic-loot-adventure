@@ -17,6 +17,7 @@ export function TowerRuntime({ paused }: { paused: boolean }) {
     accum.current += Math.min(delta, 0.1);
     if (accum.current < 0.05) return;
     accum.current %= 0.05;
+
     const state = useGameStore.getState();
     const pieces = state.playerBase?.pieces ?? null;
     const current = cache.current;

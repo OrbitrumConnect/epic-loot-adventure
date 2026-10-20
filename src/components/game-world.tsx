@@ -502,14 +502,13 @@ function Character({
     // Piloto / clique-pra-andar (sem WASD, seguindo um destino) corre no sprint.
     const autoFollowing = !dx && !dz && (targetVx !== 0 || targetVz !== 0);
     const sprinting = k.has('ShiftLeft') || k.has('ShiftRight') || autoFollowing;
-    audioManager.setFootsteps(velocity.current.lengthSq() > 0.02, sprinting);
     const ACCEL = 22;
     const DECEL = 28;
     const px = body.current.position.x;
     const pz = body.current.position.z;
     const inLake = LAKE_CENTERS.some(l => (px - l.x) ** 2 + (pz - l.z) ** 2 < l.r * l.r);
     const moveBonus = 1 + effectiveAttributes(useGameStore.getState().player).moveSpeed / 100;
-    // Andar/correr -10% (pedido do Pedro): correr 6.5→5.85, andar 4.5→4.05.
+    // Andar/correr com redução de 10%: correr 4.8→4.32, andar 2.0→1.8.
     const MAX_SPEED = (sprinting ? 4.32 : 1.8) * (inLake ? 0.4 : 1) * moveBonus;
 
     if (targetVx !== 0 || targetVz !== 0) {
@@ -1272,10 +1271,14 @@ function TerrainMesh({ c, onAttack, paused }: { c: Palette; onAttack?: (() => vo
         .replace('#include <map_fragment>', /* glsl */ `
           #ifdef USE_MAP
             diffuseColor.rgb *= texture2D(map, vMapUv).rgb;
-            // Dica leve de grama (olive dessaturado) só onde vBlend é alto.
-            // Barro/sertão: aproxima o chão jogável do tom do anel externo.
+            // A textura original continua visível, mas recebe uma mistura
+            // uniforme de areia/barro para reduzir o verde excessivo do chão.
+            // O relevo, a malha e a colisão permanecem exatamente iguais.
+            // Barro/sertão discreto: aquece e escurece o marrom sem puxar para vermelho.
             diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.55, 0.40, 0.24 ), 0.42 );
+            // Aproxima o chão jogável do tom do anel externo, sem mudar relevo ou água.
             diffuseColor.rgb *= vec3( 0.75, 0.66, 0.53 );
+            // Dica leve de grama (olive dessaturado) só onde vBlend é alto.
             diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.97, 1.0, 0.88 ), vBlend * 0.15 );
           #endif
         `);

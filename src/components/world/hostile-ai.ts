@@ -139,6 +139,8 @@ export function queuePosition(id: string, x: number, z: number, behavior: Creatu
 }
 
 export function flushPositions() {
+  // Em sala online o convidado recebe as posições do anfitrião; não pode
+  // sobrescrevê-las com uma IA local divergente.
   if (!canSimulateSharedWorld()) { pending.clear(); return; }
   if (pending.size === 0) return;
   useGameStore.setState(s => ({

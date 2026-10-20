@@ -13,24 +13,7 @@ export function connectLocalPersistence(store: PersistenceStore, storage: SaveSt
   try {
     const raw = storage.getItem(SAVE_KEY);
     const save = parseLocalSave(raw);
-    if (save) {
-      const restored = restoreLocalSave(save, store.getState(), now());
-      const potionIdx = restored.player.inventory.slots.findIndex(s => s.itemId === 'health_potion');
-      const hotbar = [...restored.player.inventory.hotbar.slots];
-      // Recursos brutos ficam somente na mochila; nunca ocupam a hotbar.
-      for (let i = 0; i < hotbar.length; i++) {
-        const invIdx = hotbar[i];
-        if (invIdx == null) continue;
-        const item = restored.player.inventory.slots[invIdx]?.itemId;
-        if (item === 'wood' || item === 'stone') hotbar[i] = null;
-      }
-      // O slot 12 existe sempre; fica vazio até o primeiro drop de poção.
-      hotbar[11] = potionIdx >= 0 ? potionIdx : null;
-      store.setState({
-        ...restored,
-        player: { ...restored.player, inventory: { ...restored.player.inventory, hotbar: { ...restored.player.inventory.hotbar, slots: hotbar } } },
-      });
-    }
+    if (save) store.setState(restoreLocalSave(save, store.getState(), now()));
     else if (raw !== null) storage.removeItem(SAVE_KEY);
   } catch { /* Storage bloqueado/corrompido: mantém o protótipo local jogável. */ }
 

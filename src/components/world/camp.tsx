@@ -22,7 +22,6 @@ import { hashId, markPointerConsumed, mixColor, rand, terrainHeight, type Palett
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { WatchtowerModel } from './glb-watchtower';
 import { useGameStore } from '@/game/state/game-store';
-import { audioManager } from '@/game/audio/audio-manager';
 
 /** Distância² (m²) além da qual a luz da fogueira do acampamento sai do shader. */
 const CAMP_LIGHT_D2 = 26 * 26;
@@ -212,7 +211,6 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
     const fl = fireLight.current;
     if (fl) {
       fl.getWorldPosition(tmpCampV);
-      audioManager.updateCampfireDistance(Math.hypot(p.x - tmpCampV.x, p.z - tmpCampV.z));
       const near = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z) < CAMP_LIGHT_D2;
       fl.visible = near;
       if (near) fl.intensity = (3.6 + nightFactor() * 8) + Math.sin(clock.elapsedTime * 7) * 0.7; // +luz (Pedro)

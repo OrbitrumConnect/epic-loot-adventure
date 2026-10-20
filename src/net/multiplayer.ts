@@ -106,6 +106,7 @@ export const useNet = create<NetState>((set, get) => ({
 
     ch.on('broadcast', { event: 'world' }, ({ payload }) => {
       const p = payload as { id: string; creatures: CreatureState[] };
+      // O anfitrião é a autoridade. Ele não deve aceitar um snapshot de convidado.
       if (p.id === selfId || get().isHost || !Array.isArray(p.creatures)) return;
       set({ world: p.creatures });
     });

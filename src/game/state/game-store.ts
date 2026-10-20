@@ -23,9 +23,6 @@ import {
 } from '../systems/baseSystem';
 import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
 import type { BaseType, BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
-
-// Slot 12 (índice 11) é reservado exclusivamente para poções.
-const POTION_HOTBAR_INDEX = 11;
 import { BASE_TYPES, DEFAULT_BASE_TYPE } from '../data/base-types';
 import { basePieceCost } from '../systems/baseTypeSystem';
 import { CLAIM_SIZE } from '../data/base-pieces';
@@ -53,7 +50,6 @@ import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
-import { audioManager } from '../audio/audio-manager';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
@@ -77,7 +73,6 @@ type GameState = {
   deathBags: DeathBag[];
   ui: UIState;
   attackTick: number;
-  rangedShotTick: number;
   /** Incrementa a cada especial (Q/R); o mundo 3D anima. `specialKind` diz qual. */
   specialTick: number;
   specialKind: 'jump' | 'spin' | null;
@@ -135,7 +130,6 @@ type GameActions = {
   deallocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Equipa um item da bolsa no slot certo pela categoria (arma/armadura/acessório). */
   equipItem: (itemId: string) => void;
-  dropItem: (slotIndex: number) => void;
   /** Tira o equipamento de um slot (volta pro "nu"). */
   unequipSlot: (slot: 'primary' | 'secondary' | 'armor' | 'accessory') => void;
   useHotbarSlot: (index: number) => void;
@@ -263,7 +257,7 @@ function createInitialPlayer(): PlayerState {
     { itemId: 'ammo', quantity: 60 }, // munição inicial p/ pistola/rifle
   ]);
   // Hotbar estendida: 8 slots originais INTACTOS + arco/pistola/rifle no fim.
-  inventory.hotbar.slots = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 3];
+  inventory.hotbar.slots = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
 
   return {
     id: 'player_1',
@@ -432,7 +426,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   resources: createInitialResources(),
   deathBags: [],
   attackTick: 0,
-  rangedShotTick: 0,
   specialTick: 0,
   specialKind: null,
   base: createInitialBase(Date.now()),
@@ -612,10 +605,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
     const finalPower = Math.round(totalPower * damageMultiplier(state.player));
 
+    // Em sala convidada o inimigo pertence ao anfitrião. O convidado conserva
+    // apenas o próprio cooldown/munição e envia a intenção do golpe; a vida
+    // comum volta no snapshot do anfitrião para todos os jogadores.
     if (!canSimulateSharedWorld()) {
-      if (heldItemId === 'bow') audioManager.playShot();
-      if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
-      if (!usingRanged) audioManager.playMelee();
       broadcastCreatureHit({ targetId, source: state.player.position, damage: finalPower });
       set({
         player: {
@@ -624,7 +617,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           inventory: usesBullet ? removeItem(state.player.inventory, 'ammo', 1) : state.player.inventory,
         },
         attackTick: state.attackTick + 1,
-        rangedShotTick: usingRanged ? state.rangedShotTick + 1 : state.rangedShotTick,
         ui: { ...state.ui, message: `Golpe enviado contra ${creature.name}.` },
       });
       return;
@@ -677,13 +669,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           if (drop.itemId) drafts.push(lootEvent(drop.itemId, drop.quantity, creature.position));
         }
         if (loot.length > 0) {
-          let collected = 0;
-          for (const drop of loot) {
-            if (!drop.itemId || !canAddItem(updatedPlayer.inventory, drop.itemId, drop.quantity)) continue;
-            updatedPlayer = { ...updatedPlayer, inventory: addItem(updatedPlayer.inventory, drop.itemId, drop.quantity) };
-            collected += drop.quantity;
-          }
-          msg += collected > 0 ? ` ${bonus ? `✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} ` : ''}recompensa adicionada.` : 'Mochila cheia; recompensa não adicionada.';
+          const bag = createDeathBag(creature.id, creature.name, creature.position, loot);
+          updatedBags = [...state.deathBags, bag];
+          msg += bonus ? ` ✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} dropou!` : ` Loot no chão!`;
         }
       }
       updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
@@ -728,15 +716,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }
     }
 
-    if (heldItemId === 'bow') audioManager.playShot();
-    if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
-    if (!usingRanged) audioManager.playMelee();
     set({
       player: updatedPlayer,
       creatures: updatedCreatures,
       deathBags: updatedBags,
       attackTick: state.attackTick + 1,
-      rangedShotTick: usingRanged ? state.rangedShotTick + 1 : state.rangedShotTick,
       feedback: pushEvents(state.feedback, drafts, stamp),
       ui: { ...state.ui, message: msg },
     });
@@ -809,7 +793,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   collect: (nodeId: string) => {
     const state = get();
-    audioManager.playHarvest();
     const nodeIdx = state.resources.findIndex(r => r.id === nodeId);
     if (nodeIdx < 0) return;
 
@@ -1044,12 +1027,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         const invIdx = inv.slots.findIndex(sl => sl.itemId === itemId);
         if (invIdx >= 0) {
           const slots = [...hotbar.slots];
-          // O slot 12 (índice 11) é reservado para poções e nunca pode ser
-          // sobrescrito ao equipar uma arma.
-          const target = s.ui.selectedHotbar === POTION_HOTBAR_INDEX ? 0 : s.ui.selectedHotbar;
-          slots[target] = invIdx;
-          const potionIdx = inv.slots.findIndex(sl => sl.itemId === 'health_potion');
-          if (potionIdx >= 0) slots[POTION_HOTBAR_INDEX] = potionIdx;
+          slots[s.ui.selectedHotbar] = invIdx;
           hotbar = { ...hotbar, slots };
         }
       }
@@ -1062,17 +1040,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         ui: { ...s.ui, message: `${item.name} equipado.` },
       };
     });
-  },
-  dropItem: (slotIndex) => {
-    const state = get();
-    const itemId = state.player.inventory.slots[slotIndex]?.itemId;
-    const quantity = itemId ? state.player.inventory.slots[slotIndex]!.quantity : 0;
-    if (quantity <= 0) return;
-    const inventory = { ...state.player.inventory, slots: state.player.inventory.slots.map((slot, i) => i === slotIndex ? { itemId: null, quantity: 0 } : { ...slot }) };
-    const hotbar = inventory.hotbar.slots.map(slotIndex => inventory.slots[slotIndex]?.itemId ? slotIndex : null);
-    const equipment = { ...inventory.equipment };
-    (Object.keys(equipment) as (keyof typeof equipment)[]).forEach(slot => { if (equipment[slot] === itemId) equipment[slot] = null; });
-    set({ player: { ...state.player, inventory: { ...inventory, hotbar: { ...inventory.hotbar, slots: hotbar }, equipment } }, ui: { ...state.ui, message: `${ITEMS[itemId]?.name ?? itemId} descartado.` } });
   },
 
   unequipSlot: (slot) => {
@@ -1561,7 +1528,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const result = harvestWorldNode(
       node, state.player.inventory.equipment.primary, state.player.inventory, Date.now(),
     );
-    if (result.harvested > 0) audioManager.playHarvest();
     if (!result.ok) {
       set(s => ({ ui: { ...s.ui, message: result.message } }));
       return;
@@ -1712,22 +1678,19 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Com poção infinita (dev) e sem cura na hotbar, usa o slot 0 só como sinal:
       // quem executa o `heal` deve chamar `drinkPotion()`, que ignora o índice.
       healSlot: findHealHotbarIndex(state.player.inventory) ?? (findBestHealItem(state.player.inventory, DEV_INFINITE_POTIONS) ? 0 : null),
-      // Considera a mochila cheia com tolerância para arredondamento de peso;
-      // quando cheia, o piloto deve caçar e nunca voltar a escolher uma árvore.
-      gatherCapacity: getWeight(state.player.inventory) < state.player.inventory.maxWeight - 0.01 && state.player.inventory.slots.some(slot => {
+      gatherCapacity: getWeight(state.player.inventory) < state.player.inventory.maxWeight && state.player.inventory.slots.some(slot => {
         if (slot.itemId === null) return true;
         const item = ITEMS[slot.itemId];
         return Boolean(item && slot.quantity < item.maxStack);
       }),
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
-      attackRange: weaponRangeFor(
+      attackRange: weaponFor(
         (() => {
           const s = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
           return s != null ? state.player.inventory.slots[s]?.itemId ?? null : null;
         })(),
-        state.player.level,
-      ),
+      ).range,
       harvestNodes: state.harvestNodes.map(n => ({
         id: n.id,
         kind: n.kind,

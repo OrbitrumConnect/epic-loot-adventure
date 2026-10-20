@@ -14,7 +14,8 @@ import { heldKindFor, selectedItemId } from './held-weapon';
  * retarget. Cada clip vem de um GLB próprio (Mixamo exporta 1 por arquivo).
  * Mesma interface do `GlbHero` (`actionRef`/`speedRef`/`weapon`) p/ trocar fácil.
  */
-const RED_URL = '/models/red/red.glb';
+// Preview local do novo herói Meshy; os clips Mixamo existentes continuam iguais.
+const RED_URL = '/models/red/hero-preview.glb';
 const CLIP_URL: Record<string, string> = {
   idle: '/models/red/idle.glb',
   walk: '/models/red/walk.glb',
@@ -26,7 +27,7 @@ const CLIP_URL: Record<string, string> = {
 /** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
  *  Mixamo são Y-up → a anim DEITA o herói. Cancela com +90° X num wrapper (fora do
  *  esqueleto, não distorce o skinning). Y afina a planta dos pés no chão. */
-const STAND_FIX_X = Math.PI / 2;
+const STAND_FIX_X = 0;
 const STAND_FIX_Y = 0;
 /** Velocidade do clip de ataque (combo Mixamo é longo → acelera p/ fechar a janela). */
 const ATTACK_SPEED = 1.5;
@@ -51,13 +52,44 @@ function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
   return box;
 }
 
+/** Bounding box REAL pós-esqueleto (o que de fato renderiza). Ao contrário da caixa
+ *  por geometria, é imune à escala "assada" no bind: exports Blender deixam o
+ *  esqueleto sob um nó em escala 0.01 que o SKINNING ignora na tela mas a caixa de
+ *  geometria NÃO — então a bind reporta ~0.016 m para um herói de 1.63 m. Amostra os
+ *  vértices já posicionados pelos ossos. */
+function measureSkinnedBox(root: THREE.Object3D): THREE.Box3 {
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    const sm = o as THREE.SkinnedMesh;
+    const pos = sm.geometry?.attributes?.['position'] as THREE.BufferAttribute | undefined;
+    if (sm.isSkinnedMesh && pos) {
+      const step = Math.max(1, Math.floor(pos.count / 2000)); // amostra p/ custo baixo
+      for (let i = 0; i < pos.count; i += step) {
+        v.fromBufferAttribute(pos, i);
+        sm.applyBoneTransform(i, v);
+        v.applyMatrix4(sm.matrixWorld);
+        box.expandByPoint(v);
+      }
+    }
+  });
+  return box;
+}
+
 /** Zera o deslocamento horizontal (root motion) do Hips → não desliza pelo mapa
- *  (o movimento quem dirige é a lógica do jogo). Mantém o Y (pulinho natural). */
-function stripRootMotion(clip: THREE.AnimationClip): THREE.AnimationClip {
+ *  (o movimento quem dirige é a lógica do jogo). Mantém o Y (pulinho natural).
+ *  `fixHipsY` (só herói Blender): fixa o Y do quadril no valor do bind — os clips
+ *  vêm de OUTRO esqueleto e trazem um Y que afunda o corpo neste; fixar no bind
+ *  mantém a altura certa com a animação rodando (perde só o leve pulinho). */
+function stripRootMotion(clip: THREE.AnimationClip, fixHipsY: number | null = null): THREE.AnimationClip {
   for (const track of clip.tracks) {
     if (/Hips\.position$/i.test(track.name)) {
       const v = track.values;
-      for (let i = 0; i + 2 < v.length; i += 3) { v[i] = 0; v[i + 2] = 0; }
+      for (let i = 0; i + 2 < v.length; i += 3) {
+        v[i] = 0; v[i + 2] = 0;
+        if (fixHipsY !== null) v[i + 1] = fixHipsY;
+      }
     }
   }
   return clip;
@@ -115,12 +147,26 @@ export function GlbHeroMixamo({
     const c = skeletonClone(scene);
     if (autoHeight) {
       c.updateMatrixWorld(true);
-      const box = measureGeoBox(c);
-      const h = box.max.y - box.min.y || 1;
+      // A caixa por geometria (bind) é enganada quando o export "assa" uma escala no
+      // esqueleto (Blender 0.01): ela reporta ~0.016 m, mas o SKINNING renderiza
+      // 1.63 m. A caixa skinned mede o que de fato aparece. Usamos a skinned SÓ
+      // quando a bind está claramente mentindo (razão de altura muito fora de 1);
+      // para modelos normais (escala ~1: raiders FBX, red.glb) as duas batem e
+      // mantemos a bind → comportamento idêntico ao original (zero regressão).
+      const bindBox = measureGeoBox(c);
+      const bindH = bindBox.max.y - bindBox.min.y || 1;
+      const skBox = measureSkinnedBox(c);
+      const skH = skBox.max.y - skBox.min.y;
+      const fooled = skH > 1e-4 && Math.abs(Math.log(skH / bindH)) > 0.5;
+      const h = fooled ? skH : bindH;
       c.scale.setScalar(autoHeight / h);
       c.updateMatrixWorld(true);
-      const b2 = measureGeoBox(c);
+      const b2 = fooled ? measureSkinnedBox(c) : measureGeoBox(c);
       c.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+      // Modelos "fooled" (export Blender) usam clips feitos p/ OUTRO esqueleto; a
+      // pose idle real pode deslocar o corpo verticalmente vs. o bind medido aqui.
+      // Marca p/ o useFrame reassentar os pés uma vez, já com a animação rodando.
+      c.userData['fooled'] = fooled;
     }
     return c;
   }, [scene, autoHeight]);
@@ -134,17 +180,28 @@ export function GlbHeroMixamo({
   }, [cloned]);
 
   const clips = useMemo(() => {
+    // Só modelos "fooled" (herói Blender) fixam o Y do quadril no bind; raiders/red
+    // (fooled=false) mantêm o comportamento original (Y do clip + pulinho).
+    const fooled = cloned.userData['fooled'] === true;
+    let fixHipsY: number | null = null;
+    if (fooled) {
+      cloned.traverse((o) => {
+        if (fixHipsY === null && /hips$/i.test(o.name.replace(/[^a-z]/gi, ''))) {
+          fixHipsY = (o as THREE.Bone).position.y;
+        }
+      });
+    }
     const mk = (g: { animations: THREE.AnimationClip[] }, name: string): THREE.AnimationClip | null => {
       const src = g.animations[0];
       if (!src) return null;
       const a = src.clone();
       a.name = name;
       a.tracks = a.tracks.filter((t) => boneNames.has(t.name.split('.')[0] ?? ''));
-      return stripRootMotion(a);
+      return stripRootMotion(a, fixHipsY);
     };
     return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(jumpG, 'jump')]
       .filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames]);
+  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames, cloned]);
 
   const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
@@ -284,6 +341,18 @@ export function GlbHeroMixamo({
     }
   });
 
+  // O grip é filho do osso da mão, cuja escala de MUNDO ainda inclui o 0.01 do
+  // esqueleto (~0.012 no modelo Blender, ~1 no FBX). Dividir por essa escala real
+  // do osso mantém gripPos/gripScale em METROS consistentes — sem isso a arma do
+  // modelo Blender renderiza ~100x menor (some da mão).
+  const gripNorm = useMemo(() => {
+    if (!handBone) return 1;
+    cloned.updateMatrixWorld(true);
+    const s = new THREE.Vector3();
+    handBone.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), s);
+    return 1 / (Math.abs(s.x) || 1);
+  }, [cloned, handBone]);
+
   return (
     <group ref={inner} rotation={[0, yaw, 0]} scale={scale}>
       {/* Wrapper que "levanta" o herói (cancela o -90° X do rig Meshy FBX). */}
@@ -292,7 +361,11 @@ export function GlbHeroMixamo({
       </group>
       {weapon && handBone
         ? createPortal(
-            <group position={gripPos} rotation={gripRot} scale={gripScale}>
+            <group
+              position={[gripPos[0] * gripNorm, gripPos[1] * gripNorm, gripPos[2] * gripNorm]}
+              rotation={gripRot}
+              scale={gripScale * gripNorm}
+            >
               {weapon}
             </group>,
             handBone,

@@ -23,16 +23,16 @@ export const DEFAULT_MELEE: WeaponProfile = { type: 'melee', ranged: false, rang
 
 export const WEAPONS: Record<string, WeaponProfile> = {
   // Ranged — abaixo dos 25 m do auto-farm, então ainda exige aproximar um pouco.
-  bow:    { type: 'bow',    ranged: true, range: 18, cooldown: 0.9, projectile: 'arrow' },
-  pistol: { type: 'pistol', ranged: true, range: 20, cooldown: 0.5, projectile: 'bullet' },
-  rifle:  { type: 'rifle',  ranged: true, range: 25, cooldown: 0.8, projectile: 'bullet' },
+  bow:    { type: 'bow',    ranged: true, range: 8,  cooldown: 0.9, projectile: 'arrow' },
+  pistol: { type: 'pistol', ranged: true, range: 10, cooldown: 0.5, projectile: 'bullet' },
+  rifle:  { type: 'rifle',  ranged: true, range: 12, cooldown: 0.8, projectile: 'bullet' },
 };
 
-/** Alcance efetivo cresce com o nível e chega, no máximo, a 35 m no nível 250. */
+/** Alcance efetivo cresce com o nível e chega, no máximo, a 50 m no nível 250. */
 export function weaponRangeFor(itemId: string | null | undefined, level = 1): number {
   const base = weaponFor(itemId).range;
   const t = Math.min(1, Math.max(0, (Math.floor(level) - 1) / 249));
-  return Math.round((base + (35 - base) * t) * 10) / 10;
+  return Math.round((base + (50 - base) * t) * 10) / 10;
 }
 
 /** Perfil da arma de um item (ou o melee padrão). */

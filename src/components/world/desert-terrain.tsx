@@ -73,7 +73,7 @@ function makeMatte(c: THREE.Object3D, shadow: 'receive' | 'cast') {
       if (isMountain) {
         pm.color.lerp(MOUNTAIN_TINT, 0.22); // reduz avermelhado excessivo
       } else {
-        pm.color.lerp(GROUND_TINT, 0.28);   // retira cast verde-acinzentado
+        pm.color.lerp(GROUND_TINT, 0.28);   // mistura sutil, sem alterar a textura do GLB
       }
 
       pm.needsUpdate = true;

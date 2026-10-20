@@ -835,6 +835,7 @@ export function NetBases({ c }: { c: Palette }) {
   );
 }
 
+/** A mesma base do anfitrião/convidado: cerca, peças e a casa central. */
 function RemoteBase({ id, c }: { id: string; c: Palette }) {
   const base = useNet((s) => s.bases[id] ?? null);
   if (!base) return null;

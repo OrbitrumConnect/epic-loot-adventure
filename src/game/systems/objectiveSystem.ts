@@ -461,15 +461,6 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   }
 
   if (active.kind === 'gather_node') {
-    // Mochila cheia: não fique parado diante do recurso. Mantém a atividade
-    // útil caçando criaturas dentro do raio e retoma a coleta quando houver
-    // espaço novamente.
-    if (snapshot.gatherCapacity === false) {
-      const huntBase = snapshot.autoHuntRadius ?? 0;
-      const prey = nearestCreatureWithin(snapshot, Math.max(huntBase, snapshot.attackRange ?? 0));
-      if (prey) return engage(snapshot, prey, 'Caçando por perto (mochila cheia)');
-      return { kind: 'idle', reason: 'Mochila cheia: aguardando espaço para coletar.' };
-    }
     const node = snapshot.resources.find(r => r.id === active.targetId);
     if (!node || node.depleted) return { kind: 'idle', reason: 'Recurso indisponível.' };
     if (getDistance(snapshot.playerPosition, node.position) <= GATHER_RANGE) {

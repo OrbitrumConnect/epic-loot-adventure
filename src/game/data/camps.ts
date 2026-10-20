@@ -158,7 +158,7 @@ export const CAMPS: Record<string, CampDefinition> = {
       gold: 190,
       items: [
         { itemId: 'iron_ore', quantity: 6 },
-        { itemId: 'health_potion', quantity: 5 },
+        { itemId: 'health_potion', quantity: 2 },
         { itemId: 'wolf_pelt', quantity: 2 },
       ],
     },
@@ -196,7 +196,7 @@ export const CAMPS: Record<string, CampDefinition> = {
       items: [
         { itemId: 'arcane_essence', quantity: 6 },
         { itemId: 'iron_ore', quantity: 10 },
-        { itemId: 'health_potion', quantity: 5 },
+        { itemId: 'health_potion', quantity: 3 },
       ],
     },
     respawnMs: 480_000,
@@ -239,7 +239,7 @@ export const CAMPS: Record<string, CampDefinition> = {
         { itemId: 'leather_armor', quantity: 1 },
         { itemId: 'arcane_essence', quantity: 12 },
         { itemId: 'iron_ore', quantity: 16 },
-        { itemId: 'health_potion', quantity: 5 },
+        { itemId: 'health_potion', quantity: 4 },
       ],
     },
     respawnMs: 600_000,

@@ -46,3 +46,10 @@ art/**/__pycache__/
 
 # Cache de ferramenta local
 .cache/
+
+.env
+.env.local
+.env.*.local
+
+# Assets de mapa pesados (passam do limite 100MB do GitHub) — hospedar a parte
+public/models/map/

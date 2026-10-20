@@ -38,6 +38,8 @@ export function BaseHouse({
   // Casa de PEDRA (evolução nível 10). Carrega sempre; só renderiza quando evoluída.
   const stone = useGLTF('/models/house/stone-house.glb');
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
+  // A evolução visual da base remota ainda não faz parte do payload de rede.
+  // Ela continua sendo uma casa de madeira, mas fica no mesmo core da cerca.
   const baseEvolved = remote ? false : localBaseEvolved;
 
   const gl = useThree((s) => s.gl);

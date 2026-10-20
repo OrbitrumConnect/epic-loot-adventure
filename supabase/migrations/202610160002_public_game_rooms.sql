@@ -54,6 +54,7 @@ create trigger game_rooms_set_updated_at before update on public.game_rooms
 alter table public.game_rooms enable row level security;
 alter table public.game_room_members enable row level security;
 
+-- Every persistent room is public; member details remain private to room members.
 create policy "game_rooms_public_read" on public.game_rooms for select to anon, authenticated using (true);
 create policy "game_room_members_read_own_room" on public.game_room_members for select to authenticated using (
   exists (select 1 from public.game_room_members mine where mine.room_id = game_room_members.room_id and mine.user_id = auth.uid())
@@ -74,6 +75,7 @@ begin
 end;
 $$;
 
+-- Atomic reservation: row lock prevents two callers from taking the final seat.
 create or replace function public.join_public_game_room(p_code text, p_side public.room_member_side default 'ally')
 returns public.game_rooms
 language plpgsql security definer set search_path = public
@@ -87,6 +89,7 @@ begin
   if found then
     update public.game_room_members set last_seen_at = now(), left_at = null, side = p_side where room_id = room.id and user_id = auth.uid();
   else
+    -- Seats inactive for over two minutes are reclaimed inside the same transaction.
     update public.game_room_members set left_at = now() where room_id = room.id and left_at is null and last_seen_at < now() - interval '2 minutes';
     select count(*)::smallint into room.active_players from public.game_room_members where room_id = room.id and left_at is null;
     if room.active_players >= room.max_players then raise exception 'room full'; end if;

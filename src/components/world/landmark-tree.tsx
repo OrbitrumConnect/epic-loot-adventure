@@ -22,12 +22,15 @@ export function LandmarkTree({ x, z, scale = 5.5, yaw = 0, url = GNARLED, editor
     });
     return c;
   }, [scene]);
-  const pivot = useMemo(() => { const box = new THREE.Box3().setFromObject(tree); const center = box.getCenter(new THREE.Vector3()); return { center }; }, [tree]);
+  const pivot = useMemo(() => { const box = new THREE.Box3().setFromObject(tree); const center = box.getCenter(new THREE.Vector3()); return { center, minY: box.min.y }; }, [tree]);
   const edited = useEditorStore(s => editorId ? s.objects.find(o => o.id === editorId) : undefined);
   const tx = edited?.transform.position[0] ?? x; const ty = edited?.transform.position[1] ?? 0; const tz = edited?.transform.position[2] ?? z;
   const rs = edited?.transform.scale[0] ?? scale; const ry = edited?.transform.rotation[1] ?? yaw;
   const y = terrainHeight(tx, tz);
   const active = useEditorStore(s => s.active); const selected = useEditorStore(s => s.selectedId === editorId); const select = useEditorStore(s => s.select); const tool = useEditorStore(s => s.tool); const update = useEditorStore(s => s.update);
+  // The catalog transform represents the asset origin/base. Keep the model's
+  // bounding-box pivot offset inside the wrapper so the gizmo stays on the
+  // actual tree while preserving the authored world position.
   const group = <group position={[tx + pivot.center.x * rs, y + BASE_BELOW * rs + pivot.center.y * rs + ty, tz + pivot.center.z * rs]} rotation={[0, ry, 0]} scale={rs} onPointerDown={e => { if (!active || !editorId) return; e.stopPropagation(); select(editorId); }}>
       <group position={[-pivot.center.x, -pivot.center.y, -pivot.center.z]}><primitive object={tree} /></group>
     </group>;

@@ -4,10 +4,30 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useEditorStore, type EditorObject, type Transform } from './editor-store';
 
+/** De-shine dos assets de mapa do Meshy (mesmo princípio do makeMatte do terreno):
+ *  nulifica os mapas metal/rough e trava fosco, SEM tint (mantém a cor original).
+ *  Aplicado só a `/models/map/` → trees/mountains/watchtower ficam intactos. */
+function matte(root: THREE.Object3D) {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mat of mats) {
+      const pm = mat as THREE.MeshStandardMaterial;
+      if (!pm || !('roughness' in pm)) continue;
+      pm.metalnessMap = null; pm.metalness = 0;
+      pm.roughnessMap = null; pm.roughness = 1;
+      pm.envMapIntensity = 0;
+      pm.needsUpdate = true;
+    }
+  });
+}
+
 function PlacedObject({ item }: { item: EditorObject }) {
   const { scene } = useGLTF(item.assetUrl);
   const model = useMemo(() => {
     const clone = scene.clone(true);
+    if (item.assetUrl.includes('/models/map/')) matte(clone);
     const box = new THREE.Box3().setFromObject(clone);
     const span = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) || 1;
     const target = item.assetUrl.includes('/terrain/mountain') ? 12 : 4;
