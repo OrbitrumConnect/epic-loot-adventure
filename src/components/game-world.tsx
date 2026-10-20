@@ -557,6 +557,7 @@ function Character({
     }
 
     const moving = velocity.current.length() > 0.1;
+    audioManager.setFootsteps(moving && isGrounded.current, sprinting); // som de passos (restaurado)
     heroAction.current = attackPhase.current !== 'idle'
       ? 'attack'
       : !isGrounded.current

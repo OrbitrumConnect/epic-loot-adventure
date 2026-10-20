@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { ITEMS } from '../data/items';
 import { weaponFor, weaponRangeFor } from '../data/weapons';
+import { audioManager } from '../audio/audio-manager';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, WORLD_HALF } from '../data/camps';
@@ -649,6 +650,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (usingRanged && prof.projectile) {
       drafts.push(shotEvent(state.player.position, creature.position, prof.projectile));
     }
+    // Áudio por arma: arco = flecha, pistola/rifle = tiro, senão melee.
+    if (heldItemId === 'bow') audioManager.playShot();
+    else if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
+    else if (!usingRanged) audioManager.playMelee();
 
     if (result.targetDied) {
       const def = CREATURES[creature.speciesId];
@@ -762,6 +767,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let updatedPlayer: PlayerState = { ...state.player, lastSpecialAt: now };
     let updatedBags = state.deathBags;
     let hits = 0;
+    audioManager.playMelee(); // especial (salto/giro) = melee
 
     const creatures = state.creatures.map(c => {
       if (c.behavior === 'dead') return c;
@@ -1540,6 +1546,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const drafts: FeedbackDraft[] = [];
     if (result.harvested > 0) {
       drafts.push(harvestEvent(def.resourceId, result.harvested, node.position));
+      audioManager.playHarvest(); // som de coletar (madeira/pedra/etc.)
     }
     if (result.xp > 0) drafts.push(xpEvent(result.xp, state.player.position));
     if (granted.result.levelsGained > 0) {
