@@ -16,6 +16,7 @@ import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
 import { registerWall, wallHeightAt, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
+import { MapFloor } from './world/map-floor';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
 import { FactoryRubble } from './world/factory-rubble';
@@ -339,6 +340,18 @@ const USE_RED_HERO = true;
  *  novo em GLB. NÃO afeta ficar em pé — personagens/coisas usam `terrainHeight` (matemático).
  *  Reversível: true volta o chão. O backdrop distante (`DistantLandscape`) não é afetado. */
 const SHOW_CENTRAL_GROUND = false;
+
+/** Água velha (rio/lagos em posições fixas antigas). Pedro 20/10: OFF — substituída por
+ *  um plano de água no nível do GLB, que aparece só nas partes baixas/azuis (o rio real
+ *  do mapa). Reversível: true volta a água antiga. */
+const SHOW_OLD_WATER = false;
+/** Plano de água do mapa. O mapeamento da textura mostrou a água azul CENTRAL (perto do
+ *  spawn). Nível ~0.2 (piso seco ~0.7, água ~-0.2 → aparece só nos baixios). Centro e
+ *  tamanho ajustáveis — hoje cobre o rio central; o shape do rio vem da geometria do GLB
+ *  (só mostra onde afunda abaixo do nível). */
+const MAP_WATER_Y = -2.0;                             // superfície da água: ~0.6m acima do leito (-2.6, nível do acampamento mais baixo)
+const MAP_WATER_CENTER: [number, number] = [6, 15];  // x,z do centro da água (leito do rio central)
+const MAP_WATER_SIZE = 84;                            // lado do plano (m)
 
 /** Labirinto FIXO no mapa. Pedro 20/10: OFF — agora é colocado/ajustado pelo Editor ADM
  *  (Biblioteca GLB → "Labirinto"). Reversível: true volta o maze fixo. NOTA: o maze do
@@ -2013,6 +2026,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <Atmosphere c={c} paused={props.paused} />
 
       {SHOW_CENTRAL_GROUND && <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />}
+      {/* Chão principal do mapa FIXO (rio-wasteland) — determinístico, vai pro Vercel.
+          Remova a cópia colocada pelo Editor (localStorage) pra não duplicar. */}
+      <MapFloor />
       <EditorWorldLayer />
 
       <mesh geometry={path} receiveShadow>
@@ -2022,19 +2038,27 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       {/* Luminárias da estrada — acendem ao anoitecer */}
       {lamps.map((l, i) => <RoadLamp key={`lamp${i}`} {...l} />)}
 
-      {/* Lakes — local water discs sitting at the terrain edge height */}
-      {LAKE_CENTERS.map((lake, i) => (
-        <mesh key={`lake${i}`} position={[lake.x, lakeWaterY(lake), lake.z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[lake.r * 0.92, 32]} />
-          <WaterMaterial color={c.water} time={waterTime} />
-        </mesh>
-      ))}
-
-      {/* River — fita ondulada que desemboca no laginho */}
-      <mesh geometry={river} receiveShadow>
-        <WaterMaterial color={c.water} time={waterTime} river />
+      {/* Água do MAPA: plano no nível do GLB, centrado na área azul CENTRAL (mapeada na
+          textura). Aparece só onde o GLB afunda abaixo do nível (o rio); o chão seco
+          esconde o resto. Centro/tamanho em MAP_WATER_CENTER/SIZE. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[MAP_WATER_CENTER[0], MAP_WATER_Y, MAP_WATER_CENTER[1]]} renderOrder={1}>
+        <planeGeometry args={[MAP_WATER_SIZE, MAP_WATER_SIZE]} />
+        <WaterMaterial color={c.water} time={waterTime} />
       </mesh>
-      <RiverBanks c={c} />
+
+      {/* Água antiga (rio/lagos fixos) — OFF; posições não batiam com o GLB. */}
+      {SHOW_OLD_WATER && <>
+        {LAKE_CENTERS.map((lake, i) => (
+          <mesh key={`lake${i}`} position={[lake.x, lakeWaterY(lake), lake.z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[lake.r * 0.92, 32]} />
+            <WaterMaterial color={c.water} time={waterTime} />
+          </mesh>
+        ))}
+        <mesh geometry={river} receiveShadow>
+          <WaterMaterial color={c.water} time={waterTime} river />
+        </mesh>
+        <RiverBanks c={c} />
+      </>}
       <DistantLandscape c={c} />
 
       {/* Bridge — tabuado elevado com vigas, pilares e guarda-corpo; leva a estrada por cima do córrego, na frente do nascedouro */}
