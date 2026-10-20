@@ -47,7 +47,7 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
-import { creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
+import { creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
@@ -1685,12 +1685,15 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }),
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
-      attackRange: weaponFor(
+      playerLevel: state.player.level,
+      // Alcance EFETIVO da arma (escala com o nível, igual ao combate real).
+      attackRange: weaponRangeFor(
         (() => {
           const s = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
           return s != null ? state.player.inventory.slots[s]?.itemId ?? null : null;
         })(),
-      ).range,
+        state.player.level,
+      ),
       harvestNodes: state.harvestNodes.map(n => ({
         id: n.id,
         kind: n.kind,
@@ -1705,6 +1708,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         // Inimigo (raider/lobo/boss) vs pacífico (cervo/coelho): o piloto defende
         // dos inimigos, mas NÃO persegue pacífico — senão nunca farma.
         hostile: !(CREATURES[c.speciesId]?.peaceful ?? false),
+        // Nível derivado dos stats da espécie (fallback 1 se desconhecida).
+        level: CREATURES[c.speciesId] ? creatureLevel(CREATURES[c.speciesId]!) : 1,
       })),
       camps: state.camps.map(c => ({
         id: c.id,
@@ -1714,8 +1719,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         cleared: c.cleared,
       })),
       // O piloto recebe os dois: nós de colheita novos e os recursos legados.
+      // Todos os tipos de HARVEST_NODES (madeira/pedra/ferro/ouro/cristal) são
+      // elegíveis; o `range` sai da definição do nó pra casar com a coleta real.
       resources: [
-        ...state.harvestNodes.map(n => ({ id: n.id, position: n.position, depleted: n.depleted })),
+        ...state.harvestNodes.map(n => ({
+          id: n.id,
+          position: n.position,
+          depleted: n.depleted,
+          kind: n.kind,
+          range: HARVEST_NODES[n.kind]?.range,
+        })),
         ...state.resources.map(r => ({ id: r.id, position: r.position, depleted: r.depleted })),
       ],
       objectives: state.objectives,

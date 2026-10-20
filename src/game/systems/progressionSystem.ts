@@ -16,6 +16,22 @@ export function creatureXp(def: Pick<CreatureDefinition, 'maxHp' | 'attackPower'
 }
 
 // ---------------------------------------------------------------------------
+// Nível de criatura (derivado dos stats, determinístico e monotônico)
+//
+//   nível = 1 + floor(creatureXp / CREATURE_XP_PER_LEVEL)
+//
+// Reusa `creatureXp` (vida+ataque+armadura), então quem dá mais XP é mais forte
+// e tem nível maior — ordenação estável. Sempre inteiro >= 1. Divisor 18 calibra
+// a curva: fauna fraca (coelho/cervo) fica nível 1, lobo ~2, saqueador ~3-6,
+// chefes (colosso/kaiju) em dezenas. Usado pelo piloto pra evitar alvo forte.
+// ---------------------------------------------------------------------------
+export const CREATURE_XP_PER_LEVEL = 18;
+
+export function creatureLevel(def: Pick<CreatureDefinition, 'maxHp' | 'attackPower' | 'armor'>): number {
+  return 1 + Math.floor(creatureXp(def) / CREATURE_XP_PER_LEVEL);
+}
+
+// ---------------------------------------------------------------------------
 // Curva de nível
 // ---------------------------------------------------------------------------
 
