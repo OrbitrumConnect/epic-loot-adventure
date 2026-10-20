@@ -1,8 +1,9 @@
 import { TransformControls, useGLTF } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { useEditorStore, type EditorObject, type Transform } from './editor-store';
+import { useEditorStore, type EditorObject } from './editor-store';
+import { registerTerrain } from '../world/terrain-collision';
 
 /** De-shine dos assets de mapa do Meshy (mesmo princípio do makeMatte do terreno):
  *  nulifica os mapas metal/rough e trava fosco, SEM tint (mantém a cor original).
@@ -40,15 +41,24 @@ function PlacedObject({ item }: { item: EditorObject }) {
     return box.getCenter(new THREE.Vector3());
   }, [model]);
   const ref = useRef<THREE.Group>(null);
+  // Colisão: registra a malha do GLB como CHÃO (BVH) → o player anda em cima
+  // (terrainMeshY pega a superfície mais alta). A raycast usa a matrixWorld atual,
+  // então mover/escalar no editor continua valendo sem re-registrar. Cleanup ao sair.
+  useEffect(() => {
+    if (!ref.current) return;
+    return registerTerrain(ref.current);
+  }, [model]);
   const active = useEditorStore(s => s.active); const selected = useEditorStore(s => s.selectedId === item.id);
   const tool = useEditorStore(s => s.tool); const select = useEditorStore(s => s.select); const update = useEditorStore(s => s.update);
-  const before = useRef<Transform | null>(null);
   const pick = (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); select(item.id); };
   const [px, py, pz] = item.transform.position;
   const [sx, sy, sz] = item.transform.scale;
   const group = <group ref={ref} visible={item.visible} position={[px + pivot.x * sx, py + pivot.y * sy, pz + pivot.z * sz]} rotation={item.transform.rotation} scale={item.transform.scale} onPointerDown={pick}><group position={[-pivot.x, -pivot.y, -pivot.z]}><primitive object={model} /></group></group>;
   if (!active || !selected) return group;
-  const sync = () => { const o = ref.current; if (!o) return; const next: Transform = { position: [o.position.x - pivot.x * o.scale.x, o.position.y - pivot.y * o.scale.y, o.position.z - pivot.z * o.scale.z], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }; const current = useEditorStore.getState().objects.find(x => x.id === item.id)?.transform; if (current && JSON.stringify(current) === JSON.stringify(next)) return; update(item.id, next); };
-  return <TransformControls mode={tool} onMouseDown={() => { before.current = item.transform; }} onChange={sync} onObjectChange={sync} onMouseUp={() => { sync(); before.current = null; }}>{group}</TransformControls>;
+  // Commit SÓ no onMouseUp (mesmo padrão do DesertMountain que já funcionava): durante
+  // o arraste o gizmo move o objeto sozinho; commitar a cada onChange causava re-render
+  // que DERRUBAVA o arraste. Lê a pose final e grava uma vez.
+  const sync = () => { const o = ref.current; if (!o) return; update(item.id, { position: [o.position.x - pivot.x * o.scale.x, o.position.y - pivot.y * o.scale.y, o.position.z - pivot.z * o.scale.z], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); };
+  return <TransformControls mode={tool} onMouseUp={sync}>{group}</TransformControls>;
 }
 export function EditorWorldLayer() { const objects = useEditorStore(s => s.objects); return <>{objects.filter(item => item.source !== 'map').map(item => <PlacedObject key={item.id} item={item} />)}</>; }

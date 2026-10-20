@@ -15,7 +15,6 @@ import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { DesertPlain, DesertMountain, MOUNTAIN_CAVE } from './world/desert-terrain';
 import { terrainMeshY, registerWall, wallHeightAt } from './world/terrain-collision';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
@@ -61,7 +60,7 @@ import {
 } from './world/free-cam';
 import { FreeCamOverlay } from './world/free-cam-overlay';
 import { EditorWorldLayer } from './editor/editor-world';
-import { isEditorActive } from './editor/editor-store';
+import { isEditorActive, useEditorStore as useEditorStoreCam } from './editor/editor-store';
 
 export type WorldProps = {
   mode: string;
@@ -81,7 +80,12 @@ export type CameraMode = 'iso' | 'third' | 'free';
 // uma rampa curta sobe do terreno até o deck pra não ter degrau brusco.
 const BRIDGE = { cx: -2, cz: 2.5, cos: Math.cos(0.64), sin: Math.sin(0.64), halfLen: 3.75, halfWidth: 1.35, deckTop: 0.67, ramp: 1.4 };
 
+/** Ponte de madeira no meio do mapa. Pedro 20/10: OFF (visual + superfície caminhável).
+ *  Reversível: true volta a ponte. */
+const SHOW_BRIDGE = false;
+
 function bridgeSurfaceY(px: number, pz: number): number {
+  if (!SHOW_BRIDGE) return -Infinity;
   const dx = px - BRIDGE.cx;
   const dz = pz - BRIDGE.cz;
   const lx = dx * BRIDGE.cos - dz * BRIDGE.sin;
@@ -330,6 +334,11 @@ function Campfire({ c, position: pos }: { c: Palette; position: [number, number,
 const USE_GLB_HERO = true;
 /** Survivor Red (rig Mixamo) no lugar do Kael (rig Unreal/UAL). Reversível: false volta o Kael. */
 const USE_RED_HERO = true;
+
+/** Chão central jogável (PlaneGeometry texturado). Pedro 20/10: OFF p/ avaliar o mapa
+ *  novo em GLB. NÃO afeta ficar em pé — personagens/coisas usam `terrainHeight` (matemático).
+ *  Reversível: true volta o chão. O backdrop distante (`DistantLandscape`) não é afetado. */
+const SHOW_CENTRAL_GROUND = false;
 
 function Character({
   c, attack, movement, onPosition, paused, playerRef, cameraYawRef, cameraMode,
@@ -613,9 +622,16 @@ function Character({
     // acaba" dentro da cave). Fora das montanhas, terreno normal (camp/casa/fábrica).
     const bx = body.current.position.x, bz = body.current.position.z;
     const mountainY = terrainMeshY(bx, bz, body.current.position.y);
-    const groundY = mountainY > -Infinity
-      ? mountainY
-      : Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor);
+    // Sem caverna agora: o player NUNCA fica abaixo do chão base. Pega a superfície
+    // MAIS ALTA entre a malha (GLB/rocha), o terreno procedural, a ponte e a casa.
+    // Assim a malha do GLB só ERGUE o player (pisar em pedra), nunca o faz cair
+    // pra baixo do mapa quando a geometria do GLB fica sob o chão.
+    const groundY = Math.max(
+      mountainY > -Infinity ? mountainY : -Infinity,
+      terrainHeight(bx, bz),
+      bridgeSurfaceY(bx, bz),
+      houseFloor,
+    );
 
     if (!isGrounded.current) {
       jumpVelocity.current -= 15 * dt;
@@ -1468,6 +1484,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   const isoYaw = useRef(0);            // giro 360° da câmera de cima (MOBA): botão direito / 1 dedo
   const isoDragging = useRef(false);   // arrastando o botão direito pra girar
   const isoZoom = useRef<number | null>(null);
+  const editorPan = useRef(new THREE.Vector3()); // deslocamento da câmera MOBA no modo edit (pan)
+  const editorPanning = useRef(false);           // arrastando (botão direito) p/ mover a câmera no editor
+  const prevSel = useRef<string | null>(null);   // último objeto selecionado (p/ focar a câmera ao trocar)
 
   // Câmera livre (dev): teclas, posição e vetores de rascunho (criados 1x, nunca
   // alocados por quadro). Métrica/inspeção escrevem no bridge `free-cam.ts`.
@@ -1493,6 +1512,16 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     const canvas = gl.domElement;
 
     const onMouseMove = (e: MouseEvent) => {
+      // Editor: arrastar c/ botão DIREITO move a câmera de cima pelo mapa (pan), desacoplada do player.
+      if (editorPanning.current) {
+        const a = isoYaw.current;
+        const z = isoZoom.current ?? 20;
+        const speed = 1.6 / z; // mais zoom → pan mais fino
+        const dx = -e.movementX * speed, dz = -e.movementY * speed;
+        editorPan.current.x += dx * Math.cos(a) - dz * Math.sin(a);
+        editorPan.current.z += dx * Math.sin(a) + dz * Math.cos(a);
+        return;
+      }
       // Câmera de cima (MOBA): arrastar c/ botão DIREITO gira 360° ao redor do boneco.
       if (isoDragging.current) {
         isoYaw.current -= e.movementX * 0.006;
@@ -1542,7 +1571,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     };
 
     const onMouseDown = (e: MouseEvent) => {
-      if (isEditorActive()) return;
+      if (isEditorActive()) {
+        // No editor, câmera MOBA (iso): botão DIREITO arrasta pra mover a câmera pelo mapa.
+        if (e.button === 2 && cameraMode === 'iso') editorPanning.current = true;
+        return;
+      }
       // Botão DIREITO no modo de cima: inicia o giro 360° da câmera (não ataca/anda).
       if (e.button === 2 && cameraMode === 'iso') { isoDragging.current = true; return; }
       // Câmera livre (Caio): clique nunca ataca — a inspeção é pela mira central.
@@ -1559,7 +1592,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     };
 
     const onMouseUp = (e: MouseEvent) => {
-      if (e.button === 2) isoDragging.current = false;
+      if (e.button === 2) { isoDragging.current = false; editorPanning.current = false; }
     };
     // Botão direito gira a câmera no modo de cima → suprime o menu de contexto do navegador.
     const onContextMenu = (e: MouseEvent) => { if (cameraMode === 'iso') e.preventDefault(); };
@@ -1694,11 +1727,25 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       const a = isoYaw.current;
       const rx = 24 * Math.cos(a) - 24 * Math.sin(a);
       const rz = 24 * Math.sin(a) + 24 * Math.cos(a);
-      const wantPos = new THREE.Vector3(px + rx, 29, pz + rz);
+      // Modo edit: `editorPan` desacopla a câmera do player p/ navegar/editar de cima.
+      // Fora do editor zera → volta a centrar no player (sem regressão).
+      if (!isEditorActive()) { editorPan.current.set(0, 0, 0); prevSel.current = null; }
+      else {
+        // Focar ao SELECIONAR: ao trocar de objeto, centra a câmera nele (como no Max/
+        // Blender) — resolve "clico, seleciono e fico preso" quando o objeto está longe.
+        const ed = useEditorStoreCam.getState();
+        if (ed.selectedId !== prevSel.current) {
+          prevSel.current = ed.selectedId;
+          const o = ed.objects.find(x => x.id === ed.selectedId);
+          if (o) editorPan.current.set(o.transform.position[0] - px, 0, o.transform.position[2] - pz);
+        }
+      }
+      const cx = px + editorPan.current.x, cz = pz + editorPan.current.z;
+      const wantPos = new THREE.Vector3(cx + rx, 29, cz + rz);
       const lerpFactor = modeChanged ? 1 : 0.06;
       camTarget.current.lerp(wantPos, lerpFactor);
       camera.position.copy(camTarget.current);
-      camLookAt.current.lerp(new THREE.Vector3(px, py, pz), lerpFactor);
+      camLookAt.current.lerp(new THREE.Vector3(cx, py, cz), lerpFactor);
       camera.lookAt(camLookAt.current);
     } else if (cameraMode === 'free') {
       const free = getFreeCam();
@@ -1968,7 +2015,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <Sun />
       <Atmosphere c={c} paused={props.paused} />
 
-      <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />
+      {SHOW_CENTRAL_GROUND && <TerrainMesh c={c} onAttack={props.onAttack} paused={props.paused} />}
       <EditorWorldLayer />
 
       <mesh geometry={path} receiveShadow>
@@ -1994,7 +2041,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <DistantLandscape c={c} />
 
       {/* Bridge — tabuado elevado com vigas, pilares e guarda-corpo; leva a estrada por cima do córrego, na frente do nascedouro */}
-      <group position={[-2, 0, 2.5]} rotation={[0, 0.64, 0]}>
+      {SHOW_BRIDGE && <group position={[-2, 0, 2.5]} rotation={[0, 0.64, 0]}>
         {/* Tabuado (anda ao longo do X local, atravessando a água) */}
         {Array.from({ length: 16 }, (_, i) => (
           <mesh key={`plank${i}`} position={[(i - 7.5) * 0.5, 0.6, 0]} receiveShadow castShadow>
@@ -2031,7 +2078,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
             ))}
           </group>
         ))}
-      </group>
+      </group>}
 
       <Billboards trees={trees} c={c} />
       {showAshlandPilot && <AshlandPilot />}
@@ -2063,13 +2110,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       ))}
       {/* Multiplayer: avatares dos outros jogadores (online). */}
       <RemotePlayers />
-      {/* Planície do deserto (puxada um pouco pro fundo; aumento LEVE só p/ não
-          abrir buraco verde na frente). */}
-      <DesertPlain size={206} z={36} yOffset={-1.0} />
-      <DesertMountain x={-57.4} z={91.1} yOffset={-0.5} url="/models/terrain/mountain.glb" transform={{ position: [-57.4, -0.5, 91.1], rotation: [0, -3.5, 0], scale: [5.6, 6.6, 4.2] }} />
-      <DesertMountain x={-86.3} z={50} yOffset={-0.5} url={MOUNTAIN_CAVE} transform={{ position: [-86.3, -0.5, 50], rotation: [0, -7.2, 0], scale: [7.7, 8.7, 7.1] }} />
-      {/* Montanha rochosa (boca da caverna virada pro spawn) + montanha-caverna
-          (passarela) no canto. Baixadas p/ o chão original prevalecer em cima. Climáveis. */}
+      {/* Terrenos GLB (planície do deserto + 2 montanhas) REMOVIDOS por hora (Pedro 19/10):
+          ficavam nas bordas / abaixo do chão original e serão trocados pelo novo mapa.
+          O chão real continua sendo o `terrainHeight` procedural (bichos e player usam ele);
+          sem as montanhas registradas, o player cai sempre no terrainHeight (igual aos bichos).
+          Histórico no git (commit e8212f0) p/ restaurar se precisar. */}
       <GlbContainers />
       {/* Montanha antiga ZERADA (Pedro 16/10): atalaia do topo removida junto;
           montanhas GLB novas + crista de pedra da planície entram no lugar. */}
