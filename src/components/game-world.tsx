@@ -345,13 +345,17 @@ const SHOW_CENTRAL_GROUND = false;
  *  um plano de água no nível do GLB, que aparece só nas partes baixas/azuis (o rio real
  *  do mapa). Reversível: true volta a água antiga. */
 const SHOW_OLD_WATER = false;
+/** Estrada antiga (jpg que cortava o mapa). Pedro 20/10: OFF — não assentava no relevo
+ *  do GLB e a textura ficava torta. O GLB já tem seus caminhos. Reversível: true volta. */
+const SHOW_OLD_ROAD = false;
 /** Plano de água do mapa. O mapeamento da textura mostrou a água azul CENTRAL (perto do
  *  spawn). Nível ~0.2 (piso seco ~0.7, água ~-0.2 → aparece só nos baixios). Centro e
  *  tamanho ajustáveis — hoje cobre o rio central; o shape do rio vem da geometria do GLB
  *  (só mostra onde afunda abaixo do nível). */
-const MAP_WATER_Y = -2.0;                             // superfície da água: ~0.6m acima do leito (-2.6, nível do acampamento mais baixo)
-const MAP_WATER_CENTER: [number, number] = [6, 15];  // x,z do centro da água (leito do rio central)
-const MAP_WATER_SIZE = 84;                            // lado do plano (m)
+const MAP_WATER_Y = -2.0;                             // superfície da água: ~0.6m acima do leito (-2.6). Nesse nível baixo, o plano
+                                                      // só mostra água onde o GLB AFUNDA (lago central + praias nas margens); terra seca fica por cima.
+const MAP_WATER_CENTER: [number, number] = [0, 0];   // cobre o mapa todo; a forma (lago + praias) vem da geometria do GLB
+const MAP_WATER_SIZE = 210;                           // lado do plano (m) — alcança as margens/praias
 
 /** Labirinto FIXO no mapa. Pedro 20/10: OFF — agora é colocado/ajustado pelo Editor ADM
  *  (Biblioteca GLB → "Labirinto"). Reversível: true volta o maze fixo. NOTA: o maze do
@@ -2031,9 +2035,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <MapFloor />
       <EditorWorldLayer />
 
-      <mesh geometry={path} receiveShadow>
+      {SHOW_OLD_ROAD && <mesh geometry={path} receiveShadow>
         <meshStandardMaterial map={roadTex} bumpMap={roadTex} bumpScale={0.045} roughness={0.92} side={THREE.DoubleSide} />
-      </mesh>
+      </mesh>}
 
       {/* Luminárias da estrada — acendem ao anoitecer */}
       {lamps.map((l, i) => <RoadLamp key={`lamp${i}`} {...l} />)}
