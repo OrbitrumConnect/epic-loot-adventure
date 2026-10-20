@@ -177,6 +177,76 @@ export function surfaceColorAt(x: number, z: number): THREE.Color | null {
   return null;
 }
 
+/** Lê a cor (sRGB 0-1) de uma textura já bufferizada num UV, com wrap + flipY. */
+function texColorAt(
+  px: { data: Uint8ClampedArray; w: number; h: number },
+  tex: THREE.Texture, u: number, v: number, out: THREE.Color,
+): THREE.Color {
+  const uu = u - Math.floor(u);
+  let vv = v - Math.floor(v);
+  if (tex.flipY) vv = 1 - vv;
+  const ix = Math.min(px.w - 1, Math.max(0, Math.floor(uu * px.w)));
+  const iy = Math.min(px.h - 1, Math.max(0, Math.floor(vv * px.h)));
+  const i = (iy * px.w + ix) * 4;
+  return out.setRGB(px.data[i]! / 255, px.data[i + 1]! / 255, px.data[i + 2]! / 255);
+}
+
+const _ga = new THREE.Vector3(), _gb = new THREE.Vector3(), _gc = new THREE.Vector3();
+const _gcol = new THREE.Color(), _gsum = new THREE.Color();
+/**
+ * Varre os TRIÂNGULOS das malhas de terreno e devolve a posição de mundo (x,z) dos
+ * que caem em textura "verde" (via `isGreen`, em sRGB 0-1). O mapa é descampado: o
+ * verde são manchas pequenas embutidas no barro, então amostrar por triângulo pega
+ * exatamente onde elas estão (a grade espaçada errava). `tint` = média do verde
+ * amostrado (já em LINEAR), pra a grama casar com o tom do chão. 1x no load.
+ */
+export function collectGreenSurfaceSpots(
+  isGreen: (c: THREE.Color) => boolean,
+  max: number,
+): { spots: { x: number; z: number }[]; tint: THREE.Color | null } {
+  const spots: { x: number; z: number }[] = [];
+  _gsum.setRGB(0, 0, 0);
+  let n = 0;
+  for (const root of terrains) {
+    if (spots.length >= max) break;
+    root.updateMatrixWorld(true);
+    root.traverse((o) => {
+      if (spots.length >= max) return;
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !m.geometry) return;
+      const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial | undefined;
+      const tex = mat?.map;
+      if (!tex?.image) return;
+      const px = imagePixels(tex.image as TexImageSource);
+      if (!px) return;
+      const pos = m.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+      const uv = m.geometry.getAttribute('uv') as THREE.BufferAttribute | undefined;
+      if (!pos || !uv) return;
+      const idx = m.geometry.getIndex();
+      const tris = idx ? idx.count / 3 : pos.count / 3;
+      // Stride: a malha do mapa tem ~760k triângulos. Testar ~1 a cada N espalha os
+      // tufos pelo mapa (em vez de amontoar nos primeiros) e limita o custo (1x no load).
+      const stride = Math.max(1, Math.floor(tris / 90000));
+      for (let t = 0; t < tris && spots.length < max; t += stride) {
+        const i0 = idx ? idx.getX(t * 3) : t * 3;
+        const i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+        const i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+        const u = (uv.getX(i0) + uv.getX(i1) + uv.getX(i2)) / 3;
+        const v = (uv.getY(i0) + uv.getY(i1) + uv.getY(i2)) / 3;
+        texColorAt(px, tex, u, v, _gcol);
+        if (!isGreen(_gcol)) continue;
+        _gsum.add(_gcol); n++;
+        _ga.fromBufferAttribute(pos, i0).applyMatrix4(m.matrixWorld);
+        _gb.fromBufferAttribute(pos, i1).applyMatrix4(m.matrixWorld);
+        _gc.fromBufferAttribute(pos, i2).applyMatrix4(m.matrixWorld);
+        spots.push({ x: (_ga.x + _gb.x + _gc.x) / 3, z: (_ga.z + _gb.z + _gc.z) / 3 });
+      }
+    });
+  }
+  const tint = n > 0 ? _gsum.multiplyScalar(1 / n).convertSRGBToLinear() : null;
+  return { spots, tint };
+}
+
 /* ---- PAREDES (labirinto): colisão horizontal simples ---- */
 const walls = new Set<THREE.Object3D>();
 

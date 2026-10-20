@@ -31,7 +31,7 @@ import * as THREE from 'three';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, type Palette } from './world-kit';
-import { glbSurfaceY, surfaceColorAt, useTerrainVersion } from './terrain-collision';
+import { glbSurfaceY, collectGreenSurfaceSpots, useTerrainVersion } from './terrain-collision';
 import { ForestRocks, ForestTrees } from './forest-models';
 import { LivingTrees } from './living-trees';
 import { GroundCover } from './ground-cover';
@@ -271,53 +271,51 @@ function inLake(x: number, z: number, pad = 0): boolean {
 }
 
 /* ------------------------------------------------------------------ *
- * GRAMA nas áreas VERDES do mapa (Pedro): grade jitterada densa sobre o
- * mapa; em cada ponto amostra a cor real da malha do GLB (surfaceColorAt)
- * e só fica onde é verde. Tufo = GroundCover (lâminas finas animadas), tom
- * casando com a média do verde amostrado (tint). Determinístico → Vercel.
+ * GRAMA nas MANCHAS VERDES do mapa (Pedro): o mapa é descampado (barro/areia)
+ * com manchas verdes PEQUENAS embutidas (dálmata) no chão e na montanha. Varre
+ * os TRIÂNGULOS da malha do GLB (collectGreenSurfaceSpots) e põe tufo exatamente
+ * onde a textura é esverdeada — a grade espaçada errava essas manchinhas. Cada
+ * mancha vira um pequeno punhado de tufos (cluster) pra ficar cheia. Tom casa com
+ * a média do verde amostrado (tint). Determinístico → Vercel. GroundCover = lâminas
+ * finas animadas por vento.
  * ------------------------------------------------------------------ */
-const GRASS_STEP = 2.4;        // espaçamento da grade (m) — densidade
-const GRASS_CAP = 2200;        // teto de tufos (instanced, barato)
-/** Verde "de grama": canal G domina R e B (em espaço linear). */
+const GRASS_CAP = 4500;        // teto de tufos (instanced, barato) — Pedro: "bastante"
+const CLUSTER = 5;             // tufos por mancha verde (adensa a mancha)
+const CLUSTER_SPREAD = 1.1;    // raio (m) do punhado em torno da mancha
+/** Esverdeado (sRGB 0-1): caqui/oliva embutido no barro. O mapa é alaranjado — areia
+ *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
+ *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
+ *  pixels reais do rio-wasteland (histograma de g/r). */
 function isGreen(c: THREE.Color): boolean {
-  return c.g > c.r * 1.06 && c.g > c.b * 1.12 && c.g > 0.02;
+  return c.g >= c.r * 0.80 && c.g >= c.b && c.g > 0.12;
 }
-function buildGreenGrass(): { placements: Placement[]; tint?: THREE.Color } {
-  const out: Placement[] = [];
-  const sum = new THREE.Color(0, 0, 0);
-  let n = 0, i = 0;
-  for (let x = -MAP_HALF; x <= MAP_HALF; x += GRASS_STEP) {
-    for (let z = -MAP_HALF; z <= MAP_HALF; z += GRASS_STEP, i++) {
-      if (inLake(x, z, 1)) continue;
-      const jx = x + (rand(i + 7) - 0.5) * GRASS_STEP;
-      const jz = z + (rand(i + 99) - 0.5) * GRASS_STEP;
-      const col = surfaceColorAt(jx, jz);
-      if (!col || !isGreen(col)) continue;
-      sum.add(col); n++;
-      if (out.length < GRASS_CAP) {
-        const h = 0.7 + rand(i + 50) * 0.5;
-        out.push({ x: jx, z: jz, w: h * 1.1, h, yaw: rand(i + 3) * Math.PI * 2 });
-      }
-    }
-  }
-  if (n === 0) return { placements: [] };
-  const tint = sum.multiplyScalar(1 / n); // média do verde da malha (já em linear)
-  return { placements: out, tint };
-}
-/** Gera a grama verde quando o GLB+textura carregam (retry curto até a imagem
- *  decodificar — o registro do terreno não espera a textura). */
-function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color } {
+/** Gera a grama quando o GLB+textura carregam (retry curto até a imagem decodificar —
+ *  o registro do terreno não espera a textura). Nunca limpa grama já achada. */
+function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefined } {
   const tv = useTerrainVersion();
-  const [res, setRes] = useState<{ placements: Placement[]; tint?: THREE.Color }>({ placements: [] });
+  const [res, setRes] = useState<{ placements: Placement[]; tint?: THREE.Color | undefined }>({ placements: [] });
   useEffect(() => {
     let cancelled = false, tries = 0;
     const attempt = () => {
       if (cancelled) return;
-      const r = buildGreenGrass();
-      // Só PUBLICA quando achou grama; NUNCA limpa (um tv-bump posterior com amostra
-      // momentaneamente vazia não pode apagar a grama já encontrada). Se esgotar as
-      // tentativas sem achar, desiste em silêncio e mantém o que havia.
-      if (r.placements.length > 40) { setRes(r); return; }
+      const { spots, tint } = collectGreenSurfaceSpots(isGreen, Math.ceil(GRASS_CAP / CLUSTER));
+      if (spots.length > 10) {
+        const out: Placement[] = [];
+        for (let s = 0; s < spots.length && out.length < GRASS_CAP; s++) {
+          const sp = spots[s]!;
+          for (let k = 0; k < CLUSTER; k++) {
+            const seed = s * 7 + k * 101;
+            const h = 0.6 + rand(seed + 50) * 0.5;
+            out.push({
+              x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
+              z: sp.z + (rand(seed + 99) - 0.5) * 2 * CLUSTER_SPREAD,
+              w: h * 1.1, h, yaw: rand(seed + 3) * Math.PI * 2,
+            });
+          }
+        }
+        setRes({ placements: out, tint: tint ?? undefined });
+        return;
+      }
       if (tries >= 20) return;
       tries++; setTimeout(attempt, 250); // textura ainda decodificando → tenta de novo
     };
