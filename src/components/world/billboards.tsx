@@ -325,15 +325,11 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
           grid.push({ x: jx, z: jz });
         }
       }
-      const spots = [...grid, ...meshSpots];
       const perSpot = 3; // tufos por mancha (densidade local — grama cheia)
-      const targetSpots = Math.ceil(GRASS_CAP / perSpot);
-      const spotStride = Math.max(1, Math.floor(spots.length / targetSpots));
       const out: Placement[] = [];
-      for (let s = 0; s < spots.length && out.length < GRASS_CAP; s += spotStride) {
-        const sp = spots[s]!;
+      const push = (sp: { x: number; z: number }, base: number) => {
         for (let k = 0; k < perSpot; k++) {
-          const seed = s * 7 + k * 101;
+          const seed = base + k * 101;
           const h = 0.9 + rand(seed + 50) * 0.7;
           out.push({
             x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
@@ -341,6 +337,16 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
             w: h * 1.2, h, yaw: rand(seed + 3) * Math.PI * 2,
           });
         }
+      };
+      // PRIORIDADE ao CHÃO PLANO (grade) — é o que faltava. A montanha tem MUITO mais
+      // manchas; se sorteasse uniforme, ela levava quase tudo e o plano ficava com fiapos.
+      // Plano leva até ~70% do teto; a montanha preenche o resto (strided).
+      const gridCap = Math.floor(GRASS_CAP * 0.7);
+      for (let s = 0; s < grid.length && out.length < gridCap; s++) push(grid[s]!, s * 7);
+      const remain = Math.max(0, GRASS_CAP - out.length);
+      if (remain > 0 && meshSpots.length > 0) {
+        const mStride = Math.max(1, Math.floor(meshSpots.length / Math.max(1, remain / perSpot)));
+        for (let s = 0; s < meshSpots.length && out.length < GRASS_CAP; s += mStride) push(meshSpots[s]!, 1_000_000 + s * 7);
       }
       setRes({ placements: out, tint: tint ?? undefined });
     };
