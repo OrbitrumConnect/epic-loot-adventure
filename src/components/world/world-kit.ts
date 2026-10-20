@@ -4,7 +4,7 @@
  * automático usem exatamente os mesmos valores (sem duplicar constantes).
  */
 import * as THREE from 'three';
-import { LAKE_CENTERS, RIVER_POINTS, RIVER_HALF_WIDTH, riverDistance } from '@/game/data/camps';
+import { LAKE_CENTERS, RIVER_POINTS, RIVER_HALF_WIDTH, riverDistance, SAFE_ZONE } from '@/game/data/camps';
 
 const names = [
   'ground', 'ground-light', 'grass', 'pine', 'leaf', 'leaf-light', 'trunk',
@@ -99,7 +99,7 @@ export const HERO_HEIGHT = 1.869;
  * anel (igual o círculo dos acampamentos). Mesma ideia de `pushOut*` da base:
  * empurra qualquer corpo hostil para a borda do círculo.
  */
-export const SAFE_ZONE = { x: 2, z: -28, radius: 11 } as const;
+export { SAFE_ZONE } from '@/game/data/camps';
 
 /** Empurra (x,z) para fora da zona segura, somando o raio do corpo. Fora dela, nada muda. */
 export function pushOutSafeZone(x: number, z: number, bodyRadius = 0): [number, number] {

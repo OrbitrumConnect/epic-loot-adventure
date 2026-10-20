@@ -519,6 +519,60 @@ describe('objectiveSystem · caça autônoma por nível', () => {
     expect(intent).toMatchObject({ kind: 'attack', creatureId: 'boss' });
   });
 
+  it('DENTRO da zona segura NÃO foge do brutamontes (ele não entra) e volta a farmar', () => {
+    // O bug: o hostil forte fica preso na borda da zona segura, a ~5,6 m da
+    // base, dentro de FLEE_RADIUS. O piloto devolvia `retreat` a cada tique e
+    // morava parado na base, sem farmar nem caçar — pra sempre.
+    const base = {
+      playerLevel: 1,
+      homePosition: { x: 7, z: -26 },
+      safeZone: { x: 2, z: -28, radius: 11 },
+      creatures: [
+        { id: 'boss', position: { x: 12.6, z: -26 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
+      ],
+      resources: [
+        { id: 'node_perigoso', position: { x: 14, z: -26 }, depleted: false },
+        { id: 'node_seguro', position: { x: -4, z: -30 }, depleted: false },
+      ],
+    };
+    const intent = decideIntent(snapshot({ ...base, playerPosition: { x: 7, z: -26 } }), T0);
+    expect(intent.kind).not.toBe('retreat');
+    expect(intent).toMatchObject({ kind: 'move', to: { x: -4, z: -30 } });
+
+    // FORA da zona segura o medo continua valendo: foge pra base.
+    const outside = decideIntent(snapshot({ ...base, playerPosition: { x: 20, z: -26 } }), T0);
+    expect(outside.kind).toBe('retreat');
+  });
+
+  it('zona segura: sem nó/presa longe do brutamontes, espera com motivo claro', () => {
+    const intent = decideIntent(snapshot({
+      playerLevel: 1,
+      playerPosition: { x: 7, z: -26 },
+      homePosition: { x: 7, z: -26 },
+      safeZone: { x: 2, z: -28, radius: 11 },
+      creatures: [
+        { id: 'boss', position: { x: 12.6, z: -26 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
+      ],
+      resources: [{ id: 'node_perigoso', position: { x: 14, z: -26 }, depleted: false }],
+    }), T0);
+    expect(intent).toMatchObject({ kind: 'idle' });
+    if (intent.kind === 'idle') expect(intent.reason).toContain('rondando');
+  });
+
+  it('zona segura: brutamontes colado NÃO vira alvo de autodefesa', () => {
+    const intent = decideIntent(snapshot({
+      playerLevel: 1,
+      playerPosition: { x: 7, z: -26 },
+      homePosition: { x: 7, z: -26 },
+      safeZone: { x: 2, z: -28, radius: 11 },
+      creatures: [
+        { id: 'boss', position: { x: 11, z: -26 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
+        { id: 'rato', position: { x: 5, z: -26 }, behavior: 'patrol', hp: 10, hostile: true, level: 1 },
+      ],
+    }), T0);
+    expect(intent).toMatchObject({ kind: 'attack', creatureId: 'rato' });
+  });
+
   it('bolsa cheia e nada a fazer → retreat pra base (não fica inerte)', () => {
     const intent = decideIntent(snapshot({
       gatherCapacity: false,

@@ -8,7 +8,7 @@ import { ITEMS } from '../data/items';
 import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
-import { CAMPS, WORLD_HALF } from '../data/camps';
+import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
@@ -1733,6 +1733,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       ],
       objectives: state.objectives,
       homePosition: HOME_POSITION,
+      safeZone: SAFE_ZONE,
       baseUnderSiege: state.wave.phase === 'combat',
     };
   },

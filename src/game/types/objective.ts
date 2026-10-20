@@ -61,6 +61,9 @@ export type AutoSnapshot = {
   resources: { id: string; position: Position; depleted: boolean; kind?: string; range?: number }[];
   objectives: ObjectiveQueueState;
   homePosition: Position;
+  /** Zona segura do spawn: nenhum hostil entra nela (`pushOutSafeZone`). Dentro
+   *  dela fugir é inútil — o inimigo não alcança — e travava o piloto pra sempre. */
+  safeZone?: { x: number; z: number; radius: number };
   /** Onda em COMBATE (cerco à base) → o piloto prioriza DEFENDER: ataca o hostil
    *  mais próximo dentro do raio de defesa e não persegue além dele. */
   baseUnderSiege?: boolean;

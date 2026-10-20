@@ -34,6 +34,11 @@ export const BASE_DEFENSE_RADIUS = 35;
 export const LEVEL_TOO_STRONG = 3;
 /** Perseguidor forte demais dentro deste raio → o piloto ocioso foge pra base. */
 export const FLEE_RADIUS = 12;
+/** Margem de segurança em volta de um perseguidor FORTE DEMAIS: o piloto não
+ *  escolhe recurso nem presa dentro deste raio dele, pra trabalhar do lado
+ *  oposto da base em vez de ficar inerte enquanto o brutamontes ronda. */
+export const DANGER_MARGIN = 10;
+
 /** Caça ociosa: sem objetivo e sem recurso válido, persegue o hostil de MENOR
  *  nível dentro deste raio (bem maior que AUTO_ENGAGE_RADIUS pra não travar
  *  parado dentro da zona segura quando os inimigos ficam na borda). */
@@ -313,6 +318,7 @@ function weakestTargetWithin(
   radius: number,
   playerLevel: number,
   hostileOnly: boolean,
+  dangers: Position[] = [],
 ): AutoSnapshot['creatures'][number] | null {
   let best: AutoSnapshot['creatures'][number] | null = null;
   let bestLevel = Infinity;
@@ -321,6 +327,7 @@ function weakestTargetWithin(
     if (!isCreatureAlive(creature)) continue;
     if (hostileOnly && creature.hostile === false) continue;
     if (isTooStrong(creature, playerLevel)) continue;
+    if (dangers.length > 0 && !awayFromDanger(creature.position, dangers)) continue;
     const dist = getDistance(snapshot.playerPosition, creature.position);
     if (dist > radius) continue;
     const level = creatureLevelOf(creature);
@@ -387,12 +394,44 @@ function nearestHostileWithin(snapshot: AutoSnapshot, radius: number): AutoSnaps
   return best;
 }
 
-/** Recurso vivo (não esgotado) mais próximo do jogador — pro farm automático. */
-function nearestNode(snapshot: AutoSnapshot): AutoSnapshot['resources'][number] | null {
+/**
+ * O jogador está DENTRO da zona segura do spawn? Lá nenhum hostil entra
+ * (`pushOutSafeZone` empurra todo corpo inimigo pra borda), então fugir de quem
+ * ronda do lado de fora é inútil — e era o que travava o piloto pra sempre.
+ * Sem `safeZone` no snapshot (testes antigos), devolve `false`.
+ */
+function isPlayerSafe(snapshot: AutoSnapshot): boolean {
+  const zone = snapshot.safeZone;
+  if (!zone) return false;
+  return getDistance(snapshot.playerPosition, { x: zone.x, z: zone.z }) <= zone.radius;
+}
+
+/** Perseguidores vivos FORTES DEMAIS, de onde o piloto mantém distância. */
+function dangerousChasers(snapshot: AutoSnapshot, playerLevel: number): Position[] {
+  const out: Position[] = [];
+  for (const creature of snapshot.creatures) {
+    if (!isCreatureAlive(creature)) continue;
+    if (creature.behavior !== 'chase' && creature.behavior !== 'attack') continue;
+    if (!isTooStrong(creature, playerLevel)) continue;
+    out.push(creature.position);
+  }
+  return out;
+}
+
+/** O ponto está longe o bastante de todo perseguidor forte demais? */
+function awayFromDanger(position: Position, dangers: Position[]): boolean {
+  return dangers.every(d => getDistance(position, d) > DANGER_MARGIN);
+}
+
+/** Recurso vivo (não esgotado) mais próximo do jogador — pro farm automático.
+ *  `dangers` vazio não filtra nada; com brutamontes rondando, só considera nó
+ *  fora do raio dele. */
+function nearestNode(snapshot: AutoSnapshot, dangers: Position[] = []): AutoSnapshot['resources'][number] | null {
   let best: AutoSnapshot['resources'][number] | null = null;
   let bestDist = Infinity;
   for (const node of snapshot.resources) {
     if (node.depleted) continue;
+    if (dangers.length > 0 && !awayFromDanger(node.position, dangers)) continue;
     const dist = getDistance(snapshot.playerPosition, node.position);
     if (dist < bestDist) {
       bestDist = dist;
@@ -454,12 +493,18 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   // 4. AUTODEFESA — perseguidor dentro de SELF_DEFENSE_RADIUS vem ANTES da fila.
   // Com objetivo do jogador: obedece e luta (ordem manda, mesmo contra forte).
   // Sem objetivo (caça autônoma): se o perseguidor é forte demais, FOGE.
+  const safe = isPlayerSafe(snapshot);
   const threat = nearestThreat(snapshot);
   if (threat) {
-    if (!active && isTooStrong(threat, playerLevel)) {
+    const tooStrong = !active && isTooStrong(threat, playerLevel);
+    // Dentro da zona segura o brutamontes NÃO alcança o jogador (fica preso na
+    // borda do círculo). Fugir dele ali devolvia `retreat` a cada tique pra
+    // sempre — o piloto morava na base sem farmar nem caçar. Agora ignora o
+    // ronda e segue o loop ocioso (que já evita o raio dele).
+    if (tooStrong && !safe) {
       return { kind: 'retreat', to: { ...snapshot.homePosition }, reason: 'Inimigo forte demais: fugindo.' };
     }
-    return { kind: 'attack', creatureId: threat.id, to: { ...threat.position } };
+    if (!tooStrong) return { kind: 'attack', creatureId: threat.id, to: { ...threat.position } };
   }
 
   // 4b. DEFESA DE BASE — durante a ONDA (cerco), prioriza o hostil mais próximo
@@ -482,17 +527,22 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     //   7. idle.
 
     // 1. FUGA — perseguidor forte demais (os <=10m já foram tratados no passo 4).
+    // Dentro da zona segura não foge: o bicho não entra, e insistir travava tudo.
     const chaser = nearestChaserWithin(snapshot, FLEE_RADIUS);
-    if (chaser && isTooStrong(chaser, playerLevel)) {
+    if (chaser && isTooStrong(chaser, playerLevel) && !safe) {
       return { kind: 'retreat', to: { ...snapshot.homePosition }, reason: 'Inimigo forte demais: fugindo.' };
     }
+
+    // Com brutamontes rondando, trabalha LONGE dele (outro lado da base) em vez
+    // de ficar inerte esperando ele sumir.
+    const dangers = dangerousChasers(snapshot, playerLevel);
 
     // 2. DEFESA: inimigo (não forte demais) coladinho → ataca. SÓ hostil.
     const foe = weakestTargetWithin(snapshot, AUTO_ENGAGE_RADIUS, playerLevel, true);
     if (foe) return engage(snapshot, foe, 'Defendendo a base');
 
     // 3. FARM: coleta o nó mais próximo (alcance da própria definição do nó).
-    const node = nearestNode(snapshot);
+    const node = nearestNode(snapshot, dangers);
     if (node && snapshot.gatherCapacity !== false) {
       const reach = node.range ?? GATHER_RANGE;
       if (getDistance(snapshot.playerPosition, node.position) <= reach) {
@@ -503,13 +553,13 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
 
     // 4. CAÇA AUTÔNOMA: hostil de menor nível até IDLE_HUNT_RADIUS (ignora forte
     // demais). É o conserto do bug: o piloto não trava parado na zona segura.
-    const prey = weakestTargetWithin(snapshot, IDLE_HUNT_RADIUS, playerLevel, true);
+    const prey = weakestTargetWithin(snapshot, IDLE_HUNT_RADIUS, playerLevel, true, dangers);
     if (prey) return engage(snapshot, prey, 'Caçando por perto');
 
     // 5. CAÇA PACÍFICA (comida) só se o jogador ligou o raio de caça.
     const huntBase = snapshot.autoHuntRadius ?? 0;
     if (huntBase > 0) {
-      const quarry = weakestTargetWithin(snapshot, Math.max(huntBase, snapshot.attackRange ?? 0), playerLevel, false);
+      const quarry = weakestTargetWithin(snapshot, Math.max(huntBase, snapshot.attackRange ?? 0), playerLevel, false, dangers);
       if (quarry) return engage(snapshot, quarry, 'Caçando por perto');
     }
 
@@ -519,6 +569,9 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     }
 
     // 7
+    if (dangers.length > 0) {
+      return { kind: 'idle', reason: 'Inimigo forte demais rondando: esperando na base.' };
+    }
     return { kind: 'idle', reason: 'Nenhum objetivo ativo.' };
   }
 
