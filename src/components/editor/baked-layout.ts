@@ -33,19 +33,21 @@ export const BAKED_EDITOR_OBJECTS: EditorObject[] = [
   // colocou coqueiros na água no localhost (não vai pro Vercel) e deu carta branca pra eu
   // fixar — posições minhas, ajustáveis no Editor. Base no chão com POS.y=8 (escala 4),
   // colisão 'none' (decorativo, não escalável). Se flutuar/afundar, ajustar o Y no painel.
+  // ground:true → assentam no chão REAL do GLB (não ficam voando). Posições na MARGEM,
+  // fora do raio do lago (25,25,r32), pra não caírem sobre a água. Y=0 é só fallback.
   {
     id: 'baked-palms-01', name: 'Coqueiros 1', assetUrl: '/models/map/desert-palm-cluster.glb',
-    source: 'editor', selectable: true, visible: true, collide: 'none',
-    transform: { position: [45, 8, 30], rotation: [0, 0.4, 0], scale: [4, 4, 4] },
+    source: 'editor', selectable: true, visible: true, collide: 'none', ground: true,
+    transform: { position: [60, 0, 25], rotation: [0, 0.4, 0], scale: [4, 4, 4] },
   },
   {
     id: 'baked-palms-02', name: 'Coqueiros 2', assetUrl: '/models/map/desert-palm-cluster.glb',
-    source: 'editor', selectable: true, visible: true, collide: 'none',
-    transform: { position: [20, 8, 52], rotation: [0, 2.1, 0], scale: [4, 4, 4] },
+    source: 'editor', selectable: true, visible: true, collide: 'none', ground: true,
+    transform: { position: [25, 0, 60], rotation: [0, 2.1, 0], scale: [4, 4, 4] },
   },
   {
     id: 'baked-palms-03', name: 'Coqueiros 3', assetUrl: '/models/map/desert-palm-cluster.glb',
-    source: 'editor', selectable: true, visible: true, collide: 'none',
-    transform: { position: [48, 8, 8], rotation: [0, -1.2, 0], scale: [4, 4, 4] },
+    source: 'editor', selectable: true, visible: true, collide: 'none', ground: true,
+    transform: { position: [-10, 0, 22], rotation: [0, -1.2, 0], scale: [4, 4, 4] },
   },
 ];
