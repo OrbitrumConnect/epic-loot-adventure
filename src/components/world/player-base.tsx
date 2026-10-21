@@ -536,6 +536,22 @@ function BuildLayer({
     const chk = updateClaimCandidate();
     if (!chk) { console.log('[BASE] clique ignorado: sem candidato de terreno sob o cursor.'); return; }
     if (!chk.ok) { console.log('[BASE] terreno INVÁLIDO:', chk.message, chk.origin); gs.setMessage(`Não dá para reivindicar: ${chk.message}`); return; }
+    // PvP (fatia 3): não colar numa base INIMIGA — distância mínima de 3 bases (centro a centro).
+    if (MP_ENABLED && useNet.getState().connected) {
+      const net = useNet.getState();
+      const myCx = (chk.origin.gx + CLAIM_SIZE / 2) * BASE_GRID;
+      const myCz = (chk.origin.gz + CLAIM_SIZE / 2) * BASE_GRID;
+      const MIN_SEP = 3 * CLAIM_SIZE * BASE_GRID;
+      for (const [pid, base] of Object.entries(net.bases)) {
+        const hostile = net.players[pid]?.side === 'enemy' || net.selfSide === 'enemy';
+        const wp = base?.worldPosition;
+        if (!hostile || !wp) continue;
+        if (Math.hypot(myCx - wp.x, myCz - wp.z) < MIN_SEP) {
+          gs.setMessage('Muito perto de uma base inimiga — afaste-se (mínimo 3 bases de distância).');
+          return;
+        }
+      }
+    }
     console.log('[BASE] ✅ reivindicando terreno em', chk.origin);
     gs.claimBase(chk.origin, terrainHeight);    s.current.originKey = '';
     s.current.labelText = '';
