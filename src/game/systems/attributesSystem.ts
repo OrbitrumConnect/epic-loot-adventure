@@ -31,7 +31,7 @@ export const ATTRIBUTE_CAPS: PlayerAttributes = { damage: 40, dexterity: 50, car
 export const ATTR_REF_LEVEL = 30;
 
 /** Peso máximo base da bolsa (carry 0% = este valor). */
-export const BASE_MAX_WEIGHT = 200;
+export const BASE_MAX_WEIGHT = 1000; // Pedro: stacks grandes (bala/pedra/madeira) — bolsa não enche à toa
 
 /** Quanto cada ponto de skill soma num atributo (%). */
 export const SKILL_STEP = 1;

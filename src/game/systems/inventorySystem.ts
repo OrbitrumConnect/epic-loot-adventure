@@ -1,6 +1,12 @@
 import type { InventoryState, InventorySlot } from '../types';
 import { ITEMS } from '../data/items';
 
+/** Slot RESERVADO só pra POÇÃO (Pedro): toda poção coletada vai pra este slot (fixo); nada
+ *  além de poção entra nele, e a poção não é empurrada pra fora por outro item. Overflow de
+ *  poção (acima do maxStack) ainda cai nos outros slots. É o slot da hotbar pra beber rápido. */
+export const POTION_SLOT = 3;
+const POTION_ITEM = 'health_potion';
+
 export function createInventory(initialItems?: { itemId: string; quantity: number }[]): InventoryState {
   const slots: InventorySlot[] = Array.from({ length: 24 }, () => ({ itemId: null, quantity: 0 }));
 
@@ -15,7 +21,7 @@ export function createInventory(initialItems?: { itemId: string; quantity: numbe
   return {
     slots,
     maxSlots: 24,
-    maxWeight: 40,
+    maxWeight: 1000, // alinhado ao BASE_MAX_WEIGHT; syncCarry recalcula com a capacidade%
     equipment: { primary: null, secondary: null, armor: null, accessory: null },
     hotbar: { slots: [0, 1, 2, 3, 4, 5, 6, 7] },
   };
@@ -46,12 +52,25 @@ export function canAddItem(inventory: InventoryState, itemId: string, quantity: 
   const item = ITEMS[itemId];
   if (!item || quantity <= 0) return false;
 
+  const isPotion = itemId === POTION_ITEM;
+  // POÇÃO sempre cabe no slot reservado (SEM limite de peso): bolsa cheia não pode impedir
+  // de pegar poção — o slot fixo resolve (Pedro). Só o que passar do maxStack cai na regra
+  // normal (peso + outros slots).
+  if (isPotion) {
+    const s = inventory.slots[POTION_SLOT];
+    const cur = s && s.itemId === POTION_ITEM ? s.quantity : 0;
+    const free = (!s || s.itemId == null || s.itemId === POTION_ITEM) ? item.maxStack - cur : 0;
+    if (free >= quantity) return true;
+  }
+
   const addedWeight = item.weight * quantity;
   if (getWeight(inventory) + addedWeight > inventory.maxWeight) return false;
 
   // A coleta é atômica: se o drop não couber por inteiro, não podemos retornar
   // `true` e deixar `addItem` perder silenciosamente o excedente da pilha.
-  const stackCapacity = inventory.slots.reduce((capacity, slot) => {
+  const stackCapacity = inventory.slots.reduce((capacity, slot, i) => {
+    // Slot reservado da poção: só conta pra poção; pra qualquer outro item, capacidade 0.
+    if (i === POTION_SLOT && !isPotion) return capacity;
     if (slot.itemId === itemId) return capacity + Math.max(0, item.maxStack - slot.quantity);
     if (slot.itemId === null) return capacity + item.maxStack;
     return capacity;
@@ -65,8 +84,21 @@ export function addItem(inventory: InventoryState, itemId: string, quantity: num
 
   const slots = inventory.slots.map(s => ({ ...s }));
   let remaining = quantity;
+  const isPotion = itemId === POTION_ITEM;
 
+  // POÇÃO: entra SEMPRE no slot reservado primeiro (fixo). Outros itens NUNCA usam esse slot.
+  if (isPotion) {
+    const s = slots[POTION_SLOT];
+    if (s && (s.itemId === POTION_ITEM || s.itemId === null)) {
+      const cur = s.itemId === POTION_ITEM ? s.quantity : 0;
+      const canAdd = Math.min(remaining, item.maxStack - cur);
+      if (canAdd > 0) { s.itemId = POTION_ITEM; s.quantity = cur + canAdd; remaining -= canAdd; }
+    }
+  }
+
+  // Empilha nos slots existentes (pula o reservado — poção já tratada, outros proibidos).
   for (let i = 0; i < slots.length && remaining > 0; i++) {
+    if (i === POTION_SLOT) continue;
     const slot = slots[i]!;
     if (slot.itemId === itemId && slot.quantity < item.maxStack) {
       const canAdd = Math.min(remaining, item.maxStack - slot.quantity);
@@ -75,7 +107,9 @@ export function addItem(inventory: InventoryState, itemId: string, quantity: num
     }
   }
 
+  // Abre slot vazio (nunca o reservado pra não-poção; overflow de poção pode usar outros).
   for (let i = 0; i < slots.length && remaining > 0; i++) {
+    if (i === POTION_SLOT) continue;
     const slot = slots[i]!;
     if (slot.itemId === null) {
       const canAdd = Math.min(remaining, item.maxStack);
