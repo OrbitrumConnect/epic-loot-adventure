@@ -16,6 +16,7 @@ import { HeldItem, selectedItemId } from './world/held-weapon';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
+import { HeroNameplate } from './world/hero-nameplate';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
 import { registerWall, wallHeightAt, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
@@ -769,6 +770,9 @@ function Character({
         <ringGeometry args={[0.53, 0.57, 32]} />
         <meshBasicMaterial color={c.gold} transparent opacity={0.7} />
       </mesh>
+
+      {/* Plaquinha nick · Nv. + barra de vida acima da cabeça (igual aos inimigos). */}
+      <HeroNameplate />
 
       {USE_GLB_HERO && (USE_RED_HERO
         ? <GlbHeroMixamo actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT * 1.04} rangedAttack weapon={<HeldItem c={c} />} />
@@ -1670,20 +1674,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     // Botão direito gira a câmera no modo de cima → suprime o menu de contexto do navegador.
     const onContextMenu = (e: MouseEvent) => { if (cameraMode === 'iso') e.preventDefault(); };
 
-    // Touch (mobile): arrastar 1 dedo gira a câmera no 3ª pessoa; TAP no chão
-    // anda até o ponto (modo manual). Reusa a infra de "clique-pra-andar": basta
-    // setar o alvo `target` que o personagem já persegue quando não há WASD.
-    const raycaster = new THREE.Raycaster();
-    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const tmpNdc = new THREE.Vector2();
-    const tmpHit = new THREE.Vector3();
-    const walkTo = (clientX: number, clientY: number) => {
-      if (useGameStore.getState().objectives.mode === 'idle') return; // só no manual
-      const r = canvas.getBoundingClientRect();
-      tmpNdc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
-      raycaster.setFromCamera(tmpNdc, camera);
-      if (raycaster.ray.intersectPlane(groundPlane, tmpHit)) target.current.set(tmpHit.x, 0, tmpHit.z);
-    };
+    // Touch (mobile): arrastar 1 dedo gira a câmera (iso/3ª pessoa). O TAP no chão NÃO anda mais
+    // — quem move é o JOYSTICK (Pedro: "tirar o andar-clicando pra não confundir MOBA e 3ª
+    // pessoa"). Tocar num inimigo ainda seleciona/ataca (evento do próprio mesh).
 
     let startX = 0, startY = 0, lastTX = 0, lastTY = 0, moved = false;
     const onTouchStart = (e: TouchEvent) => {
@@ -1710,8 +1703,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     const onTouchEnd = (e: TouchEvent) => {
       const t = e.changedTouches[0];
       if (!moved && t && !props.paused && !isBuildActive()) {
-        walkTo(t.clientX, t.clientY);
-        e.preventDefault(); // suprime o mousedown sintetizado (tap não ataca)
+        // Tap no chão não faz nada (joystick move); só suprime o mousedown sintetizado
+        // pra o toque não virar ataque/giro fantasma.
+        e.preventDefault();
       }
       moved = false;
     };
