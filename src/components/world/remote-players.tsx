@@ -21,6 +21,7 @@ function RemotePlayer({ id }: { id: string }) {
   const inited = useRef(false);
   const labelGroup = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
+  const enemyRing = useRef<THREE.Mesh>(null); // anel vermelho sob INIMIGOS (PvP, atualiza ao vivo)
   const initial = useNet.getState().players[id];
   const title = `${initial?.name ?? 'Viajante'} · Nv. ${initial?.level ?? 1}`;
   const texture = useMemo(() => labelTexture(title, '#fff3c4'), [title]);
@@ -45,11 +46,15 @@ function RemotePlayer({ id }: { id: string }) {
       labelGroup.current.visible = dist <= LABEL_RANGE;
       labelGroup.current.quaternion.copy(state.camera.quaternion);
     }
+    const enemy = p.side === 'enemy';
     if (hpFill.current) {
       const ratio = Math.max(0, Math.min(1, p.hp / Math.max(1, p.maxHp)));
       hpFill.current.scale.x = ratio;
       hpFill.current.position.x = -0.45 + ratio * 0.45;
+      // Barra vermelha pra inimigo, verde pra aliado (atualiza ao vivo quando ele escolhe).
+      (hpFill.current.material as THREE.MeshBasicMaterial).color.set(enemy ? '#ef4444' : '#55c979');
     }
+    if (enemyRing.current) enemyRing.current.visible = enemy;
   });
   return (
     <group ref={group} onPointerDown={(event) => {
@@ -60,6 +65,11 @@ function RemotePlayer({ id }: { id: string }) {
       if (p) useGameStore.getState().setMessage(`${p.name} · Nv. ${p.level} · ${Math.round(p.hp)}/${Math.round(p.maxHp)} PV.`);
     }}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />
+      {/* Anel vermelho sob INIMIGOS (PvP). Fica invisível pra aliado; toggle no useFrame. */}
+      <mesh ref={enemyRing} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} visible={false} raycast={noRaycast}>
+        <ringGeometry args={[0.55, 0.72, 36]} />
+        <meshBasicMaterial color="#ef4444" transparent opacity={0.75} depthWrite={false} />
+      </mesh>
       <group ref={labelGroup} position={[0, HERO_HEIGHT + 0.65, 0]} visible={false}>
         <mesh position={[0, 0.2, 0]} renderOrder={12} raycast={noRaycast}>
           <planeGeometry args={[0.2 * texture.aspect, 0.2]} />

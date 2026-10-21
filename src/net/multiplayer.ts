@@ -25,6 +25,9 @@ export const supabase = MP_ENABLED
 
 export const MAX_PLAYERS = 8;
 
+/** Postura PvP que o jogador declara ao entrar numa sala (fatia 1 do PvP). */
+export type PvpSide = 'ally' | 'enemy';
+
 export type RemotePose = {
   id: string; name: string;
   /** Metadado leve de presença; prepara a identidade persistente futura. */
@@ -33,6 +36,8 @@ export type RemotePose = {
   maxHp: number;
   x: number; z: number; yaw: number;
   action: string; t: number;
+  /** Aliado ou Inimigo (declarado no card ao entrar). Default 'ally'. */
+  side: PvpSide;
 };
 
 export type CreatureHitIntent = {
@@ -50,6 +55,10 @@ type NetState = {
   isHost: boolean;
   selfId: string;
   selfName: string;
+  /** Minha postura PvP na sala (declarada no card). `sideChosen` controla o card. */
+  selfSide: PvpSide;
+  sideChosen: boolean;
+  setSide: (s: PvpSide) => void;
   /** Outros jogadores (sem o self). */
   players: Record<string, RemotePose>;
   /** Base de cada outro jogador (pra renderizar a base dele no mapa). */
@@ -74,11 +83,14 @@ export const useNet = create<NetState>((set, get) => ({
   isHost: false,
   selfId: rand(8),
   selfName: 'Viajante-' + Math.floor(100 + Math.random() * 900),
+  selfSide: 'ally',
+  sideChosen: false,
   players: {},
   bases: {},
   world: null,
 
   setName: (n) => set({ selfName: n.trim() || get().selfName }),
+  setSide: (s) => set({ selfSide: s, sideChosen: true }),
 
   join: (code) => {
     if (!supabase) return;
@@ -141,12 +153,14 @@ export const useNet = create<NetState>((set, get) => ({
     });
 
     channel = ch;
-    set({ room, connected: false, isHost, players: {}, bases: {}, world: null });
+    // Host entra como aliado (não escolhe); convidado (entrou por código/link) declara a
+    // postura no card → `sideChosen=false` faz o card aparecer. (fatia 1 do PvP)
+    set({ room, connected: false, isHost, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: isHost });
   },
 
   leave: () => {
     if (channel && supabase) { void supabase.removeChannel(channel); channel = null; }
-    set({ room: null, connected: false, isHost: false, players: {}, bases: {}, world: null });
+    set({ room: null, connected: false, isHost: false, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: false });
   },
 }));
 
@@ -157,10 +171,10 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
   const now = performance.now();
   if (now - lastSent < 88) return;
   lastSent = now;
-  const { selfId, selfName } = useNet.getState();
+  const { selfId, selfName, selfSide } = useNet.getState();
   void channel.send({
     type: 'broadcast', event: 'pose',
-    payload: { id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now } satisfies RemotePose,
+    payload: { id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now, side: selfSide } satisfies RemotePose,
   });
 }
 

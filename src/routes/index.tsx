@@ -47,6 +47,7 @@ import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
 import { EditorPanel } from '@/components/editor/editor-panel';
 import { useEditorStore } from '@/components/editor/editor-store';
 import { LoginGate } from '@/components/LoginGate';
+import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
@@ -390,6 +391,7 @@ function Index() {
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
       <LoginGate />
+      <PvpGate />
       {editorActive && <EditorPanel />}
       <aside className="game-sidebar" aria-label="Navegação do jogo">
         <Button variant="ghost" size="icon" className="sidebar-toggle"
