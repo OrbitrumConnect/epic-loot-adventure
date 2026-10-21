@@ -17,6 +17,7 @@ const noRaycast = () => {};
 export function HeroNameplate() {
   const labelGroup = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
+  const parentQ = useRef(new THREE.Quaternion());
   const name = useGameStore((s) => s.player.name);
   const level = useGameStore((s) => s.player.level);
   const title = `${name} · Nv. ${level}`;
@@ -24,7 +25,17 @@ export function HeroNameplate() {
 
   useFrame((state) => {
     const g = labelGroup.current;
-    if (g) g.quaternion.copy(state.camera.quaternion); // sempre de frente pra câmera
+    if (g) {
+      // A placa vive DENTRO do grupo do herói, que gira quando ele vira. Pra ela ficar SEMPRE
+      // de frente pra câmera (e não sumir de perfil), cancelamos a rotação do pai: orientação
+      // local = (rotação-do-pai)⁻¹ × (rotação-da-câmera) → no mundo ela aponta pra câmera.
+      if (g.parent) {
+        g.parent.getWorldQuaternion(parentQ.current).invert();
+        g.quaternion.copy(parentQ.current).multiply(state.camera.quaternion);
+      } else {
+        g.quaternion.copy(state.camera.quaternion);
+      }
+    }
     if (hpFill.current) {
       const p = useGameStore.getState().player;
       const ratio = Math.max(0, Math.min(1, p.hp / Math.max(1, p.maxHp)));
