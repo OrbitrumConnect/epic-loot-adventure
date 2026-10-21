@@ -18,7 +18,7 @@ import { getCamps } from './objective-bridge';
 import { isRaider, Raider } from './raider';
 import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
-import { broadcastWorld, MP_ENABLED, registerCreatureHitHandler, useNet } from '@/net/multiplayer';
+import { broadcastWorld, MP_ENABLED, registerCreatureHitHandler, registerPlayerHitHandler, useNet } from '@/net/multiplayer';
 
 const SYNC_INTERVAL = 0.2;
 
@@ -96,6 +96,16 @@ export function MultiplayerWorldSync() {
     const timer = window.setInterval(send, 450);
     return () => window.clearInterval(timer);
   }, [connected, isHost]);
+
+  // PvP (fatia 2): aplica no jogador LOCAL o golpe recebido de um inimigo (o canal já validou a
+  // inimizade e que o alvo sou eu). Vale pra host e convidado.
+  useEffect(() => {
+    if (!MP_ENABLED || !connected) return;
+    registerPlayerHitHandler((hit) => {
+      useGameStore.getState().takePlayerDamage(hit.damage, hit.fromName);
+    });
+    return () => registerPlayerHitHandler(null);
+  }, [connected]);
 
   useEffect(() => {
     if (!MP_ENABLED || !connected || isHost || !remoteWorld) return;

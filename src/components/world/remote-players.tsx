@@ -2,12 +2,17 @@ import { useFrame } from '@react-three/fiber';
 import { useRef, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import * as THREE from 'three';
-import { useNet } from '@/net/multiplayer';
+import { useNet, broadcastPlayerHit } from '@/net/multiplayer';
 import { GlbHeroMixamo } from './glb-hero-mixamo';
 import type { HeroAction } from './glb-hero';
 import { labelTexture, markPointerConsumed, terrainHeight, HERO_HEIGHT } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
+import { selectedItemId } from './held-weapon';
 import { useGameStore } from '@/game/state/game-store';
+import { weaponRangeFor } from '@/game/data/weapons';
+import { damageMultiplier } from '@/game/systems/attributesSystem';
+import { playerBaseAttack } from '@/game/systems/progressionSystem';
+import { ITEMS } from '@/game/data/items';
 
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
 const LABEL_RANGE = 12;
@@ -62,7 +67,24 @@ function RemotePlayer({ id }: { id: string }) {
       event.stopPropagation();
       markPointerConsumed(event.nativeEvent);
       const p = useNet.getState().players[id];
-      if (p) useGameStore.getState().setMessage(`${p.name} · Nv. ${p.level} · ${Math.round(p.hp)}/${Math.round(p.maxHp)} PV.`);
+      if (!p) return;
+      const store = useGameStore.getState();
+      const me = store.player;
+      const hostile = p.side === 'enemy' || useNet.getState().selfSide === 'enemy';
+      const g = group.current;
+      // Aliado (ou eu morto): só mostra a ficha. Inimigo: PvP — golpe se estiver no alcance.
+      if (!hostile || me.dead || !g) {
+        store.setMessage(`${p.name} · Nv. ${p.level} · ${Math.round(p.hp)}/${Math.round(p.maxHp)} PV.`);
+        return;
+      }
+      const dist = Math.hypot(me.position.x - g.position.x, me.position.z - g.position.z);
+      const heldId = selectedItemId(store);
+      const range = weaponRangeFor(heldId, me.level);
+      if (dist > range + 0.6) { store.setMessage(`${p.name} está longe demais (${range.toFixed(1)}m).`); return; }
+      const base = playerBaseAttack(me.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
+      const dmg = Math.max(1, Math.round(base * damageMultiplier(me)));
+      broadcastPlayerHit(id, dmg);
+      store.setMessage(`⚔️ Você atingiu ${p.name}! -${dmg}`);
     }}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />
       {/* Anel vermelho sob INIMIGOS (PvP). Fica invisível pra aliado; toggle no useFrame. */}

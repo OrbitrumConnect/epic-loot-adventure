@@ -217,6 +217,9 @@ type GameActions = {
   tickWorld: () => void;
   /** O mundo 3D chama quando uma criatura acerta o jogador (ou outro dano que só ele vê). */
   reportDamage: (targetId: string, amount: number, position: Position, onPlayer: boolean) => void;
+  /** Aplica dano ao jogador LOCAL (usado pelo PvP: golpe de um inimigo remoto). Reduz HP,
+   *  mata em 0 (respawn) e marca agressão. `sourceName` = quem bateu (pra mensagem). */
+  takePlayerDamage: (amount: number, sourceName: string) => void;
   pruneFeedback: () => void;
   buildAutoSnapshot: () => AutoSnapshot;
 };
@@ -1779,6 +1782,26 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // por uma janela curta (ver RECENT_DAMAGE_WINDOW_MS em objectiveSystem).
       ...(onPlayer ? { player: { ...s.player, lastDamagedAt: now } } : {}),
     }));
+  },
+
+  takePlayerDamage: (amount, sourceName) => {
+    if (amount <= 0) return;
+    const now = Date.now();
+    set(s => {
+      if (s.player.dead) return {};
+      const dmg = Math.max(1, Math.round(amount));
+      const hp = Math.max(0, s.player.hp - dmg);
+      if (hp <= 0) {
+        return {
+          player: { ...s.player, hp: 0, dead: true, respawnAt: now + 15_000, lastDamagedAt: now },
+          ui: { ...s.ui, message: `${sourceName} te derrotou!` },
+        };
+      }
+      return {
+        player: { ...s.player, hp, lastDamagedAt: now },
+        ui: { ...s.ui, message: `${sourceName} te atingiu! -${dmg} HP (${hp}/${s.player.maxHp})` },
+      };
+    });
   },
 
   pruneFeedback: () => {

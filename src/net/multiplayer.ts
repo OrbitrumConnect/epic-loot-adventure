@@ -47,6 +47,16 @@ export type CreatureHitIntent = {
   damage: number;
 };
 
+/** Golpe PvP de um jogador em OUTRO (fatia 2). `id` = atacante, `targetId` = alvo. */
+export type PlayerHitIntent = {
+  id: string;
+  targetId: string;
+  damage: number;
+  fromName: string;
+  /** Postura do ATACANTE — o alvo só aceita o dano se houver inimizade. */
+  fromSide: PvpSide;
+};
+
 type NetState = {
   room: string | null;
   connected: boolean;
@@ -75,6 +85,7 @@ const randRoom = () => rand(5).toUpperCase();
 
 let channel: RealtimeChannel | null = null;
 let creatureHitHandler: ((intent: CreatureHitIntent) => void) | null = null;
+let playerHitHandler: ((intent: PlayerHitIntent) => void) | null = null;
 
 export const useNet = create<NetState>((set, get) => ({
   room: null,
@@ -129,6 +140,15 @@ export const useNet = create<NetState>((set, get) => ({
       const hit = payload as CreatureHitIntent;
       if (!get().isHost || hit.id === selfId || !hit.targetId || !Number.isFinite(hit.damage)) return;
       creatureHitHandler?.(hit);
+    });
+
+    // PvP (fatia 2): golpe de outro jogador. Só me interessa o que mira em MIM, e só vale se
+    // houver inimizade (o atacante é inimigo OU eu me declarei inimigo). Fora isso, ignora.
+    ch.on('broadcast', { event: 'player-hit' }, ({ payload }) => {
+      const hit = payload as PlayerHitIntent;
+      if (hit.targetId !== selfId || hit.id === selfId || !Number.isFinite(hit.damage)) return;
+      if (hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return; // dois aliados não se ferem
+      playerHitHandler?.(hit);
     });
 
     ch.on('presence', { event: 'sync' }, () => {
@@ -208,6 +228,23 @@ export function broadcastCreatureHit(intent: Omit<CreatureHitIntent, 'id'>): voi
 /** Registrado pela camada de mundo enquanto este navegador é anfitrião. */
 export function registerCreatureHitHandler(handler: ((intent: CreatureHitIntent) => void) | null): void {
   creatureHitHandler = handler;
+}
+
+/** PvP (fatia 2): manda um golpe num jogador inimigo. O ALVO valida/aplica (não há autoridade
+ *  central pra players). Inclui minha postura pra o alvo saber se há inimizade. */
+export function broadcastPlayerHit(targetId: string, damage: number): void {
+  if (!channel || !useNet.getState().connected || !targetId || !Number.isFinite(damage) || damage <= 0) return;
+  const { selfId, selfName, selfSide } = useNet.getState();
+  if (targetId === selfId) return;
+  void channel.send({
+    type: 'broadcast', event: 'player-hit',
+    payload: { id: selfId, targetId, damage, fromName: selfName, fromSide: selfSide } satisfies PlayerHitIntent,
+  });
+}
+
+/** Registrado pela camada de mundo/HUD pra aplicar o dano PvP recebido no jogador local. */
+export function registerPlayerHitHandler(handler: ((intent: PlayerHitIntent) => void) | null): void {
+  playerHitHandler = handler;
 }
 
 /** Link de convite da sala atual (pra compartilhar). */
