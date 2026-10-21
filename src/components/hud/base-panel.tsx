@@ -90,6 +90,8 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
   const baseMetal = useGameStore(s => s.baseMetal);
   const playerLevel = useGameStore(s => s.player.level);
   const wave = useGameStore(s => s.wave.wave);
+  const woodHave = getItemCount(inventory, 'wood');
+  const stoneHave = getItemCount(inventory, 'stone');
   const build = useBuildSelection();
   const key = BUILD_MODE_KEY_LABEL;
   const warCamp = cityBase.buildings.find(b => b.defId === 'war_camp') ?? null;
@@ -299,7 +301,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
         <div className="base-tower-upgrade">
           <div>
             <strong>Evoluir Casa (Pedra)</strong>
-            <small>{baseEvolved ? 'Casa de pedra ativa ✓' : `Onda 4 + nível 10 + 200 madeira + 400 pedra · casa e muros viram pedra. Onda: ${wave} · nível: ${playerLevel}`}</small>
+            <small>{baseEvolved ? 'Casa de pedra ativa ✓' : `Onda 4 + nível 10 · madeira 200 (tem ${woodHave}) + pedra 400 (tem ${stoneHave}) · casa e muros viram pedra. Onda: ${wave} · nível: ${playerLevel}`}</small>
           </div>
           <Button size="sm" variant="outline" disabled={baseEvolved || wave < 4 || playerLevel < 10}
             title={baseEvolved ? 'Já é de pedra' : wave < 4 ? 'Só a partir da onda 4' : playerLevel < 10 ? 'Precisa ser nível 10' : 'Evoluir para casa de pedra'}
@@ -311,7 +313,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
         <div className="base-tower-upgrade">
           <div>
             <strong>Evoluir Casa (Metal)</strong>
-            <small>{baseMetal ? 'Casa de metal ativa ✓' : `Onda 8 + pedra + nível >20 + 460 madeira + 920 pedra (2.3x). Onda: ${wave} · nível: ${playerLevel}`}</small>
+            <small>{baseMetal ? 'Casa de metal ativa ✓' : `Onda 8 + pedra + nível >20 · madeira 460 (tem ${woodHave}) + pedra 920 (tem ${stoneHave}). Onda: ${wave} · nível: ${playerLevel}`}</small>
           </div>
           <Button size="sm" variant="outline" disabled={baseMetal || !baseEvolved || wave < 8 || playerLevel <= 20}
             title={baseMetal ? 'Já é de metal' : !baseEvolved ? 'Precisa ser de pedra antes' : wave < 8 ? 'Só a partir da onda 8' : playerLevel <= 20 ? 'Precisa ser acima do nível 20' : 'Evoluir para casa de metal'}
