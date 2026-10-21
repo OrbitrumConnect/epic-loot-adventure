@@ -8,6 +8,7 @@ import type { PlayerState, HarvestNodeState, ResourceNode, UIState } from '../ty
 import type { PlayerBaseState } from '../types/playerbase';
 import { createHarvestNodes, tickHarvestNodes } from './harvestSystem';
 import { cellInSquare, worldToCell } from './playerBaseSystem';
+import { INVENTORY_SLOTS } from './inventorySystem';
 
 export const SAVE_KEY = 'tribos.local.v1';
 export type PersistState = {
@@ -172,6 +173,15 @@ function grantTransitionBoxes<T extends { slots: { itemId: string | null; quanti
   return { ...inv, slots };
 }
 
+/** Migração de slots (Pedro pediu +50): saves ANTIGOS (24 slots) ganham slots VAZIOS até
+ *  `INVENTORY_SLOTS`, sem perder nada. Idempotente (save já grande passa direto). */
+function padSlots<T extends { slots: { itemId: string | null; quantity: number }[]; maxSlots: number }>(inv: T): T {
+  if (inv.slots.length >= INVENTORY_SLOTS) return inv;
+  const slots = inv.slots.map(s => ({ ...s }));
+  while (slots.length < INVENTORY_SLOTS) slots.push({ itemId: null, quantity: 0 });
+  return { ...inv, slots, maxSlots: INVENTORY_SLOTS };
+}
+
 export function restoreLocalSave(save: LocalSave, initial: PersistState, now: number): PersistState {
   const defaults = createInitialBase(now);
   const city: BaseState = {
@@ -235,7 +245,7 @@ export function restoreLocalSave(save: LocalSave, initial: PersistState, now: nu
     base: tickBase(city, now),
     ...(initial.ui ? { ui: { ...initial.ui, selectedHotbar: hotbarIndex < 0 ? 0 : hotbarIndex } } : {}),
     playerBase: claim, towerLastShotAt,
-    player: { ...initial.player, ...save.player, inventory: grantTransitionBoxes(save.player.inventory),
+    player: { ...initial.player, ...save.player, inventory: padSlots(grantTransitionBoxes(save.player.inventory)),
       hp: save.player.maxHp, mana: save.player.maxMana,
       stamina: save.player.maxStamina, dead: false, respawnAt: 0 },
     harvestNodes: tickHarvestNodes(nodes, now), resources: initial.resources.filter(r => outside(r.position)),

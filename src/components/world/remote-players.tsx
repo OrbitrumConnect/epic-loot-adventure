@@ -40,12 +40,21 @@ function RemotePlayer({ id }: { id: string }) {
     const pose = resolveRemotePose(useNet.getState().poseHistory[id] ?? [], now - INTERPOLATION_DELAY_MS, now);
     if (!pose) return;
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
-    if (!inited.current) { g.position.set(pose.x, glbSurfaceY(pose.x, pose.z, terrainHeight(pose.x, pose.z)), pose.z); g.rotation.y = pose.yaw; inited.current = true; }
+    // Posição/yaw vêm da pose interpolada (atraso fixo). Pés: usa a altura REAL que o outro
+    // jogador mandou (ponte/casa/pulo/morro); sem `y` (cliente antigo) cai no cálculo pelo chão.
+    const groundAt = (x: number, z: number) => glbSurfaceY(x, z, terrainHeight(x, z));
+    if (!inited.current) {
+      g.position.set(pose.x, Number.isFinite(p.y) ? (p.y as number) : groundAt(pose.x, pose.z), pose.z);
+      g.rotation.y = pose.yaw;
+      inited.current = true;
+    }
     const dt = Math.min(delta, 0.1);
     const t = 1 - Math.exp(-15 * dt);
     g.position.x += (pose.x - g.position.x) * t;
     g.position.z += (pose.z - g.position.z) * t;
-    g.position.y = glbSurfaceY(g.position.x, g.position.z, terrainHeight(g.position.x, g.position.z));
+    g.position.y = Number.isFinite(p.y)
+      ? g.position.y + ((p.y as number) - g.position.y) * t
+      : groundAt(g.position.x, g.position.z);
     let dy = pose.yaw - g.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;

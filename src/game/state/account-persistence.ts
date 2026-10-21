@@ -57,8 +57,14 @@ export function startAccountPersistence(userId: string): () => void {
       return;
     }
     const parsed = data?.save ? parseLocalSave(JSON.stringify(data.save)) : null;
-    if (parsed) {
+    // O MAIS AVANÇADO vence (XP total): um aparelho zerado que logou antes semeava nível 1
+    // na conta e depois SOBRESCREVIA o progresso local de outro aparelho ("atualizei e zerou").
+    const localXp = store.getState().player.totalXp ?? 0;
+    if (parsed && (parsed.player.totalXp ?? 0) >= localXp) {
       store.setState(restoreLocalSave(parsed, store.getState(), Date.now()));
+    } else if (parsed) {
+      dirty = true;
+      push(); // local está à frente da conta: sobe o local (não perde progresso).
     } else {
       dirty = true;
       push(); // genuinamente sem save nesta conta: sobe o que o jogador já tem.

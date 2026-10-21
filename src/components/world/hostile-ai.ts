@@ -25,7 +25,7 @@ import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece } from './base-targets';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
-import { canSimulateSharedWorld } from '@/net/multiplayer';
+import { broadcastMobHit, canSimulateSharedWorld, remoteTargets } from '@/net/multiplayer';
 
 /**
  * Clique num inimigo: esquerdo seleciona, Shift+esquerdo enfileira uma caçada.
@@ -320,10 +320,22 @@ export function useHostileAI(opts: HostileOptions) {
     const player = playerRef.current;
     if (!player) return;
 
-    const px = player.position.x;
-    const pz = player.position.z;
     const wx = g.position.x;
     const wz = g.position.z;
+    // Convidado em sala: o bicho NÃO pensa aqui — espelha o host (uma cena só pra todos).
+    const mirror = !canSimulateSharedWorld();
+    // Alvo: eu (solo) — ou, sendo HOST, o jogador MAIS PERTO entre mim e os convidados.
+    let px = player.position.x;
+    let pz = player.position.z;
+    const distToLocal = Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz));
+    let targetRemoteId: string | null = null;
+    if (!mirror) {
+      let best = distToLocal;
+      for (const r of remoteTargets()) {
+        const d = Math.sqrt((r.x - wx) * (r.x - wx) + (r.z - wz) * (r.z - wz));
+        if (d < best) { best = d; px = r.x; pz = r.z; targetRemoteId = r.id; }
+      }
+    }
     const distToPlayer = Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz));
 
     let moving = false;
@@ -341,14 +353,27 @@ export function useHostileAI(opts: HostileOptions) {
 
     let chasing = false;
     let flee = false;
-    if (tuning.peaceful) {
+    if (!mirror && tuning.peaceful) {
       // Histerese: começa a fugir dentro de `aggroRange` e só para 30% além,
       // para o bicho não tremer na borda do raio.
       const stopAt = aggroRange * 1.3;
       fleeing.current = distToPlayer < (fleeing.current ? stopAt : aggroRange);
       flee = fleeing.current;
     }
-    if (flee) {
+    if (mirror) {
+      // ESPELHO (convidado): segue a posição que o HOST mandou, suave. Nada de AI local
+      // (antes cada tela via uma cena diferente: aqui o bicho andando, lá já morrendo).
+      const tx = creature.position.x;
+      const tz = creature.position.z;
+      const gap = Math.hypot(tx - wx, tz - wz);
+      const k = gap > 12 ? 1 : 1 - Math.exp(-10 * dt); // respawn/teleporte: pula direto
+      targetX = wx + (tx - wx) * k;
+      targetZ = wz + (tz - wz) * k;
+      moving = gap > 0.08;
+      chasing = creature.behavior === 'chase' || creature.behavior === 'attack';
+      flee = creature.behavior === 'flee';
+      if (creature.behavior === 'attack' && swing.current <= 0) swing.current = 0.35;
+    } else if (flee) {
       chaseTimer.current = 0;
       // Corre para longe do jogador; perto da borda do mapa desliza em direção
       // ao centro para não ficar encurralado contra o limite.
@@ -375,7 +400,12 @@ export function useHostileAI(opts: HostileOptions) {
       }
       if (distToPlayer <= tuning.attackRange) {
         attackCooldown.current -= dt;
-        if (attackCooldown.current <= 0) {
+        if (attackCooldown.current <= 0 && targetRemoteId) {
+          // Alvo é um CONVIDADO: o host avisa e ele aplica com a própria armadura.
+          attackCooldown.current = creature.attackCooldown;
+          swing.current = 0.35;
+          broadcastMobHit(targetRemoteId, Math.max(1, creature.attackPower), creature.name);
+        } else if (attackCooldown.current <= 0) {
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
           const dmg = mitigateDamage(Math.max(1, creature.attackPower), useGameStore.getState().player);
@@ -465,7 +495,7 @@ export function useHostileAI(opts: HostileOptions) {
     // SEPARAÇÃO entre criaturas (anti-empilhamento): empurra pra longe de quem
     // está colado, usando as posições vivas dos `creatureAnchors`. Assim a horda
     // não vira "10 bichos dentro de 1" te cercando bugado — eles se espalham.
-    {
+    if (!mirror) {
       let sx = 0, sz = 0;
       for (const [oid, oa] of creatureAnchors) {
         if (oid === creatureId || !oa.alive) continue;
@@ -487,11 +517,13 @@ export function useHostileAI(opts: HostileOptions) {
     // Colisão da base (mesma do player): cerca + paredes da casa bloqueiam a
     // criatura; o portão/vão da porta deixa passar. Ela encosta e ATACA o muro
     // (nearestBasePiece acima), aí avança quando a peça cai. Sem reinventar.
-    [targetX, targetZ] = pushOutBasePieces(targetX, targetZ, CREATURE_RADIUS);
-    [targetX, targetZ] = pushOutHouseWalls(targetX, targetZ, CREATURE_RADIUS);
-    [targetX, targetZ] = pushOutFactoryWalls(targetX, targetZ, CREATURE_RADIUS);
-    // Zona segura do spawn: nenhum inimigo/boss entra — fica barrado na borda.
-    [targetX, targetZ] = pushOutSafeZone(targetX, targetZ, CREATURE_RADIUS);
+    if (!mirror) { // no espelho o host já resolveu colisão; repetir aqui faria o bicho tremer
+      [targetX, targetZ] = pushOutBasePieces(targetX, targetZ, CREATURE_RADIUS);
+      [targetX, targetZ] = pushOutHouseWalls(targetX, targetZ, CREATURE_RADIUS);
+      [targetX, targetZ] = pushOutFactoryWalls(targetX, targetZ, CREATURE_RADIUS);
+      // Zona segura do spawn: nenhum inimigo/boss entra — fica barrado na borda.
+      [targetX, targetZ] = pushOutSafeZone(targetX, targetZ, CREATURE_RADIUS);
+    }
     g.position.x = THREE.MathUtils.clamp(targetX, -MAP_HALF, MAP_HALF);
     g.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
     // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno — e
@@ -544,7 +576,7 @@ export function useHostileAI(opts: HostileOptions) {
     const highlighted = isHighlightedCreature(creatureId);
     const targeted = getTargetId() === creatureId;
     const hurt = creature.hp < creature.maxHp;
-    const showBar = distToPlayer < LABEL_RANGE || hurt || highlighted;
+    const showBar = distToLocal < LABEL_RANGE || hurt || highlighted;
     const hpGroup = opts.hpGroup.current;
     if (hpGroup) {
       hpGroup.visible = showBar;

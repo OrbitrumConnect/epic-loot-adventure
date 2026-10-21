@@ -35,6 +35,9 @@ export type RemotePose = {
   hp: number;
   maxHp: number;
   x: number; z: number; yaw: number;
+  /** Altura REAL dos pés de quem envia (ponte, assoalho da casa, pulo, morro). Opcional:
+   *  cliente antigo sem `y` → o receptor calcula pelo chão (compatível). */
+  y?: number;
   action: string; t: number;
   /** Aliado ou Inimigo (declarado no card ao entrar). Default 'ally'. */
   side?: PvpSide;
@@ -86,7 +89,46 @@ type NetState = {
 const rand = (n: number) => Math.random().toString(36).slice(2, 2 + n);
 const randRoom = () => rand(5).toUpperCase();
 
+/** Metadado de presença usado na eleição do host. `away` = aba escondida ou modo Clash. */
+export type PresenceMeta = { joinedAt?: number; host?: boolean; away?: boolean };
+
+/**
+ * Quem segura a sala (simula os inimigos) — DETERMINÍSTICO: todo cliente vê a mesma
+ * presença e chega ao mesmo resultado. Só conta quem está PRESENTE de verdade (não `away`):
+ * (1) se há um host marcado e presente, ele continua (o mais antigo, se houver corrida);
+ * (2) senão, o jogador presente MAIS ANTIGO assume (desempate pelo id). Se TODOS estão
+ * ausentes, vale a mesma regra sobre todos (o solo segue no BackgroundSim).
+ * Assim o host sair, minimizar ou entrar no modo Clash NÃO pausa nem laga os outros.
+ */
+export function electHost(members: { id: string; meta: PresenceMeta }[]): string | null {
+  if (members.length === 0) return null;
+  const order = (a: { id: string; meta: PresenceMeta }, b: { id: string; meta: PresenceMeta }) =>
+    (a.meta.joinedAt ?? Infinity) - (b.meta.joinedAt ?? Infinity) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const present = members.filter(m => !m.meta.away);
+  const pool = present.length > 0 ? present : members;
+  const flagged = pool.filter(m => m.meta.host).sort(order);
+  if (flagged.length > 0) return flagged[0]!.id;
+  return [...pool].sort(order)[0]!.id;
+}
+
+let selfAway = false;
+let awayTimer: ReturnType<typeof setTimeout> | null = null;
+let retrack: (() => void) | null = null;
+
+/**
+ * Marca o jogador local como AUSENTE (aba escondida / modo Clash) ou presente. Ausente há
+ * 2 s → o host passa a sala pro próximo presente; voltar é imediato (entra como convidado).
+ */
+export function setAway(away: boolean): void {
+  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
+  const apply = (v: boolean) => { if (selfAway === v) return; selfAway = v; retrack?.(); };
+  if (away) awayTimer = setTimeout(() => apply(true), 2000);
+  else apply(false);
+}
+
 let channel: RealtimeChannel | null = null;
+/** Recebi mundo AO VIVO de um host nesta sala? (decide se "retomar" usa a foto do banco) */
+let hadLiveWorld = false;
 let creatureHitHandler: ((intent: CreatureHitIntent) => void) | null = null;
 let playerHitHandler: ((intent: PlayerHitIntent) => void) | null = null;
 
@@ -113,6 +155,8 @@ export const useNet = create<NetState>((set, get) => ({
     const isHost = !code; // quem cria a sala (sem código) é o host (simula inimigos)
     const room = (code || randRoom()).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     const selfId = get().selfId;
+    const joinedAt = Date.now(); // ordem de chegada → quem assume se o host sair
+    hadLiveWorld = false;
     const ch = supabase.channel('tribos:' + room, {
       config: { presence: { key: selfId }, broadcast: { self: false } },
     });
@@ -141,6 +185,7 @@ export const useNet = create<NetState>((set, get) => ({
       const p = payload as { id: string; creatures: CreatureState[] };
       // O anfitrião é a autoridade. Ele não deve aceitar um snapshot de convidado.
       if (p.id === selfId || get().isHost || !Array.isArray(p.creatures)) return;
+      hadLiveWorld = true;
       set({ world: p.creatures });
     });
 
@@ -148,6 +193,13 @@ export const useNet = create<NetState>((set, get) => ({
       const hit = payload as CreatureHitIntent;
       if (!get().isHost || hit.id === selfId || !hit.targetId || !Number.isFinite(hit.damage)) return;
       creatureHitHandler?.(hit);
+    });
+
+    // Mundo único: o bicho do HOST me acertou (eu sou convidado). Aplica com a MINHA armadura.
+    ch.on('broadcast', { event: 'mob-hit' }, ({ payload }) => {
+      const hit = payload as MobHitIntent;
+      if (hit.targetId !== selfId || get().isHost || !Number.isFinite(hit.damage)) return;
+      mobHitHandler?.(hit);
     });
 
     // PvP (fatia 2): golpe de outro jogador. Só me interessa o que mira em MIM, e só vale se
@@ -173,12 +225,28 @@ export const useNet = create<NetState>((set, get) => ({
         for (const id of ids) if (id !== selfId && s.poseHistory[id]) poseHistory[id] = s.poseHistory[id]!;
         return { players, poseHistory, bases, full: ids.length >= MAX_PLAYERS };
       });
+      // MIGRAÇÃO DE HOST: se o host saiu (ou a sala estava vazia), o mais antigo assume e
+      // segue simulando a partir do último snapshot que já tem no store. Nada quebra.
+      const members = ids.map(id => ({ id, meta: ((st[id] as unknown as PresenceMeta[])?.[0]) ?? {} }));
+      const elected = electHost(members);
+      if (elected && (elected === selfId) !== get().isHost) setHost(elected === selfId);
     });
+
+    const track = () => {
+      if (!get().connected) return;
+      void ch.track({ name: get().selfName, joinedAt, host: get().isHost, away: selfAway } satisfies PresenceMeta & { name: string });
+    };
+    retrack = track;
+    const setHost = (host: boolean) => {
+      set({ isHost: host, ...(host ? { world: null } : {}) });
+      track();
+      if (host) void registerRoom(room); else unregisterRoom();
+    };
 
     ch.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         set({ connected: true });
-        void ch.track({ name: get().selfName });
+        track();
       }
     });
 
@@ -190,6 +258,7 @@ export const useNet = create<NetState>((set, get) => ({
   },
 
   leave: () => {
+    retrack = null;
     unregisterRoom();
     if (channel && supabase) { void supabase.removeChannel(channel); channel = null; }
     set({ room: null, connected: false, isHost: false, players: {}, poseHistory: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: false });
@@ -198,7 +267,7 @@ export const useNet = create<NetState>((set, get) => ({
 
 /** Envia a pose do jogador local (chamar do loop; throttla sozinho a ~11Hz). */
 let lastSent = 0;
-export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number): void {
+export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number, y?: number): void {
   if (!channel || !useNet.getState().connected) return;
   const now = performance.now();
   if (now - lastSent < 88) return;
@@ -206,7 +275,10 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
   const { selfId, selfName, selfSide } = useNet.getState();
   void channel.send({
     type: 'broadcast', event: 'pose',
-    payload: { id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now, side: selfSide } satisfies RemotePose,
+    payload: {
+      id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now, side: selfSide,
+      ...(y !== undefined && Number.isFinite(y) ? { y } : {}),
+    } satisfies RemotePose,
   });
 }
 
@@ -259,6 +331,30 @@ export function registerPlayerHitHandler(handler: ((intent: PlayerHitIntent) => 
   playerHitHandler = handler;
 }
 
+/* ---- Mundo único: o host mira QUALQUER jogador e avisa o convidado quando o bicho bate ---- */
+export type MobHitIntent = { id: string; targetId: string; damage: number; creatureName: string };
+let mobHitHandler: ((intent: MobHitIntent) => void) | null = null;
+
+/** Jogadores remotos vivos (pro AI do HOST escolher o alvo mais perto). Vazio fora de sala/convidado. */
+export function remoteTargets(): { id: string; x: number; z: number }[] {
+  const s = useNet.getState();
+  if (!s.connected || !s.isHost) return [];
+  return Object.values(s.players).filter(p => p.hp > 0).map(p => ({ id: p.id, x: p.x, z: p.z }));
+}
+
+/** Host: um bicho acertou um CONVIDADO (dano bruto; o convidado aplica a própria armadura). */
+export function broadcastMobHit(targetId: string, damage: number, creatureName: string): void {
+  if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
+  void channel.send({
+    type: 'broadcast', event: 'mob-hit',
+    payload: { id: useNet.getState().selfId, targetId, damage, creatureName } satisfies MobHitIntent,
+  });
+}
+
+export function registerMobHitHandler(handler: ((intent: MobHitIntent) => void) | null): void {
+  mobHitHandler = handler;
+}
+
 /** Link de convite da sala atual (pra compartilhar). */
 export function inviteLink(room: string): string {
   try {
@@ -273,58 +369,103 @@ export function roomFromUrl(): string | null {
   try { return new URL(window.location.href).searchParams.get('room'); } catch { return null; }
 }
 
-/* ------------------------------------------------------------------ *
- * LOBBY: registro das salas ativas na tabela `game_rooms` (SELECT público;
- * INSERT/UPDATE/DELETE só do dono via auth.uid()). Assim dá pra LISTAR as
- * partidas abertas e entrar por clique, sem link. Só o HOST registra a sala.
- * ------------------------------------------------------------------ */
-export type RoomInfo = { code: string; players: number; max: number; updatedAt: string };
 
-const ROOM_STALE_MS = 60_000; // sala sem heartbeat há +60s é considerada morta
-let roomRowId: string | null = null;
+/* ------------------------------------------------------------------ *
+ * LOBBY + PERSISTÊNCIA DA SALA (Multiplayer B). Tudo pela função do banco
+ * `room_heartbeat` (SECURITY DEFINER): o GRANT da tabela é só SELECT, então o
+ * upsert/update direto falhava calado (a aba Salas nunca listava nada).
+ *  - Quem SEGURA a sala (host) bate a cada 15 s; a cada 30 s leva a FOTO do mundo
+ *    (inimigos) — só grava quem tem a autoridade (lease 60 s no banco).
+ *  - Passou a vez / saiu → solta a autoridade na hora (release) com a última foto.
+ *  - Ninguém na sala → a linha FICA (pausada) até 3 dias; quem abrir o link nesse prazo
+ *    RETOMA da foto. +3 dias sem ninguém → o próprio heartbeat limpa.
+ * ------------------------------------------------------------------ */
+export type RoomInfo = { code: string; players: number; max: number; updatedAt: string; live: boolean };
+
+const ROOM_LIVE_MS = 60_000;                 // heartbeat recente = sala AO VIVO
+const ROOM_KEEP_MS = 3 * 24 * 60 * 60_000;   // pausada até 3 dias (depois o banco limpa)
 let roomHeartbeat: ReturnType<typeof setInterval> | null = null;
+let heartbeatRoom: string | null = null;
+let snapshotProvider: (() => CreatureState[]) | null = null;
+
+/** A camada de mundo registra de onde tirar a foto (inimigos atuais do store). */
+export function registerWorldSnapshotProvider(fn: (() => CreatureState[]) | null): void {
+  snapshotProvider = fn;
+}
+
+function heartbeat(code: string, withSnapshot: boolean, release = false): void {
+  if (!supabase) return;
+  const players = Object.keys(useNet.getState().players).length + 1;
+  const creatures = withSnapshot && snapshotProvider ? snapshotProvider() : null;
+  void supabase.rpc('room_heartbeat', {
+    p_code: code, p_players: players,
+    p_snapshot: creatures ? { creatures, savedAt: Date.now() } : null,
+    p_release: release,
+  }).then(({ error }) => { if (error) console.warn('[sala] heartbeat falhou:', error.message); });
+}
 
 async function registerRoom(code: string): Promise<void> {
-  if (!supabase) return;
+  if (!supabase || heartbeatRoom === code) return;
   const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) return; // sem login não registra (mas o P2P segue funcionando por link)
-  const { data, error } = await supabase
-    .from('game_rooms')
-    .upsert({ code, owner_id: uid, max_players: MAX_PLAYERS, active_players: 1, status: 'open', last_active_at: new Date().toISOString() }, { onConflict: 'code' })
-    .select('id')
-    .maybeSingle();
-  if (error || !data) return;
-  roomRowId = data.id as string;
-  roomHeartbeat = setInterval(() => {
-    if (!supabase || !roomRowId) return;
-    const players = Object.keys(useNet.getState().players).length + 1;
-    void supabase.from('game_rooms').update({ active_players: players, last_active_at: new Date().toISOString() }).eq('id', roomRowId);
-  }, 15_000);
+  if (!auth.user) return; // sem login não persiste a sala (o P2P por link segue funcionando)
+  unregisterRoom();
+  heartbeatRoom = code;
+  let tick = 0;
+  heartbeat(code, true);
+  roomHeartbeat = setInterval(() => { tick++; heartbeat(code, tick % 2 === 0); }, 15_000);
 }
 
+/** Para de segurar a sala: solta a autoridade JÁ (com a última foto). A linha NÃO é apagada. */
 function unregisterRoom(): void {
   if (roomHeartbeat) { clearInterval(roomHeartbeat); roomHeartbeat = null; }
-  if (supabase && roomRowId) { void supabase.from('game_rooms').delete().eq('id', roomRowId); }
-  roomRowId = null;
+  if (heartbeatRoom) heartbeat(heartbeatRoom, true, true);
+  heartbeatRoom = null;
 }
 
-/** Lista as salas ABERTAS com heartbeat recente (pra aba de salas). */
+/**
+ * RETOMAR: se virei host SEM ter recebido mundo ao vivo (sala vazia/pausada), busco a última
+ * foto salva da sala. Se eu era convidado e o host saiu, NÃO uso a foto do banco (o meu
+ * estado ao vivo é mais novo).
+ */
+export async function fetchResumeSnapshot(): Promise<CreatureState[] | null> {
+  const room = useNet.getState().room;
+  if (!supabase || !room || hadLiveWorld) return null;
+  const { data, error } = await supabase.from('game_rooms')
+    .select('world_snapshot, world_version').eq('code', room).maybeSingle();
+  if (error || !data) return null;
+  const snap = data.world_snapshot as { creatures?: unknown } | null;
+  return Array.isArray(snap?.creatures) && (data.world_version as number) > 1
+    ? (snap!.creatures as CreatureState[]) : null;
+}
+
+/** Classifica a linha do lobby (pura, testável): ao vivo, pausada (retomável) ou expirada. */
+export function roomStatus(lastActiveIso: string, now = Date.now()): 'live' | 'paused' | 'expired' {
+  const age = now - new Date(lastActiveIso).getTime();
+  if (age <= ROOM_LIVE_MS) return 'live';
+  if (age <= ROOM_KEEP_MS) return 'paused';
+  return 'expired';
+}
+
+/** Salas AO VIVO e PAUSADAS (até 3 dias, retomáveis pelo mesmo código). */
 export async function listRooms(): Promise<RoomInfo[]> {
   if (!supabase) return [];
-  const since = new Date(Date.now() - ROOM_STALE_MS).toISOString();
+  const since = new Date(Date.now() - ROOM_KEEP_MS).toISOString();
   const { data, error } = await supabase
     .from('game_rooms')
     .select('code, active_players, max_players, last_active_at')
-    .eq('status', 'open')
+    .neq('status', 'closed')
     .gte('last_active_at', since)
     .order('last_active_at', { ascending: false })
     .limit(30);
   if (error || !data) return [];
-  return data.map((r) => ({
-    code: r.code as string,
-    players: (r.active_players as number) ?? 1,
-    max: (r.max_players as number) ?? MAX_PLAYERS,
-    updatedAt: r.last_active_at as string,
-  }));
+  return data.map((r) => {
+    const live = roomStatus(r.last_active_at as string) === 'live';
+    return {
+      code: r.code as string,
+      players: live ? ((r.active_players as number) ?? 1) : 0,
+      max: (r.max_players as number) ?? MAX_PLAYERS,
+      updatedAt: r.last_active_at as string,
+      live,
+    };
+  });
 }
