@@ -26,6 +26,7 @@ import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece } from './base-targets';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { broadcastMobHit, canSimulateSharedWorld, remoteTargets } from '@/net/multiplayer';
+import { takeKnockback } from '@/game/systems/knockbackSystem';
 
 /**
  * Clique num inimigo: esquerdo seleciona, Shift+esquerdo enfileira uma caçada.
@@ -490,6 +491,13 @@ export function useHostileAI(opts: HostileOptions) {
       targetX = wx + Math.sin(moveAngle) * tuning.wanderSpeed * dt;
       targetZ = wz + Math.cos(moveAngle) * tuning.wanderSpeed * dt;
       moving = true;
+    }
+
+    // EMPURRÃO (furacão/bumerangue do herói e da base): consome a fila suave; as colisões
+    // logo abaixo (muro/casa/fábrica/zona segura) seguram o bicho = "colisão leve".
+    if (!mirror) {
+      const kb = takeKnockback(creatureId, dt);
+      if (kb) { targetX += kb.x; targetZ += kb.z; }
     }
 
     // SEPARAÇÃO entre criaturas (anti-empilhamento): empurra pra longe de quem
