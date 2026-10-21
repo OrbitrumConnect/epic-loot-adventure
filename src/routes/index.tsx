@@ -533,16 +533,30 @@ function Index() {
             }}>
               <Skull style={{ width: 72, height: 72, color: '#ef4444', marginBottom: 16 }} />
               <h2 style={{ fontSize: 34, fontWeight: 700, margin: 0, color: '#ef4444', textShadow: '0 0 20px rgba(239,68,68,0.5)' }}>Sua base caiu!</h2>
-              <p style={{ fontSize: 16, marginTop: 12, opacity: 0.85 }}>A horda destruiu seu núcleo. Fim da sobrevivência.</p>
+              <p style={{ fontSize: 16, marginTop: 12, opacity: 0.85, textAlign: 'center', maxWidth: 420, padding: '0 16px' }}>
+                A horda destruiu seu núcleo. Você perdeu 5 níveis e a madeira/pedra/ferro — seu loot ficou. Continue e reconstrua.
+              </p>
+              {/* Pedro: perder a base = −5 níveis e SEGUE. "Continuar" é o caminho principal;
+                  o reset total vira opção secundária (só se o jogador escolher). */}
               <button
-                onClick={() => useGameStore.getState().restartSurvival()}
+                onClick={() => useGameStore.setState(s => ({ ui: { ...s.ui, baseFell: false } }))}
                 style={{
                   marginTop: 24, padding: '14px 30px', fontSize: 18, fontWeight: 700,
                   color: '#0b0b0b', background: '#fbbf24', border: 'none', borderRadius: 10,
                   cursor: 'pointer', boxShadow: '0 0 24px rgba(251,191,36,0.45)',
                 }}
               >
-                🔥 Sobreviver de novo
+                Continuar
+              </button>
+              <button
+                onClick={() => { if (window.confirm('Recomeçar do ZERO (nível 1, inventário novo)?')) useGameStore.getState().restartSurvival(); }}
+                style={{
+                  marginTop: 12, padding: '8px 18px', fontSize: 13, fontWeight: 600,
+                  color: '#fff', background: 'transparent', border: '1px solid rgba(255,255,255,0.35)',
+                  borderRadius: 8, cursor: 'pointer', opacity: 0.8,
+                }}
+              >
+                Recomeçar do zero
               </button>
             </div>
           )}

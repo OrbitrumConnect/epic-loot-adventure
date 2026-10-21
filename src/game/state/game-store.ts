@@ -1547,20 +1547,25 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Penalidade (Pedro): perde 5 NÍVEIS por base perdida (piso 1), mantendo o resto
       // (itens, atributos, HP). Assim o progresso NÃO zera — o jogador continua vivo e
       // querendo evoluir. 5→1, 10→5, 15→10, 20→15...
-      // A mochila volta ao KIT INICIAL (novo sobrevivente: armas base + bala/flecha/
-      // poção + madeira/pedra iniciais). Perde o estoque farmado e refarma a base do 0,
-      // mas MANTÉM nível (−5) e atributos. "Jogo normal do 0 com nível" (Pedro).
+      // Pedro (21/10, revisado): perde SÓ os materiais de construção (madeira, pedra,
+      // ferro). Loot próprio FICA: armas, munição, flecha, poção, drops raros, couro etc.
+      // Nada de zerar conta/inventário — só −5 níveis e refarma o material da base.
+      const LOST_ON_WIPE = new Set(['wood', 'stone', 'iron_ore']);
       const lostLevel = Math.max(1, state.player.level - 5);
       const penalized = syncCarry({
         ...state.player,
         level: lostLevel,
         xp: 0,
         xpToNext: xpForLevel(lostLevel),
-        inventory: createInitialPlayer().inventory,
+        inventory: {
+          ...state.player.inventory,
+          slots: state.player.inventory.slots.map(s =>
+            s.itemId && LOST_ON_WIPE.has(s.itemId) ? { itemId: null, quantity: 0 } : s),
+        },
       });
       const penaltyMsg = lostLevel < state.player.level
-        ? `${message} Você perdeu 5 níveis (${state.player.level}→${lostLevel}) e os recursos farmados; recomece a base com seu nível.`
-        : `${message} Você perdeu os recursos farmados; recomece a base com seu nível.`;
+        ? `${message} Você perdeu 5 níveis (${state.player.level}→${lostLevel}) e a madeira/pedra/ferro; seu loot ficou. Reconstrua a base.`
+        : `${message} Você perdeu a madeira/pedra/ferro; seu loot ficou. Reconstrua a base.`;
       set({
         player: penalized,
         stats: { ...state.stats, basesLost: state.stats.basesLost + 1 },
