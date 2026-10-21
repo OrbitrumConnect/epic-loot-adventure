@@ -62,8 +62,9 @@ describe('torres integradas à store', () => {
     const state = useGameStore.getState();
     expect(state.creatures[0]!.behavior).toBe('dead');
     expect(state.creatures[0]!.respawnAt).toBeGreaterThan(5000);
-    expect(state.deathBags).toHaveLength(1);
-    expect(state.deathBags[0]!.ownerId).toBe('victim');
+    // Loot vai DIRETO pro inventário (empilha), não pro saco. Saco só se não couber.
+    expect(state.deathBags).toHaveLength(0);
+    expect(state.player.inventory.slots.some(s => s.itemId === 'wolf_fang')).toBe(true);
     const shots = state.feedback.filter(e => e.kind === 'shot');
     expect(shots).toHaveLength(1);
     expect(shots[0]!.sourceHeight).toBe(BASE_TOWER_HEIGHT);

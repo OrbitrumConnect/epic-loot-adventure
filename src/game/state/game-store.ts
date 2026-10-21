@@ -242,8 +242,19 @@ function rewardCreatureDeath(c: CreatureState, player: PlayerState, bags: DeathB
     const bonus = rollBonusLoot(def, newHunt, seen, rng);
     player = { ...player, huntValue: newHunt, huntSeen: { ...(player.huntSeen ?? {}), [c.speciesId]: seen + 1 } };
     if (bonus) loot.push(bonus);
-    for (const drop of loot) if (drop.itemId) drafts.push(lootEvent(drop.itemId, drop.quantity, c.position));
-    if (loot.length) bags = [...bags, createDeathBag(c.id, c.name, c.position, loot)];
+    // Loot vai DIRETO pro inventário, empilhando nos slots (madeira/pedra/bala/poção
+    // acumulam; abre slot novo só quando enche). Sem saco, sem diálogo (Pedro). O que
+    // NÃO couber (inventário/peso cheio) cai num saco no chão — nada se perde.
+    let inv = player.inventory;
+    const overflow: typeof loot = [];
+    for (const drop of loot) {
+      if (!drop.itemId) continue;
+      drafts.push(lootEvent(drop.itemId, drop.quantity, c.position));
+      if (canAddItem(inv, drop.itemId, drop.quantity)) inv = addItem(inv, drop.itemId, drop.quantity);
+      else overflow.push(drop);
+    }
+    player = { ...player, inventory: inv };
+    if (overflow.length) bags = [...bags, createDeathBag(c.id, c.name, c.position, overflow)];
   }
   const xpGain = creatureXp(def ?? c);
   const granted = grantXp({ ...player, gold: player.gold + 15 }, xpGain);
