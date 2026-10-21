@@ -147,6 +147,10 @@ export function AutoPilot({
     }
     wasIdle.current = true;
 
+    // Chuva de Flechas AUTOMÁTICA no idle: chamada silenciosa (auto=true) — só dispara quando
+    // há arma de longe na mão, alvo no alcance e o cooldown (que escala com o nível) pronto.
+    useGameStore.getState().arrowRain(true);
+
     const now = Date.now();
     const snapshot = buildAutoSnapshot();
     const intent = decideIntent(snapshot, now);

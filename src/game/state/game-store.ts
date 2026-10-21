@@ -78,6 +78,8 @@ type GameState = {
   /** Incrementa a cada especial (Q/R); o mundo 3D anima. `specialKind` diz qual. */
   specialTick: number;
   specialKind: 'jump' | 'spin' | null;
+  /** Cooldown (s, relógio absoluto) da Chuva de Flechas — poder de longe. Não persiste. */
+  lastArrowRainAt: number;
   base: BaseState;
   /** Base persistente no mundo (Fase 3). `null` = ainda não reivindicou terreno. */
   playerBase: PlayerBaseState | null;
@@ -130,6 +132,10 @@ type GameActions = {
   tickPowers: (now: number) => void;
   attack: (targetId: string) => void;
   specialAttack: (kind: 'jump' | 'spin') => void;
+  /** Chuva de Flechas: poder de longe, flechas caem do céu e dão dano em ÁREA (raio escala
+   *  com o nível, 5 m → 18 m; cooldown 15 s → 5 s). Precisa de arma de longe equipada.
+   *  `auto` (piloto idle): silencioso — não escreve mensagem quando ainda não pode disparar. */
+  arrowRain: (auto?: boolean) => void;
   collect: (nodeId: string) => void;
   collectNearest: () => void;
   /** Faz nascer o mini-boss (um por vez) perto do jogador. Chamado pelo timer. */
@@ -457,6 +463,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   attackTick: 0,
   specialTick: 0,
   specialKind: null,
+  lastArrowRainAt: 0,
   base: createInitialBase(Date.now()),
   playerBase: null,
   selectedBaseType: DEFAULT_BASE_TYPE,
@@ -870,6 +877,97 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       specialTick: state.specialTick + 1,
       specialKind: kind,
       ui: { ...state.ui, message: hits > 0 ? `Especial! ${hits} atingido(s).` : 'Especial (nada no alcance).' },
+    });
+  },
+
+  arrowRain: (auto = false) => {
+    const state = get();
+    if (state.player.dead) return;
+
+    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+    const heldId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    const prof = weaponFor(heldId);
+    if (!prof.ranged) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: 'Chuva de Flechas precisa de uma arma de longe equipada.' } }));
+      return;
+    }
+
+    const now = Date.now() / 1000;
+    const ARROW_RAIN_ARROWS = 5;     // flechas caindo (Pedro: "umas 4")
+    const ARROW_RAIN_AMMO = 3;       // munição por salva (armas de bala; arco é livre)
+    // Nível escala tudo: raio da ÁREA 5 m → 18 m e cooldown 15 s → 5 s (nv 1 → nv 200+).
+    const t = Math.min(1, Math.max(0, (state.player.level - 1) / 199));
+    const radius = Math.round((5 + (18 - 5) * t) * 10) / 10;
+    const cooldown = Math.round((15 - (15 - 5) * t) * 10) / 10;
+
+    const since = now - state.lastArrowRainAt;
+    if (since < cooldown) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: `Chuva de Flechas recarregando (${Math.ceil(cooldown - since)}s).` } }));
+      return;
+    }
+
+    const usesBullet = prof.projectile === 'bullet';
+    if (usesBullet && getItemCount(state.player.inventory, 'ammo') < ARROW_RAIN_AMMO) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: 'Sem munição para a Chuva de Flechas.' } }));
+      return;
+    }
+
+    // Alvo: hostil mais próximo dentro do alcance da arma (vira o CENTRO da chuva).
+    const reach = weaponRangeFor(heldId, state.player.level);
+    let center: Position | null = null;
+    let bestD = Infinity;
+    for (const c of state.creatures) {
+      if (c.behavior === 'dead') continue;
+      const d = getDistance(state.player.position, c.position);
+      if (d <= reach && d < bestD) { bestD = d; center = c.position; }
+    }
+    if (!center) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: 'Nenhum alvo no alcance da Chuva de Flechas.' } }));
+      return;
+    }
+    const hitCenter = center;
+
+    const base = playerBaseAttack(state.player.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
+    const power = Math.round(base * 1.3 * damageMultiplier(state.player));
+    const critStats = playerCritStats(state.player);
+    const drafts: FeedbackDraft[] = [];
+
+    // VISUAL: flechas caindo do céu dentro da área (reusa Projectiles via eventos 'shot':
+    // origem no MESMO ponto do chão com sourceHeight alto → cai reto de cima).
+    for (let i = 0; i < ARROW_RAIN_ARROWS; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const rr = Math.sqrt(Math.random()) * radius;
+      const drop = { x: hitCenter.x + Math.cos(ang) * rr, z: hitCenter.z + Math.sin(ang) * rr };
+      drafts.push(shotEvent(drop, drop, 'arrow', 13));
+    }
+
+    let updatedPlayer: PlayerState = { ...state.player, lastAttackAt: now };
+    if (usesBullet) updatedPlayer = { ...updatedPlayer, inventory: removeItem(updatedPlayer.inventory, 'ammo', ARROW_RAIN_AMMO) };
+    let updatedBags = state.deathBags;
+    let hits = 0;
+
+    const creatures = state.creatures.map(c => {
+      if (c.behavior === 'dead') return c;
+      if (getDistance(hitCenter, c.position) > radius) return c;
+      hits += 1;
+      const r = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
+      drafts.push(damageEvent(c.id, r.damage, c.position, { critical: !!r.critical }));
+      if (r.targetDied) {
+        const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);
+        updatedPlayer = reward.player;
+        updatedBags = reward.bags;
+        return deadCreature(c, Date.now(), Math.random);
+      }
+      return { ...c, hp: r.targetHp, behavior: 'chase' as const };
+    });
+
+    set({
+      player: updatedPlayer,
+      creatures,
+      deathBags: updatedBags,
+      feedback: pushEvents(state.feedback, drafts, Date.now()),
+      lastArrowRainAt: now,
+      ui: { ...state.ui, message: `🏹 Chuva de Flechas! ${hits} atingido(s).` },
     });
   },
 

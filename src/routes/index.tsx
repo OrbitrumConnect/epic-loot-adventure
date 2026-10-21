@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
-  Circle, CircleDot, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
+  Circle, CircleDot, CloudRain, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
   Heart, Home, Landmark, Leaf, ListChecks, Lock, LogOut, Map, Menu, MessageSquare, Mountain, Package,
   PanelLeftClose, Pickaxe, Repeat, Settings, Shield, ShieldCheck, Skull,
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Trophy, Users, Utensils, Wind, X, Zap,
@@ -188,6 +188,7 @@ function Index() {
   const xpPct = player.xpToNext > 0 ? Math.min(100, Math.round((player.xp / player.xpToNext) * 100)) : 0;
 
   const attack = useGameStore(s => s.attack);
+  const arrowRain = useGameStore(s => s.arrowRain);
   const collectNearest = useGameStore(s => s.collectNearest);
   const specialAttack = useGameStore(s => s.specialAttack);
   const allocateSkill = useGameStore(s => s.allocateSkill);
@@ -318,6 +319,7 @@ function Index() {
       }
       if (e.code === 'KeyQ' && !inCity && !freeCam) specialAttack('jump');
       if (e.code === 'KeyR' && !inCity && !freeCam) specialAttack('spin');
+      if (e.code === 'KeyF' && !inCity && !freeCam) arrowRain();
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'Backquote' && !inCity) toggleFreeCam();
       if (e.code === 'KeyV' && !inCity) toggleCamera();
@@ -333,7 +335,7 @@ function Index() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, specialAttack, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, cameraMode, ui.panel, inCity, editorActive, setEditorActive]);
+  }, [collectNearest, specialAttack, arrowRain, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, cameraMode, ui.panel, inCity, editorActive, setEditorActive]);
 
   function open(id: string) {
     setPanelMessage('');
@@ -367,6 +369,7 @@ function Index() {
       <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
       <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
       <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
+      <Button variant="ghost" className="world-action" data-primary="true" aria-label="Chuva de Flechas" title="Chuva de Flechas — dano em área (arma de longe) · F" onClick={() => arrowRain()}><CloudRain /></Button>
       <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
       {!playerBase && (
