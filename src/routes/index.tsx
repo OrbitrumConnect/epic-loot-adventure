@@ -4,7 +4,7 @@ import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
   Circle, CircleDot, CloudRain, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
   Heart, Home, Landmark, Leaf, ListChecks, Lock, LogOut, Map, Menu, MessageSquare, Mountain, Package,
-  PanelLeftClose, Pickaxe, Repeat, Settings, Shield, ShieldCheck, Skull,
+  PanelLeftClose, Pickaxe, Repeat, RotateCcw, Settings, Shield, ShieldCheck, Skull,
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Trophy, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,6 +52,8 @@ import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
+import { supabase } from '@/net/multiplayer';
+import { SAVE_KEY } from '@/game/systems/persistenceSystem';
 const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
@@ -286,6 +288,18 @@ function Index() {
   const isMobile = useIsMobile();
   const authUser = useAuth(s => s.user);
   const signOut = useAuth(s => s.signOut);
+
+  // Novo personagem (zerar): apaga o save LOCAL e, se logado, o da CONTA (senão recarrega
+  // o antigo), depois recarrega a página pro estado inicial.
+  const resetCharacter = useCallback(() => {
+    if (!window.confirm('Zerar o personagem e começar de novo? Isso apaga o progresso atual.')) return;
+    try { localStorage.removeItem(SAVE_KEY); } catch { /* storage bloqueado */ }
+    if (AUTH_ENABLED && authUser && supabase) {
+      void supabase.from('player_saves').delete().eq('user_id', authUser.id).then(() => location.reload());
+    } else {
+      location.reload();
+    }
+  }, [authUser]);
 
   // Progresso na CONTA: começa ao logar (carrega o save da conta ou semeia com o local),
   // para ao deslogar. Chaveado pelo id do usuário pra reiniciar se trocar de conta.
@@ -948,6 +962,17 @@ function Index() {
                           onClick={() => { void signOut(); setPanel(null); }}>Sair</Button>
                       </div>
                     )}
+                    {/* Novo personagem (zerar) — sempre visível, inclusive no mobile. */}
+                    <div className="home-building">
+                      <RotateCcw />
+                      <div style={{ flex: 1 }}>
+                        <strong>Novo personagem</strong>
+                        <small>Zera o progresso e começa do nível 1 (inventário novo).</small>
+                      </div>
+                      <Button variant="ghost" className="world-action" style={{ width: 'auto', padding: '0 12px' }}
+                        aria-label="Zerar e começar novo" title="Zerar e começar novo"
+                        onClick={resetCharacter}>Zerar</Button>
+                    </div>
                     <div className="panel-stats"><span>TRIBOS v0.2 · Protótipo local · Sem multiplayer conectado</span></div>
                   </>
                 )}

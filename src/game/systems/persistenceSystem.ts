@@ -134,6 +134,24 @@ export function parseLocalSave(raw: string | null): LocalSave | null {
   } catch { return null; }
 }
 
+/** Migração de transição (Pedro): saves ANTIGOS (feitos antes da flecha existir) ganham
+ *  as caixas novas — 2000 flecha + garante 2000 bala + 500 poção. Gate = não ter 'arrow'
+ *  no inventário (uma vez; depois o save já tem flecha). Preserva o resto. */
+function grantTransitionBoxes<T extends { slots: { itemId: string | null; quantity: number }[] }>(inv: T): T {
+  if (inv.slots.some(s => s.itemId === 'arrow')) return inv; // já tem flecha = já migrado
+  const slots = inv.slots.map(s => ({ ...s }));
+  const ensure = (itemId: string, qty: number) => {
+    const have = slots.find(s => s.itemId === itemId);
+    if (have) { if (have.quantity < qty) have.quantity = qty; return; }
+    const empty = slots.find(s => s.itemId === null);
+    if (empty) { empty.itemId = itemId; empty.quantity = qty; }
+  };
+  ensure('arrow', 2000);
+  ensure('ammo', 2000);
+  ensure('health_potion', 500);
+  return { ...inv, slots };
+}
+
 export function restoreLocalSave(save: LocalSave, initial: PersistState, now: number): PersistState {
   const defaults = createInitialBase(now);
   const city: BaseState = {
@@ -197,7 +215,8 @@ export function restoreLocalSave(save: LocalSave, initial: PersistState, now: nu
     base: tickBase(city, now),
     ...(initial.ui ? { ui: { ...initial.ui, selectedHotbar: hotbarIndex < 0 ? 0 : hotbarIndex } } : {}),
     playerBase: claim, towerLastShotAt,
-    player: { ...initial.player, ...save.player, hp: save.player.maxHp, mana: save.player.maxMana,
+    player: { ...initial.player, ...save.player, inventory: grantTransitionBoxes(save.player.inventory),
+      hp: save.player.maxHp, mana: save.player.maxMana,
       stamina: save.player.maxStamina, dead: false, respawnAt: 0 },
     harvestNodes: tickHarvestNodes(nodes, now), resources: initial.resources.filter(r => outside(r.position)),
   };
