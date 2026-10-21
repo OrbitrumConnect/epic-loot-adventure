@@ -40,7 +40,7 @@ export const SKILL_STEP = 1;
 export const SKILL_CAP_PER_ATTR = 60;
 
 /** Bônus de dano (%) por raridade da arma equipada. */
-const RARITY_DAMAGE: Record<string, number> = { common: 0, rare: 8, epic: 16, mythic: 28 };
+const RARITY_DAMAGE: Record<string, number> = { common: 0, uncommon: 4, rare: 8, epic: 16, legendary: 28, ancestral: 42 };
 
 /** Contribuição do NÍVEL para cada atributo (%). Linear: 0 no lvl 1 → teto no nível-referência (e fica no teto acima dele). */
 export function levelAttributes(level: number): PlayerAttributes {
@@ -63,11 +63,11 @@ export function weaponDamageBonus(inventory: InventoryState): number {
 }
 
 /** Armadura equipada → CARGA (%) por raridade (alças/placas reforçadas aguentam mais peso). */
-const RARITY_ARMOR_CARRY: Record<string, number> = { common: 4, rare: 8, epic: 14, mythic: 22 };
+const RARITY_ARMOR_CARRY: Record<string, number> = { common: 4, uncommon: 6, rare: 8, epic: 14, legendary: 22, ancestral: 32 };
 /** Acessório equipado → DESTREZA (%) por raridade. */
-const RARITY_ACCESSORY_DEX: Record<string, number> = { common: 3, rare: 8, epic: 14, mythic: 22 };
+const RARITY_ACCESSORY_DEX: Record<string, number> = { common: 3, uncommon: 5, rare: 8, epic: 14, legendary: 22, ancestral: 32 };
 /** Acessório equipado → VELOCIDADE (%) por raridade. */
-const RARITY_ACCESSORY_MOVE: Record<string, number> = { common: 1, rare: 3, epic: 6, mythic: 10 };
+const RARITY_ACCESSORY_MOVE: Record<string, number> = { common: 1, uncommon: 2, rare: 3, epic: 6, legendary: 10, ancestral: 15 };
 
 /**
  * Bônus de atributo (%) vindo da ARMADURA e do ACESSÓRIO equipados. Um `attrBonus`

@@ -17,7 +17,8 @@ describe('economia de loot — acesso por marco de valor', () => {
   it('cada marco desbloqueia a raridade seguinte (cumulativo)', () => {
     expect(accessibleRarities(HUNT_THRESHOLDS.rare)).toEqual(['rare']);
     expect(accessibleRarities(HUNT_THRESHOLDS.epic)).toEqual(['rare', 'epic']);
-    expect(accessibleRarities(HUNT_THRESHOLDS.mythic)).toEqual(['rare', 'epic', 'mythic']);
+    expect(accessibleRarities(HUNT_THRESHOLDS.legendary)).toEqual(['rare', 'epic', 'legendary']);
+    expect(accessibleRarities(HUNT_THRESHOLDS.ancestral)).toEqual(['rare', 'epic', 'legendary', 'ancestral']);
   });
 
   it('os pools apontam pra itens reais com a raridade certa', () => {

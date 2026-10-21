@@ -15,16 +15,17 @@ import { creatureXp } from './progressionSystem';
 /** Drop de bônus: item garantidamente identificado (itemId nunca nulo). */
 export type BonusDrop = { itemId: string; quantity: number };
 
-export type BonusRarity = 'rare' | 'epic' | 'mythic';
+export type BonusRarity = 'rare' | 'epic' | 'legendary' | 'ancestral';
 
 /** Valor de caça acumulado necessário pra DESBLOQUEAR cada raridade de bônus. */
-export const HUNT_THRESHOLDS: Record<BonusRarity, number> = { rare: 180, epic: 300, mythic: 500 };
+export const HUNT_THRESHOLDS: Record<BonusRarity, number> = { rare: 180, epic: 300, legendary: 500, ancestral: 800 };
 
 /** Pools de recompensa por raridade (itens que existem em `ITEMS`). */
 export const BONUS_POOLS: Record<BonusRarity, readonly string[]> = {
   rare: ['hunter_bow', 'bone_armor', 'iron_axe', 'iron_pickaxe', 'gold_ore', 'arcane_essence'],
   epic: ['ancestral_blade', 'guardian_plate'],
-  mythic: ['eclipse_blade'],
+  legendary: ['eclipse_blade'],
+  ancestral: [], // grade ancestral entra na Fase 1b (fórmula); pool vazio = não dropa ainda
 };
 
 type Def = Pick<CreatureDefinition, 'maxHp' | 'attackPower' | 'armor'>;
@@ -39,7 +40,8 @@ export function accessibleRarities(huntValue: number): BonusRarity[] {
   const out: BonusRarity[] = [];
   if (huntValue >= HUNT_THRESHOLDS.rare) out.push('rare');
   if (huntValue >= HUNT_THRESHOLDS.epic) out.push('epic');
-  if (huntValue >= HUNT_THRESHOLDS.mythic) out.push('mythic');
+  if (huntValue >= HUNT_THRESHOLDS.legendary) out.push('legendary');
+  if (huntValue >= HUNT_THRESHOLDS.ancestral) out.push('ancestral');
   return out;
 }
 
@@ -70,7 +72,8 @@ export function rollBonusLoot(
   const weight: Record<BonusRarity, number> = {
     rare: 6,
     epic: 2 + value / 200,
-    mythic: 0.5 + value / 400,
+    legendary: 0.5 + value / 400,
+    ancestral: 0.2 + value / 700,
   };
   const pool = tiers
     .map(t => ({ t, w: weight[t], items: BONUS_POOLS[t] }))

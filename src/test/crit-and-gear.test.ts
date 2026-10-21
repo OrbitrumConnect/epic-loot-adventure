@@ -113,7 +113,7 @@ describe('bônus de armadura e acessório', () => {
 
   it('total continua travado em 0–100', () => {
     ITEMS['test_charm'] = {
-      id: 'test_charm', name: 'Amuleto', category: 'utility', rarity: 'mythic', weight: 0.2, maxStack: 1,
+      id: 'test_charm', name: 'Amuleto', category: 'utility', rarity: 'legendary', weight: 0.2, maxStack: 1,
       dropOnDeath: false, usable: false, equippable: true, equipSlot: 'accessory', icon: 'Gem',
       attrBonus: { dexterity: 500, damage: 500 },
     };

@@ -462,7 +462,7 @@ export const ITEMS: Record<string, Item> = {
     id: 'eclipse_blade',
     name: 'Lâmina do Eclipse',
     category: 'weapon',
-    rarity: 'mythic',
+    rarity: 'legendary',
     weight: 4.5,
     maxStack: 1,
     dropOnDeath: false,
