@@ -1576,7 +1576,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         xpToNext: xpForLevel(lostLevel),
         inventory: {
           ...kit, slots,
-          equipment: { primary: keepEq(eq.primary), secondary: keepEq(eq.secondary), armor: keepEq(eq.armor), accessory: keepEq(eq.accessory) },
+          // TODOS os slots (genérico: já cobre os 8 de armadura por tier do PR do Caio).
+          equipment: Object.fromEntries(
+            Object.entries(eq).map(([slot, id]) => [slot, keepEq((id as string | null | undefined) ?? null)]),
+          ) as typeof eq,
         },
       });
       const penaltyMsg = lostLevel < state.player.level
