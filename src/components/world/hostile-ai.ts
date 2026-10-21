@@ -23,9 +23,9 @@ import { glbSurfaceY } from './terrain-collision';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { BASE_PIECES } from '@/game/data/base-pieces';
-import { nearestBasePiece } from './base-targets';
+import { nearestBasePiece, nearestPieceIn } from './base-targets';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
-import { broadcastMobHit, canSimulateSharedWorld, remoteTargets } from '@/net/multiplayer';
+import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTargets, useNet, waveOwner } from '@/net/multiplayer';
 import { takeKnockback } from '@/game/systems/knockbackSystem';
 
 /**
@@ -450,6 +450,36 @@ export function useHostileAI(opts: HostileOptions) {
       // mesmo com o player longe (é o cerco da horda). Se o player chegar perto,
       // o ramo de cima (chase) já o prioriza.
       chaseTimer.current = 0;
+      const owner = waveOwner(creatureId);
+      const net = useNet.getState();
+      const remoteOwner = owner && net.connected && owner !== net.selfId ? owner : null;
+      const remoteBase = remoteOwner ? net.bases[remoteOwner] : null;
+      const remoteCore = remoteBase?.pieces.find((p) => p.kind === 'core');
+      if (remoteOwner) {
+        // Horda de um CONVIDADO (o host simula): marcha até a base DELE e avisa o dono do golpe.
+        if (remoteCore && remoteBase) {
+          const ctr = cellCenter(remoteCore.cell);
+          const distToBase = Math.sqrt((ctr.x - wx) ** 2 + (ctr.z - wz) ** 2);
+          if (distToBase > 3) {
+            const ang = Math.atan2(ctr.x - wx, ctr.z - wz);
+            targetX = wx + Math.sin(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+            targetZ = wz + Math.cos(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+            moving = true;
+          }
+          const hit = nearestPieceIn(remoteBase.pieces, wx, wz);
+          const target = hit ?? (distToBase <= 3.5 ? { id: remoteCore.id, x: ctr.x, z: ctr.z } : null);
+          if (target) {
+            attackCooldown.current -= dt;
+            if (attackCooldown.current <= 0) {
+              attackCooldown.current = creature.attackCooldown;
+              swing.current = 0.35;
+              const dmg = Math.max(1, creature.attackPower);
+              reportDamageToStore(target.id, dmg, { x: target.x, z: target.z }, false);
+              broadcastBaseHit(remoteOwner, target.id, dmg, creature.name);
+            }
+          }
+        }
+      } else {
       const base = useGameStore.getState().playerBase;
       const core = base?.pieces.find((p) => p.kind === 'core');
       if (core) {
@@ -477,6 +507,7 @@ export function useHostileAI(opts: HostileOptions) {
             st.damageBasePiece(target.id, dmg);
           }
         }
+      }
       }
     } else {
       chaseTimer.current = 0;

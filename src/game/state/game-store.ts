@@ -63,7 +63,7 @@ import {
   pushEvents, shotEvent, xpEvent,
 } from '../systems/feedbackSystem';
 import type { FeedbackDraft } from '../systems/feedbackSystem';
-import { broadcastCreatureHit, canSimulateSharedWorld } from '@/net/multiplayer';
+import { broadcastCreatureHit, broadcastWaveSpawn, canSimulateSharedWorld, isMyWave, useNet } from '@/net/multiplayer';
 import {
   BOOMERANG_DMG_MULT, BOOMERANG_DURATION_MS, BOOMERANG_HIT_RADIUS, BOOMERANG_PUSH, HERO_POWER_LABEL,
   HERO_POWER_TICK_MS, HERO_POWER_UNLOCK, LIGHTNING_BOLT_MS, LIGHTNING_DMG_MULT, LIGHTNING_SPLASH,
@@ -427,8 +427,17 @@ function baseCenter(base: PlayerBaseState | null): { x: number; z: number } | nu
   return core ? baseCellCenter(core.cell) : null;
 }
 
-/** Cria os raiders de uma onda ao redor da base (eles marcham até ela — ver hostile-ai). */
-function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: number): CreatureState[] {
+/** Convidado pedindo a própria horda ao host: reenvia a cada 4 s; desiste em 60 s (não trava). */
+const GUEST_WAVE_RETRY_MS = 4000;
+const GUEST_WAVE_GIVE_UP_MS = 60_000;
+let guestWaveAskedAt = 0;
+let guestWaveFirstAskAt = 0;
+
+/** Cria os raiders de uma onda ao redor da base (eles marcham até ela — ver hostile-ai).
+ *  `owner` (online): id do dono da base no id do bicho (`wave3_oABC_...`) — cada jogador tem
+ *  a própria horda no mesmo mundo. Vazio = solo (formato antigo). */
+export function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: number, owner = ''): CreatureState[] {
+  const ownerTag = owner ? `o${owner}_` : '';
   const hpScale = waveHpScale(wave);
   const clamp = (v: number) => Math.max(-WORLD_HALF + 2, Math.min(WORLD_HALF - 2, v));
   const out: CreatureState[] = [];
@@ -440,7 +449,7 @@ function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: n
     const r = 34 + Math.random() * 14; // nascem BEM fora da vista, marcham até a base
     const hp = Math.round(scaleEnemyHp(def.maxHp) * hpScale * hpMul);
     out.push({
-      id: `wave${wave}_${tag}${i}_${now}`,
+      id: `wave${wave}_${ownerTag}${tag}${i}_${now}`,
       speciesId: sp,
       name: def.name,
       hp, maxHp: hp,
@@ -630,6 +639,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const damage = towerDamage(tower, c, rng) * towerDamageMult(state.baseUpgrades.tower_damage);
       const hp = Math.max(0, c.hp - damage);
       const drafts = [shotEvent(tower, c.position, 'arrow', towerHeight(tower.tier, tower.level)), damageEvent(c.id, damage, c.position)];
+      if (!canSimulateSharedWorld()) {
+        // Convidado: o bicho vive no host — a torre pede o dano (armadura já entrou no towerDamage,
+        // então devolve a do bicho pro host não descontar 2×). A vida volta no snapshot.
+        broadcastCreatureHit({ targetId: c.id, source: { x: tower.x, z: tower.z }, damage: Math.round(damage + c.armor) });
+        set({
+          player: { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) },
+          towerLastShotAt: { ...state.towerLastShotAt, [tower.id]: now },
+          feedback: pushEvents(state.feedback, drafts, now),
+        });
+        continue;
+      }
       let player = { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) };
       let deathBags = state.deathBags;
       if (hp === 0) {
@@ -2129,15 +2149,37 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let upgradeChoices = state.upgradeChoices;
     {
       const center = baseCenter(state.playerBase);
+      // Só conta a horda da MINHA base (online cada jogador tem a sua no mesmo mundo).
       const aliveWave = ticked.creatures.filter(
-        (c) => c.id.startsWith('wave') && c.hp > 0 && c.behavior !== 'dead',
+        (c) => c.id.startsWith('wave') && c.hp > 0 && c.behavior !== 'dead' && isMyWave(c.id),
       ).length;
       const wt = tickWaves(state.wave, now, center != null, aliveWave, state.playerBase?.enclosed === true);
       waveState = wt.state;
+      const guest = !canSimulateSharedWorld();
       if (wt.startedWave && center) {
-        const spawned = spawnWaveRaiders(wt.startedWave, center, now);
-        waveCreatures = [...ticked.creatures, ...spawned];
-        waveState = markSpawned(waveState, spawned.length);
+        if (guest) {
+          // Convidado: o mundo é do host — pede a horda; o pendente só zera quando ela aparecer.
+          broadcastWaveSpawn(wt.startedWave, center);
+          guestWaveAskedAt = now;
+          guestWaveFirstAskAt = now;
+        } else {
+          const net = useNet.getState();
+          const spawned = spawnWaveRaiders(wt.startedWave, center, now, net.connected ? net.selfId : '');
+          waveCreatures = [...ticked.creatures, ...spawned];
+          waveState = markSpawned(waveState, spawned.length);
+        }
+      } else if (waveState.phase === 'combat' && waveState.spawnPending > 0 && center) {
+        if (aliveWave > 0 || !guest) {
+          waveState = markSpawned(waveState, waveState.spawnPending); // horda chegou pelo mundo do host
+          guestWaveFirstAskAt = 0;
+        } else if (guestWaveFirstAskAt > 0 && now - guestWaveFirstAskAt > GUEST_WAVE_GIVE_UP_MS) {
+          waveState = markSpawned(waveState, waveState.spawnPending); // host não respondeu: não trava
+          guestWaveFirstAskAt = 0;
+        } else if (now - guestWaveAskedAt > GUEST_WAVE_RETRY_MS) {
+          broadcastWaveSpawn(waveState.wave, center);
+          guestWaveAskedAt = now;
+          if (guestWaveFirstAskAt === 0) guestWaveFirstAskAt = now;
+        }
       }
       // Onda repelida → oferece 3 cartas de evolução da base (draft do Pedro).
       if (wt.repelledWave && !upgradeChoices) {
