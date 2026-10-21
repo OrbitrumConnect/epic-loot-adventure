@@ -6,6 +6,7 @@ import { useNet } from '@/net/multiplayer';
 import { GlbHeroMixamo } from './glb-hero-mixamo';
 import type { HeroAction } from './glb-hero';
 import { labelTexture, markPointerConsumed, terrainHeight, HERO_HEIGHT } from './world-kit';
+import { glbSurfaceY } from './terrain-collision';
 import { useGameStore } from '@/game/state/game-store';
 
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
@@ -28,12 +29,12 @@ function RemotePlayer({ id }: { id: string }) {
     const p = useNet.getState().players[id];
     if (!g || !p) return;
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
-    if (!inited.current) { g.position.set(p.x, terrainHeight(p.x, p.z), p.z); g.rotation.y = p.yaw; inited.current = true; }
+    if (!inited.current) { g.position.set(p.x, glbSurfaceY(p.x, p.z, terrainHeight(p.x, p.z)), p.z); g.rotation.y = p.yaw; inited.current = true; }
     const dt = Math.min(delta, 0.1);
     const t = 1 - Math.exp(-15 * dt);
     g.position.x += (p.x - g.position.x) * t;
     g.position.z += (p.z - g.position.z) * t;
-    g.position.y = terrainHeight(g.position.x, g.position.z);
+    g.position.y = glbSurfaceY(g.position.x, g.position.z, terrainHeight(g.position.x, g.position.z));
     let dy = p.yaw - g.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
