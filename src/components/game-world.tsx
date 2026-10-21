@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
+import { BackgroundSim } from './world/background-sim';
 import { HarvestNodes } from './world/harvest-nodes';
 import { queueNearestNode } from './world/objective-bridge';
 import { CombatFeedback } from './world/combat-feedback';
@@ -2256,6 +2257,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <OcclusionFader playerRef={playerRef} paused={props.paused} />
 
       <AutoPilot playerRef={playerRef} movement={target} paused={props.paused} />
+
+      {/* Mantém a lógica viva (ondas/torres/host) quando a aba está escondida. */}
+      <BackgroundSim paused={Boolean(props.paused)} />
 
       <CelShade />
 
