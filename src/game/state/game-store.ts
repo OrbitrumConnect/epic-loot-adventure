@@ -662,7 +662,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name, playerCritStats(state.player));
 
-    const updatedCreatures = state.creatures.map(c => {
+    let updatedCreatures = state.creatures.map(c => {
       if (c.id !== targetId) return c;
       if (result.targetDied) {
         return deadCreature(c, Date.now(), Math.random);
@@ -707,14 +707,22 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           huntSeen: { ...(updatedPlayer.huntSeen ?? {}), [creature.speciesId]: seen + 1 },
         };
         if (bonus) loot.push(bonus);
+        // Loot DIRETO pro inventário (empilha); overflow (cheio/peso) cai num saco. Mesmo
+        // comportamento do rewardCreatureDeath — antes o golpe do player (e o idle, que usa
+        // este mesmo attack) jogava o loot no chão e não coletava. Sem diálogo.
+        let inv = updatedPlayer.inventory;
+        const overflow: typeof loot = [];
         for (const drop of loot) {
-          if (drop.itemId) drafts.push(lootEvent(drop.itemId, drop.quantity, creature.position));
+          if (!drop.itemId) continue;
+          drafts.push(lootEvent(drop.itemId, drop.quantity, creature.position));
+          if (canAddItem(inv, drop.itemId, drop.quantity)) inv = addItem(inv, drop.itemId, drop.quantity);
+          else overflow.push(drop);
         }
-        if (loot.length > 0) {
-          const bag = createDeathBag(creature.id, creature.name, creature.position, loot);
-          updatedBags = [...state.deathBags, bag];
-          msg += bonus ? ` ✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} dropou!` : ` Loot no chão!`;
+        updatedPlayer = { ...updatedPlayer, inventory: inv };
+        if (overflow.length > 0) {
+          updatedBags = [...state.deathBags, createDeathBag(creature.id, creature.name, creature.position, overflow)];
         }
+        if (loot.length > 0) msg += bonus ? ` ✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} dropou!` : ` Loot coletado!`;
       }
       updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
       const xpGain = creatureXp(def ?? creature);
@@ -758,6 +766,30 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           ? `Alguns itens caíram no chão.`
           : `Você não perdeu itens.`;
       }
+    }
+
+    // PASSIVO: AoE de melee (espada/machado) ACIMA DO LVL 5 — o golpe normal acerta mais
+    // inimigos num raio PEQUENO (do herói, não da base). Só sword/axe/lâminas (não arco/arma
+    // de fogo, não pickaxe/tocha). Reusa resolveAttack + rewardCreatureDeath (loot direto).
+    const cleaveWeapon = !usingRanged && heldItemId != null && heldItemId !== 'torch'
+      && !heldItemId.includes('pickaxe') && (ITEMS[heldItemId]?.attackPower ?? 0) > 0;
+    if (cleaveWeapon && !updatedPlayer.dead && state.player.level >= 5) {
+      const CLEAVE_RADIUS = 2.8, CLEAVE_MAX = 7; // + o alvo = até 8 inimigos
+      let extra = 0;
+      updatedCreatures = updatedCreatures.map(c => {
+        if (extra >= CLEAVE_MAX || c.id === targetId || c.behavior === 'dead') return c;
+        if (getDistance(state.player.position, c.position) > CLEAVE_RADIUS) return c;
+        extra += 1;
+        const r = resolveAttack(finalPower, c.hp, c.maxHp, c.armor, c.name, playerCritStats(state.player));
+        drafts.push(damageEvent(c.id, r.damage, c.position, { critical: !!r.critical, fire: usingTorch }));
+        if (r.targetDied) {
+          const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);
+          updatedPlayer = reward.player;
+          updatedBags = reward.bags;
+          return deadCreature(c, Date.now(), Math.random);
+        }
+        return { ...c, hp: r.targetHp, behavior: 'chase' as const };
+      });
     }
 
     set({

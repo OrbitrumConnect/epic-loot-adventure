@@ -110,3 +110,36 @@ describe('Couraça de Espinhos: a arma na mão tem que causar dano', () => {
     expect(before - after).toBeGreaterThanOrEqual(30);
   });
 });
+
+describe('AoE de melee (cleave) — espada/machado acima do lvl 5', () => {
+  beforeEach(() => useGameStore.getState().restartSurvival());
+
+  it('no lvl 5 a espada acerta inimigos VIZINHOS (não só o alvo); longe fica intacto', () => {
+    useGameStore.setState(s => ({
+      player: { ...s.player, level: 5, position: { x: 0, z: 0 }, lastAttackAt: -1e6 },
+      creatures: [
+        creatureAt('wolf', 'alvo', 1, 0),
+        creatureAt('wolf', 'vizinho', 0, 1.5),
+        creatureAt('wolf', 'longe', 20, 0),
+      ],
+      ui: { ...s.ui, selectedHotbar: 0 }, // espada na mão
+    }));
+    const before = new Map(useGameStore.getState().creatures.map(c => [c.id, c.hp]));
+    useGameStore.getState().attack('alvo');
+    const after = new Map(useGameStore.getState().creatures.map(c => [c.id, c.hp]));
+    expect(after.get('alvo')!).toBeLessThan(before.get('alvo')!);       // alvo
+    expect(after.get('vizinho')!).toBeLessThan(before.get('vizinho')!); // cleave pegou o vizinho
+    expect(after.get('longe')!).toBe(before.get('longe')!);             // fora do raio: intacto
+  });
+
+  it('abaixo do lvl 5 NÃO faz cleave (só o alvo toma dano)', () => {
+    useGameStore.setState(s => ({
+      player: { ...s.player, level: 4, position: { x: 0, z: 0 }, lastAttackAt: -1e6 },
+      creatures: [creatureAt('wolf', 'alvo', 1, 0), creatureAt('wolf', 'vizinho', 0, 1.5)],
+      ui: { ...s.ui, selectedHotbar: 0 },
+    }));
+    const vizBefore = useGameStore.getState().creatures.find(c => c.id === 'vizinho')!.hp;
+    useGameStore.getState().attack('alvo');
+    expect(useGameStore.getState().creatures.find(c => c.id === 'vizinho')!.hp).toBe(vizBefore);
+  });
+});
