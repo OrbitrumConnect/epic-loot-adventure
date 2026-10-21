@@ -8,7 +8,7 @@ import {
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Trophy, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useGameStore } from '@/game/state/game-store';
+import { useGameStore, arrowRainCooldownFor } from '@/game/state/game-store';
 import { startLocalPersistence } from '@/game/state/local-persistence';
 import { startAccountPersistence } from '@/game/state/account-persistence';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
@@ -158,6 +158,8 @@ function Index() {
   // Cooldown do especial (Q/R compartilham). `clock` tica a cada 1s e força o recompute.
   void clock;
   const specialLeft = Math.max(0, Math.ceil(effectiveSpecialCooldown(player) - (Date.now() / 1000 - (player.lastSpecialAt ?? 0))));
+  const lastArrowRainAt = useGameStore(s => s.lastArrowRainAt);
+  const arrowRainLeft = Math.max(0, Math.ceil(arrowRainCooldownFor(player.level) - (Date.now() / 1000 - lastArrowRainAt)));
 
   const activeObjective = objectives.items.find(o => o.status === 'active')
     ?? objectives.items.find(o => o.status === 'queued')
@@ -369,7 +371,7 @@ function Index() {
       <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
       <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
       <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
-      <Button variant="ghost" className="world-action" data-primary="true" aria-label="Chuva de Flechas" title="Chuva de Flechas — dano em área (arma de longe) · F" onClick={() => arrowRain()}><CloudRain /></Button>
+      <Button variant="ghost" className="world-action" data-cooldown={arrowRainLeft > 0} aria-label="Chuva de Flechas" title="Chuva de Flechas — 3 ondas em área (arma de longe) · F" onClick={() => arrowRain()}><CloudRain />{arrowRainLeft > 0 && <span className="cd">{arrowRainLeft}</span>}</Button>
       <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
       {!playerBase && (

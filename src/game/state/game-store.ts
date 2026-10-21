@@ -455,6 +455,22 @@ function createInitialResources(): ResourceNode[] {
 
 const INITIAL_CAMP_WORLD = createCamps(Date.now());
 
+/** Fator de escala por nível (0 no nv1 → 1 no nv200+). Usado pela Chuva de Flechas. */
+function arrowRainT(level: number): number {
+  return Math.min(1, Math.max(0, (level - 1) / 199));
+}
+/** Raio da área da Chuva de Flechas: 5 m (nv1) → 18 m (nv200+). */
+export function arrowRainRadiusFor(level: number): number {
+  return Math.round((5 + (18 - 5) * arrowRainT(level)) * 10) / 10;
+}
+/** Cooldown da Chuva de Flechas: 15 s (nv1) → 5 s (nv200+). */
+export function arrowRainCooldownFor(level: number): number {
+  return Math.round((15 - (15 - 5) * arrowRainT(level)) * 10) / 10;
+}
+/** Nº de ondas da Chuva de Flechas e o intervalo entre elas (Pedro: 3 chuvas, 1 s). */
+export const ARROW_RAIN_WAVES = 3;
+export const ARROW_RAIN_WAVE_MS = 1000;
+
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
   player: createInitialPlayer(),
   creatures: [...createInitialCreatures(), ...createWildCreatures(), ...INITIAL_CAMP_WORLD.creatures],
@@ -892,13 +908,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
 
+    const ARROW_RAIN_ARROWS = 5;        // flechas por ONDA (caem do céu)
+    const ARROW_RAIN_AMMO_PER_WAVE = 1; // munição por onda (3 ondas = 3; arco é livre)
     const now = Date.now() / 1000;
-    const ARROW_RAIN_ARROWS = 5;     // flechas caindo (Pedro: "umas 4")
-    const ARROW_RAIN_AMMO = 3;       // munição por salva (armas de bala; arco é livre)
-    // Nível escala tudo: raio da ÁREA 5 m → 18 m e cooldown 15 s → 5 s (nv 1 → nv 200+).
-    const t = Math.min(1, Math.max(0, (state.player.level - 1) / 199));
-    const radius = Math.round((5 + (18 - 5) * t) * 10) / 10;
-    const cooldown = Math.round((15 - (15 - 5) * t) * 10) / 10;
+    const cooldown = arrowRainCooldownFor(state.player.level);
 
     const since = now - state.lastArrowRainAt;
     if (since < cooldown) {
@@ -907,68 +920,82 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
 
     const usesBullet = prof.projectile === 'bullet';
-    if (usesBullet && getItemCount(state.player.inventory, 'ammo') < ARROW_RAIN_AMMO) {
+    if (usesBullet && getItemCount(state.player.inventory, 'ammo') < ARROW_RAIN_AMMO_PER_WAVE) {
       if (!auto) set(s => ({ ui: { ...s.ui, message: 'Sem munição para a Chuva de Flechas.' } }));
       return;
     }
 
-    // Alvo: hostil mais próximo dentro do alcance da arma (vira o CENTRO da chuva).
+    // Precisa de um alvo no alcance pra COMEÇAR (vira o centro da 1ª onda).
     const reach = weaponRangeFor(heldId, state.player.level);
-    let center: Position | null = null;
-    let bestD = Infinity;
-    for (const c of state.creatures) {
-      if (c.behavior === 'dead') continue;
-      const d = getDistance(state.player.position, c.position);
-      if (d <= reach && d < bestD) { bestD = d; center = c.position; }
-    }
-    if (!center) {
+    const nearestHostile = (): Position | null => {
+      let best: Position | null = null, bestD = Infinity;
+      for (const c of get().creatures) {
+        if (c.behavior === 'dead') continue;
+        const d = getDistance(get().player.position, c.position);
+        if (d <= reach && d < bestD) { bestD = d; best = c.position; }
+      }
+      return best;
+    };
+    if (!nearestHostile()) {
       if (!auto) set(s => ({ ui: { ...s.ui, message: 'Nenhum alvo no alcance da Chuva de Flechas.' } }));
       return;
     }
-    const hitCenter = center;
 
-    const base = playerBaseAttack(state.player.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
-    const power = Math.round(base * 1.3 * damageMultiplier(state.player));
-    const critStats = playerCritStats(state.player);
-    const drafts: FeedbackDraft[] = [];
+    // Dispara AGORA (trava o cooldown) e agenda as outras ondas, 1 s entre elas (Pedro: "3 chuvas").
+    set(s => ({ lastArrowRainAt: now, ui: { ...s.ui, message: '🏹 Chuva de Flechas!' } }));
 
-    // VISUAL: flechas caindo do céu dentro da área (reusa Projectiles via eventos 'shot':
-    // origem no MESMO ponto do chão com sourceHeight alto → cai reto de cima).
-    for (let i = 0; i < ARROW_RAIN_ARROWS; i++) {
-      const ang = Math.random() * Math.PI * 2;
-      const rr = Math.sqrt(Math.random()) * radius;
-      const drop = { x: hitCenter.x + Math.cos(ang) * rr, z: hitCenter.z + Math.sin(ang) * rr };
-      drafts.push(shotEvent(drop, drop, 'arrow', 13));
-    }
+    const fireWave = () => {
+      const st = get();
+      if (st.player.dead) return;
+      const center = nearestHostile(); // recalcula: a chuva acompanha os bichos a cada onda
+      if (!center) return;
+      const radius = arrowRainRadiusFor(st.player.level);
+      const base = playerBaseAttack(st.player.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
+      const power = Math.round(base * 1.3 * damageMultiplier(st.player));
+      const critStats = playerCritStats(st.player);
+      const drafts: FeedbackDraft[] = [];
 
-    let updatedPlayer: PlayerState = { ...state.player, lastAttackAt: now };
-    if (usesBullet) updatedPlayer = { ...updatedPlayer, inventory: removeItem(updatedPlayer.inventory, 'ammo', ARROW_RAIN_AMMO) };
-    let updatedBags = state.deathBags;
-    let hits = 0;
-
-    const creatures = state.creatures.map(c => {
-      if (c.behavior === 'dead') return c;
-      if (getDistance(hitCenter, c.position) > radius) return c;
-      hits += 1;
-      const r = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
-      drafts.push(damageEvent(c.id, r.damage, c.position, { critical: !!r.critical }));
-      if (r.targetDied) {
-        const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);
-        updatedPlayer = reward.player;
-        updatedBags = reward.bags;
-        return deadCreature(c, Date.now(), Math.random);
+      // VISUAL: flechas caem do céu na área (Projectiles via 'shot'; origem no mesmo ponto do
+      // chão com sourceHeight alto → cai reto de cima). Vale no manual E no idle.
+      for (let i = 0; i < ARROW_RAIN_ARROWS; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const rr = Math.sqrt(Math.random()) * radius;
+        const drop = { x: center.x + Math.cos(ang) * rr, z: center.z + Math.sin(ang) * rr };
+        drafts.push(shotEvent(drop, drop, 'arrow', 13));
       }
-      return { ...c, hp: r.targetHp, behavior: 'chase' as const };
-    });
 
-    set({
-      player: updatedPlayer,
-      creatures,
-      deathBags: updatedBags,
-      feedback: pushEvents(state.feedback, drafts, Date.now()),
-      lastArrowRainAt: now,
-      ui: { ...state.ui, message: `🏹 Chuva de Flechas! ${hits} atingido(s).` },
-    });
+      let updatedPlayer: PlayerState = { ...st.player, lastAttackAt: Date.now() / 1000 };
+      const hasAmmo = getItemCount(updatedPlayer.inventory, 'ammo') >= ARROW_RAIN_AMMO_PER_WAVE;
+      if (usesBullet && hasAmmo) updatedPlayer = { ...updatedPlayer, inventory: removeItem(updatedPlayer.inventory, 'ammo', ARROW_RAIN_AMMO_PER_WAVE) };
+      let updatedBags = st.deathBags;
+      let hits = 0;
+
+      const creatures = st.creatures.map(c => {
+        if (c.behavior === 'dead') return c;
+        if (getDistance(center, c.position) > radius) return c;
+        hits += 1;
+        const r = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
+        drafts.push(damageEvent(c.id, r.damage, c.position, { critical: !!r.critical }));
+        if (r.targetDied) {
+          const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);
+          updatedPlayer = reward.player;
+          updatedBags = reward.bags;
+          return deadCreature(c, Date.now(), Math.random);
+        }
+        return { ...c, hp: r.targetHp, behavior: 'chase' as const };
+      });
+
+      set({
+        player: updatedPlayer,
+        creatures,
+        deathBags: updatedBags,
+        feedback: pushEvents(get().feedback, drafts, Date.now()),
+        ui: { ...get().ui, message: `🏹 Chuva de Flechas! ${hits} atingido(s).` },
+      });
+    };
+
+    fireWave(); // onda 1 agora
+    for (let w = 1; w < ARROW_RAIN_WAVES; w++) setTimeout(fireWave, w * ARROW_RAIN_WAVE_MS); // ondas 2 e 3
   },
 
   collect: (nodeId: string) => {
