@@ -1077,7 +1077,10 @@ function Index() {
                 {!panel && <div className="world-actions world-actions--footer">{actionButtons}</div>}
               </div>
             </div>
-            <div className="hotbar-note">{hotbarItems[ui.selectedHotbar]?.name ?? 'Vazio'} <span className="text-primary">·</span> Guerreiro</div>
+            <div className="hotbar-note-row">
+              <Button variant="ghost" size="icon" className="footer-settings" aria-label="Preferências" title="Preferências · Sair · Zerar" onClick={() => open('settings')}><Settings /></Button>
+              <div className="hotbar-note">{hotbarItems[ui.selectedHotbar]?.name ?? 'Vazio'} <span className="text-primary">·</span> Guerreiro</div>
+            </div>
           </div>
           <div className="bag-summary">
             <div className="footer-label"><Backpack />MOCHILA</div>
