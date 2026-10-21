@@ -509,12 +509,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const state = get();
       const index = selectTowerTarget(tower, state.creatures, state.towerLastShotAt[tower.id], now);
       if (index < 0) continue;
+      // POOL COMPARTILHADO de bala (Pedro): a torre gasta a MESMA munição do personagem.
+      // Sem bala, a torre NÃO atira (base não dispara infinito) — mas as mortes dela dropam
+      // loot (inclui bala) direto no inventário, então a base se reabastece farmando.
+      if (getItemCount(state.player.inventory, 'ammo') <= 0) continue;
       const c = state.creatures[index]!;
       // Dano base da torre (Caio) × multiplicador das cartas de evolução (hordas).
       const damage = towerDamage(tower, c, rng) * towerDamageMult(state.baseUpgrades.tower_damage);
       const hp = Math.max(0, c.hp - damage);
       const drafts = [shotEvent(tower, c.position, 'arrow', towerHeight(tower.tier, tower.level)), damageEvent(c.id, damage, c.position)];
-      let player = state.player;
+      let player = { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) };
       let deathBags = state.deathBags;
       if (hp === 0) {
         const reward = rewardCreatureDeath(c, player, deathBags, drafts, rng);
