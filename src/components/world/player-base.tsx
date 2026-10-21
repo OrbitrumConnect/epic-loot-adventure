@@ -25,6 +25,7 @@ import { cellCenter, checkClaim, previewLine, worldToCell } from '@/game/systems
 import { GlbBaseCastle } from './glb-base-castle';
 import { BaseHouse } from './base-house';
 import { GlbWatchTowers } from './glb-watchtower';
+import { GlbBaseWalls } from './glb-base-walls';
 import { GlbTrainingCamps } from './glb-training-camp';
 import { TowerRuntime } from './tower-runtime';
 import { PowerOrbit } from './power-orbit';
@@ -145,11 +146,16 @@ function BaseStructures({ c, piecesSource, interactive = true }: {
   }, [built]);
 
   const last = useRef<BasePiece[] | null | undefined>(undefined);
+  const lastTier = useRef(-1);
 
   useFrame(() => {
     const pieces = piecesSource ? piecesSource() : (useGameStore.getState().playerBase?.pieces ?? null);
-    if (pieces === last.current) return;
+    // Tier visual da base LOCAL: 0=madeira, 1=pedra, 2=metal (remoto fica madeira).
+    const gs = piecesSource ? null : useGameStore.getState();
+    const baseTier = gs ? (gs.baseMetal ? 2 : gs.baseEvolved ? 1 : 0) : 0;
+    if (pieces === last.current && baseTier === lastTier.current) return;
     last.current = pieces;
+    lastTier.current = baseTier;
 
     for (const b of built.batches) { b.mesh.count = 0; b.ids.length = 0; }
     for (const cr of built.cracks) cr.mesh.count = 0;
@@ -158,7 +164,10 @@ function BaseStructures({ c, piecesSource, interactive = true }: {
       for (const p of pieces) {
         if (p.kind === 'training') continue; // prédio composto, fora dos lotes de peças simples
         if (USE_GLB_TOWER && p.kind === 'tower') continue; // torre vira GLB (GlbWatchTowers)
-        const batch = built.batches[KINDS.indexOf(p.kind) * 3 + (p.tier - 1)];
+        if (p.kind === 'wall' && baseTier > 0) continue;   // muro vira GLB de pedra/metal (GlbBaseWalls)
+        // Porta acompanha o tier da base (madeira→pedra→ferro) p/ casar com os muros GLB.
+        const effTier = (p.kind === 'door' && baseTier > 0 ? (baseTier + 1) : p.tier) as 1 | 2 | 3;
+        const batch = built.batches[KINDS.indexOf(p.kind) * 3 + (effTier - 1)];
         if (!batch || batch.mesh.count >= CAP) continue;
         const ctr = cellCenter(p.cell);
         const ratio = p.maxHp > 0 ? Math.max(0, Math.min(1, p.hp / p.maxHp)) : 1;
@@ -811,6 +820,7 @@ export function PlayerBase({
     <>
       {USE_GLB_BASE ? <GlbBaseCastle /> : <BaseStructures c={c} />}
       {USE_GLB_TOWER && <GlbWatchTowers />}
+      <GlbBaseWalls />
       <GlbTrainingCamps />
       <TowerRuntime paused={paused} />
       <PowerOrbit paused={paused} />

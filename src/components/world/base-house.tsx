@@ -38,12 +38,11 @@ function BaseHouseInner({
   const obj = useLoader(OBJLoader, modelUrl('house/WoodHouse.obj'));
   const diffuse = useTexture(modelUrl('house/Diffuse.webp'));
   const normal = useTexture(modelUrl('house/normal.webp'));
-  // Casa de PEDRA (evolução nível 10). Carrega sempre; só renderiza quando evoluída.
+  // Casa de PEDRA (evolução nível 10) e de METAL (nível >20): cada uma tem seu GLB
+  // próprio (2 andares com rampa, PBR embutido). Carregam sempre; só renderizam quando
+  // a evolução é paga. A madeira segue o OBJ original com diffuse/normal.
   const stone = useGLTF(modelUrl('house/stone-house.glb'));
-  // Casa de METAL: tier topo (onda >=10 E nível >20). Ainda NÃO temos um GLB de metal
-  // dedicado — reusamos a geometria da pedra com material metálico (prata). Quando
-  // existir models/house/metal-house.glb, trocar a fonte aqui. NÃO dar useGLTF num
-  // arquivo inexistente: ele faz throw e derruba o Canvas inteiro (404).
+  const metal = useGLTF(modelUrl('house/metal-house.glb'));
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
   const localBaseMetal = useGameStore((s) => s.baseMetal ?? false);
   // A evolução visual da base remota ainda não faz parte do payload de rede.
@@ -62,23 +61,40 @@ function BaseHouseInner({
   const clipPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6), []);
 
   const prepared = useMemo(() => {
-    // Tier: metal (onda>=10 & nível>20) → pedra (evoluída) → madeira (base).
-    // Metal reusa a geometria da pedra (não há GLB de metal) com material metálico.
-    const o = (metalTier || baseEvolved ? stone.scene : obj).clone();
-    diffuse.colorSpace = THREE.SRGBColorSpace;
-    const mat = metalTier
-      ? new THREE.MeshStandardMaterial({ color: '#8c939c', roughness: 0.5, metalness: 0.55, side: THREE.DoubleSide, clippingPlanes: [clipPlane] })
-      : baseEvolved
-      ? new THREE.MeshStandardMaterial({ color: '#9a938a', roughness: 1, metalness: 0, side: THREE.DoubleSide, clippingPlanes: [clipPlane] })
-      : new THREE.MeshStandardMaterial({ map: diffuse, normalMap: normal, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, clippingPlanes: [clipPlane] });
-    o.traverse((m) => {
-      const mesh = m as THREE.Mesh;
-      if (mesh.isMesh) {
-        mesh.material = mat;
+    // Tier: metal (nível>20) → pedra (nível 10) → madeira (base). Pedra e metal são
+    // GLBs próprios (2 andares + rampa) com PBR embutido; madeira é o OBJ.
+    const glb = metalTier ? metal.scene : baseEvolved ? stone.scene : null;
+    const o = (glb ?? obj).clone(true);
+    const owned: THREE.Material[] = [];
+    if (glb) {
+      // Preserva a textura PBR do GLB; só força dupla face + o plano de corte do teto.
+      o.traverse((m) => {
+        const mesh = m as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const cloneMat = (src: THREE.Material) => {
+          const clone = src.clone();
+          clone.side = THREE.DoubleSide;
+          clone.clippingPlanes = [clipPlane];
+          owned.push(clone);
+          return clone;
+        };
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(cloneMat) : cloneMat(mesh.material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-      }
-    });
+      });
+    } else {
+      diffuse.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.MeshStandardMaterial({ map: diffuse, normalMap: normal, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, clippingPlanes: [clipPlane] });
+      owned.push(mat);
+      o.traverse((m) => {
+        const mesh = m as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.material = mat;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+        }
+      });
+    }
     const box = new THREE.Box3().setFromObject(o);
     const h = box.max.y - box.min.y || 1;
     o.scale.setScalar(TARGET_H / h);
@@ -124,8 +140,11 @@ function BaseHouseInner({
         }
       }
     });
-    return { wrap, halfX, halfZ, wallSegs };
-  }, [obj, stone, baseEvolved, metalTier, diffuse, normal, clipPlane]);
+    return { wrap, halfX, halfZ, wallSegs, owned };
+  }, [obj, stone, metal, baseEvolved, metalTier, diffuse, normal, clipPlane]);
+
+  // Descarta os materiais clonados ao trocar de tier/desmontar (evita leak de shader).
+  useEffect(() => () => { for (const m of prepared.owned) m.dispose(); }, [prepared]);
 
   // Teto some ao entrar: baixa o plano de corte pra ~2,6 m acima do piso.
   useFrame(() => {

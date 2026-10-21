@@ -645,24 +645,29 @@ progress::-webkit-progress-bar { background: var(--secondary); }
      (a coluna cabe na altura da hotbar). MOCHILA some no mobile pra não apertar. */
   .bag-summary { display: none; }
   .world-actions--footer {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 5px;
-    width: 100px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
+    width: 150px; margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--border);
   }
-  .world-action { width: 30px; height: 30px; }
+  .world-action { width: 26px; height: 26px; }
   .world-message { font-size: 10px; line-height: 1.6; }
 
   /* Rodapé mais BAIXO/compacto no mobile (−~30% nos slots) pra sobrar mundo pro joystick, sem
      quebrar o modelo nem sair da linha. Hotkeys + triggers de auto-farm continuam. */
-  .game-footer { min-height: 54px; padding: 5px 6px; gap: 6px; }
-  .hotbar { gap: 3px; }
-  .hotbar-slot { width: 27px; height: 33px; border-radius: 3px; }
-  .hotbar-slot > svg { width: 14px; height: 14px; }
-  .hotbar-slot .hotbar-sprite { width: 21px; height: 21px; }
-  .hotbar-slot:nth-child(9) { margin-left: 7px; }
+  .game-footer { min-height: 36px; padding: 3px 5px; gap: 5px; }
+  .hotbar { gap: 2px; }
+  .hotbar-slot { width: 24px; height: 30px; border-radius: 3px; }
+  .hotbar-slot > svg { width: 13px; height: 13px; }
+  .hotbar-slot .hotbar-sprite { width: 19px; height: 19px; }
+  .hotbar-slot:nth-child(9) { margin-left: 6px; }
   .slot-key { font-size: 6px; left: 2px; top: 1px; }
   .slot-count { font-size: 6px; right: 2px; bottom: 1px; }
-  .hotbar-note { font-size: 7px; margin-top: 3px; }
-  .world-action { width: 27px; height: 27px; }
+  .hotbar-note { font-size: 7px; margin-top: 2px; }
+  .world-action { width: 26px; height: 26px; }
+  /* Coluna da direita (AUTO + triggers) bem compacta p/ o rodapé preto encolher. */
+  .potion-ctl { padding-left: 4px; gap: 2px; }
+  .potion-toggle { height: 22px; padding: 0 5px; font-size: 7px; letter-spacing: .4px; }
+  .potion-toggle svg { width: 11px; height: 11px; }
+  .potion-count { font-size: 7px; }
 }
 
 /* -------------------------------------------------------------------------
