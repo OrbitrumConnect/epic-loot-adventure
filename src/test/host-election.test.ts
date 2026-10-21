@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { electHost } from '../net/multiplayer';
+import { electHost, roomStatus } from '../net/multiplayer';
+
+describe('sala persiste até 3 dias (multiplayer B)', () => {
+  const now = Date.parse('2026-10-21T20:00:00Z');
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  it('heartbeat recente = ao vivo', () => expect(roomStatus(ago(30_000), now)).toBe('live'));
+  it('sem ninguém há 1 dia = pausada (retomável)', () => expect(roomStatus(ago(24 * 3600_000), now)).toBe('paused'));
+  it('sem ninguém há +3 dias = expirada', () => expect(roomStatus(ago(73 * 3600_000), now)).toBe('expired'));
+});
 
 describe('migração de host (multiplayer A): outro segura a sala', () => {
   it('host presente continua host, mesmo havendo jogador mais antigo sem flag', () => {

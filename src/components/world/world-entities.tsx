@@ -18,7 +18,10 @@ import { getCamps } from './objective-bridge';
 import { isRaider, Raider } from './raider';
 import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
-import { broadcastWorld, MP_ENABLED, registerCreatureHitHandler, registerPlayerHitHandler, useNet } from '@/net/multiplayer';
+import {
+  broadcastWorld, fetchResumeSnapshot, MP_ENABLED, registerCreatureHitHandler, registerPlayerHitHandler,
+  registerWorldSnapshotProvider, useNet,
+} from '@/net/multiplayer';
 
 const SYNC_INTERVAL = 0.2;
 
@@ -91,10 +94,17 @@ export function MultiplayerWorldSync() {
 
   useEffect(() => {
     if (!MP_ENABLED || !connected || !isHost) return;
+    // Multiplayer B: a foto que vai pro banco (sala persiste até 3 dias) = inimigos atuais.
+    registerWorldSnapshotProvider(() => useGameStore.getState().creatures);
+    // RETOMAR: sala vazia/pausada → começo da última foto salva (se houver), não do zero.
+    let cancelled = false;
+    void fetchResumeSnapshot().then((creatures) => {
+      if (!cancelled && creatures && creatures.length > 0) useGameStore.setState({ creatures });
+    });
     const send = () => broadcastWorld(useGameStore.getState().creatures);
     send();
     const timer = window.setInterval(send, 450);
-    return () => window.clearInterval(timer);
+    return () => { cancelled = true; window.clearInterval(timer); registerWorldSnapshotProvider(null); };
   }, [connected, isHost]);
 
   // PvP (fatia 2): aplica no jogador LOCAL o golpe recebido de um inimigo (o canal já validou a

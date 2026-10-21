@@ -121,6 +121,8 @@ export function setAway(away: boolean): void {
 }
 
 let channel: RealtimeChannel | null = null;
+/** Recebi mundo AO VIVO de um host nesta sala? (decide se "retomar" usa a foto do banco) */
+let hadLiveWorld = false;
 let creatureHitHandler: ((intent: CreatureHitIntent) => void) | null = null;
 let playerHitHandler: ((intent: PlayerHitIntent) => void) | null = null;
 
@@ -147,6 +149,7 @@ export const useNet = create<NetState>((set, get) => ({
     const room = (code || randRoom()).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     const selfId = get().selfId;
     const joinedAt = Date.now(); // ordem de chegada → quem assume se o host sair
+    hadLiveWorld = false;
     const ch = supabase.channel('tribos:' + room, {
       config: { presence: { key: selfId }, broadcast: { self: false } },
     });
@@ -171,6 +174,7 @@ export const useNet = create<NetState>((set, get) => ({
       const p = payload as { id: string; creatures: CreatureState[] };
       // O anfitrião é a autoridade. Ele não deve aceitar um snapshot de convidado.
       if (p.id === selfId || get().isHost || !Array.isArray(p.creatures)) return;
+      hadLiveWorld = true;
       set({ world: p.creatures });
     });
 
@@ -318,65 +322,103 @@ export function roomFromUrl(): string | null {
   try { return new URL(window.location.href).searchParams.get('room'); } catch { return null; }
 }
 
+
 /* ------------------------------------------------------------------ *
- * LOBBY: registro das salas ativas na tabela `game_rooms` (SELECT público;
- * INSERT/UPDATE/DELETE só do dono via auth.uid()). Assim dá pra LISTAR as
- * partidas abertas e entrar por clique, sem link. Só o HOST registra a sala.
+ * LOBBY + PERSISTÊNCIA DA SALA (Multiplayer B). Tudo pela função do banco
+ * `room_heartbeat` (SECURITY DEFINER): o GRANT da tabela é só SELECT, então o
+ * upsert/update direto falhava calado (a aba Salas nunca listava nada).
+ *  - Quem SEGURA a sala (host) bate a cada 15 s; a cada 30 s leva a FOTO do mundo
+ *    (inimigos) — só grava quem tem a autoridade (lease 60 s no banco).
+ *  - Passou a vez / saiu → solta a autoridade na hora (release) com a última foto.
+ *  - Ninguém na sala → a linha FICA (pausada) até 3 dias; quem abrir o link nesse prazo
+ *    RETOMA da foto. +3 dias sem ninguém → o próprio heartbeat limpa.
  * ------------------------------------------------------------------ */
-export type RoomInfo = { code: string; players: number; max: number; updatedAt: string };
+export type RoomInfo = { code: string; players: number; max: number; updatedAt: string; live: boolean };
 
-const ROOM_STALE_MS = 60_000; // sala sem heartbeat há +60s é considerada morta
-let roomRowId: string | null = null;
+const ROOM_LIVE_MS = 60_000;                 // heartbeat recente = sala AO VIVO
+const ROOM_KEEP_MS = 3 * 24 * 60 * 60_000;   // pausada até 3 dias (depois o banco limpa)
 let roomHeartbeat: ReturnType<typeof setInterval> | null = null;
+let heartbeatRoom: string | null = null;
+let snapshotProvider: (() => CreatureState[]) | null = null;
 
-async function registerRoom(code: string, attempt = 0): Promise<void> {
-  if (!supabase || roomRowId) return;
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) return; // sem login não registra (mas o P2P segue funcionando por link)
-  const { data, error } = await supabase
-    .from('game_rooms')
-    .upsert({ code, owner_id: uid, max_players: MAX_PLAYERS, active_players: 1, status: 'open', last_active_at: new Date().toISOString() }, { onConflict: 'code' })
-    .select('id')
-    .maybeSingle();
-  if (error || !data) {
-    // Host recém-eleito: a linha do host antigo pode ainda existir (RLS do dono bloqueia).
-    // Re-tenta depois que ela some — a sala volta pro lobby sem ninguém fazer nada.
-    if (attempt < 5 && useNet.getState().isHost && useNet.getState().room === code) {
-      setTimeout(() => { void registerRoom(code, attempt + 1); }, 3000);
-    }
-    return;
-  }
-  roomRowId = data.id as string;
-  roomHeartbeat = setInterval(() => {
-    if (!supabase || !roomRowId) return;
-    const players = Object.keys(useNet.getState().players).length + 1;
-    void supabase.from('game_rooms').update({ active_players: players, last_active_at: new Date().toISOString() }).eq('id', roomRowId);
-  }, 15_000);
+/** A camada de mundo registra de onde tirar a foto (inimigos atuais do store). */
+export function registerWorldSnapshotProvider(fn: (() => CreatureState[]) | null): void {
+  snapshotProvider = fn;
 }
 
+function heartbeat(code: string, withSnapshot: boolean, release = false): void {
+  if (!supabase) return;
+  const players = Object.keys(useNet.getState().players).length + 1;
+  const creatures = withSnapshot && snapshotProvider ? snapshotProvider() : null;
+  void supabase.rpc('room_heartbeat', {
+    p_code: code, p_players: players,
+    p_snapshot: creatures ? { creatures, savedAt: Date.now() } : null,
+    p_release: release,
+  }).then(({ error }) => { if (error) console.warn('[sala] heartbeat falhou:', error.message); });
+}
+
+async function registerRoom(code: string): Promise<void> {
+  if (!supabase || heartbeatRoom === code) return;
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return; // sem login não persiste a sala (o P2P por link segue funcionando)
+  unregisterRoom();
+  heartbeatRoom = code;
+  let tick = 0;
+  heartbeat(code, true);
+  roomHeartbeat = setInterval(() => { tick++; heartbeat(code, tick % 2 === 0); }, 15_000);
+}
+
+/** Para de segurar a sala: solta a autoridade JÁ (com a última foto). A linha NÃO é apagada. */
 function unregisterRoom(): void {
   if (roomHeartbeat) { clearInterval(roomHeartbeat); roomHeartbeat = null; }
-  if (supabase && roomRowId) { void supabase.from('game_rooms').delete().eq('id', roomRowId); }
-  roomRowId = null;
+  if (heartbeatRoom) heartbeat(heartbeatRoom, true, true);
+  heartbeatRoom = null;
 }
 
-/** Lista as salas ABERTAS com heartbeat recente (pra aba de salas). */
+/**
+ * RETOMAR: se virei host SEM ter recebido mundo ao vivo (sala vazia/pausada), busco a última
+ * foto salva da sala. Se eu era convidado e o host saiu, NÃO uso a foto do banco (o meu
+ * estado ao vivo é mais novo).
+ */
+export async function fetchResumeSnapshot(): Promise<CreatureState[] | null> {
+  const room = useNet.getState().room;
+  if (!supabase || !room || hadLiveWorld) return null;
+  const { data, error } = await supabase.from('game_rooms')
+    .select('world_snapshot, world_version').eq('code', room).maybeSingle();
+  if (error || !data) return null;
+  const snap = data.world_snapshot as { creatures?: unknown } | null;
+  return Array.isArray(snap?.creatures) && (data.world_version as number) > 1
+    ? (snap!.creatures as CreatureState[]) : null;
+}
+
+/** Classifica a linha do lobby (pura, testável): ao vivo, pausada (retomável) ou expirada. */
+export function roomStatus(lastActiveIso: string, now = Date.now()): 'live' | 'paused' | 'expired' {
+  const age = now - new Date(lastActiveIso).getTime();
+  if (age <= ROOM_LIVE_MS) return 'live';
+  if (age <= ROOM_KEEP_MS) return 'paused';
+  return 'expired';
+}
+
+/** Salas AO VIVO e PAUSADAS (até 3 dias, retomáveis pelo mesmo código). */
 export async function listRooms(): Promise<RoomInfo[]> {
   if (!supabase) return [];
-  const since = new Date(Date.now() - ROOM_STALE_MS).toISOString();
+  const since = new Date(Date.now() - ROOM_KEEP_MS).toISOString();
   const { data, error } = await supabase
     .from('game_rooms')
     .select('code, active_players, max_players, last_active_at')
-    .eq('status', 'open')
+    .neq('status', 'closed')
     .gte('last_active_at', since)
     .order('last_active_at', { ascending: false })
     .limit(30);
   if (error || !data) return [];
-  return data.map((r) => ({
-    code: r.code as string,
-    players: (r.active_players as number) ?? 1,
-    max: (r.max_players as number) ?? MAX_PLAYERS,
-    updatedAt: r.last_active_at as string,
-  }));
+  return data.map((r) => {
+    const live = roomStatus(r.last_active_at as string) === 'live';
+    return {
+      code: r.code as string,
+      players: live ? ((r.active_players as number) ?? 1) : 0,
+      max: (r.max_players as number) ?? MAX_PLAYERS,
+      updatedAt: r.last_active_at as string,
+      live,
+    };
+  });
 }
