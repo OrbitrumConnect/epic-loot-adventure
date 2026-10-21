@@ -219,8 +219,10 @@ export const ITEMS: Record<string, Item> = {
     name: 'Munição',
     category: 'resource',
     rarity: 'common',
-    weight: 0.02,
-    maxStack: 9999,
+    // Caixa ÚNICA de munição (Pedro): acumula INFINITO num só item, nunca abre 2º slot
+    // e sem o peso travar — ganha entra na caixa, atira sai. maxStack gigante + peso 0.
+    weight: 0,
+    maxStack: 9_999_999,
     dropOnDeath: true,
     usable: false,
     equippable: false,
