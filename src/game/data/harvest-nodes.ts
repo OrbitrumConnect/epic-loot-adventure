@@ -50,3 +50,12 @@ export const HARVEST_NODE_TARGETS: Record<HarvestNodeKind, number> = {
 
 /** Total de nós do mundo (soma dos alvos acima). */
 export const HARVEST_NODE_COUNT: number = Object.values(HARVEST_NODE_TARGETS).reduce((a, b) => a + b, 0);
+
+/**
+ * Alcance de colheita escalado pelo NÍVEL (Pedro: farm fixo em 3.2 m ficava curto).
+ * Dobra do base até o nível 250 (ex.: 3.2 → 6.4), igual à ideia do range de arma crescer.
+ */
+export function harvestRangeFor(baseRange: number, level = 1): number {
+  const t = Math.min(1, Math.max(0, (Math.floor(level) - 1) / 249));
+  return Math.round(baseRange * (1 + t) * 10) / 10;
+}

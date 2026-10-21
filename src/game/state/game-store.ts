@@ -11,7 +11,7 @@ import { audioManager } from '../audio/audio-manager';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
-import { HARVEST_NODES } from '../data/harvest-nodes';
+import { HARVEST_NODES, harvestRangeFor } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
 import { resolveAttack, getDistance } from '../systems/combatSystem';
@@ -883,7 +883,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const def = HARVEST_NODES[node.kind];
       if (!def) continue;
       const d = getDistance(pos, node.position);
-      if (d <= def.range + 0.5 && d < bestNodeDist) { bestNodeDist = d; bestNode = node; }
+      if (d <= harvestRangeFor(def.range, state.player.level) + 0.5 && d < bestNodeDist) { bestNodeDist = d; bestNode = node; }
     }
 
     // Recurso solto mais próximo (cristal/baú/torre), até 4 m.
@@ -1644,7 +1644,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const def = HARVEST_NODES[node.kind];
 
     // +0,5 m de folga: o jogador anda entre o clique e a colheita.
-    if (getDistance(state.player.position, node.position) > def.range + 0.5) {
+    if (getDistance(state.player.position, node.position) > harvestRangeFor(def.range, state.player.level) + 0.5) {
       set(s => ({ ui: { ...s.ui, message: `${def.name}: muito longe para colher.` } }));
       return;
     }
@@ -1898,7 +1898,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           position: n.position,
           depleted: n.depleted,
           kind: n.kind,
-          range: HARVEST_NODES[n.kind]?.range,
+          range: HARVEST_NODES[n.kind] ? harvestRangeFor(HARVEST_NODES[n.kind]!.range, state.player.level) : undefined,
         })),
         ...state.resources.map(r => ({ id: r.id, position: r.position, depleted: r.depleted })),
       ],
