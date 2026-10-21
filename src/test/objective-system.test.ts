@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { AutoSnapshot, ObjectiveKind, ObjectiveQueueState, Position } from '@/game/types';
 import {
-  ARRIVAL_RADIUS, ATTACK_RANGE, FLEE_RADIUS, GATHER_RANGE, IDLE_HUNT_RADIUS,
+  ARRIVAL_RADIUS, ATTACK_RANGE, GATHER_RANGE, IDLE_HUNT_RADIUS,
   RETREAT_HP_RATIO, SELF_DEFENSE_RADIUS,
   addObjective, clearObjectives, createQueue, decideIntent, findHealHotbarIndex,
   getActiveObjective, hasPendingObjective, removeObjective, reorderObjective, setMode, setRepeat,
@@ -480,32 +480,34 @@ describe('objectiveSystem · caça autônoma por nível', () => {
     expect(beyond.kind).toBe('idle');
   });
 
-  it('ocioso: nunca escolhe hostil forte demais pra caçar → idle', () => {
+  it('ocioso: ENGAJA o hostil forte demais pra caçar (sem gate de nível)', () => {
+    // Antes o gate de nível devolvia `idle`; agora o piloto caça qualquer hostil.
     const intent = decideIntent(snapshot({
       playerLevel: 1,
       creatures: [
         { id: 'boss', position: { x: 20, z: 0 }, behavior: 'idle', hp: 500, hostile: true, level: 10 },
       ],
     }), T0);
-    expect(intent.kind).toBe('idle');
+    expect(intent.kind).toBe('move');
+    if (intent.kind === 'move') expect(intent.to).toEqual({ x: 20, z: 0 });
   });
 
-  it('ocioso: foge de perseguidor forte demais dentro de FLEE_RADIUS', () => {
+  it('ocioso: NÃO foge de perseguidor forte demais — vai pra cima (sem gate)', () => {
+    // Antes devolvia `retreat` ("forte demais"); agora engaja. O boss a 11 m
+    // está além do SELF_DEFENSE_RADIUS (10), então cai na caça ociosa: `move`.
     const intent = decideIntent(snapshot({
       playerLevel: 1,
       homePosition: { x: 0, z: 1 },
       creatures: [
-        { id: 'boss', position: { x: FLEE_RADIUS - 1, z: 0 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
+        { id: 'boss', position: { x: 11, z: 0 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
       ],
     }), T0);
-    expect(intent.kind).toBe('retreat');
-    if (intent.kind === 'retreat') {
-      expect(intent.to).toEqual({ x: 0, z: 1 });
-      expect(intent.reason).toContain('forte demais');
-    }
+    expect(intent.kind).not.toBe('retreat');
+    expect(intent.kind).not.toBe('idle');
+    expect(intent).toMatchObject({ kind: 'move', to: { x: 11, z: 0 } });
   });
 
-  it('objetivo explícito IGNORA o filtro de nível (ordem do jogador)', () => {
+  it('objetivo explícito manda atacar o chefe de nível alto', () => {
     const queue = tickObjectives(
       queueWith([{ kind: 'hunt_creature', targetId: 'boss', label: 'caçar chefe' }]),
       { ...emptyWorld, creatures: [{ id: 'boss', behavior: 'idle', hp: 500 }] },
@@ -519,57 +521,37 @@ describe('objectiveSystem · caça autônoma por nível', () => {
     expect(intent).toMatchObject({ kind: 'attack', creatureId: 'boss' });
   });
 
-  it('DENTRO da zona segura NÃO foge do brutamontes (ele não entra) e volta a farmar', () => {
-    // O bug: o hostil forte fica preso na borda da zona segura, a ~5,6 m da
-    // base, dentro de FLEE_RADIUS. O piloto devolvia `retreat` a cada tique e
-    // morava parado na base, sem farmar nem caçar — pra sempre.
+  it('brutamontes perseguindo coladinho vira ALVO de autodefesa (sem gate de nível)', () => {
+    // Antes o piloto fugia ("retreat") de um perseguidor forte. Agora ele vira a
+    // cara e ataca — perseguidor dentro do SELF_DEFENSE_RADIUS é alvo, por mais
+    // forte que seja.
     const base = {
       playerLevel: 1,
       homePosition: { x: 7, z: -26 },
-      safeZone: { x: 2, z: -28, radius: 11 },
       creatures: [
         { id: 'boss', position: { x: 12.6, z: -26 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
-      ],
-      resources: [
-        { id: 'node_perigoso', position: { x: 14, z: -26 }, depleted: false },
-        { id: 'node_seguro', position: { x: -4, z: -30 }, depleted: false },
       ],
     };
     const intent = decideIntent(snapshot({ ...base, playerPosition: { x: 7, z: -26 } }), T0);
-    expect(intent.kind).not.toBe('retreat');
-    expect(intent).toMatchObject({ kind: 'move', to: { x: -4, z: -30 } });
+    expect(intent).toMatchObject({ kind: 'attack', creatureId: 'boss' });
 
-    // FORA da zona segura o medo continua valendo: foge pra base.
+    // Mesmo de longe não foge mais: a 7,4 m ainda está no raio de autodefesa.
     const outside = decideIntent(snapshot({ ...base, playerPosition: { x: 20, z: -26 } }), T0);
-    expect(outside.kind).toBe('retreat');
+    expect(outside.kind).not.toBe('retreat');
+    expect(outside).toMatchObject({ kind: 'attack', creatureId: 'boss' });
   });
 
-  it('zona segura: sem nó/presa longe do brutamontes, espera com motivo claro', () => {
+  it('entre dois perseguidores, autodefesa pega o MAIS PRÓXIMO (não filtra nível)', () => {
     const intent = decideIntent(snapshot({
       playerLevel: 1,
       playerPosition: { x: 7, z: -26 },
       homePosition: { x: 7, z: -26 },
-      safeZone: { x: 2, z: -28, radius: 11 },
-      creatures: [
-        { id: 'boss', position: { x: 12.6, z: -26 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
-      ],
-      resources: [{ id: 'node_perigoso', position: { x: 14, z: -26 }, depleted: false }],
-    }), T0);
-    expect(intent).toMatchObject({ kind: 'idle' });
-    if (intent.kind === 'idle') expect(intent.reason).toContain('rondando');
-  });
-
-  it('zona segura: brutamontes colado NÃO vira alvo de autodefesa', () => {
-    const intent = decideIntent(snapshot({
-      playerLevel: 1,
-      playerPosition: { x: 7, z: -26 },
-      homePosition: { x: 7, z: -26 },
-      safeZone: { x: 2, z: -28, radius: 11 },
       creatures: [
         { id: 'boss', position: { x: 11, z: -26 }, behavior: 'chase', hp: 500, hostile: true, level: 10 },
-        { id: 'rato', position: { x: 5, z: -26 }, behavior: 'patrol', hp: 10, hostile: true, level: 1 },
+        { id: 'rato', position: { x: 5, z: -26 }, behavior: 'chase', hp: 10, hostile: true, level: 1 },
       ],
     }), T0);
+    // rato está a 2 m, boss a 4 m → o mais próximo é o rato.
     expect(intent).toMatchObject({ kind: 'attack', creatureId: 'rato' });
   });
 
