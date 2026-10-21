@@ -917,21 +917,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const prof = weaponFor(heldId);
 
     const ARROW_RAIN_ARROWS = 5;        // flechas por ONDA (caem do céu)
-    const ARROW_RAIN_AMMO_PER_WAVE = 1; // munição por onda (3 ondas = 3; arco é livre)
     const now = Date.now() / 1000;
     const cooldown = arrowRainCooldownFor(state.player.level);
 
+    // SÓ cooldown gateia (Pedro: sem mana/stamina/munição — o tempo de 15 s já determina).
     const since = now - state.lastArrowRainAt;
     if (since < cooldown) {
       if (!auto) set(s => ({ ui: { ...s.ui, message: `Chuva de Flechas recarregando (${Math.ceil(cooldown - since)}s).` } }));
       return;
     }
 
-    const usesBullet = prof.projectile === 'bullet';
-    if (usesBullet && getItemCount(state.player.inventory, 'ammo') < ARROW_RAIN_AMMO_PER_WAVE) {
-      if (!auto) set(s => ({ ui: { ...s.ui, message: 'Sem munição para a Chuva de Flechas.' } }));
-      return;
-    }
+    const usesBullet = prof.projectile === 'bullet'; // só define o SOM (tiro x flecha)
 
     // Alcance de MIRA do poder (fixo, independente da arma — a chuva vem do céu): pega o hostil
     // mais próximo até 20 m pra virar o centro da 1ª onda.
@@ -975,11 +971,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         drafts.push(shotEvent(drop, drop, 'arrow', 13));
       }
 
-      // NÃO mexe em `lastAttackAt`: a chuva é um PODER à parte (cooldown próprio) e não deve
-      // travar o tiro normal — o herói segue atirando enquanto as flechas caem (Pedro).
+      // NÃO mexe em `lastAttackAt` (poder à parte, não trava o tiro normal) nem gasta munição
+      // (só cooldown gateia — Pedro).
       let updatedPlayer: PlayerState = { ...st.player };
-      const hasAmmo = getItemCount(updatedPlayer.inventory, 'ammo') >= ARROW_RAIN_AMMO_PER_WAVE;
-      if (usesBullet && hasAmmo) updatedPlayer = { ...updatedPlayer, inventory: removeItem(updatedPlayer.inventory, 'ammo', ARROW_RAIN_AMMO_PER_WAVE) };
       let updatedBags = st.deathBags;
       let hits = 0;
 
