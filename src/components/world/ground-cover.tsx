@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { ForestBatch, fadeMaterial, type ForestPlacement } from './forest-models';
+import { ForestBatch, type ForestPlacement } from './forest-models';
 import { rand, type Palette } from './world-kit';
 import type { FadeSphere } from './occlusion';
 
@@ -48,20 +48,20 @@ export function GroundCover({ placements, c, tint }: { placements: ForestPlaceme
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.computeVertexNormals();
-    const source = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, side: THREE.DoubleSide });
-    const material = fadeMaterial(source);
-    source.dispose();
+    // A grama NÃO entra no sistema de oclusão (perf A1: 62k tufos não varrem por frame).
+    // Por isso NÃO pode usar `fadeMaterial`: sem `registerInstancedFade`, o atributo
+    // `aFade` nunca é criado → o shader de fade multiplica o alfa por 0 → as lâminas
+    // SOMEM (só a sombra fica, que não passa pelo fade). Material SIMPLES + vento = visível.
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.93, side: THREE.DoubleSide });
     const time = { value: 0 };
-    const fadeCompile = material.onBeforeCompile;
-    material.onBeforeCompile = (shader, renderer) => {
-      fadeCompile.call(material, shader, renderer);
+    material.onBeforeCompile = (shader) => {
       shader.uniforms['uCoverTime'] = time;
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uCoverTime;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           float phase = instanceMatrix[3].x * 0.6 + instanceMatrix[3].z * 0.4;
           transformed.x += sin(uCoverTime * 1.4 + phase + position.y) * position.y * position.y * 0.07;`);
     };
-    material.customProgramCacheKey = () => 'ground-cover-wind-fade-v1';
+    material.customProgramCacheKey = () => 'ground-cover-wind-v2';
     return { geometry, material, time };
   }, [c, tintKey]);
   useFrame(({ clock }) => { assets.time.value = clock.elapsedTime; });
