@@ -32,9 +32,13 @@ export const WEAPONS: Record<string, WeaponProfile> = {
 
 /** Alcance efetivo cresce com o nível e chega, no máximo, a 50 m no nível 250. */
 export function weaponRangeFor(itemId: string | null | undefined, level = 1): number {
-  const base = weaponFor(itemId).range;
+  const prof = weaponFor(itemId);
+  // Melee é CORPO A CORPO: NÃO escala com o nível (fica no alcance base, ~4 m). O que cresce
+  // é o AoE/cleave (dano em mais bichos no raio do corpo), não a distância. Só RANGED escala
+  // (arco/pistola/rifle vão mais longe com o nível). Pedro: "a espada não dá dano a 8 m".
+  if (!prof.ranged) return prof.range;
   const t = Math.min(1, Math.max(0, (Math.floor(level) - 1) / 249));
-  return Math.round((base + (50 - base) * t) * 10) / 10;
+  return Math.round((prof.range + (50 - prof.range) * t) * 10) / 10;
 }
 
 /** Perfil da arma de um item (ou o melee padrão). */
