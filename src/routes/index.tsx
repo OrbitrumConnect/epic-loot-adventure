@@ -44,6 +44,7 @@ import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/wo
 const GameWorld = lazy(() => import('@/components/game-world'));
 import { BossSpawner } from '@/components/world/boss-spawner';
 import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
+import { RoomsPanel } from '@/components/hud/rooms-panel';
 import { EditorPanel } from '@/components/editor/editor-panel';
 import { useEditorStore } from '@/components/editor/editor-store';
 import { LoginGate } from '@/components/LoginGate';
@@ -95,6 +96,7 @@ const navigation = [
   { id: 'loot', name: 'Loot', icon: Package },
   { id: 'inventory', name: 'Inventário', icon: Backpack },
   { id: 'ranks', name: 'Ranking', icon: Trophy },
+  { id: 'rooms', name: 'Salas', icon: Users },
 ];
 
 function Index() {
@@ -360,7 +362,7 @@ function Index() {
   });
 
   const panel = ui.panel;
-  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : panel === 'ranks' ? 'Ranking' : 'Tribo dos Guardiões';
+  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : panel === 'ranks' ? 'Ranking' : panel === 'rooms' ? 'Salas' : 'Tribo dos Guardiões';
 
   // Triggers do mundo (piloto/pegar/atacar/especiais/câmera/casa). Mesma fonte
   // renderizada em dois lugares: sobre o mundo (desktop) e no rodapé ao lado do
@@ -897,6 +899,8 @@ function Index() {
                     <div className="panel-stats"><span>1 membro · Sessão local</span><span>Armazém: {totalResources} recursos</span></div>
                   </>
                 )}
+
+                {panel === 'rooms' && <RoomsPanel />}
 
                 {panel === 'ranks' && (() => {
                   const kills = Object.values(player.huntSeen ?? {}).reduce((a, b) => a + (b as number), 0);

@@ -176,9 +176,11 @@ export const useNet = create<NetState>((set, get) => ({
     // Host entra como aliado (não escolhe); convidado (entrou por código/link) declara a
     // postura no card → `sideChosen=false` faz o card aparecer. (fatia 1 do PvP)
     set({ room, connected: false, isHost, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: isHost });
+    if (isHost) void registerRoom(room); // publica a sala no lobby (aba de salas)
   },
 
   leave: () => {
+    unregisterRoom();
     if (channel && supabase) { void supabase.removeChannel(channel); channel = null; }
     set({ room: null, connected: false, isHost: false, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: false });
   },
@@ -259,4 +261,60 @@ export function inviteLink(room: string): string {
 /** Código da sala vindo do link (?room=XXXX), se houver. */
 export function roomFromUrl(): string | null {
   try { return new URL(window.location.href).searchParams.get('room'); } catch { return null; }
+}
+
+/* ------------------------------------------------------------------ *
+ * LOBBY: registro das salas ativas na tabela `game_rooms` (SELECT público;
+ * INSERT/UPDATE/DELETE só do dono via auth.uid()). Assim dá pra LISTAR as
+ * partidas abertas e entrar por clique, sem link. Só o HOST registra a sala.
+ * ------------------------------------------------------------------ */
+export type RoomInfo = { code: string; players: number; max: number; updatedAt: string };
+
+const ROOM_STALE_MS = 60_000; // sala sem heartbeat há +60s é considerada morta
+let roomRowId: string | null = null;
+let roomHeartbeat: ReturnType<typeof setInterval> | null = null;
+
+async function registerRoom(code: string): Promise<void> {
+  if (!supabase) return;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return; // sem login não registra (mas o P2P segue funcionando por link)
+  const { data, error } = await supabase
+    .from('game_rooms')
+    .upsert({ code, owner_id: uid, max_players: MAX_PLAYERS, active_players: 1, status: 'open', last_active_at: new Date().toISOString() }, { onConflict: 'code' })
+    .select('id')
+    .maybeSingle();
+  if (error || !data) return;
+  roomRowId = data.id as string;
+  roomHeartbeat = setInterval(() => {
+    if (!supabase || !roomRowId) return;
+    const players = Object.keys(useNet.getState().players).length + 1;
+    void supabase.from('game_rooms').update({ active_players: players, last_active_at: new Date().toISOString() }).eq('id', roomRowId);
+  }, 15_000);
+}
+
+function unregisterRoom(): void {
+  if (roomHeartbeat) { clearInterval(roomHeartbeat); roomHeartbeat = null; }
+  if (supabase && roomRowId) { void supabase.from('game_rooms').delete().eq('id', roomRowId); }
+  roomRowId = null;
+}
+
+/** Lista as salas ABERTAS com heartbeat recente (pra aba de salas). */
+export async function listRooms(): Promise<RoomInfo[]> {
+  if (!supabase) return [];
+  const since = new Date(Date.now() - ROOM_STALE_MS).toISOString();
+  const { data, error } = await supabase
+    .from('game_rooms')
+    .select('code, active_players, max_players, last_active_at')
+    .eq('status', 'open')
+    .gte('last_active_at', since)
+    .order('last_active_at', { ascending: false })
+    .limit(30);
+  if (error || !data) return [];
+  return data.map((r) => ({
+    code: r.code as string,
+    players: (r.active_players as number) ?? 1,
+    max: (r.max_players as number) ?? MAX_PLAYERS,
+    updatedAt: r.last_active_at as string,
+  }));
 }
