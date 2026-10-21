@@ -2024,14 +2024,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (s.player.dead) return {};
       const dmg = Math.max(1, Math.round(amount));
       const hp = Math.max(0, s.player.hp - dmg);
+      const feedback = pushEvent(s.feedback, damageEvent(s.player.id, dmg, s.player.position, { onPlayer: true }), now);
       if (hp <= 0) {
         return {
           player: { ...s.player, hp: 0, dead: true, respawnAt: now + 15_000, lastDamagedAt: now },
+          feedback,
           ui: { ...s.ui, message: `${sourceName} te derrotou!` },
         };
       }
       return {
         player: { ...s.player, hp, lastDamagedAt: now },
+        feedback,
         ui: { ...s.ui, message: `${sourceName} te atingiu! -${dmg} HP (${hp}/${s.player.maxHp})` },
       };
     });

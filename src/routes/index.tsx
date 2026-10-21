@@ -220,7 +220,9 @@ function Index() {
     ? `Onda ${wave.wave} ⚔️`
     : wave.phase === 'peace'
       ? `Paz · Onda ${wave.wave + 1} em ${Math.max(0, Math.ceil((wave.phaseEndsAt - Date.now()) / 1000))}s`
-      : null;
+      : playerBase && !playerBase.enclosed
+        ? 'Feche o perímetro p/ armar a horda'
+        : null;
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);

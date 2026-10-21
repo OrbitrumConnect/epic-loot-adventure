@@ -8,7 +8,7 @@ import type { HeroAction } from './glb-hero';
 import { labelTexture, markPointerConsumed, terrainHeight, HERO_HEIGHT } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
 import { useGameStore } from '@/game/state/game-store';
-import { pvpStrike } from './pvp-attack';
+import { hitRecently, markPvpHit, PVP_LOCK_BREAK, pvpStrike, pvpTarget, setPvpTarget } from './pvp-attack';
 
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
 const LABEL_RANGE = 12;
@@ -23,6 +23,7 @@ function RemotePlayer({ id }: { id: string }) {
   const labelGroup = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
   const enemyRing = useRef<THREE.Mesh>(null); // anel vermelho sob INIMIGOS (PvP, atualiza ao vivo)
+  const prevHp = useRef<number | null>(null);
   const initial = useNet.getState().players[id];
   const title = `${initial?.name ?? 'Viajante'} · Nv. ${initial?.level ?? 1}`;
   const texture = useMemo(() => labelTexture(title, '#fff3c4'), [title]);
@@ -63,6 +64,25 @@ function RemotePlayer({ id }: { id: string }) {
       (hpFill.current.material as THREE.MeshBasicMaterial).color.set(enemy ? '#ef4444' : '#55c979');
     }
     if (enemyRing.current) enemyRing.current.visible = enemy;
+
+    // Vida dele caiu (golpe de qualquer um) → número de dano em cima dele, pra todos verem.
+    const store = useGameStore.getState();
+    const prev = prevHp.current;
+    prevHp.current = p.hp;
+    if (prev !== null && p.hp < prev) {
+      store.reportDamage(`remote-${id}`, prev - p.hp, { x: g.position.x, z: g.position.z }, false);
+      if (p.hp <= 0 && prev > 0 && hitRecently(id)) {
+        store.setMessage(`💀 Você derrotou ${p.name}!`);
+        if (pvpTarget() === id) setPvpTarget(null);
+      }
+    }
+
+    // Alvo TRAVADO: segue golpeando no ritmo da arma (sem precisar ficar clicando).
+    if (pvpTarget() === id) {
+      const hostile = enemy || useNet.getState().selfSide === 'enemy';
+      if (!hostile || store.player.dead || p.hp <= 0 || dist > PVP_LOCK_BREAK) setPvpTarget(null);
+      else if (pvpStrike(p.name, g.position.x, g.position.z, 0.6, (raw) => broadcastPlayerHit(id, raw), true)) markPvpHit(id);
+    }
   });
   return (
     <group ref={group} onPointerDown={(event) => {
@@ -81,8 +101,11 @@ function RemotePlayer({ id }: { id: string }) {
         return;
       }
       // Cadência + alcance + munição da arma; o ALVO aplica o PvP justo (fração + armadura + teto).
+      // O clique TRAVA o alvo: o useFrame continua golpeando enquanto ele estiver no alcance.
+      setPvpTarget(id);
       if (pvpStrike(p.name, g.position.x, g.position.z, 0.6, (raw) => broadcastPlayerHit(id, raw))) {
-        store.setMessage(`⚔️ Você atingiu ${p.name}!`);
+        markPvpHit(id);
+        store.setMessage(`⚔️ Atacando ${p.name}!`);
       }
     }}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />

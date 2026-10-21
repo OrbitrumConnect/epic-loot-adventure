@@ -895,6 +895,7 @@ function RemoteBase({ id, c }: { id: string; c: Palette }) {
             useGameStore.getState().setMessage(`🏹 Você atacou a base de ${ownerName}!`);
           }
         }} />
+      {USE_GLB_TOWER && <GlbWatchTowers pieces={base.pieces} />}
       <BaseHouse pieces={base.pieces} remote />
     </>
   );
