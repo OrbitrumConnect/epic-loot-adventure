@@ -21,6 +21,38 @@ export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 }
 
+const KEEP_KEY = 'tribos_keep_logged';
+
+/** Preferência salva de "Manter-se conectado" (padrão: SIM). */
+export function keepLoggedPref(): boolean {
+  try { return localStorage.getItem(KEEP_KEY) !== '0'; } catch { return true; }
+}
+
+/** Remove o token de sessão do Supabase do localStorage (logout "ao fechar"). */
+function clearPersistedSession(): void {
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('sb-') && k.endsWith('-auth-token')) localStorage.removeItem(k);
+    }
+  } catch { /* ignore */ }
+}
+
+let unloadHandler: (() => void) | null = null;
+
+/**
+ * "Manter-se conectado": quando LIGADO (padrão) a sessão persiste normalmente. Quando
+ * DESLIGADO, armamos um `pagehide` que apaga o token ao fechar/atualizar a aba — assim a
+ * próxima visita exige login de novo.
+ */
+export function setKeepLogged(keep: boolean): void {
+  try { localStorage.setItem(KEEP_KEY, keep ? '1' : '0'); } catch { /* ignore */ }
+  if (unloadHandler) { window.removeEventListener('pagehide', unloadHandler); unloadHandler = null; }
+  if (!keep) {
+    unloadHandler = clearPersistedSession;
+    window.addEventListener('pagehide', unloadHandler);
+  }
+}
+
 /** Nome do sobrevivente guardado no metadado do usuário. */
 export function survivorName(user: User | null): string | null {
   const n = user?.user_metadata?.['survivor_name'];
@@ -57,6 +89,7 @@ export const useAuth = create<AuthState>((set) => ({
 
   init() {
     if (!supabase) { set({ ready: true }); return; }
+    setKeepLogged(keepLoggedPref()); // re-arma o "apagar ao fechar" se a preferência for NÃO manter.
     void supabase.auth.getSession().then(({ data }) => set({ user: data.session?.user ?? null, ready: true }));
     supabase.auth.onAuthStateChange((_event, session) => set({ user: session?.user ?? null }));
   },

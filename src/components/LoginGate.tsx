@@ -6,7 +6,8 @@
  * Ao logar, o nome do sobrevivente vai pro player da store (aparece no HUD/ranking).
  */
 import { useEffect, useState } from 'react';
-import { AUTH_ENABLED, isValidEmail, survivorName, useAuth } from '@/net/auth';
+import { Eye, EyeOff } from 'lucide-react';
+import { AUTH_ENABLED, isValidEmail, keepLoggedPref, setKeepLogged, survivorName, useAuth } from '@/net/auth';
 import { useGameStore } from '@/game/state/game-store';
 
 export function LoginGate() {
@@ -22,6 +23,8 @@ export function LoginGate() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [keep, setKeep] = useState(keepLoggedPref());
 
   useEffect(() => { init(); }, [init]);
 
@@ -41,6 +44,7 @@ export function LoginGate() {
   const canSubmit = emailOk && passOk && nameOk && !busy;
   const submit = () => {
     if (!canSubmit) return;
+    setKeepLogged(keep);
     if (creating) signUp(name, email, pass); else signIn(email, pass);
   };
 
@@ -71,10 +75,26 @@ export function LoginGate() {
             onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
         </label>
         <label style={lbl}>Senha
-          <input style={inp} type="password" value={pass} placeholder="mínimo 6 caracteres"
-            autoComplete={creating ? 'new-password' : 'current-password'}
-            onChange={(e) => setPass(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
+          <div style={{ position: 'relative' }}>
+            <input style={{ ...inp, width: '100%', paddingRight: 38, boxSizing: 'border-box' }}
+              type={showPass ? 'text' : 'password'} value={pass} placeholder="mínimo 6 caracteres"
+              autoComplete={creating ? 'new-password' : 'current-password'}
+              onChange={(e) => setPass(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
+            <button type="button" aria-label={showPass ? 'Ocultar senha' : 'Mostrar senha'}
+              onClick={() => setShowPass((v) => !v)}
+              style={{
+                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', color: '#9fb4cc', cursor: 'pointer',
+                display: 'grid', placeItems: 'center', padding: 4,
+              }}>
+              {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+          </div>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer', opacity: 0.9 }}>
+          <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} style={{ width: 15, height: 15, accentColor: '#f2c879' }} />
+          Manter-se conectado
         </label>
         {error && <div style={{ color: '#ff8f8f', fontSize: 12.5 }}>{error}</div>}
         <button style={{ ...btn, background: '#f2c879', color: '#1a1206', marginTop: 4 }}

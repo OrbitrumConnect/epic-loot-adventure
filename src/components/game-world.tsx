@@ -7,6 +7,7 @@ import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
 import { BackgroundSim } from './world/background-sim';
 import { virtualMove } from './world/virtual-input';
+import { isTypingTarget } from './world/typing-target';
 import { HarvestNodes } from './world/harvest-nodes';
 import { queueNearestNode } from './world/objective-bridge';
 import { CombatFeedback } from './world/combat-feedback';
@@ -467,6 +468,7 @@ function Character({
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return; // digitando num campo (login/chat): não mexe o herói.
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
         e.preventDefault();
         keys.current.add(e.code);
