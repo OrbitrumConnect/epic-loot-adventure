@@ -1373,7 +1373,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   evolveBaseToStone: () => {
     const s = get();
     if (s.baseEvolved) return;
-    const LEVEL = 10, WOOD = 200, STONE = 400; // custo dobrado (Pedro)
+    const LEVEL = 10, WOOD = 200, STONE = 400, WAVE = 4; // custo dobrado (Pedro) · onda mínima
+    if ((s.wave?.wave ?? 1) < WAVE) {
+      set({ ui: { ...s.ui, message: `Casa de pedra: só a partir da onda ${WAVE}.` } });
+      return;
+    }
     if ((s.player.level ?? 1) < LEVEL) {
       set({ ui: { ...s.ui, message: `Casa de pedra: precisa ser nível ${LEVEL}.` } });
       return;
@@ -1396,7 +1400,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       set({ ui: { ...s.ui, message: 'Casa de metal: evolua para PEDRA primeiro.' } });
       return;
     }
-    const LEVEL = 20, WOOD = 460, STONE = 920; // custo dobrado (Pedro) — 2.3x da pedra (200/400)
+    const LEVEL = 20, WOOD = 460, STONE = 920, WAVE = 8; // custo dobrado (Pedro) — 2.3x da pedra · onda mínima
+    if ((s.wave?.wave ?? 1) < WAVE) {
+      set({ ui: { ...s.ui, message: `Casa de metal: só a partir da onda ${WAVE}.` } });
+      return;
+    }
     if ((s.player.level ?? 1) <= LEVEL) {
       set({ ui: { ...s.ui, message: `Casa de metal: precisa ser acima do nível ${LEVEL}.` } });
       return;
