@@ -34,6 +34,12 @@ function openSpot(i: number): { x: number; z: number } | null {
 }
 
 export function GlbContainers() {
+  // COUNT=0 (containers desligados): NÃO carregar o GLB. Antes, `useGLTF(URL)` rodava mesmo
+  // com 0 containers em cena → baixava container.glb (34 MB) e subia 3 texturas 4096² pra GPU
+  // (~255 MB de VRAM) à toa no boot. `COUNT` é constante de módulo, então o early-return é
+  // estável entre renders (nenhum hook roda antes dele). Religar containers (COUNT>0) volta tudo.
+  if (COUNT === 0) return null;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- COUNT é constante; o caminho é fixo.
   const { scene } = useGLTF(URL);
 
   const items = useMemo(() => {
