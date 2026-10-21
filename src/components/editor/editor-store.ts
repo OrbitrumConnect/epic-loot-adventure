@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { BAKED_EDITOR_OBJECTS } from './baked-layout';
+import { modelUrl } from '@/game/asset-path';
 
 export type EditorTool = 'translate' | 'rotate' | 'scale';
 export type Transform = { position: [number, number, number]; rotation: [number, number, number]; scale: [number, number, number] };
@@ -9,33 +10,33 @@ export type Transform = { position: [number, number, number]; rotation: [number,
 export type EditorCollide = 'none' | 'floor' | 'block';
 export type EditorObject = { id: string; name: string; assetUrl: string; transform: Transform; visible: boolean; source?: 'editor' | 'map'; selectable?: boolean; collide?: EditorCollide; ground?: boolean };
 export const EDITOR_ASSETS = [
-  { name: 'Árvore rachada', assetUrl: '/models/trees/tree-split.glb', scale: 4 },
-  { name: 'Árvore ancestral', assetUrl: '/models/trees/tree-gnarled.glb', scale: 5 },
-  { name: 'Torre de vigia', assetUrl: '/models/watchtower/watchtower.glb', scale: 1 },
-  { name: 'Labirinto', assetUrl: '/models/props/maze.glb', scale: 14 },
-  { name: 'Montanha oeste', assetUrl: '/models/terrain/mountain.glb', scale: 1 },
-  { name: 'Montanha caverna', assetUrl: '/models/terrain/mountain-cave.glb', scale: 1 },
-  // Novos assets de mapa (Meshy). De-shine aplicado no PlacedObject p/ assets /models/map/.
+  { name: 'Árvore rachada', assetUrl: modelUrl('trees/tree-split.glb'), scale: 4 },
+  { name: 'Árvore ancestral', assetUrl: modelUrl('trees/tree-gnarled.glb'), scale: 5 },
+  { name: 'Torre de vigia', assetUrl: modelUrl('watchtower/watchtower.glb'), scale: 1 },
+  { name: 'Labirinto', assetUrl: modelUrl('props/maze.glb'), scale: 14 },
+  { name: 'Montanha oeste', assetUrl: modelUrl('terrain/mountain.glb'), scale: 1 },
+  { name: 'Montanha caverna', assetUrl: modelUrl('terrain/mountain-cave.glb'), scale: 1 },
+  // Novos assets de mapa (Meshy). De-shine aplicado no PlacedObject p/ assets models/map/.
   // 6 entradas removidas (rio-wasteland-master, desert-palm-cluster, savannah-grass-sparse/low,
-  // metal-house, palm-farm): apontavam p/ arquivo que NÃO existe em public/models/map/ (404 no
+  // metal-house, palm-farm): apontavam p/ arquivo que NÃO existe no catálogo de mapa (404 no
   // FileLoader) e não há substituto em disco. Removidas em vez de deixadas quebradas no catálogo
   // do Editor ADM. A ponte (wasteland-scrap-bridge) foi restaurada: o Pedro trouxe o GLB (otimizado,
   // 1,6 MB) no upstream/main, então a entrada voltou a apontar para arquivo existente.
-  { name: 'Rio devastado (icônico)', assetUrl: '/models/map/rio-wasteland-iconic.glb', scale: 20 },
-  { name: 'Ponte de sucata', assetUrl: '/models/map/wasteland-scrap-bridge.glb', scale: 8 },
-  // stone-house: arquivo real vive em /models/house/ (confirmado com test -f), não /models/map/.
-  { name: 'Casa de pedra', assetUrl: '/models/house/stone-house.glb', scale: 6 },
+  { name: 'Rio devastado (icônico)', assetUrl: modelUrl('map/rio-wasteland-iconic.glb'), scale: 20 },
+  { name: 'Ponte de sucata', assetUrl: modelUrl('map/wasteland-scrap-bridge.glb'), scale: 8 },
+  // stone-house: arquivo real vive em models/house/ (confirmado com test -f), não models/map/.
+  { name: 'Casa de pedra', assetUrl: modelUrl('house/stone-house.glb'), scale: 6 },
 ] as const;
 const KEY = 'tribos.editor.local.v1';
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const mapCatalog: EditorObject[] = [
-  { id: 'map-tree-gnarled-01', name: 'Árvore ancestral 01', assetUrl: '/models/trees/tree-gnarled.glb', source: 'map', selectable: true, visible: true, transform: { position: [11, 0, -22], rotation: [0, 0, 0], scale: [6, 6, 6] } },
-  { id: 'map-tree-gnarled-02', name: 'Árvore ancestral 02', assetUrl: '/models/trees/tree-gnarled.glb', source: 'map', selectable: true, visible: true, transform: { position: [-18, 0, -10], rotation: [0, .8, 0], scale: [5.5, 5.5, 5.5] } },
-  { id: 'map-tree-gnarled-03', name: 'Árvore ancestral 03', assetUrl: '/models/trees/tree-gnarled.glb', source: 'map', selectable: true, visible: true, transform: { position: [34, 0, -48], rotation: [0, 2.1, 0], scale: [6.5, 6.5, 6.5] } },
-  { id: 'map-tree-gnarled-04', name: 'Árvore ancestral 04', assetUrl: '/models/trees/tree-gnarled.glb', source: 'map', selectable: true, visible: true, transform: { position: [-32, 0, -42], rotation: [0, 1.3, 0], scale: [5, 5, 5] } },
-  { id: 'map-tree-gnarled-05', name: 'Árvore ancestral 05', assetUrl: '/models/trees/tree-gnarled.glb', source: 'map', selectable: true, visible: true, transform: { position: [42, 0, 8], rotation: [0, 3, 0], scale: [6, 6, 6] } },
-  { id: 'map-tree-gnarled-06', name: 'Árvore ancestral 06', assetUrl: '/models/trees/tree-gnarled.glb', source: 'map', selectable: true, visible: true, transform: { position: [-40, 0, 24], rotation: [0, .4, 0], scale: [5.5, 5.5, 5.5] } },
-  { id: 'map-desert-plain-01', name: 'Planície desértica', assetUrl: '/models/terrain/desert-plain.glb', source: 'map', selectable: false, visible: true, transform: { position: [0, -1, 36], rotation: [0, 0, 0], scale: [206, 206, 206] } },
+  { id: 'map-tree-gnarled-01', name: 'Árvore ancestral 01', assetUrl: modelUrl('trees/tree-gnarled.glb'), source: 'map', selectable: true, visible: true, transform: { position: [11, 0, -22], rotation: [0, 0, 0], scale: [6, 6, 6] } },
+  { id: 'map-tree-gnarled-02', name: 'Árvore ancestral 02', assetUrl: modelUrl('trees/tree-gnarled.glb'), source: 'map', selectable: true, visible: true, transform: { position: [-18, 0, -10], rotation: [0, .8, 0], scale: [5.5, 5.5, 5.5] } },
+  { id: 'map-tree-gnarled-03', name: 'Árvore ancestral 03', assetUrl: modelUrl('trees/tree-gnarled.glb'), source: 'map', selectable: true, visible: true, transform: { position: [34, 0, -48], rotation: [0, 2.1, 0], scale: [6.5, 6.5, 6.5] } },
+  { id: 'map-tree-gnarled-04', name: 'Árvore ancestral 04', assetUrl: modelUrl('trees/tree-gnarled.glb'), source: 'map', selectable: true, visible: true, transform: { position: [-32, 0, -42], rotation: [0, 1.3, 0], scale: [5, 5, 5] } },
+  { id: 'map-tree-gnarled-05', name: 'Árvore ancestral 05', assetUrl: modelUrl('trees/tree-gnarled.glb'), source: 'map', selectable: true, visible: true, transform: { position: [42, 0, 8], rotation: [0, 3, 0], scale: [6, 6, 6] } },
+  { id: 'map-tree-gnarled-06', name: 'Árvore ancestral 06', assetUrl: modelUrl('trees/tree-gnarled.glb'), source: 'map', selectable: true, visible: true, transform: { position: [-40, 0, 24], rotation: [0, .4, 0], scale: [5.5, 5.5, 5.5] } },
+  { id: 'map-desert-plain-01', name: 'Planície desértica', assetUrl: modelUrl('terrain/desert-plain.glb'), source: 'map', selectable: false, visible: true, transform: { position: [0, -1, 36], rotation: [0, 0, 0], scale: [206, 206, 206] } },
   { id: 'map-maze-01', name: 'Labirinto norte', assetUrl: 'procedural:maze', source: 'map', selectable: false, visible: true, transform: { position: [-8, 0, 56], rotation: [0, 0, 0], scale: [1, 1, 1] } },
   { id: 'map-factory-01', name: 'Fábrica principal', assetUrl: 'component:factory', source: 'map', selectable: false, visible: true, transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } },
   { id: 'map-containers-01', name: 'Containers do cenário', assetUrl: 'component:glb-containers', source: 'map', selectable: false, visible: true, transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } },

@@ -5,6 +5,7 @@ import { terrainHeight } from './world-kit';
 import { registerTerrain } from './terrain-collision';
 import { useEditorStore } from '../editor/editor-store';
 import { AssetBoundary } from './asset-boundary';
+import { modelUrl } from '@/game/asset-path';
 
 /**
  * Terreno do deserto (modelos Meshy decimados) — planície (chão novo) + montanhas
@@ -12,9 +13,9 @@ import { AssetBoundary } from './asset-boundary';
  * cada terreno aqui se registra pra colisão por raycast/BVH). Acampamento, casa e
  * fábrica têm colisão PRÓPRIA e não são afetados (a malha só ergue o piso).
  */
-const PLAIN_URL = '/models/terrain/desert-plain.glb';
-const MOUNTAIN_URL = '/models/terrain/mountain.glb';
-const MOUNTAIN_CAVE_URL = '/models/terrain/mountain-cave.glb';
+const PLAIN_URL = modelUrl('terrain/desert-plain.glb');
+const MOUNTAIN_URL = modelUrl('terrain/mountain.glb');
+const MOUNTAIN_CAVE_URL = modelUrl('terrain/mountain-cave.glb');
 
 /**
  * Deixa o material FOSCO e harmoniza a paleta terrosa.

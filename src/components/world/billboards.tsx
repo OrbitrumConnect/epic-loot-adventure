@@ -31,7 +31,7 @@ import * as THREE from 'three';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, riverDistance, RIVER_HALF_WIDTH, type Palette } from './world-kit';
-import { glbSurfaceY, collectGreenSurfaceSpots, surfaceColorAt, useTerrainVersion } from './terrain-collision';
+import { glbSurfaceY, collectGreenSurfaceSpots, isGreenSurfaceColor, surfaceColorAt, useTerrainVersion } from './terrain-collision';
 import { ForestRocks, ForestTrees } from './forest-models';
 import { LivingTrees } from './living-trees';
 import { GroundCover } from './ground-cover';
@@ -285,11 +285,14 @@ const CLUSTER_SPREAD = 1.0;    // raio (m) do punhado — menor = tufos mais JUN
  *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
  *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
  *  pixels reais do rio-wasteland (histograma de g/r). */
+export { GRASS_CAP };
+export const capGrassPlacements = <T,>(placements: readonly T[], cap = GRASS_CAP): T[] => placements.slice(0, cap);
+
 function isGreen(c: THREE.Color): boolean {
   // Oliva do PLANO (amarronzado, g/r~0.70, bem perto da areia 0.69) + verde da montanha.
   // g>=r*0.70 pega o oliva do chão plano e ainda exclui a areia clara (0.69). g>=b*0.92
   // deixa passar o oliva-amarronzado (b um pouco maior). Pedro: grama no plano também.
-  return c.g >= c.r * 0.70 && c.g >= c.b * 0.92 && c.g > 0.08;
+  return isGreenSurfaceColor(c);
 }
 /** Gera a grama quando o GLB+textura carregam (retry curto até a imagem decodificar —
  *  o registro do terreno não espera a textura). Nunca limpa grama já achada. */
@@ -302,7 +305,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
       if (cancelled) return;
       // (A) Manchas detectadas na malha (montanha + verde forte das bordas). Também serve
       // de SINAL de que a textura decodificou: só acha verde quando os pixels estão prontos.
-      const { spots: meshSpots, tint } = collectGreenSurfaceSpots(isGreen, 100000);
+      const { spots: meshSpots, tint } = collectGreenSurfaceSpots(isGreenSurfaceColor, 100000);
       if (meshSpots.length <= 10) {           // textura ainda não pronta → tenta de novo
         if (tries >= 20) return;
         tries++; setTimeout(attempt, 250); return;
@@ -348,7 +351,7 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
         const mStride = Math.max(1, Math.floor(meshSpots.length / Math.max(1, remain / perSpot)));
         for (let s = 0; s < meshSpots.length && out.length < GRASS_CAP; s += mStride) push(meshSpots[s]!, 1_000_000 + s * 7);
       }
-      setRes({ placements: out, tint: tint ?? undefined });
+      setRes({ placements: capGrassPlacements(out), tint: tint ?? undefined });
     };
     attempt();
     return () => { cancelled = true; };

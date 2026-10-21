@@ -9,6 +9,7 @@ import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING } from './hostile-ai';
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 import { GlbCreature } from './glb-creature';
+import { modelUrl } from '@/game/asset-path';
 
 /** Lobo do Vale = GLB (fox, anim própria, tint cinza). Visual troca; IA/HP ficam. */
 const USE_GLB_WOLF = true;
@@ -76,7 +77,7 @@ export function Wolf({
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
       <SelectionRing ring={ring} radius={0.6} c={c} />
       <EnemyLabel name={name} height={1.5} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
-      {USE_GLB_WOLF && <GlbCreature url="/models/animals/fox.glb" movingRef={movingRef} height={1.2} yaw={0} tint="#3f434b" />}
+      {USE_GLB_WOLF && <GlbCreature url={modelUrl('animals/fox.glb')} movingRef={movingRef} height={1.2} yaw={0} tint="#3f434b" />}
       <group visible={!USE_GLB_WOLF}>
       {/* Body */}
       <mesh position={[0, 0.5, 0]} scale={[0.44, 0.5, 1.04]} geometry={furGeometry} material={coat} castShadow />

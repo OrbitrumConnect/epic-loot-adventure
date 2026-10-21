@@ -13,6 +13,8 @@ import { weaponRangeFor } from '@/game/data/weapons';
 import { damageMultiplier } from '@/game/systems/attributesSystem';
 import { playerBaseAttack } from '@/game/systems/progressionSystem';
 import { ITEMS } from '@/game/data/items';
+import { resolveRemotePose } from './remote-player-interpolation';
+const INTERPOLATION_DELAY_MS = 100;
 
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
 const LABEL_RANGE = 12;
@@ -34,14 +36,17 @@ function RemotePlayer({ id }: { id: string }) {
     const g = group.current;
     const p = useNet.getState().players[id];
     if (!g || !p) return;
+    const now = performance.now();
+    const pose = resolveRemotePose(useNet.getState().poseHistory[id] ?? [], now - INTERPOLATION_DELAY_MS, now);
+    if (!pose) return;
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
-    if (!inited.current) { g.position.set(p.x, glbSurfaceY(p.x, p.z, terrainHeight(p.x, p.z)), p.z); g.rotation.y = p.yaw; inited.current = true; }
+    if (!inited.current) { g.position.set(pose.x, glbSurfaceY(pose.x, pose.z, terrainHeight(pose.x, pose.z)), pose.z); g.rotation.y = pose.yaw; inited.current = true; }
     const dt = Math.min(delta, 0.1);
     const t = 1 - Math.exp(-15 * dt);
-    g.position.x += (p.x - g.position.x) * t;
-    g.position.z += (p.z - g.position.z) * t;
+    g.position.x += (pose.x - g.position.x) * t;
+    g.position.z += (pose.z - g.position.z) * t;
     g.position.y = glbSurfaceY(g.position.x, g.position.z, terrainHeight(g.position.x, g.position.z));
-    let dy = p.yaw - g.rotation.y;
+    let dy = pose.yaw - g.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
     g.rotation.y += dy * t;

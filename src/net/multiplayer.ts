@@ -37,8 +37,10 @@ export type RemotePose = {
   x: number; z: number; yaw: number;
   action: string; t: number;
   /** Aliado ou Inimigo (declarado no card ao entrar). Default 'ally'. */
-  side: PvpSide;
+  side?: PvpSide;
 };
+
+export type RemotePoseSample = { pose: RemotePose; receivedAt: number };
 
 export type CreatureHitIntent = {
   id: string;
@@ -71,6 +73,7 @@ type NetState = {
   setSide: (s: PvpSide) => void;
   /** Outros jogadores (sem o self). */
   players: Record<string, RemotePose>;
+  poseHistory: Record<string, RemotePoseSample[]>;
   /** Base de cada outro jogador (pra renderizar a base dele no mapa). */
   bases: Record<string, PlayerBaseState>;
   /** Snapshot do mundo enviado pelo anfitrião. Clientes convidados nunca o simulam. */
@@ -97,6 +100,7 @@ export const useNet = create<NetState>((set, get) => ({
   selfSide: 'ally',
   sideChosen: false,
   players: {},
+  poseHistory: {},
   bases: {},
   world: null,
 
@@ -116,7 +120,11 @@ export const useNet = create<NetState>((set, get) => ({
     ch.on('broadcast', { event: 'pose' }, ({ payload }) => {
       const p = payload as RemotePose;
       if (p.id === selfId) return;
-      set((s) => ({ players: { ...s.players, [p.id]: p } }));
+      const receivedAt = performance.now();
+      set((s) => ({
+        players: { ...s.players, [p.id]: p },
+        poseHistory: { ...s.poseHistory, [p.id]: [...(s.poseHistory[p.id] ?? []), { pose: p, receivedAt }].slice(-24) },
+      }));
     });
 
     ch.on('broadcast', { event: 'base' }, ({ payload }) => {
@@ -161,7 +169,9 @@ export const useNet = create<NetState>((set, get) => ({
           if (s.players[id]) players[id] = s.players[id]!;
           if (s.bases[id]) bases[id] = s.bases[id]!;
         }
-        return { players, bases, full: ids.length >= MAX_PLAYERS };
+        const poseHistory: Record<string, RemotePoseSample[]> = {};
+        for (const id of ids) if (id !== selfId && s.poseHistory[id]) poseHistory[id] = s.poseHistory[id]!;
+        return { players, poseHistory, bases, full: ids.length >= MAX_PLAYERS };
       });
     });
 
@@ -175,14 +185,14 @@ export const useNet = create<NetState>((set, get) => ({
     channel = ch;
     // Host entra como aliado (não escolhe); convidado (entrou por código/link) declara a
     // postura no card → `sideChosen=false` faz o card aparecer. (fatia 1 do PvP)
-    set({ room, connected: false, isHost, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: isHost });
+    set({ room, connected: false, isHost, players: {}, poseHistory: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: isHost });
     if (isHost) void registerRoom(room); // publica a sala no lobby (aba de salas)
   },
 
   leave: () => {
     unregisterRoom();
     if (channel && supabase) { void supabase.removeChannel(channel); channel = null; }
-    set({ room: null, connected: false, isHost: false, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: false });
+    set({ room: null, connected: false, isHost: false, players: {}, poseHistory: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: false });
   },
 }));
 

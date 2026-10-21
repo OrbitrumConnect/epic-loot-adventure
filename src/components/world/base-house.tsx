@@ -10,6 +10,7 @@ import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { houseCollider, housePlayerInside } from './house-collider';
 import { AssetBoundary } from './asset-boundary';
 import type { BasePiece } from '@/game/types/playerbase';
+import { modelUrl } from '@/game/asset-path';
 
 /**
  * Casa completa (WoodHouse.obj + textura) como PRÉDIO central da base — 1 modelo
@@ -34,14 +35,14 @@ function BaseHouseInner({
 }: { pieces?: BasePiece[] | null; remote?: boolean } = {}) {
   const localPieces = useGameStore((s) => s.playerBase?.pieces);
   const pieces = remotePieces === undefined ? localPieces : remotePieces;
-  const obj = useLoader(OBJLoader, '/models/house/WoodHouse.obj');
-  const diffuse = useTexture('/models/house/Diffuse.png');
-  const normal = useTexture('/models/house/normal.png');
+  const obj = useLoader(OBJLoader, modelUrl('house/WoodHouse.obj'));
+  const diffuse = useTexture(modelUrl('house/Diffuse.webp'));
+  const normal = useTexture(modelUrl('house/normal.webp'));
   // Casa de PEDRA (evolução nível 10). Carrega sempre; só renderiza quando evoluída.
-  const stone = useGLTF('/models/house/stone-house.glb');
+  const stone = useGLTF(modelUrl('house/stone-house.glb'));
   // Casa de METAL: tier topo (onda >=10 E nível >20). Ainda NÃO temos um GLB de metal
   // dedicado — reusamos a geometria da pedra com material metálico (prata). Quando
-  // existir /models/house/metal-house.glb, trocar a fonte aqui. NÃO dar useGLTF num
+  // existir models/house/metal-house.glb, trocar a fonte aqui. NÃO dar useGLTF num
   // arquivo inexistente: ele faz throw e derruba o Canvas inteiro (404).
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
   const localBaseMetal = useGameStore((s) => s.baseMetal ?? false);

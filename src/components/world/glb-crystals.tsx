@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { terrainHeight } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
+import { modelUrl } from '@/game/asset-path';
 
 /**
  * Cristal da Essência como GLB BONITO — mas o modelo é PESADO (~92k tris!). Então
@@ -13,7 +14,7 @@ import { glbSurfaceY } from './terrain-collision';
  * (harvest-nodes). Visual quase igual, mas corta ~2,7M → ~0,4M tris. `raycast`
  * OFF (o clique vai pro nó procedural atrás = colheita intacta).
  */
-const URL = '/models/crystal/crystal.glb';
+const URL = modelUrl('crystal/crystal.glb');
 const TARGET_H = 1.5;
 const POOL = 4;
 
