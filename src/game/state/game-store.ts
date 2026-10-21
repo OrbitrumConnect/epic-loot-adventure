@@ -473,6 +473,8 @@ export function arrowRainCooldownFor(level: number): number {
 /** Nº de ondas da Chuva de Flechas e o intervalo entre elas (Pedro: 3 chuvas, 1 s). */
 export const ARROW_RAIN_WAVES = 3;
 export const ARROW_RAIN_WAVE_MS = 1000;
+/** Nível que DESBLOQUEIA a Chuva de Flechas (1º poder do herói). */
+export const ARROW_RAIN_UNLOCK_LEVEL = 5;
 
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
   player: createInitialPlayer(),
@@ -903,13 +905,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const state = get();
     if (state.player.dead) return;
 
+    // DESBLOQUEIA no nível 5 (1º poder do herói — Pedro).
+    if (state.player.level < ARROW_RAIN_UNLOCK_LEVEL) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: `Chuva de Flechas desbloqueia no nível ${ARROW_RAIN_UNLOCK_LEVEL}.` } }));
+      return;
+    }
+
+    // PODER do herói: funciona com QUALQUER arma na mão (até espada) — não é exclusivo do arco.
     const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
     const heldId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
     const prof = weaponFor(heldId);
-    if (!prof.ranged) {
-      if (!auto) set(s => ({ ui: { ...s.ui, message: 'Chuva de Flechas precisa de uma arma de longe equipada.' } }));
-      return;
-    }
 
     const ARROW_RAIN_ARROWS = 5;        // flechas por ONDA (caem do céu)
     const ARROW_RAIN_AMMO_PER_WAVE = 1; // munição por onda (3 ondas = 3; arco é livre)
@@ -928,8 +933,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
 
-    // Precisa de um alvo no alcance pra COMEÇAR (vira o centro da 1ª onda).
-    const reach = weaponRangeFor(heldId, state.player.level);
+    // Alcance de MIRA do poder (fixo, independente da arma — a chuva vem do céu): pega o hostil
+    // mais próximo até 20 m pra virar o centro da 1ª onda.
+    const reach = 20;
     const nearestHostile = (): Position | null => {
       let best: Position | null = null, bestD = Infinity;
       for (const c of get().creatures) {

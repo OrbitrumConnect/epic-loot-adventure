@@ -374,7 +374,9 @@ function Index() {
       <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
       <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
       <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
-      <Button variant="ghost" className="world-action" data-cooldown={arrowRainLeft > 0} aria-label="Chuva de Flechas" title="Chuva de Flechas — 3 ondas em área (arma de longe) · F" onClick={() => arrowRain()}><CloudRain />{arrowRainLeft > 0 && <span className="cd">{arrowRainLeft}</span>}</Button>
+      {player.level >= 5 && (
+        <Button variant="ghost" className="world-action" data-cooldown={arrowRainLeft > 0} aria-label="Chuva de Flechas" title="Chuva de Flechas — 3 ondas em área · F" onClick={() => arrowRain()}><CloudRain />{arrowRainLeft > 0 && <span className="cd">{arrowRainLeft}</span>}</Button>
+      )}
       <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
       {!playerBase && (

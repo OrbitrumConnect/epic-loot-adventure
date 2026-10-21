@@ -19,7 +19,7 @@ describe('Chuva de Flechas (poder de longe, dano em área)', () => {
 
   it('com ARCO na mão e alvos no raio, acerta TODOS os do raio (dano em área)', () => {
     useGameStore.setState(s => ({
-      player: { ...s.player, position: { x: 0, z: 0 } },
+      player: { ...s.player, level: 5, position: { x: 0, z: 0 } },
       lastArrowRainAt: 0,
       creatures: [
         creatureAt('wolf', 'perto1', 3, 0),
@@ -36,12 +36,24 @@ describe('Chuva de Flechas (poder de longe, dano em área)', () => {
     expect(after.get('longe')!).toBe(before.get('longe')!);            // fora: intacto
   });
 
-  it('melee na mão NÃO dispara (poder é de longe)', () => {
+  it('é PODER do herói: dispara com ESPADA na mão também (não é exclusivo do arco)', () => {
     useGameStore.setState(s => ({
-      player: { ...s.player, position: { x: 0, z: 0 } },
+      player: { ...s.player, level: 5, position: { x: 0, z: 0 } },
       lastArrowRainAt: 0,
       creatures: [creatureAt('wolf', 'alvo', 2, 0)],
-      ui: { ...s.ui, selectedHotbar: 0 }, // espada
+      ui: { ...s.ui, selectedHotbar: 0 }, // espada (melee)
+    }));
+    const before = useGameStore.getState().creatures[0]!.hp;
+    useGameStore.getState().arrowRain();
+    expect(useGameStore.getState().creatures[0]!.hp).toBeLessThan(before); // caiu mesmo com espada
+  });
+
+  it('ABAIXO do nível 5 NÃO dispara (desbloqueia no 5)', () => {
+    useGameStore.setState(s => ({
+      player: { ...s.player, level: 4, position: { x: 0, z: 0 } },
+      lastArrowRainAt: 0,
+      creatures: [creatureAt('wolf', 'alvo', 2, 0)],
+      ui: { ...s.ui, selectedHotbar: 8 }, // arco
     }));
     const before = useGameStore.getState().creatures[0]!.hp;
     useGameStore.getState().arrowRain();
@@ -50,7 +62,7 @@ describe('Chuva de Flechas (poder de longe, dano em área)', () => {
 
   it('respeita o cooldown (segunda chamada seguida não dá dano)', () => {
     useGameStore.setState(s => ({
-      player: { ...s.player, position: { x: 0, z: 0 } },
+      player: { ...s.player, level: 5, position: { x: 0, z: 0 } },
       lastArrowRainAt: 0,
       creatures: [creatureAt('wolf', 'alvo', 2, 0)],
       ui: { ...s.ui, selectedHotbar: 8 },
