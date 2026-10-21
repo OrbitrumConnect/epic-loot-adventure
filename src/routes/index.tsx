@@ -534,7 +534,7 @@ function Index() {
               <Skull style={{ width: 72, height: 72, color: '#ef4444', marginBottom: 16 }} />
               <h2 style={{ fontSize: 34, fontWeight: 700, margin: 0, color: '#ef4444', textShadow: '0 0 20px rgba(239,68,68,0.5)' }}>Sua base caiu!</h2>
               <p style={{ fontSize: 16, marginTop: 12, opacity: 0.85, textAlign: 'center', maxWidth: 420, padding: '0 16px' }}>
-                A horda destruiu seu núcleo. Você perdeu 5 níveis e a madeira/pedra/ferro — seu loot ficou. Continue e reconstrua.
+                A horda destruiu seu núcleo. Você perdeu 5 níveis e o farm (mochila voltou ao kit inicial) — armas, armaduras e itens raros ficaram. Continue e reconstrua.
               </p>
               {/* Pedro: perder a base = −5 níveis e SEGUE. "Continuar" é o caminho principal;
                   o reset total vira opção secundária (só se o jogador escolher). */}
