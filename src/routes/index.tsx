@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
   Circle, CircleDot, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
-  Heart, Home, Landmark, Leaf, ListChecks, Lock, Map, Menu, MessageSquare, Mountain, Package,
+  Heart, Home, Landmark, Leaf, ListChecks, Lock, LogOut, Map, Menu, MessageSquare, Mountain, Package,
   PanelLeftClose, Pickaxe, Repeat, Settings, Shield, ShieldCheck, Skull,
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Trophy, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
@@ -48,6 +48,7 @@ import { useEditorStore } from '@/components/editor/editor-store';
 import { LoginGate } from '@/components/LoginGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
 const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
@@ -276,6 +277,8 @@ function Index() {
 
   const inCity = ui.mode === 'city';
   const isMobile = useIsMobile();
+  const authUser = useAuth(s => s.user);
+  const signOut = useAuth(s => s.signOut);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -912,6 +915,18 @@ function Index() {
                   <>
                     <div className="home-building"><Wind /><div><strong>Áudio ambiente</strong><small>Desativado nesta versão</small></div></div>
                     <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · Clique no inimigo seleciona · Shift+clique enfileira · V câmera · E coletar · I inventário · B cidade · G piloto automático (idle/manual)</small></div></div>
+                    {AUTH_ENABLED && authUser && (
+                      <div className="home-building">
+                        <LogOut />
+                        <div style={{ flex: 1 }}>
+                          <strong>Conta</strong>
+                          <small>{survivorName(authUser) ?? 'Sobrevivente'} · {authUser.email}</small>
+                        </div>
+                        <Button variant="ghost" className="world-action" style={{ width: 'auto', padding: '0 12px' }}
+                          aria-label="Sair da conta" title="Sair da conta"
+                          onClick={() => { void signOut(); setPanel(null); }}>Sair</Button>
+                      </div>
+                    )}
                     <div className="panel-stats"><span>TRIBOS v0.2 · Protótipo local · Sem multiplayer conectado</span></div>
                   </>
                 )}
