@@ -30,11 +30,13 @@ export const FIRST_PEACE_MS = 300_000; // 5 min após FECHAR a base, antes da 1�
 export function peaceDurationMs(wave: number): number {
   // Escala ~1 min por onda — fôlego pra farmar material, remanejar tropas e até raidar um
   // inimigo no servidor (sabendo que pode ser atacado). Médio/justo (nem fácil nem difícil):
-  //   ondas 1-5: 3 min · 6→20: sobe +1/onda até o teto de 6 min · acima da 20: 6→10 min.
+  //   ondas 1-5: 3 min · 6→20: sobe +1/onda até o teto de 8 min · acima da 20: 8→12 min.
+  // Pedro (21/10): hordas GRANDES (≥ onda 7 já ~40 inimigos) pedem um pouco mais de paz,
+  // inclusive porque o mundo segue rodando nos menus/modo cidade. +2 min nos tetos.
   let minutes: number;
   if (wave <= 5) minutes = 3;
-  else if (wave <= 20) minutes = Math.min(6, 3 + (wave - 5)); // 6=4, 7=5, 8..20=6
-  else minutes = Math.min(10, 6 + (wave - 20));               // 21=7 … 24+=10
+  else if (wave <= 20) minutes = Math.min(8, 3 + (wave - 5)); // 6=4, 7=5, 8=6, 9=7, 10..20=8
+  else minutes = Math.min(12, 8 + (wave - 20));               // 21=9 … 24+=12
   return minutes * 60_000;
 }
 export const BASE_WAVE_ENEMIES = 4;  // referência de quantidade

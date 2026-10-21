@@ -19,9 +19,10 @@ import { isRaider, Raider } from './raider';
 import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
 import {
-  broadcastWorld, fetchResumeSnapshot, MP_ENABLED, registerCreatureHitHandler, registerPlayerHitHandler,
-  registerWorldSnapshotProvider, useNet,
+  broadcastWorld, fetchResumeSnapshot, MP_ENABLED, registerCreatureHitHandler, registerMobHitHandler,
+  registerPlayerHitHandler, registerWorldSnapshotProvider, useNet,
 } from '@/net/multiplayer';
+import { mitigateDamage } from '@/game/systems/attributesSystem';
 
 const SYNC_INTERVAL = 0.2;
 
@@ -114,7 +115,12 @@ export function MultiplayerWorldSync() {
     registerPlayerHitHandler((hit) => {
       useGameStore.getState().takePlayerDamage(hit.damage, hit.fromName);
     });
-    return () => registerPlayerHitHandler(null);
+    // Mundo único: bicho do host me acertou (sou convidado) → minha armadura mitiga.
+    registerMobHitHandler((hit) => {
+      const st = useGameStore.getState();
+      st.takePlayerDamage(mitigateDamage(Math.max(1, hit.damage), st.player), hit.creatureName);
+    });
+    return () => { registerPlayerHitHandler(null); registerMobHitHandler(null); };
   }, [connected]);
 
   useEffect(() => {

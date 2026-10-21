@@ -35,6 +35,9 @@ export type RemotePose = {
   hp: number;
   maxHp: number;
   x: number; z: number; yaw: number;
+  /** Altura REAL dos pés de quem envia (ponte, assoalho da casa, pulo, morro). Opcional:
+   *  cliente antigo sem `y` → o receptor calcula pelo chão (compatível). */
+  y?: number;
   action: string; t: number;
   /** Aliado ou Inimigo (declarado no card ao entrar). Default 'ally'. */
   side: PvpSide;
@@ -184,6 +187,13 @@ export const useNet = create<NetState>((set, get) => ({
       creatureHitHandler?.(hit);
     });
 
+    // Mundo único: o bicho do HOST me acertou (eu sou convidado). Aplica com a MINHA armadura.
+    ch.on('broadcast', { event: 'mob-hit' }, ({ payload }) => {
+      const hit = payload as MobHitIntent;
+      if (hit.targetId !== selfId || get().isHost || !Number.isFinite(hit.damage)) return;
+      mobHitHandler?.(hit);
+    });
+
     // PvP (fatia 2): golpe de outro jogador. Só me interessa o que mira em MIM, e só vale se
     // houver inimizade (o atacante é inimigo OU eu me declarei inimigo). Fora isso, ignora.
     ch.on('broadcast', { event: 'player-hit' }, ({ payload }) => {
@@ -247,7 +257,7 @@ export const useNet = create<NetState>((set, get) => ({
 
 /** Envia a pose do jogador local (chamar do loop; throttla sozinho a ~11Hz). */
 let lastSent = 0;
-export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number): void {
+export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number, y?: number): void {
   if (!channel || !useNet.getState().connected) return;
   const now = performance.now();
   if (now - lastSent < 88) return;
@@ -255,7 +265,10 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
   const { selfId, selfName, selfSide } = useNet.getState();
   void channel.send({
     type: 'broadcast', event: 'pose',
-    payload: { id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now, side: selfSide } satisfies RemotePose,
+    payload: {
+      id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now, side: selfSide,
+      ...(y !== undefined && Number.isFinite(y) ? { y } : {}),
+    } satisfies RemotePose,
   });
 }
 
@@ -306,6 +319,30 @@ export function broadcastPlayerHit(targetId: string, damage: number): void {
 /** Registrado pela camada de mundo/HUD pra aplicar o dano PvP recebido no jogador local. */
 export function registerPlayerHitHandler(handler: ((intent: PlayerHitIntent) => void) | null): void {
   playerHitHandler = handler;
+}
+
+/* ---- Mundo único: o host mira QUALQUER jogador e avisa o convidado quando o bicho bate ---- */
+export type MobHitIntent = { id: string; targetId: string; damage: number; creatureName: string };
+let mobHitHandler: ((intent: MobHitIntent) => void) | null = null;
+
+/** Jogadores remotos vivos (pro AI do HOST escolher o alvo mais perto). Vazio fora de sala/convidado. */
+export function remoteTargets(): { id: string; x: number; z: number }[] {
+  const s = useNet.getState();
+  if (!s.connected || !s.isHost) return [];
+  return Object.values(s.players).filter(p => p.hp > 0).map(p => ({ id: p.id, x: p.x, z: p.z }));
+}
+
+/** Host: um bicho acertou um CONVIDADO (dano bruto; o convidado aplica a própria armadura). */
+export function broadcastMobHit(targetId: string, damage: number, creatureName: string): void {
+  if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
+  void channel.send({
+    type: 'broadcast', event: 'mob-hit',
+    payload: { id: useNet.getState().selfId, targetId, damage, creatureName } satisfies MobHitIntent,
+  });
+}
+
+export function registerMobHitHandler(handler: ((intent: MobHitIntent) => void) | null): void {
+  mobHitHandler = handler;
 }
 
 /** Link de convite da sala atual (pra compartilhar). */

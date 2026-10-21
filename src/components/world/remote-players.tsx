@@ -35,12 +35,19 @@ function RemotePlayer({ id }: { id: string }) {
     const p = useNet.getState().players[id];
     if (!g || !p) return;
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
-    if (!inited.current) { g.position.set(p.x, glbSurfaceY(p.x, p.z, terrainHeight(p.x, p.z)), p.z); g.rotation.y = p.yaw; inited.current = true; }
+    // Pés: usa a altura REAL que o outro jogador mandou (ponte/casa/pulo/morro) — antes
+    // recalculava só pelo terreno e o amigo aparecia com os pés enterrados. Sem `y` (cliente
+    // antigo) cai no cálculo pelo chão.
+    const groundAt = (x: number, z: number) => glbSurfaceY(x, z, terrainHeight(x, z));
+    const targetY = (q: typeof p) => (Number.isFinite(q.y) ? (q.y as number) : groundAt(q.x, q.z));
+    if (!inited.current) { g.position.set(p.x, targetY(p), p.z); g.rotation.y = p.yaw; inited.current = true; }
     const dt = Math.min(delta, 0.1);
     const t = 1 - Math.exp(-15 * dt);
     g.position.x += (p.x - g.position.x) * t;
     g.position.z += (p.z - g.position.z) * t;
-    g.position.y = glbSurfaceY(g.position.x, g.position.z, terrainHeight(g.position.x, g.position.z));
+    g.position.y = Number.isFinite(p.y)
+      ? g.position.y + ((p.y as number) - g.position.y) * t
+      : groundAt(g.position.x, g.position.z);
     let dy = p.yaw - g.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
