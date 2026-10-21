@@ -778,7 +778,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const cleaveWeapon = !usingRanged && heldItemId != null && heldItemId !== 'torch'
       && !heldItemId.includes('pickaxe') && (ITEMS[heldItemId]?.attackPower ?? 0) > 0;
     if (cleaveWeapon && !updatedPlayer.dead && state.player.level >= 5) {
-      const CLEAVE_RADIUS = 4, CLEAVE_MAX = 7; // raio 4 m (corpo a corpo) + o alvo = até 8 inimigos
+      const CLEAVE_RADIUS = 3, CLEAVE_MAX = 7; // raio 3 m (corpo a corpo) + o alvo = até 8 inimigos
       let extra = 0;
       updatedCreatures = updatedCreatures.map(c => {
         if (extra >= CLEAVE_MAX || c.id === targetId || c.behavior === 'dead') return c;
