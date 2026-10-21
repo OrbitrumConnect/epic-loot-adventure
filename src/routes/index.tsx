@@ -45,6 +45,7 @@ import { BossSpawner } from '@/components/world/boss-spawner';
 import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
 import { EditorPanel } from '@/components/editor/editor-panel';
 import { useEditorStore } from '@/components/editor/editor-store';
+import { LoginGate } from '@/components/LoginGate';
 const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
@@ -369,6 +370,7 @@ function Index() {
 
   return (
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
+      <LoginGate />
       {editorActive && <EditorPanel />}
       <aside className="game-sidebar" aria-label="Navegação do jogo">
         <Button variant="ghost" size="icon" className="sidebar-toggle"

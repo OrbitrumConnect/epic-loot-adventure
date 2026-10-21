@@ -17,7 +17,9 @@ const SUPA_URL = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
 const SUPA_ANON = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
 export const MP_ENABLED = Boolean(SUPA_URL && SUPA_ANON);
 
-const supabase = MP_ENABLED
+// Exportado pra o módulo de AUTENTICAÇÃO (src/net/auth.ts) reusar o MESMO client — Supabase
+// recomenda uma única instância (auth + realtime compartilham a sessão).
+export const supabase = MP_ENABLED
   ? createClient(SUPA_URL as string, SUPA_ANON as string, { realtime: { params: { eventsPerSecond: 24 } } })
   : null;
 
