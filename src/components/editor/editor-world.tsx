@@ -3,7 +3,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useEditorStore, type EditorObject, type EditorCollide } from './editor-store';
-import { registerTerrain, registerWall } from '../world/terrain-collision';
+import { registerTerrain, registerWall, glbSurfaceY, useTerrainVersion } from '../world/terrain-collision';
 import { AssetBoundary } from '../world/asset-boundary';
 
 // Isola cada objeto: um GLB ausente (ex.: asset NÃO commitado → 404 no Vercel) faz
@@ -42,9 +42,9 @@ function PlacedObjectInner({ item }: { item: EditorObject }) {
     clone.updateMatrixWorld(true);
     return clone;
   }, [scene, item.assetUrl]);
-  const pivot = useMemo(() => {
+  const { pivot, minY } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(model);
-    return box.getCenter(new THREE.Vector3());
+    return { pivot: box.getCenter(new THREE.Vector3()), minY: box.min.y };
   }, [model]);
   const ref = useRef<THREE.Group>(null);
   // Colisão por objeto (BVH), conforme item.collide:
@@ -66,7 +66,14 @@ function PlacedObjectInner({ item }: { item: EditorObject }) {
   const pick = (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); select(item.id); };
   const [px, py, pz] = item.transform.position;
   const [sx, sy, sz] = item.transform.scale;
-  const group = <group ref={ref} visible={item.visible} position={[px + pivot.x * sx, py + pivot.y * sy, pz + pivot.z * sz]} rotation={item.transform.rotation} scale={item.transform.scale} onPointerDown={pick}><group position={[-pivot.x, -pivot.y, -pivot.z]}><primitive object={model} /></group></group>;
+  // Auto-ground (item.ground): assenta a BASE do objeto no chão REAL do GLB em vez de usar
+  // o Y fixo — evita "voando" (ex.: coqueiros bakeados). world.y = pyEff + sy*v, então a
+  // base (v=minY) fica em glbSurfaceY quando pyEff = glbSurfaceY - sy*minY. tv recomputa
+  // quando o GLB carrega. Objetos com colisão (ponte) NÃO são afetados (ground fica off).
+  const tv = useTerrainVersion(); void tv;
+  const gx = px + pivot.x * sx, gz = pz + pivot.z * sz;
+  const pyEff = item.ground ? glbSurfaceY(gx, gz, py) - sy * minY : py;
+  const group = <group ref={ref} visible={item.visible} position={[gx, pyEff + pivot.y * sy, gz]} rotation={item.transform.rotation} scale={item.transform.scale} onPointerDown={pick}><group position={[-pivot.x, -pivot.y, -pivot.z]}><primitive object={model} /></group></group>;
   if (!active || !selected) return group;
   // Commit SÓ no onMouseUp (mesmo padrão do DesertMountain que já funcionava): durante
   // o arraste o gizmo move o objeto sozinho; commitar a cada onChange causava re-render

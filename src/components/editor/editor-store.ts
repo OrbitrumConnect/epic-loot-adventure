@@ -7,7 +7,7 @@ export type Transform = { position: [number, number, number]; rotation: [number,
  *  ex. ponte) ou bloquear (barra horizontal, ex. parede/pedra). Default: nenhuma —
  *  assim prop decorativo (palmeira) não vira "escada". */
 export type EditorCollide = 'none' | 'floor' | 'block';
-export type EditorObject = { id: string; name: string; assetUrl: string; transform: Transform; visible: boolean; source?: 'editor' | 'map'; selectable?: boolean; collide?: EditorCollide };
+export type EditorObject = { id: string; name: string; assetUrl: string; transform: Transform; visible: boolean; source?: 'editor' | 'map'; selectable?: boolean; collide?: EditorCollide; ground?: boolean };
 export const EDITOR_ASSETS = [
   { name: 'Árvore rachada', assetUrl: '/models/trees/tree-split.glb', scale: 4 },
   { name: 'Árvore ancestral', assetUrl: '/models/trees/tree-gnarled.glb', scale: 5 },

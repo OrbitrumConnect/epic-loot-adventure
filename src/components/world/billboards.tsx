@@ -30,8 +30,8 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import * as THREE from 'three';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
-import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, type Palette } from './world-kit';
-import { glbSurfaceY, collectGreenSurfaceSpots, useTerrainVersion } from './terrain-collision';
+import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, riverDistance, RIVER_HALF_WIDTH, type Palette } from './world-kit';
+import { glbSurfaceY, collectGreenSurfaceSpots, surfaceColorAt, useTerrainVersion } from './terrain-collision';
 import { ForestRocks, ForestTrees } from './forest-models';
 import { LivingTrees } from './living-trees';
 import { GroundCover } from './ground-cover';
@@ -279,15 +279,17 @@ function inLake(x: number, z: number, pad = 0): boolean {
  * a média do verde amostrado (tint). Determinístico → Vercel. GroundCover = lâminas
  * finas animadas por vento.
  * ------------------------------------------------------------------ */
-const GRASS_CAP = 4500;        // teto de tufos (instanced, barato) — Pedro: "bastante"
-const CLUSTER = 5;             // tufos por mancha verde (adensa a mancha)
-const CLUSTER_SPREAD = 1.1;    // raio (m) do punhado em torno da mancha
+const GRASS_CAP = 62000;       // teto de tufos (instanced) — Pedro: "espalhar mais, lado a lado até a beirada"
+const CLUSTER_SPREAD = 1.0;    // raio (m) do punhado — menor = tufos mais JUNTOS (savana)
 /** Esverdeado (sRGB 0-1): caqui/oliva embutido no barro. O mapa é alaranjado — areia
  *  tem g/r≈0,69; vegetação é bem MENOS alaranjada (g/r alto). Limiar g/r>=0,80 pega as
  *  manchas verdes (~3,6% do mapa) e exclui a areia. g>=b evita azul (água). Medido nos
  *  pixels reais do rio-wasteland (histograma de g/r). */
 function isGreen(c: THREE.Color): boolean {
-  return c.g >= c.r * 0.71 && c.g >= c.b * 0.95 && c.g > 0.10;
+  // Oliva do PLANO (amarronzado, g/r~0.70, bem perto da areia 0.69) + verde da montanha.
+  // g>=r*0.70 pega o oliva do chão plano e ainda exclui a areia clara (0.69). g>=b*0.92
+  // deixa passar o oliva-amarronzado (b um pouco maior). Pedro: grama no plano também.
+  return c.g >= c.r * 0.70 && c.g >= c.b * 0.92 && c.g > 0.08;
 }
 /** Gera a grama quando o GLB+textura carregam (retry curto até a imagem decodificar —
  *  o registro do terreno não espera a textura). Nunca limpa grama já achada. */
@@ -298,31 +300,55 @@ function useGreenGrass(): { placements: Placement[]; tint?: THREE.Color | undefi
     let cancelled = false, tries = 0;
     const attempt = () => {
       if (cancelled) return;
-      // Coleta TODAS as manchas verdes do mapa (não só as primeiras), pra espalhar
-      // por tudo — safe zone, encostas, etc. — e não amontoar perto do lago.
-      const { spots, tint } = collectGreenSurfaceSpots(isGreen, 6000);
-      if (spots.length > 10) {
-        // Densidade por mancha ajustada ao total: muitas manchas → menos tufos cada
-        // (não estourar o teto); poucas manchas → cluster cheio. Distribui por TODAS.
-        const cluster = Math.max(1, Math.min(CLUSTER, Math.floor(GRASS_CAP / spots.length)));
-        const out: Placement[] = [];
-        for (let s = 0; s < spots.length && out.length < GRASS_CAP; s++) {
-          const sp = spots[s]!;
-          for (let k = 0; k < cluster; k++) {
-            const seed = s * 7 + k * 101;
-            const h = 0.6 + rand(seed + 50) * 0.5;
-            out.push({
-              x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
-              z: sp.z + (rand(seed + 99) - 0.5) * 2 * CLUSTER_SPREAD,
-              w: h * 1.1, h, yaw: rand(seed + 3) * Math.PI * 2,
-            });
-          }
-        }
-        setRes({ placements: out, tint: tint ?? undefined });
-        return;
+      // (A) Manchas detectadas na malha (montanha + verde forte das bordas). Também serve
+      // de SINAL de que a textura decodificou: só acha verde quando os pixels estão prontos.
+      const { spots: meshSpots, tint } = collectGreenSurfaceSpots(isGreen, 100000);
+      if (meshSpots.length <= 10) {           // textura ainda não pronta → tenta de novo
+        if (tries >= 20) return;
+        tries++; setTimeout(attempt, 250); return;
       }
-      if (tries >= 20) return;
-      tries++; setTimeout(attempt, 250); // textura ainda decodificando → tenta de novo
+      // (B) CHÃO PLANO CENTRAL: no centro o oliva tem a MESMA cor numérica da areia, então o
+      // detector da malha não o separa. Cubro o plano com uma grade jitterada, pulando água
+      // (lago/rio) e pulando só a AREIA BEM CLARA (surfaceColorAt em linear): mantém as manchas
+      // oliva/escuras (onde o Pedro quer grama) e deixa só a areia clara pelada.
+      const grid: { x: number; z: number }[] = [];
+      const STEP = 1.2, LIM = 88;
+      let gi = 0;
+      for (let x = -LIM; x <= LIM; x += STEP) {
+        for (let z = -LIM; z <= LIM; z += STEP, gi++) {
+          if (inLake(x, z, 1) || riverDistance(x, z) < RIVER_HALF_WIDTH + 2) continue;
+          const jx = x + (rand(gi + 11) - 0.5) * STEP;
+          const jz = z + (rand(gi + 77) - 0.5) * STEP;
+          const col = surfaceColorAt(jx, jz);
+          if (!col) continue;
+          if (col.r > 0.64 && col.g < col.r * 0.68) continue; // pula só a areia BEM clara mesmo; pega até a beirada perto da areia
+          grid.push({ x: jx, z: jz });
+        }
+      }
+      const perSpot = 4; // tufos por mancha (densidade local — mais junto em volta das que já tem)
+      const out: Placement[] = [];
+      const push = (sp: { x: number; z: number }, base: number) => {
+        for (let k = 0; k < perSpot; k++) {
+          const seed = base + k * 101;
+          const h = 0.42 + rand(seed + 50) * 0.5; // mais BAIXA e variada (savana) — algumas curtas
+          out.push({
+            x: sp.x + (rand(seed + 7) - 0.5) * 2 * CLUSTER_SPREAD,
+            z: sp.z + (rand(seed + 99) - 0.5) * 2 * CLUSTER_SPREAD,
+            w: h * 1.2, h, yaw: rand(seed + 3) * Math.PI * 2,
+          });
+        }
+      };
+      // PRIORIDADE ao CHÃO PLANO (grade) — é o que faltava. A montanha tem MUITO mais
+      // manchas; se sorteasse uniforme, ela levava quase tudo e o plano ficava com fiapos.
+      // Plano leva até ~70% do teto; a montanha preenche o resto (strided).
+      const gridCap = Math.floor(GRASS_CAP * 0.82);
+      for (let s = 0; s < grid.length && out.length < gridCap; s++) push(grid[s]!, s * 7);
+      const remain = Math.max(0, GRASS_CAP - out.length);
+      if (remain > 0 && meshSpots.length > 0) {
+        const mStride = Math.max(1, Math.floor(meshSpots.length / Math.max(1, remain / perSpot)));
+        for (let s = 0; s < meshSpots.length && out.length < GRASS_CAP; s += mStride) push(meshSpots[s]!, 1_000_000 + s * 7);
+      }
+      setRes({ placements: out, tint: tint ?? undefined });
     };
     attempt();
     return () => { cancelled = true; };

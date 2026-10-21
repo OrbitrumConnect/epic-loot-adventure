@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  INITIAL_WAVE, PEACE_MS, FIRST_PEACE_MS, BASE_WAVE_ENEMIES,
+  INITIAL_WAVE, PEACE_MS, FIRST_PEACE_MS, BASE_WAVE_ENEMIES, peaceDurationMs,
   tickWaves, waveMultiplier, waveEnemyCount, waveHpScale, markSpawned,
 } from '../game/systems/waveSystem';
 
@@ -62,6 +62,18 @@ describe('waveSystem · ciclo', () => {
     expect(r.state.phase).toBe('peace');
     expect(r.state.wave).toBe(1); // guarda a onda; a próxima será 2
     expect(r.state.phaseEndsAt).toBe(30_000 + PEACE_MS);
+  });
+
+  it('tempo de paz escala com a onda (10→5min, 15→8min, 20→10min)', () => {
+    expect(peaceDurationMs(5)).toBe(PEACE_MS);     // 1 min até a 10
+    expect(peaceDurationMs(10)).toBe(PEACE_MS);    // 1 min na 10
+    expect(peaceDurationMs(11)).toBe(300_000);     // 5 min acima de 10
+    expect(peaceDurationMs(15)).toBe(300_000);     // 5 min na 15
+    expect(peaceDurationMs(16)).toBe(480_000);     // 8 min acima de 15
+    expect(peaceDurationMs(21)).toBe(600_000);     // 10 min acima de 20
+    // a transição combate→paz usa o tempo escalado:
+    const r = tickWaves({ phase: 'combat', wave: 16, phaseEndsAt: 0, spawnPending: 0 }, 1000, true, 0);
+    expect(r.state.phaseEndsAt).toBe(1000 + 480_000);
   });
 
   it('markSpawned desconta o pendente sem passar de 0', () => {
