@@ -54,6 +54,10 @@ export function ForestBatch({ geometry, material, placements, spheres, yOffset =
     mesh.count = placements.length;
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
+    // Sem esferas de oclusão (ex.: GRAMA) NÃO entra no sistema de fade — senão `updateOcclusion`
+    // varria TODAS as instâncias (até ~62k tufos) por quadro sem trabalho útil. Árvores/pedras
+    // (com esferas) seguem registrando e escondendo o herói normalmente.
+    if (spheres.length === 0) return;
     return registerInstancedFade(mesh, spheres);
   }, [placements, spheres, ownGeometry, yOffset, tv]);
   return <instancedMesh ref={ref} args={[ownGeometry, material, Math.max(1, placements.length)]} castShadow receiveShadow />;
