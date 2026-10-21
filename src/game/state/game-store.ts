@@ -292,7 +292,7 @@ function createInitialPlayer(): PlayerState {
     { itemId: 'bow', quantity: 1 },
     { itemId: 'pistol', quantity: 1 },
     { itemId: 'rifle', quantity: 1 },
-    { itemId: 'ammo', quantity: 60 }, // munição inicial p/ pistola/rifle
+    { itemId: 'ammo', quantity: 2000 }, // munição inicial (Pedro: 2k; farm/bicho dropa ~50 e repõe)
   ]);
   // Hotbar estendida: 8 slots originais INTACTOS + arco/pistola/rifle no fim.
   inventory.hotbar.slots = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
