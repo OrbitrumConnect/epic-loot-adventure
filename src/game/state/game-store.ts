@@ -1361,7 +1361,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         : state.ui.message;
     if (result.wiped) {
       // Base CAIU na horda → GAME OVER. Para as ondas, limpa os inimigos de onda.
+      // Penalidade (Pedro): perde 5 NÍVEIS por base perdida (piso 1), mantendo o resto
+      // (itens, atributos, HP). Assim o progresso NÃO zera — o jogador continua vivo e
+      // querendo evoluir. 5→1, 10→5, 15→10, 20→15...
+      const lostLevel = Math.max(1, state.player.level - 5);
+      const penalized = lostLevel < state.player.level
+        ? { ...state.player, level: lostLevel, xp: 0, xpToNext: xpForLevel(lostLevel) }
+        : state.player;
+      const penaltyMsg = lostLevel < state.player.level
+        ? `${message} Você perdeu 5 níveis (${state.player.level}→${lostLevel}); o resto do progresso continua.`
+        : message;
       set({
+        player: penalized,
         playerBase: null,
         wave: INITIAL_WAVE,
         baseLevel: 1,
@@ -1370,7 +1381,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         orbitExpiresWave: 0,
         tornadoExpiresWave: 0,
         creatures: state.creatures.filter((c) => !c.id.startsWith('wave')),
-        ui: { ...state.ui, message, baseFell: true },
+        ui: { ...state.ui, message: penaltyMsg, baseFell: true },
       });
       return;
     }
