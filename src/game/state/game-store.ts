@@ -949,6 +949,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (st.player.dead) return;
       const center = nearestHostile(); // recalcula: a chuva acompanha os bichos a cada onda
       if (!center) return;
+      // Som por onda: tiro de bala pras armas de fogo, "flecha" pro arco.
+      if (usesBullet) audioManager.playGunShot(); else audioManager.playShot();
       const radius = arrowRainRadiusFor(st.player.level);
       const base = playerBaseAttack(st.player.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
       const power = Math.round(base * 1.3 * damageMultiplier(st.player));
@@ -964,7 +966,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         drafts.push(shotEvent(drop, drop, 'arrow', 13));
       }
 
-      let updatedPlayer: PlayerState = { ...st.player, lastAttackAt: Date.now() / 1000 };
+      // NÃO mexe em `lastAttackAt`: a chuva é um PODER à parte (cooldown próprio) e não deve
+      // travar o tiro normal — o herói segue atirando enquanto as flechas caem (Pedro).
+      let updatedPlayer: PlayerState = { ...st.player };
       const hasAmmo = getItemCount(updatedPlayer.inventory, 'ammo') >= ARROW_RAIN_AMMO_PER_WAVE;
       if (usesBullet && hasAmmo) updatedPlayer = { ...updatedPlayer, inventory: removeItem(updatedPlayer.inventory, 'ammo', ARROW_RAIN_AMMO_PER_WAVE) };
       let updatedBags = st.deathBags;
