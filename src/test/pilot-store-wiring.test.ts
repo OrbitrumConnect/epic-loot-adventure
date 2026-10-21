@@ -87,9 +87,14 @@ describe('elo: reportDamage(onPlayer) chega em playerLastDamagedAt e muda a deci
 
     const now = Date.now();
     const intent = decideIntent(snapshot, now);
-    // Vai atrás do agressor (15 m), não do recurso (5 m, mais perto).
-    expect(intent.kind).toBe('move');
-    if (intent.kind === 'move') {
+    // Revida o AGRESSOR (15 m) em vez de farmar o recurso (5 m, mais perto). Como a arma de
+    // longe já alcança 15 m, o piloto ATACA o agressor à distância; com alcance curto ele
+    // andaria até lá ('move' + 'Revid'). Em ambos os casos o alvo é o agressor, não o recurso.
+    expect(intent.kind === 'attack' || intent.kind === 'move').toBe(true);
+    if (intent.kind === 'attack') {
+      expect(intent.to).toEqual({ x: 15, z: 0 });
+      expect(intent.creatureId).toBe('aggressor');
+    } else if (intent.kind === 'move') {
       expect(intent.to).toEqual({ x: 15, z: 0 });
       expect(intent.reason).toContain('Revid');
     }
