@@ -93,6 +93,8 @@ type GameState = {
   /** Casa da base evoluiu p/ PEDRA (nível 10 + custo). Só troca a skin; dimensão/colisão iguais. */
   baseEvolved: boolean;
   baseMetal: boolean;
+  /** Estatísticas da sobrevivência atual (ranking). kills = soma de huntSeen. */
+  stats: { basesEvolved: number; basesLost: number; survivalStart: number };
   /** Quantas vezes cada evolução foi escolhida (stacks). */
   baseUpgrades: Record<UpgradeId, number>;
   /** 3 cartas oferecidas após repelir uma onda; null = sem escolha pendente. */
@@ -464,6 +466,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   baseLevel: 1,
   baseEvolved: false,
   baseMetal: false,
+  stats: { basesEvolved: 0, basesLost: 0, survivalStart: Date.now() },
   baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
   upgradeChoices: null,
   orbitExpiresWave: 0,
@@ -1211,7 +1214,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
     let nextInv = removeItem(inv, 'wood', WOOD);
     nextInv = removeItem(nextInv, 'stone', STONE);
-    set({ baseEvolved: true, player: syncCarry({ ...s.player, inventory: nextInv }), ui: { ...s.ui, message: 'Casa evoluída para PEDRA! 🏰' } });
+    set({ baseEvolved: true, stats: { ...s.stats, basesEvolved: s.stats.basesEvolved + 1 }, player: syncCarry({ ...s.player, inventory: nextInv }), ui: { ...s.ui, message: 'Casa evoluída para PEDRA! 🏰' } });
   },
 
   evolveBaseToMetal: () => {
@@ -1234,7 +1237,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
     let nextInv = removeItem(inv, 'wood', WOOD);
     nextInv = removeItem(nextInv, 'stone', STONE);
-    set({ baseMetal: true, player: syncCarry({ ...s.player, inventory: nextInv }), ui: { ...s.ui, message: 'Casa evoluída para METAL! ⚙️' } });
+    set({ baseMetal: true, stats: { ...s.stats, basesEvolved: s.stats.basesEvolved + 1 }, player: syncCarry({ ...s.player, inventory: nextInv }), ui: { ...s.ui, message: 'Casa evoluída para METAL! ⚙️' } });
   },
 
   enqueueUnit: (instanceId, unitId) => {
@@ -1373,6 +1376,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         : message;
       set({
         player: penalized,
+        stats: { ...state.stats, basesLost: state.stats.basesLost + 1 },
         playerBase: null,
         wave: INITIAL_WAVE,
         baseLevel: 1,
@@ -1408,6 +1412,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       upgradeChoices: null,
       orbitExpiresWave: 0,
       tornadoExpiresWave: 0,
+      stats: { basesEvolved: 0, basesLost: 0, survivalStart: Date.now() },
       objectives: createQueue(),
       ui: { ...s.ui, baseFell: false, message: '🔥 Nova sobrevivência! Colete, construa a base e prepare as defesas.' },
     }));

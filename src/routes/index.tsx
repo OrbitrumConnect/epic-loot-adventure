@@ -5,7 +5,7 @@ import {
   Circle, CircleDot, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
   Heart, Home, Landmark, Leaf, ListChecks, Lock, Map, Menu, MessageSquare, Mountain, Package,
   PanelLeftClose, Pickaxe, Repeat, Settings, Shield, ShieldCheck, Skull,
-  Sparkles, Swords, Target, Tent, Trash2, TreePine, Users, Utensils, Wind, X, Zap,
+  Sparkles, Swords, Target, Tent, Trash2, TreePine, Trophy, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
@@ -88,6 +88,7 @@ const navigation = [
   { id: 'raid', name: 'Raids', icon: Swords },
   { id: 'loot', name: 'Loot', icon: Package },
   { id: 'inventory', name: 'Inventário', icon: Backpack },
+  { id: 'ranks', name: 'Ranking', icon: Trophy },
 ];
 
 function Index() {
@@ -119,6 +120,7 @@ function Index() {
   const prevLevel = useRef<number | null>(null);
 
   const player = useGameStore(s => s.player);
+  const stats = useGameStore(s => s.stats);
   const ui = useGameStore(s => s.ui);
   const attackTick = useGameStore(s => s.attackTick);
 
@@ -338,7 +340,7 @@ function Index() {
   });
 
   const panel = ui.panel;
-  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : 'Tribo dos Guardiões';
+  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : panel === 'ranks' ? 'Ranking' : 'Tribo dos Guardiões';
 
   // Triggers do mundo (piloto/pegar/atacar/especiais/câmera/casa). Mesma fonte
   // renderizada em dois lugares: sobre o mundo (desktop) e no rodapé ao lado do
@@ -871,6 +873,34 @@ function Index() {
                     <div className="panel-stats"><span>1 membro · Sessão local</span><span>Armazém: {totalResources} recursos</span></div>
                   </>
                 )}
+
+                {panel === 'ranks' && (() => {
+                  const kills = Object.values(player.huntSeen ?? {}).reduce((a, b) => a + (b as number), 0);
+                  const secs = Math.max(0, Math.floor((Date.now() - stats.survivalStart) / 1000));
+                  const survival = secs >= 3600 ? `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m` : secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
+                  const rows: { icon: React.ReactNode; label: string; value: string | number }[] = [
+                    { icon: <Skull />, label: 'Criaturas mortas', value: kills },
+                    { icon: <Landmark />, label: 'Bases evoluídas', value: stats.basesEvolved },
+                    { icon: <Flame />, label: 'Bases perdidas', value: stats.basesLost },
+                    { icon: <Target />, label: 'Nível atual', value: player.level },
+                    { icon: <Wind />, label: 'Tempo sobrevivido', value: survival },
+                  ];
+                  return (
+                    <>
+                      <div className="raid-row"><Trophy /><div><h3>{player.name}</h3><p>Sobrevivente · Vale dos Ancestrais</p></div></div>
+                      <div className="attr-panel" aria-label="Estatísticas">
+                        {rows.map(r => (
+                          <div className="attr-row" key={r.label}>
+                            <span className="attr-name">{r.icon} {r.label}</span>
+                            <span className="attr-val">{r.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="panel-stats"><span>Ranking global entra com as contas online (Supabase).</span></div>
+                      <div className="panel-actions"><Button onClick={() => setPanel(null)}><Compass />Voltar ao vale</Button></div>
+                    </>
+                  );
+                })()}
 
                 {panel === 'settings' && (
                   <>
