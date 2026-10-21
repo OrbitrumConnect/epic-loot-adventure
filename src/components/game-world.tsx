@@ -6,6 +6,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
 import { BackgroundSim } from './world/background-sim';
+import { virtualMove } from './world/virtual-input';
 import { HarvestNodes } from './world/harvest-nodes';
 import { queueNearestNode } from './world/objective-bridge';
 import { CombatFeedback } from './world/combat-feedback';
@@ -509,8 +510,11 @@ function Character({
     // Câmera livre: WASD dirige a câmera, não o herói. O jogador continua sendo
     // simulado (pelo piloto / clique-pra-andar), só não responde ao WASD.
     const freeCam = cameraMode === 'free';
-    const dx = freeCam ? 0 : Number(k.has('KeyD') || k.has('ArrowRight')) - Number(k.has('KeyA') || k.has('ArrowLeft'));
-    const dz = freeCam ? 0 : Number(k.has('KeyS') || k.has('ArrowDown')) - Number(k.has('KeyW') || k.has('ArrowUp'));
+    // WASD + joystick virtual (mobile) somados. No desktop `virtualMove` fica 0,0 → idêntico.
+    const keyDx = Number(k.has('KeyD') || k.has('ArrowRight')) - Number(k.has('KeyA') || k.has('ArrowLeft'));
+    const keyDz = Number(k.has('KeyS') || k.has('ArrowDown')) - Number(k.has('KeyW') || k.has('ArrowUp'));
+    const dx = freeCam ? 0 : THREE.MathUtils.clamp(keyDx + virtualMove.x, -1, 1);
+    const dz = freeCam ? 0 : THREE.MathUtils.clamp(keyDz + virtualMove.z, -1, 1);
 
     let targetVx = 0;
     let targetVz = 0;

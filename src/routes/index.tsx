@@ -46,6 +46,8 @@ import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
 import { EditorPanel } from '@/components/editor/editor-panel';
 import { useEditorStore } from '@/components/editor/editor-store';
 import { LoginGate } from '@/components/LoginGate';
+import { MobileControls } from '@/components/world/mobile-controls';
+import { useIsMobile } from '@/hooks/use-mobile';
 const CityView = lazy(() => import('@/components/city-view'));
 
 export const Route = createFileRoute('/')({
@@ -273,6 +275,7 @@ function Index() {
   }, [attack]);
 
   const inCity = ui.mode === 'city';
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -642,6 +645,7 @@ function Index() {
             </div>
             <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}
+          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} />}
           </>)}
 
           {!inCity && !panel && <PiecePicker />}
