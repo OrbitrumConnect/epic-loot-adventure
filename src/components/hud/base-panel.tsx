@@ -298,7 +298,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
         <div className="base-tower-upgrade">
           <div>
             <strong>Evoluir Casa (Pedra)</strong>
-            <small>{baseEvolved ? 'Casa de pedra ativa ✓' : `Nível 10 + 100 madeira + 200 pedra · só troca a skin (mesma dimensão/colisão). Seu nível: ${playerLevel}`}</small>
+            <small>{baseEvolved ? 'Casa de pedra ativa ✓' : `Nível 10 + 200 madeira + 400 pedra · só troca a skin (mesma dimensão/colisão). Seu nível: ${playerLevel}`}</small>
           </div>
           <Button size="sm" variant="outline" disabled={baseEvolved || playerLevel < 10}
             title={baseEvolved ? 'Já é de pedra' : playerLevel < 10 ? 'Precisa ser nível 10' : 'Evoluir para casa de pedra'}
@@ -310,7 +310,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
         <div className="base-tower-upgrade">
           <div>
             <strong>Evoluir Casa (Metal)</strong>
-            <small>{baseMetal ? 'Casa de metal ativa ✓' : `Pedra + nível >20 + 230 madeira + 460 pedra (2.3x). Seu nível: ${playerLevel}`}</small>
+            <small>{baseMetal ? 'Casa de metal ativa ✓' : `Pedra + nível >20 + 460 madeira + 920 pedra (2.3x). Seu nível: ${playerLevel}`}</small>
           </div>
           <Button size="sm" variant="outline" disabled={baseMetal || !baseEvolved || playerLevel <= 20}
             title={baseMetal ? 'Já é de metal' : !baseEvolved ? 'Precisa ser de pedra antes' : playerLevel <= 20 ? 'Precisa ser acima do nível 20' : 'Evoluir para casa de metal'}

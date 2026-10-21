@@ -1369,7 +1369,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   evolveBaseToStone: () => {
     const s = get();
     if (s.baseEvolved) return;
-    const LEVEL = 10, WOOD = 100, STONE = 200;
+    const LEVEL = 10, WOOD = 200, STONE = 400; // custo dobrado (Pedro)
     if ((s.player.level ?? 1) < LEVEL) {
       set({ ui: { ...s.ui, message: `Casa de pedra: precisa ser nível ${LEVEL}.` } });
       return;
@@ -1392,7 +1392,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       set({ ui: { ...s.ui, message: 'Casa de metal: evolua para PEDRA primeiro.' } });
       return;
     }
-    const LEVEL = 20, WOOD = 230, STONE = 460; // 2.3x da pedra (100/200)
+    const LEVEL = 20, WOOD = 460, STONE = 920; // custo dobrado (Pedro) — 2.3x da pedra (200/400)
     if ((s.player.level ?? 1) <= LEVEL) {
       set({ ui: { ...s.ui, message: `Casa de metal: precisa ser acima do nível ${LEVEL}.` } });
       return;
