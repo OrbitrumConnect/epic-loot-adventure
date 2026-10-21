@@ -6,7 +6,7 @@
  * Ao logar, o nome do sobrevivente vai pro player da store (aparece no HUD/ranking).
  */
 import { useEffect, useState } from 'react';
-import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
+import { AUTH_ENABLED, isValidEmail, survivorName, useAuth } from '@/net/auth';
 import { useGameStore } from '@/game/state/game-store';
 
 export function LoginGate() {
@@ -18,7 +18,9 @@ export function LoginGate() {
   const signIn = useAuth((s) => s.signIn);
   const signUp = useAuth((s) => s.signUp);
 
+  const [mode, setMode] = useState<'in' | 'up'>('in'); // Entrar | Criar conta
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
 
   useEffect(() => { init(); }, [init]);
@@ -32,8 +34,15 @@ export function LoginGate() {
   if (!AUTH_ENABLED || user) return null;        // offline ou já logado → sem tela
   if (!ready) return <Screen>Carregando…</Screen>; // checando sessão
 
-  const canSubmit = name.trim().length >= 2 && pass.length >= 6 && !busy;
-  const submit = (fn: (n: string, p: string) => void) => { if (canSubmit) fn(name, pass); };
+  const creating = mode === 'up';
+  const emailOk = isValidEmail(email);
+  const passOk = pass.length >= 6;
+  const nameOk = !creating || name.trim().length >= 2;
+  const canSubmit = emailOk && passOk && nameOk && !busy;
+  const submit = () => {
+    if (!canSubmit) return;
+    if (creating) signUp(name, email, pass); else signIn(email, pass);
+  };
 
   return (
     <Screen>
@@ -44,25 +53,38 @@ export function LoginGate() {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ font: '800 22px system-ui', letterSpacing: 2, color: '#f2c879' }}>TRIBOS</div>
-          <div style={{ opacity: 0.75, fontSize: 12, marginTop: 2 }}>Entre com seu nome de sobrevivente</div>
+          <div style={{ opacity: 0.75, fontSize: 12, marginTop: 2 }}>
+            {creating ? 'Crie sua conta de sobrevivente' : 'Entre na sua conta'}
+          </div>
         </div>
-        <label style={lbl}>Nome do sobrevivente
-          <input style={inp} value={name} maxLength={24} autoFocus placeholder="Ex.: Kael"
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submit(signIn); }} />
+        {creating && (
+          <label style={lbl}>Nome do sobrevivente
+            <input style={inp} value={name} maxLength={24} autoFocus placeholder="Ex.: Kael"
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
+          </label>
+        )}
+        <label style={lbl}>Email
+          <input style={inp} type="email" value={email} autoFocus={!creating} placeholder="voce@email.com"
+            autoComplete="email"
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
         </label>
         <label style={lbl}>Senha
           <input style={inp} type="password" value={pass} placeholder="mínimo 6 caracteres"
+            autoComplete={creating ? 'new-password' : 'current-password'}
             onChange={(e) => setPass(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submit(signIn); }} />
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
         </label>
         {error && <div style={{ color: '#ff8f8f', fontSize: 12.5 }}>{error}</div>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button style={{ ...btn, background: '#f2c879', color: '#1a1206', flex: 1 }}
-            disabled={!canSubmit} onClick={() => submit(signIn)}>{busy ? '…' : 'Entrar'}</button>
-          <button style={{ ...btn, background: 'rgba(255,255,255,0.1)', color: '#e8eef6', flex: 1 }}
-            disabled={!canSubmit} onClick={() => submit(signUp)}>Criar conta</button>
-        </div>
+        <button style={{ ...btn, background: '#f2c879', color: '#1a1206', marginTop: 4 }}
+          disabled={!canSubmit} onClick={submit}>
+          {busy ? '…' : creating ? 'Criar conta' : 'Entrar'}
+        </button>
+        <button style={{ ...btn, background: 'transparent', color: '#9fb4cc', padding: 4, fontWeight: 600, fontSize: 12.5 }}
+          onClick={() => { setMode(creating ? 'in' : 'up'); useAuth.setState({ error: null }); }}>
+          {creating ? 'Já tenho conta — Entrar' : 'Não tenho conta — Criar'}
+        </button>
         <div style={{ opacity: 0.55, fontSize: 11, textAlign: 'center' }}>Seu progresso fica salvo na sua conta.</div>
       </div>
     </Screen>

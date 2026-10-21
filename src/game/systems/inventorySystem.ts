@@ -4,7 +4,7 @@ import { ITEMS } from '../data/items';
 /** Slot RESERVADO só pra POÇÃO (Pedro): toda poção coletada vai pra este slot (fixo); nada
  *  além de poção entra nele, e a poção não é empurrada pra fora por outro item. Overflow de
  *  poção (acima do maxStack) ainda cai nos outros slots. É o slot da hotbar pra beber rápido. */
-export const POTION_SLOT = 3;
+export const POTION_SLOT = 11; // índice 11 = "slot 12" (1-indexado) na grade do inventário
 const POTION_ITEM = 'health_potion';
 
 export function createInventory(initialItems?: { itemId: string; quantity: number }[]): InventoryState {
