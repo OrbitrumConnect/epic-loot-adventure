@@ -1,4 +1,5 @@
 import type { Item } from '../types';
+import { ARMOR_ITEMS } from './armorItems';
 
 export const ITEMS: Record<string, Item> = {
   iron_sword: {
@@ -255,6 +256,8 @@ export const ITEMS: Record<string, Item> = {
     usable: false,
     equippable: true,
     armor: 10,
+    equipSlot: 'chest',
+    stats: { defense: 6, health: 8 },
     icon: 'Shield',
   },
   gold_ore: {
@@ -443,6 +446,8 @@ export const ITEMS: Record<string, Item> = {
     usable: false,
     equippable: true,
     armor: 16,
+    equipSlot: 'chest',
+    stats: { defense: 10, health: 14 },
     icon: 'Shield',
   },
 
@@ -472,6 +477,8 @@ export const ITEMS: Record<string, Item> = {
     usable: false,
     equippable: true,
     armor: 26,
+    equipSlot: 'chest',
+    stats: { defense: 13, health: 18 },
     icon: 'Shield',
   },
   eclipse_blade: {
@@ -488,6 +495,8 @@ export const ITEMS: Record<string, Item> = {
     icon: 'Swords',
   },
 };
+
+Object.assign(ITEMS, ARMOR_ITEMS);
 
 /** Caminho do sprite do item. `Item.sprite` sobrescreve; senão vale a convenção por id. */
 export function itemSpriteUrl(itemId: string): string {

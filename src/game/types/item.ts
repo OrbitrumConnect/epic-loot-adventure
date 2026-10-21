@@ -23,6 +23,16 @@ export const RARITY_MULT: Record<Rarity, number> = {
   common: 1.0, uncommon: 1.3, rare: 1.7, epic: 2.2, legendary: 2.8, ancestral: 3.5,
 };
 
+export type ArmorSlot = 'head' | 'chest' | 'gloves' | 'legs' | 'boots' | 'amulet' | 'ring1' | 'ring2';
+export type ItemStats = {
+  health?: number;
+  defense?: number;
+  damage?: number;
+  resistance?: number;
+  speed?: number;
+  luck?: number;
+};
+
 export type Item = {
   id: string;
   name: string;
@@ -42,7 +52,9 @@ export type Item = {
    */
   attrBonus?: Partial<{ damage: number; dexterity: number; carry: number; moveSpeed: number }>;
   /** Força o slot de equipamento (ex.: 'accessory'); sem isso o slot sai da categoria. */
-  equipSlot?: 'accessory';
+  /** `accessory` é legado; novos itens usam `amulet`. */
+  equipSlot?: ArmorSlot | 'accessory';
+  stats?: ItemStats;
   icon: string;
   /**
    * Convenção: o sprite de todo item fica em `/assets/items/<id>.webp` (ver

@@ -19,6 +19,7 @@ import type { InventoryState, PlayerState } from '../types';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { ITEMS } from '../data/items';
 import { specialCooldown } from './progressionSystem';
+import { effectiveResistance, equipmentStats } from './equipmentStatsSystem';
 
 /** Teto de cada atributo em % (atingido no nível-referência). */
 export const ATTRIBUTE_CAPS: PlayerAttributes = { damage: 40, dexterity: 50, carry: 100, moveSpeed: 20 };
@@ -109,12 +110,13 @@ export function effectiveAttributes(player: PlayerState): PlayerAttributes {
   const stored = player.attributes ?? DEFAULT_ATTRIBUTES;
   const equipDamage = weaponDamageBonus(player.inventory);
   const gear = gearAttributeBonus(player.inventory);
+  const armorStats = equipmentStats(player);
   const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
   return {
-    damage: clamp(lv.damage + stored.damage + equipDamage + gear.damage),
+    damage: clamp(lv.damage + stored.damage + equipDamage + gear.damage + armorStats.damage),
     dexterity: clamp(lv.dexterity + stored.dexterity + gear.dexterity),
     carry: clamp(lv.carry + stored.carry + gear.carry),
-    moveSpeed: clamp(lv.moveSpeed + stored.moveSpeed + gear.moveSpeed),
+    moveSpeed: clamp(lv.moveSpeed + stored.moveSpeed + gear.moveSpeed + armorStats.speed),
   };
 }
 
@@ -152,8 +154,7 @@ export function effectiveMaxWeight(player: PlayerState): number {
 
 /** Armadura do peito equipado (0 = nu). */
 export function equippedArmor(player: PlayerState): number {
-  const id = player.inventory.equipment.armor;
-  return (id ? ITEMS[id]?.armor : 0) ?? 0;
+  return equipmentStats(player).defense;
 }
 
 /**
@@ -163,7 +164,8 @@ export function equippedArmor(player: PlayerState): number {
  */
 export function mitigateDamage(rawDamage: number, player: PlayerState): number {
   const a = equippedArmor(player);
-  const mitigated = rawDamage * (1 - a / (a + 50));
+  const resistance = effectiveResistance(equipmentStats(player).resistance);
+  const mitigated = rawDamage * (1 - a / (a + 50)) * (1 - resistance);
   return Math.max(1, Math.round(mitigated));
 }
 

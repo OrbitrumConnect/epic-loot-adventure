@@ -1,5 +1,6 @@
 import type { InventorySlot, ResourceNode, DeathBag, Position } from '../types';
 import type { CreatureDefinition } from '../types';
+import { luckMultiplier } from './equipmentStatsSystem';
 
 let bagCounter = 0;
 let nodeCounter = 0;
@@ -37,10 +38,11 @@ export function harvestNode(node: ResourceNode, amount: number): { node: Resourc
 export function rollCreatureLoot(
   creature: Pick<CreatureDefinition, 'lootTable'>,
   rng: () => number = Math.random,
+  luck = 0,
 ): InventorySlot[] {
   const loot: InventorySlot[] = [];
   for (const entry of creature.lootTable) {
-    if (rng() <= entry.chance) {
+    if (rng() <= Math.min(1, entry.chance * luckMultiplier(luck))) {
       loot.push({ itemId: entry.itemId, quantity: entry.quantity });
     }
   }

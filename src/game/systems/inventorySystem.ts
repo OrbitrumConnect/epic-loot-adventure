@@ -22,7 +22,8 @@ export function createInventory(initialItems?: { itemId: string; quantity: numbe
     slots,
     maxSlots: 24,
     maxWeight: 1000, // alinhado ao BASE_MAX_WEIGHT; syncCarry recalcula com a capacidade%
-    equipment: { primary: null, secondary: null, armor: null, accessory: null },
+    // armor/accessory permanecem aliases legados para chest/amulet; novos fluxos usam slots oficiais.
+    equipment: { primary: null, secondary: null, armor: null, accessory: null, head: null, gloves: null, legs: null, boots: null, amulet: null, ring1: null, ring2: null },
     hotbar: { slots: [0, 1, 2, 3, 4, 5, 6, 7] },
   };
 }
