@@ -80,11 +80,13 @@ export const ITEMS: Record<string, Item> = {
     icon: 'Rifle',
   },
   health_potion: {
+    // Caixa de poção (Pedro): começa com 500, stack grande (caixa única). Peso real
+    // 0.01 (500 poções = 5 de peso) pra contar na bolsa.
     id: 'health_potion',
     name: 'Poção de Vida',
     category: 'consumable',
     rarity: 'common',
-    weight: 0.4,
+    weight: 0.01,
     maxStack: 9999,
     dropOnDeath: true,
     usable: true,
@@ -219,14 +221,28 @@ export const ITEMS: Record<string, Item> = {
     name: 'Munição',
     category: 'resource',
     rarity: 'common',
-    // Caixa ÚNICA de munição (Pedro): acumula INFINITO num só item, nunca abre 2º slot
-    // e sem o peso travar — ganha entra na caixa, atira sai. maxStack gigante + peso 0.
-    weight: 0,
+    // Caixa ÚNICA de munição (Pedro): acumula num só item, nunca abre 2º slot. TEM peso
+    // real (0.01 → 2000 balas = 20 de peso) pra o usuário ver contando; o peso da bolsa
+    // é o limite. Ganha entra na caixa, atira sai.
+    weight: 0.01,
     maxStack: 9_999_999,
     dropOnDeath: true,
     usable: false,
     equippable: false,
     icon: 'CircleDot',
+  },
+  arrow: {
+    // Caixa de FLECHA (arco) — mesma ideia da bala. Peso real 0.01 (2000 flechas = 20).
+    id: 'arrow',
+    name: 'Flecha',
+    category: 'resource',
+    rarity: 'common',
+    weight: 0.01,
+    maxStack: 9_999_999,
+    dropOnDeath: true,
+    usable: false,
+    equippable: false,
+    icon: 'ArrowUpRight',
   },
   leather_armor: {
     id: 'leather_armor',

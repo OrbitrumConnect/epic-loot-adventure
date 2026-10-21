@@ -15,7 +15,7 @@ export const FEEDBACK_TTL: Record<FeedbackKind, number> = {
   xp: 1800,
   loot: 2600,
   harvest: 2200,
-  levelup: 3000,
+  levelup: 4500, // Pedro: o card de subir de nível fica um tico mais na tela
   shot: 400,
 };
 

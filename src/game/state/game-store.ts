@@ -282,7 +282,7 @@ function createInitialPlayer(): PlayerState {
     { itemId: 'iron_sword', quantity: 1 },
     { itemId: 'axe', quantity: 1 },
     { itemId: 'pickaxe', quantity: 1 },
-    { itemId: 'health_potion', quantity: 5 },
+    { itemId: 'health_potion', quantity: 500 },
     { itemId: 'trap', quantity: 3 },
     { itemId: 'cooked_meat', quantity: 8 },
     { itemId: 'torch', quantity: 1 },
@@ -293,6 +293,7 @@ function createInitialPlayer(): PlayerState {
     { itemId: 'pistol', quantity: 1 },
     { itemId: 'rifle', quantity: 1 },
     { itemId: 'ammo', quantity: 2000 }, // munição inicial (Pedro: 2k; farm/bicho dropa ~50 e repõe)
+    { itemId: 'arrow', quantity: 2000 }, // flecha inicial (Pedro: 2k, igual à bala; arco gasta flecha)
   ]);
   // Hotbar estendida: 8 slots originais INTACTOS + arco/pistola/rifle no fim.
   inventory.hotbar.slots = [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
@@ -649,11 +650,14 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
 
-    // Munição: armas de BALA (pistola/rifle) gastam 1 por tiro. Sem bala, não
-    // atira (arco usa flecha, é livre). Pega bala dos saqueadores/acampamentos.
-    const usesBullet = prof.projectile === 'bullet';
-    if (usesBullet && getItemCount(state.player.inventory, 'ammo') <= 0) {
-      set(s => ({ ui: { ...s.ui, message: 'Sem munição! Pegue balas dos saqueadores ou limpe um acampamento.' } }));
+    // Munição por tipo de arma (Pedro): pistola/rifle gastam BALA ('ammo'), arco gasta
+    // FLECHA ('arrow'); 1 por tiro. Sem o recurso, não atira. Drop de bicho repõe a caixa.
+    const ammoItem = prof.ranged ? (prof.projectile === 'bullet' ? 'ammo' : 'arrow') : null;
+    if (ammoItem && getItemCount(state.player.inventory, ammoItem) <= 0) {
+      const msg = ammoItem === 'ammo'
+        ? 'Sem munição! Pegue balas dos saqueadores ou limpe um acampamento.'
+        : 'Sem flechas! Mate bichos ou farme pra repor a aljava.';
+      set(s => ({ ui: { ...s.ui, message: msg } }));
       return;
     }
 
@@ -684,7 +688,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         player: {
           ...state.player,
           lastAttackAt: now,
-          inventory: usesBullet ? removeItem(state.player.inventory, 'ammo', 1) : state.player.inventory,
+          inventory: ammoItem ? removeItem(state.player.inventory, ammoItem, 1) : state.player.inventory,
         },
         attackTick: state.attackTick + 1,
         ui: { ...state.ui, message: `Golpe enviado contra ${creature.name}.` },
@@ -704,7 +708,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     let updatedPlayer = {
       ...state.player, lastAttackAt: now,
-      inventory: usesBullet ? removeItem(state.player.inventory, 'ammo', 1) : state.player.inventory,
+      inventory: ammoItem ? removeItem(state.player.inventory, ammoItem, 1) : state.player.inventory,
     };
     let updatedBags = state.deathBags;
     let msg = result.message;
