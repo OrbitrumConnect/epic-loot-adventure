@@ -83,6 +83,43 @@ type NetState = {
 const rand = (n: number) => Math.random().toString(36).slice(2, 2 + n);
 const randRoom = () => rand(5).toUpperCase();
 
+/** Metadado de presença usado na eleição do host. `away` = aba escondida ou modo Clash. */
+export type PresenceMeta = { joinedAt?: number; host?: boolean; away?: boolean };
+
+/**
+ * Quem segura a sala (simula os inimigos) — DETERMINÍSTICO: todo cliente vê a mesma
+ * presença e chega ao mesmo resultado. Só conta quem está PRESENTE de verdade (não `away`):
+ * (1) se há um host marcado e presente, ele continua (o mais antigo, se houver corrida);
+ * (2) senão, o jogador presente MAIS ANTIGO assume (desempate pelo id). Se TODOS estão
+ * ausentes, vale a mesma regra sobre todos (o solo segue no BackgroundSim).
+ * Assim o host sair, minimizar ou entrar no modo Clash NÃO pausa nem laga os outros.
+ */
+export function electHost(members: { id: string; meta: PresenceMeta }[]): string | null {
+  if (members.length === 0) return null;
+  const order = (a: { id: string; meta: PresenceMeta }, b: { id: string; meta: PresenceMeta }) =>
+    (a.meta.joinedAt ?? Infinity) - (b.meta.joinedAt ?? Infinity) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const present = members.filter(m => !m.meta.away);
+  const pool = present.length > 0 ? present : members;
+  const flagged = pool.filter(m => m.meta.host).sort(order);
+  if (flagged.length > 0) return flagged[0]!.id;
+  return [...pool].sort(order)[0]!.id;
+}
+
+let selfAway = false;
+let awayTimer: ReturnType<typeof setTimeout> | null = null;
+let retrack: (() => void) | null = null;
+
+/**
+ * Marca o jogador local como AUSENTE (aba escondida / modo Clash) ou presente. Ausente há
+ * 2 s → o host passa a sala pro próximo presente; voltar é imediato (entra como convidado).
+ */
+export function setAway(away: boolean): void {
+  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
+  const apply = (v: boolean) => { if (selfAway === v) return; selfAway = v; retrack?.(); };
+  if (away) awayTimer = setTimeout(() => apply(true), 2000);
+  else apply(false);
+}
+
 let channel: RealtimeChannel | null = null;
 let creatureHitHandler: ((intent: CreatureHitIntent) => void) | null = null;
 let playerHitHandler: ((intent: PlayerHitIntent) => void) | null = null;
@@ -109,6 +146,7 @@ export const useNet = create<NetState>((set, get) => ({
     const isHost = !code; // quem cria a sala (sem código) é o host (simula inimigos)
     const room = (code || randRoom()).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     const selfId = get().selfId;
+    const joinedAt = Date.now(); // ordem de chegada → quem assume se o host sair
     const ch = supabase.channel('tribos:' + room, {
       config: { presence: { key: selfId }, broadcast: { self: false } },
     });
@@ -163,12 +201,28 @@ export const useNet = create<NetState>((set, get) => ({
         }
         return { players, bases, full: ids.length >= MAX_PLAYERS };
       });
+      // MIGRAÇÃO DE HOST: se o host saiu (ou a sala estava vazia), o mais antigo assume e
+      // segue simulando a partir do último snapshot que já tem no store. Nada quebra.
+      const members = ids.map(id => ({ id, meta: ((st[id] as unknown as PresenceMeta[])?.[0]) ?? {} }));
+      const elected = electHost(members);
+      if (elected && (elected === selfId) !== get().isHost) setHost(elected === selfId);
     });
+
+    const track = () => {
+      if (!get().connected) return;
+      void ch.track({ name: get().selfName, joinedAt, host: get().isHost, away: selfAway } satisfies PresenceMeta & { name: string });
+    };
+    retrack = track;
+    const setHost = (host: boolean) => {
+      set({ isHost: host, ...(host ? { world: null } : {}) });
+      track();
+      if (host) void registerRoom(room); else unregisterRoom();
+    };
 
     ch.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         set({ connected: true });
-        void ch.track({ name: get().selfName });
+        track();
       }
     });
 
@@ -180,6 +234,7 @@ export const useNet = create<NetState>((set, get) => ({
   },
 
   leave: () => {
+    retrack = null;
     unregisterRoom();
     if (channel && supabase) { void supabase.removeChannel(channel); channel = null; }
     set({ room: null, connected: false, isHost: false, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: false });
@@ -274,8 +329,8 @@ const ROOM_STALE_MS = 60_000; // sala sem heartbeat há +60s é considerada mort
 let roomRowId: string | null = null;
 let roomHeartbeat: ReturnType<typeof setInterval> | null = null;
 
-async function registerRoom(code: string): Promise<void> {
-  if (!supabase) return;
+async function registerRoom(code: string, attempt = 0): Promise<void> {
+  if (!supabase || roomRowId) return;
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) return; // sem login não registra (mas o P2P segue funcionando por link)
@@ -284,7 +339,14 @@ async function registerRoom(code: string): Promise<void> {
     .upsert({ code, owner_id: uid, max_players: MAX_PLAYERS, active_players: 1, status: 'open', last_active_at: new Date().toISOString() }, { onConflict: 'code' })
     .select('id')
     .maybeSingle();
-  if (error || !data) return;
+  if (error || !data) {
+    // Host recém-eleito: a linha do host antigo pode ainda existir (RLS do dono bloqueia).
+    // Re-tenta depois que ela some — a sala volta pro lobby sem ninguém fazer nada.
+    if (attempt < 5 && useNet.getState().isHost && useNet.getState().room === code) {
+      setTimeout(() => { void registerRoom(code, attempt + 1); }, 3000);
+    }
+    return;
+  }
   roomRowId = data.id as string;
   roomHeartbeat = setInterval(() => {
     if (!supabase || !roomRowId) return;

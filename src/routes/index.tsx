@@ -52,7 +52,7 @@ import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
-import { supabase } from '@/net/multiplayer';
+import { supabase, setAway } from '@/net/multiplayer';
 import { SAVE_KEY } from '@/game/systems/persistenceSystem';
 const CityView = lazy(() => import('@/components/city-view'));
 
@@ -300,6 +300,15 @@ function Index() {
       location.reload();
     }
   }, [authUser]);
+
+  // MULTIPLAYER: aba escondida ou modo Clash/cidade = AUSENTE → se eu seguro a sala, passo
+  // pro próximo presente (não pauso nem lago os outros). Voltar = convidado, sem tranco.
+  useEffect(() => {
+    const sync = () => setAway(document.hidden || inCity);
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => document.removeEventListener('visibilitychange', sync);
+  }, [inCity]);
 
   // Progresso na CONTA: começa ao logar (carrega o save da conta ou semeia com o local),
   // para ao deslogar. Chaveado pelo id do usuário pra reiniciar se trocar de conta.
