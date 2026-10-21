@@ -8,7 +8,7 @@
  *   `onAttack` do clique esquerdo). Não duplica lógica nem toca nos gatilhos de auto-farm.
  */
 import { useRef, useState } from 'react';
-import { ChevronsUp, Swords } from 'lucide-react';
+import { ChevronsUp, Swords, Footprints } from 'lucide-react';
 import { clearVirtualMove, setVirtualMove } from './virtual-input';
 
 const RADIUS = 54; // px: distância máxima do knob ao centro (satura em magnitude 1).
@@ -41,6 +41,8 @@ export function MobileControls({ onAttack }: { onAttack: () => void }) {
     clearVirtualMove();
   };
 
+  const [running, setRunning] = useState(false);
+
   const jump = (e: React.PointerEvent) => {
     e.preventDefault();
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
@@ -48,6 +50,16 @@ export function MobileControls({ onAttack }: { onAttack: () => void }) {
   const attack = (e: React.PointerEvent) => {
     e.preventDefault();
     onAttack();
+  };
+  // CORRER = alterna o sprint (tecla Shift). Toggle (não precisa segurar: o outro dedo
+  // fica no joystick). Ligado = keydown ShiftLeft fica "preso"; desligado = keyup.
+  const toggleRun = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setRunning(r => {
+      const next = !r;
+      window.dispatchEvent(new KeyboardEvent(next ? 'keydown' : 'keyup', { code: 'ShiftLeft' }));
+      return next;
+    });
   };
 
   return (
@@ -60,6 +72,8 @@ export function MobileControls({ onAttack }: { onAttack: () => void }) {
         </>}
       </div>
       <div className="mobile-action-btns">
+        <button className={`mobile-btn mobile-btn--run${running ? ' is-on' : ''}`} aria-label="Correr"
+          aria-pressed={running} onPointerDown={toggleRun}><Footprints /></button>
         <button className="mobile-btn mobile-btn--jump" aria-label="Pular" onPointerDown={jump}><ChevronsUp /></button>
         <button className="mobile-btn mobile-btn--attack" aria-label="Atacar" onPointerDown={attack}><Swords /></button>
       </div>

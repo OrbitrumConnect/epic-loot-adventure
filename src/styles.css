@@ -789,7 +789,7 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   box-shadow: 0 2px 10px rgba(0,0,0,.4);
 }
 .mobile-action-btns {
-  position: absolute; right: 14px; bottom: 16px; z-index: 25;
+  position: absolute; right: 14px; bottom: 16px; z-index: 60; /* acima do HUD p/ o toque pegar */
   display: flex; flex-direction: column; gap: 14px; align-items: center;
 }
 .mobile-btn {
@@ -804,3 +804,10 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .mobile-btn--attack { border-color: color-mix(in oklch, var(--primary) 60%, transparent); color: var(--primary); }
 .mobile-btn--jump { width: 56px; height: 56px; }
 .mobile-btn--jump svg { width: 26px; height: 26px; }
+.mobile-btn--run { width: 56px; height: 56px; }
+.mobile-btn--run svg { width: 26px; height: 26px; }
+.mobile-btn--run.is-on {
+  border-color: color-mix(in oklch, var(--primary) 75%, transparent);
+  color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 22%, var(--overlay));
+}
