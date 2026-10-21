@@ -187,6 +187,14 @@ export const useNet = create<NetState>((set, get) => ({
       creatureHitHandler?.(hit);
     });
 
+    // PvP fatia 4: inimigo bateu na MINHA base. Só vale com inimizade (aliado não tem fogo amigo).
+    ch.on('broadcast', { event: 'base-hit' }, ({ payload }) => {
+      const hit = payload as BaseHitIntent;
+      if (hit.ownerId !== selfId || hit.id === selfId || !Number.isFinite(hit.damage)) return;
+      if (hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return;
+      baseHitHandler?.(hit);
+    });
+
     // Mundo único: o bicho do HOST me acertou (eu sou convidado). Aplica com a MINHA armadura.
     ch.on('broadcast', { event: 'mob-hit' }, ({ payload }) => {
       const hit = payload as MobHitIntent;
@@ -319,6 +327,26 @@ export function broadcastPlayerHit(targetId: string, damage: number): void {
 /** Registrado pela camada de mundo/HUD pra aplicar o dano PvP recebido no jogador local. */
 export function registerPlayerHitHandler(handler: ((intent: PlayerHitIntent) => void) | null): void {
   playerHitHandler = handler;
+}
+
+/* ---- PvP fatia 4: golpe na BASE de um inimigo. O DONO da base valida e aplica. ---- */
+export type BaseHitIntent = {
+  id: string; ownerId: string; pieceId: string; damage: number; fromName: string; fromSide: PvpSide;
+};
+let baseHitHandler: ((intent: BaseHitIntent) => void) | null = null;
+
+export function broadcastBaseHit(ownerId: string, pieceId: string, damage: number): void {
+  if (!channel || !useNet.getState().connected || !Number.isFinite(damage) || damage <= 0) return;
+  const { selfId, selfName, selfSide } = useNet.getState();
+  if (ownerId === selfId) return;
+  void channel.send({
+    type: 'broadcast', event: 'base-hit',
+    payload: { id: selfId, ownerId, pieceId, damage, fromName: selfName, fromSide: selfSide } satisfies BaseHitIntent,
+  });
+}
+
+export function registerBaseHitHandler(handler: ((intent: BaseHitIntent) => void) | null): void {
+  baseHitHandler = handler;
 }
 
 /* ---- Mundo único: o host mira QUALQUER jogador e avisa o convidado quando o bicho bate ---- */

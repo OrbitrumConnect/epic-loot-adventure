@@ -7,12 +7,8 @@ import { GlbHeroMixamo } from './glb-hero-mixamo';
 import type { HeroAction } from './glb-hero';
 import { labelTexture, markPointerConsumed, terrainHeight, HERO_HEIGHT } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
-import { selectedItemId } from './held-weapon';
 import { useGameStore } from '@/game/state/game-store';
-import { weaponRangeFor } from '@/game/data/weapons';
-import { damageMultiplier } from '@/game/systems/attributesSystem';
-import { playerBaseAttack } from '@/game/systems/progressionSystem';
-import { ITEMS } from '@/game/data/items';
+import { pvpStrike } from './pvp-attack';
 
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
 const LABEL_RANGE = 12;
@@ -84,14 +80,10 @@ function RemotePlayer({ id }: { id: string }) {
         store.setMessage(`${p.name} · Nv. ${p.level} · ${Math.round(p.hp)}/${Math.round(p.maxHp)} PV.`);
         return;
       }
-      const dist = Math.hypot(me.position.x - g.position.x, me.position.z - g.position.z);
-      const heldId = selectedItemId(store);
-      const range = weaponRangeFor(heldId, me.level);
-      if (dist > range + 0.6) { store.setMessage(`${p.name} está longe demais (${range.toFixed(1)}m).`); return; }
-      const base = playerBaseAttack(me.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
-      const dmg = Math.max(1, Math.round(base * damageMultiplier(me)));
-      broadcastPlayerHit(id, dmg);
-      store.setMessage(`⚔️ Você atingiu ${p.name}! -${dmg}`);
+      // Cadência + alcance + munição da arma; o ALVO aplica o PvP justo (fração + armadura + teto).
+      if (pvpStrike(p.name, g.position.x, g.position.z, 0.6, (raw) => broadcastPlayerHit(id, raw))) {
+        store.setMessage(`⚔️ Você atingiu ${p.name}!`);
+      }
     }}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />
       {/* Anel vermelho sob INIMIGOS (PvP). Fica invisível pra aliado; toggle no useFrame. */}
