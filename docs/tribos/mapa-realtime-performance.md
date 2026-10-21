@@ -15,7 +15,10 @@ São **duas frentes independentes**: (A) CLIENTE/RENDER (FPS/frametime no aparel
 
 ## A) CLIENTE / RENDER — FPS e fluidez
 
-### A1. Oclusão da grama varre 62k instâncias por frame à toa — CONFIRMADO ⭐ (prioridade 1)
+### A1. Oclusão da grama varre 62k instâncias por frame à toa — ✅ FEITO (commit)
+> Corrigido: `ForestBatch` só registra no sistema de fade quando há esferas; a grama (spheres
+> vazio) ficou de fora do `updateOcclusion`. Abaixo, o diagnóstico original.
+
 `ground-cover.tsx:8` passa `spheres: FadeSphere[] = []` (VAZIO) ao `ForestBatch` (`:69`), que
 registra o lote no sistema de oclusão. `occlusion.ts:updateOcclusion` (≈:253) percorre **todas**
 as instâncias de cada lote por quadro (até `GRASS_CAP` ~62k tufos) calculando distância e
