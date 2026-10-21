@@ -12,7 +12,7 @@ import {
   getUpgradeCost, getUpgradeDurationMs, getPlaceBlockReason, placeBuilding, sendExpedition,
   startUpgrade, tickBase,
 } from '@/game/systems/baseSystem';
-import { createInventory, getItemCount } from '@/game/systems/inventorySystem';
+import { createInventory, getItemCount, INVENTORY_SLOTS } from '@/game/systems/inventorySystem';
 
 const T0 = 1_000_000;
 const RICH = { wood: 1e9, stone: 1e9, food: 1e9, essence: 1e9 };
@@ -269,7 +269,7 @@ describe('baseSystem · fila de produção', () => {
     expect(delivery.state.toolStash['torch']).toBeUndefined();
 
     // Mochila sem slots livres: a ferramenta fica guardada na forja.
-    const fullInventory = createInventory(Array.from({ length: 24 }, () => ({ itemId: 'wolf_fang', quantity: 1 })));
+    const fullInventory = createInventory(Array.from({ length: INVENTORY_SLOTS }, () => ({ itemId: 'wolf_fang', quantity: 1 })));
     const held = collectTools(done, fullInventory);
     expect(held.moved).toHaveLength(0);
     expect(held.state.toolStash['torch']).toBe(1);

@@ -1547,24 +1547,47 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Penalidade (Pedro): perde 5 NÍVEIS por base perdida (piso 1), mantendo o resto
       // (itens, atributos, HP). Assim o progresso NÃO zera — o jogador continua vivo e
       // querendo evoluir. 5→1, 10→5, 15→10, 20→15...
-      // A mochila volta ao KIT INICIAL (novo sobrevivente: armas base + bala/flecha/
-      // poção + madeira/pedra iniciais). Perde o estoque farmado e refarma a base do 0,
-      // mas MANTÉM nível (−5) e atributos. "Jogo normal do 0 com nível" (Pedro).
+      // Pedro (21/10, regra final): −5 níveis + mochila VOLTA AO KIT INICIAL, mas o ESPECIAL
+      // fica: armas, armaduras, ferramentas, skills e recursos RAROS+ (ouro, essência,
+      // pele de urso...). Perde só o de FARM (recursos comuns, comida). Base some inteira
+      // (evolução pedra/metal também — reconstrói de madeira).
+      const SPECIAL_CATS = new Set(['weapon', 'armor', 'tool', 'skill']);
+      const isSpecial = (id: string) => {
+        const it = ITEMS[id];
+        return !!it && (SPECIAL_CATS.has(it.category) || (it.category === 'resource' && it.rarity !== 'common'));
+      };
+      const kit = createInitialPlayer().inventory;
+      const slots = kit.slots.map(s => ({ ...s }));
+      for (const s of state.player.inventory.slots) {
+        if (!s.itemId || !isSpecial(s.itemId)) continue;
+        const same = slots.find(k => k.itemId === s.itemId);
+        if (same) { same.quantity = Math.max(same.quantity, s.quantity); continue; } // kit já tem (ex.: pistola)
+        const empty = slots.find(k => k.itemId === null);
+        if (empty) { empty.itemId = s.itemId; empty.quantity = s.quantity; }
+      }
+      const keptIds = new Set(slots.map(s => s.itemId));
+      const eq = state.player.inventory.equipment;
+      const keepEq = (id: string | null) => (id && keptIds.has(id) ? id : null);
       const lostLevel = Math.max(1, state.player.level - 5);
       const penalized = syncCarry({
         ...state.player,
         level: lostLevel,
         xp: 0,
         xpToNext: xpForLevel(lostLevel),
-        inventory: createInitialPlayer().inventory,
+        inventory: {
+          ...kit, slots,
+          equipment: { primary: keepEq(eq.primary), secondary: keepEq(eq.secondary), armor: keepEq(eq.armor), accessory: keepEq(eq.accessory) },
+        },
       });
       const penaltyMsg = lostLevel < state.player.level
-        ? `${message} Você perdeu 5 níveis (${state.player.level}→${lostLevel}) e os recursos farmados; recomece a base com seu nível.`
-        : `${message} Você perdeu os recursos farmados; recomece a base com seu nível.`;
+        ? `${message} Você perdeu 5 níveis (${state.player.level}→${lostLevel}) e o farm; armas/armaduras/raros ficaram. Reconstrua a base.`
+        : `${message} Você perdeu o farm; armas/armaduras/raros ficaram. Reconstrua a base.`;
       set({
         player: penalized,
         stats: { ...state.stats, basesLost: state.stats.basesLost + 1 },
         playerBase: null,
+        baseEvolved: false, // base some inteira: evolução volta pra madeira (Pedro)
+        baseMetal: false,
         wave: INITIAL_WAVE,
         baseLevel: 1,
         baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },

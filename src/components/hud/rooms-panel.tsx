@@ -56,14 +56,16 @@ export function RoomsPanel() {
                 padding: '9px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontWeight: 700, letterSpacing: 1 }}>🌐 {r.code}</span>
-                  <span style={{ fontSize: 12, color: full ? '#ff8f8f' : 'var(--muted-foreground)' }}>{r.players}/{r.max}{full ? ' (cheia)' : ''}</span>
+                  <span style={{ fontWeight: 700, letterSpacing: 1 }}>{r.live ? '🌐' : '⏸️'} {r.code}</span>
+                  {r.live
+                    ? <span style={{ fontSize: 12, color: full ? '#ff8f8f' : 'var(--muted-foreground)' }}>{r.players}/{r.max}{full ? ' (cheia)' : ''}</span>
+                    : <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>pausada · retoma de onde parou</span>}
                 </div>
                 <button disabled={mine || full} onClick={() => join(r.code)} style={{
                   padding: '5px 14px', borderRadius: 8, border: 'none', cursor: mine || full ? 'default' : 'pointer',
                   fontWeight: 700, fontSize: 13, opacity: mine || full ? 0.5 : 1,
                   background: mine ? 'rgba(255,255,255,0.1)' : '#f2c879', color: mine ? '#e8eef6' : '#1a1206',
-                }}>{mine ? 'Você está aqui' : 'Entrar'}</button>
+                }}>{mine ? 'Você está aqui' : r.live ? 'Entrar' : 'Retomar'}</button>
               </div>
             );
           })}

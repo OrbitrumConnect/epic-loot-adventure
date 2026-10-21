@@ -7,8 +7,12 @@ import { ITEMS } from '../data/items';
 export const POTION_SLOT = 11; // índice 11 = "slot 12" (1-indexado) na grade do inventário
 const POTION_ITEM = 'health_potion';
 
+/** Nº de slots da bolsa. Pedro pediu +50 livres pro que for mais catado: 24 → 74. Fonte única
+ *  (createInventory + migração de save antigo em persistenceSystem usam esta constante). */
+export const INVENTORY_SLOTS = 74;
+
 export function createInventory(initialItems?: { itemId: string; quantity: number }[]): InventoryState {
-  const slots: InventorySlot[] = Array.from({ length: 24 }, () => ({ itemId: null, quantity: 0 }));
+  const slots: InventorySlot[] = Array.from({ length: INVENTORY_SLOTS }, () => ({ itemId: null, quantity: 0 }));
 
   if (initialItems) {
     initialItems.forEach((item, i) => {
@@ -20,7 +24,7 @@ export function createInventory(initialItems?: { itemId: string; quantity: numbe
 
   return {
     slots,
-    maxSlots: 24,
+    maxSlots: INVENTORY_SLOTS,
     maxWeight: 1000, // alinhado ao BASE_MAX_WEIGHT; syncCarry recalcula com a capacidade%
     equipment: { primary: null, secondary: null, armor: null, accessory: null },
     hotbar: { slots: [0, 1, 2, 3, 4, 5, 6, 7] },

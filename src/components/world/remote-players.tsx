@@ -7,12 +7,8 @@ import { GlbHeroMixamo } from './glb-hero-mixamo';
 import type { HeroAction } from './glb-hero';
 import { labelTexture, markPointerConsumed, terrainHeight, HERO_HEIGHT } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
-import { selectedItemId } from './held-weapon';
 import { useGameStore } from '@/game/state/game-store';
-import { weaponRangeFor } from '@/game/data/weapons';
-import { damageMultiplier } from '@/game/systems/attributesSystem';
-import { playerBaseAttack } from '@/game/systems/progressionSystem';
-import { ITEMS } from '@/game/data/items';
+import { pvpStrike } from './pvp-attack';
 import { resolveRemotePose } from './remote-player-interpolation';
 const INTERPOLATION_DELAY_MS = 100;
 
@@ -40,12 +36,21 @@ function RemotePlayer({ id }: { id: string }) {
     const pose = resolveRemotePose(useNet.getState().poseHistory[id] ?? [], now - INTERPOLATION_DELAY_MS, now);
     if (!pose) return;
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
-    if (!inited.current) { g.position.set(pose.x, glbSurfaceY(pose.x, pose.z, terrainHeight(pose.x, pose.z)), pose.z); g.rotation.y = pose.yaw; inited.current = true; }
+    // Posição/yaw vêm da pose interpolada (atraso fixo). Pés: usa a altura REAL que o outro
+    // jogador mandou (ponte/casa/pulo/morro); sem `y` (cliente antigo) cai no cálculo pelo chão.
+    const groundAt = (x: number, z: number) => glbSurfaceY(x, z, terrainHeight(x, z));
+    if (!inited.current) {
+      g.position.set(pose.x, Number.isFinite(p.y) ? (p.y as number) : groundAt(pose.x, pose.z), pose.z);
+      g.rotation.y = pose.yaw;
+      inited.current = true;
+    }
     const dt = Math.min(delta, 0.1);
     const t = 1 - Math.exp(-15 * dt);
     g.position.x += (pose.x - g.position.x) * t;
     g.position.z += (pose.z - g.position.z) * t;
-    g.position.y = glbSurfaceY(g.position.x, g.position.z, terrainHeight(g.position.x, g.position.z));
+    g.position.y = Number.isFinite(p.y)
+      ? g.position.y + ((p.y as number) - g.position.y) * t
+      : groundAt(g.position.x, g.position.z);
     let dy = pose.yaw - g.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
@@ -82,14 +87,10 @@ function RemotePlayer({ id }: { id: string }) {
         store.setMessage(`${p.name} · Nv. ${p.level} · ${Math.round(p.hp)}/${Math.round(p.maxHp)} PV.`);
         return;
       }
-      const dist = Math.hypot(me.position.x - g.position.x, me.position.z - g.position.z);
-      const heldId = selectedItemId(store);
-      const range = weaponRangeFor(heldId, me.level);
-      if (dist > range + 0.6) { store.setMessage(`${p.name} está longe demais (${range.toFixed(1)}m).`); return; }
-      const base = playerBaseAttack(me.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
-      const dmg = Math.max(1, Math.round(base * damageMultiplier(me)));
-      broadcastPlayerHit(id, dmg);
-      store.setMessage(`⚔️ Você atingiu ${p.name}! -${dmg}`);
+      // Cadência + alcance + munição da arma; o ALVO aplica o PvP justo (fração + armadura + teto).
+      if (pvpStrike(p.name, g.position.x, g.position.z, 0.6, (raw) => broadcastPlayerHit(id, raw))) {
+        store.setMessage(`⚔️ Você atingiu ${p.name}!`);
+      }
     }}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />
       {/* Anel vermelho sob INIMIGOS (PvP). Fica invisível pra aliado; toggle no useFrame. */}

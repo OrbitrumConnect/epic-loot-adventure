@@ -52,7 +52,7 @@ import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
-import { supabase } from '@/net/multiplayer';
+import { supabase, setAway } from '@/net/multiplayer';
 import { SAVE_KEY } from '@/game/systems/persistenceSystem';
 const CityView = lazy(() => import('@/components/city-view'));
 
@@ -301,6 +301,15 @@ function Index() {
     }
   }, [authUser]);
 
+  // MULTIPLAYER: aba escondida ou modo Clash/cidade = AUSENTE → se eu seguro a sala, passo
+  // pro próximo presente (não pauso nem lago os outros). Voltar = convidado, sem tranco.
+  useEffect(() => {
+    const sync = () => setAway(document.hidden || inCity);
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => document.removeEventListener('visibilitychange', sync);
+  }, [inCity]);
+
   // Progresso na CONTA: começa ao logar (carrega o save da conta ou semeia com o local),
   // para ao deslogar. Chaveado pelo id do usuário pra reiniciar se trocar de conta.
   useEffect(() => {
@@ -533,16 +542,30 @@ function Index() {
             }}>
               <Skull style={{ width: 72, height: 72, color: '#ef4444', marginBottom: 16 }} />
               <h2 style={{ fontSize: 34, fontWeight: 700, margin: 0, color: '#ef4444', textShadow: '0 0 20px rgba(239,68,68,0.5)' }}>Sua base caiu!</h2>
-              <p style={{ fontSize: 16, marginTop: 12, opacity: 0.85 }}>A horda destruiu seu núcleo. Fim da sobrevivência.</p>
+              <p style={{ fontSize: 16, marginTop: 12, opacity: 0.85, textAlign: 'center', maxWidth: 420, padding: '0 16px' }}>
+                A horda destruiu seu núcleo. Você perdeu 5 níveis e o farm (mochila voltou ao kit inicial) — armas, armaduras e itens raros ficaram. Continue e reconstrua.
+              </p>
+              {/* Pedro: perder a base = −5 níveis e SEGUE. "Continuar" é o caminho principal;
+                  o reset total vira opção secundária (só se o jogador escolher). */}
               <button
-                onClick={() => useGameStore.getState().restartSurvival()}
+                onClick={() => useGameStore.setState(s => ({ ui: { ...s.ui, baseFell: false } }))}
                 style={{
                   marginTop: 24, padding: '14px 30px', fontSize: 18, fontWeight: 700,
                   color: '#0b0b0b', background: '#fbbf24', border: 'none', borderRadius: 10,
                   cursor: 'pointer', boxShadow: '0 0 24px rgba(251,191,36,0.45)',
                 }}
               >
-                🔥 Sobreviver de novo
+                Continuar
+              </button>
+              <button
+                onClick={() => { if (window.confirm('Recomeçar do ZERO (nível 1, inventário novo)?')) useGameStore.getState().restartSurvival(); }}
+                style={{
+                  marginTop: 12, padding: '8px 18px', fontSize: 13, fontWeight: 600,
+                  color: '#fff', background: 'transparent', border: '1px solid rgba(255,255,255,0.35)',
+                  borderRadius: 8, cursor: 'pointer', opacity: 0.8,
+                }}
+              >
+                Recomeçar do zero
               </button>
             </div>
           )}
@@ -1003,7 +1026,7 @@ function Index() {
                       data-active={ui.selectedHotbar === i}
                       onClick={() => useHotbarSlot(i)}
                       onDragOver={e => e.preventDefault()}
-                      onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < 24) useHotbarSlot(n); }}>
+                      onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < player.inventory.slots.length) useHotbarSlot(n); }}>
                       <span className="slot-key">{i + 1}</span>
                       {item ? <ItemSprite itemId={item.id} size={40} className="hotbar-sprite" /> : <Package strokeWidth={1.3} aria-hidden="true" />}
                       <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>

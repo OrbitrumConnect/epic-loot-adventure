@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  Axe, Crosshair, Flame, FlaskConical, Gem, Mountain, Package, Pickaxe, Shield,
-  Skull, Sparkles, Swords, TreePine, Utensils,
+  ArrowUpRight, Axe, Crosshair, Flame, FlaskConical, Gem, Mountain, Package, Pickaxe, Shield,
+  Skull, Sparkles, Swords, Target, TreePine, Utensils,
 } from 'lucide-react';
 import { ITEMS, itemSpriteUrl } from '@/game/data/items';
 
@@ -34,12 +34,12 @@ function RifleIcon(props: React.SVGProps<SVGSVGElement>) {
 /** Ícones lucide de reserva, indexados por `Item.icon`. Usados quando o sprite não carrega. */
 export const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   Swords, Axe, Pickaxe, FlaskConical, Crosshair, Utensils, Flame, Sparkles,
-  TreePine, Mountain, Gem, Shield, Skull, Package,
+  TreePine, Mountain, Gem, Shield, Skull, Package, ArrowUpRight, Target,
   Bow: BowIcon, Pistol: PistolIcon, Rifle: RifleIcon,
 };
 
 /** Itens que não têm sprite webp: renderizam o ícone direto (sem 404). */
-const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade']);
+const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor']);
 
 export type ItemSpriteProps = {
   itemId: string | null | undefined;
