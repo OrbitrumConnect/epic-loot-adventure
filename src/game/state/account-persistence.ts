@@ -35,7 +35,11 @@ export function startAccountPersistence(userId: string): () => void {
     void client.from(TABLE).upsert(
       { user_id: userId, save: blob, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' },
-    );
+    ).then(({ error }) => {
+      // Antes o erro era engolido (`void`) → gravação falhava calada (tabela vazia).
+      // Agora loga e re-marca dirty pra tentar de novo (RLS/sessão/rede).
+      if (error) { dirty = true; console.warn('[save conta] gravação falhou:', error.message); }
+    });
   };
   const flush = () => {
     clearTimeout(debounce); clearTimeout(maxWait);
@@ -46,12 +50,18 @@ export function startAccountPersistence(userId: string): () => void {
   // Carrega o save da conta; sem ele, semeia com o estado atual (progresso local).
   void client.from(TABLE).select('save').eq('user_id', userId).maybeSingle().then(({ data, error }) => {
     if (stopped) return;
-    const parsed = !error && data?.save ? parseLocalSave(JSON.stringify(data.save)) : null;
+    if (error) {
+      // Load falhou (RLS/rede): NÃO semeia por cima (isso destruía o save bom com o
+      // estado fresco). Mantém o que tem; o save local segue de fallback.
+      console.warn('[save conta] load falhou, mantém local:', error.message);
+      return;
+    }
+    const parsed = data?.save ? parseLocalSave(JSON.stringify(data.save)) : null;
     if (parsed) {
       store.setState(restoreLocalSave(parsed, store.getState(), Date.now()));
     } else {
       dirty = true;
-      push(); // primeira vez nesta conta: sobe o que o jogador já tem.
+      push(); // genuinamente sem save nesta conta: sobe o que o jogador já tem.
     }
   });
 
@@ -59,8 +69,8 @@ export function startAccountPersistence(userId: string): () => void {
     if (stopped || !persistedStateChanged(state, previous)) return;
     dirty = true;
     clearTimeout(debounce);
-    debounce = setTimeout(flush, 3000);
-    maxWait ??= setTimeout(flush, 15000);
+    debounce = setTimeout(flush, 2000);
+    maxWait ??= setTimeout(flush, 6000);
   });
 
   const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
