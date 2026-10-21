@@ -181,8 +181,9 @@ export function decidePilotAttack(input: PilotAttackInput): PilotAttackDecision 
     engaged = false, style = 'auto', kiting = false, kiteStalled = false,
   } = input;
 
-  // Arma eleita pela distância (fonte única: módulo puro).
-  const pick = pickWeaponFor(dist, weapons, style);
+  // Arma eleita pela distância (fonte única: módulo puro). Passa a arma na MÃO pra
+  // o piloto RESPEITAR a escolha do jogador (não auto-trocar pistola/rifle por arco).
+  const pick = pickWeaponFor(dist, weapons, style, heldHotbarIndex);
   // Nenhuma arma usável (ex.: só bala sem munição): segura posição, não spamma store.attack().
   if (pick == null) return { action: 'wait' };
   const wantSwitch = pick != null && pick.hotbarIndex !== heldHotbarIndex;

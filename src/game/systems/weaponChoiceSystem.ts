@@ -123,6 +123,7 @@ export function pickWeaponFor(
   dist: number,
   weapons: AutoWeapon[],
   style: PilotWeaponStyle = 'auto',
+  heldIndex?: number,
 ): AutoWeapon | null {
   const usable = weapons.filter(w => w.hasAmmo);
   if (usable.length === 0) return null;
@@ -131,10 +132,15 @@ export function pickWeaponFor(
   const ranged = usable.filter(w => !isMelee(w));
 
   const bestMelee = bestMeleeOf(melees);
+  // Arma na MÃO (escolhida pelo jogador), se ainda usável (tem munição).
+  const held = heldIndex != null ? usable.find(w => w.hotbarIndex === heldIndex) : undefined;
 
   if (style === 'ranged') {
-    // Ranged manda: cobre a distância (maior DPS) ou a de maior alcance pra
-    // aproximar e atirar. Só cai no melee se não houver ranged usável.
+    // RESPEITA a arma à distância que o jogador ESCOLHEU (pistola/rifle/arco): usa ela,
+    // não auto-troca pela de maior alcance/DPS. Só troca se ela ficar sem munição — aí
+    // cai na melhor ranged restante (ex.: acabou a bala → arco). Pedro: "quero pistola/
+    // rifle, poder usar os 3".
+    if (held && !isMelee(held)) return held;
     const cover = bestRangedCovering(ranged, dist);
     if (cover) return cover;
     const longest = longestRangedOf(ranged);
@@ -143,8 +149,8 @@ export function pickWeaponFor(
   }
 
   if (style === 'melee') {
-    // Corpo a corpo manda, mesmo de longe (o piloto aproxima). Só usa ranged se
-    // não houver melee usável.
+    // Corpo a corpo manda, mesmo de longe (o piloto aproxima). Respeita a melee na mão.
+    if (held && isMelee(held)) return held;
     if (bestMelee) return bestMelee;
     const cover = bestRangedCovering(ranged, dist);
     if (cover) return cover;
