@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
 import { startLocalPersistence } from '@/game/state/local-persistence';
+import { startAccountPersistence } from '@/game/state/account-persistence';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
 import { ToolCrafting } from '@/components/hud/tool-crafting';
@@ -279,6 +280,13 @@ function Index() {
   const isMobile = useIsMobile();
   const authUser = useAuth(s => s.user);
   const signOut = useAuth(s => s.signOut);
+
+  // Progresso na CONTA: começa ao logar (carrega o save da conta ou semeia com o local),
+  // para ao deslogar. Chaveado pelo id do usuário pra reiniciar se trocar de conta.
+  useEffect(() => {
+    if (!AUTH_ENABLED || !authUser) return;
+    return startAccountPersistence(authUser.id);
+  }, [authUser?.id]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
