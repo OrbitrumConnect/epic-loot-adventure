@@ -4,7 +4,7 @@ import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
   Circle, CircleDot, CloudRain, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
   Heart, Home, Landmark, Leaf, ListChecks, Lock, LogOut, Map, Menu, MessageSquare, Mountain, Package,
-  PanelLeftClose, Pickaxe, Repeat, RotateCcw, RotateCw, Settings, Shield, ShieldCheck, Skull,
+  Download, PanelLeftClose, Pickaxe, Repeat, RotateCcw, RotateCw, Settings, Shield, ShieldCheck, Skull,
   Tornado, CloudLightning,
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Trophy, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
@@ -56,6 +56,7 @@ import { LoginGate } from '@/components/LoginGate';
 import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useAim } from '@/components/world/aim';
+import { promptInstall, usePwa } from '@/net/pwa-install';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
 import { supabase, setAway } from '@/net/multiplayer';
@@ -70,6 +71,28 @@ const ARMOR_SLOT_ICON: Record<ArmorSlot, typeof Shield> = {
   head: Shield, chest: Shield, gloves: Shield, legs: Shield, boots: Shield,
   amulet: Gem, ring1: Gem, ring2: Gem,
 };
+
+/** Preferências: instalar o jogo como app. Android/PC = botão; iPhone = instrução (não há convite). */
+function InstallAppRow() {
+  const { canInstall, installed, ios } = usePwa();
+  if (installed) return null;
+  if (!canInstall && !ios) return null;
+  return (
+    <div className="home-building">
+      <Download />
+      <div style={{ flex: 1 }}>
+        <strong>Instalar app</strong>
+        <small>{canInstall
+          ? 'Ícone na tela inicial, abre em tela cheia como um app.'
+          : 'No iPhone: toque em Compartilhar (□↑) → "Adicionar à Tela de Início".'}</small>
+      </div>
+      {canInstall && (
+        <Button variant="ghost" className="world-action" style={{ width: 'auto', padding: '0 12px' }}
+          aria-label="Instalar app" title="Instalar app" onClick={() => { void promptInstall(); }}>Instalar</Button>
+      )}
+    </div>
+  );
+}
 
 /** Mira no centro do MUNDO (não da janela): só aparece mirando; mostra o zoom (rodinha). */
 function AimCrosshair() {
@@ -1086,7 +1109,8 @@ function Index() {
                 {panel === 'settings' && (
                   <>
                     <div className="home-building"><Wind /><div><strong>Áudio ambiente</strong><small>Desativado nesta versão</small></div></div>
-                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · Clique no inimigo seleciona · Shift+clique enfileira · V câmera · E coletar · I inventário · B cidade · G piloto automático (idle/manual)</small></div></div>
+                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · Clique no inimigo seleciona · Shift+clique enfileira · V câmera · E coletar · I inventário · B cidade · G piloto automático (idle/manual) · Botão direito MIRA (3ª pessoa) · rodinha mirando = zoom</small></div></div>
+                    <InstallAppRow />
                     {AUTH_ENABLED && authUser && (
                       <div className="home-building">
                         <LogOut />
