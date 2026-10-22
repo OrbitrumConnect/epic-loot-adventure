@@ -542,13 +542,22 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     //   5. bolsa cheia → recuar pra base;
     //   6. idle.
 
+    // RAIO DO JOGADOR (slider, Pedro 22/10): limita TUDO no idle. Escolhe alvo até o maior entre
+    // o raio e o alcance da arma (com 5 m e arma de longe ele ATIRA de onde está, sem andar além
+    // dos 5 m). Sem slider (testes/antigo) = os raios de sempre. Revide e defesa da base na horda
+    // (acima) não mudam.
+    const playerRadius = snapshot.autoHuntRadius ?? IDLE_HUNT_RADIUS;
+    const reachRadius = Math.max(playerRadius, snapshot.attackRange ?? 0);
+    const defendRadius = Math.min(AUTO_ENGAGE_RADIUS, reachRadius);
+    const huntRadius = Math.min(IDLE_HUNT_RADIUS, reachRadius);
+
     // 1. DEFESA: inimigo coladinho → ataca. SÓ hostil.
-    const foe = weakestTargetWithin(snapshot, AUTO_ENGAGE_RADIUS, true);
-    const stickyFoe = stickTarget(snapshot, foe, AUTO_ENGAGE_RADIUS * COMBAT_EXIT_FACTOR);
+    const foe = weakestTargetWithin(snapshot, defendRadius, true);
+    const stickyFoe = stickTarget(snapshot, foe, defendRadius * COMBAT_EXIT_FACTOR);
     if (stickyFoe) return engage(snapshot, stickyFoe, 'Defendendo a base');
 
     // 2. FARM: coleta o nó mais próximo (alcance da própria definição do nó).
-    const node = nearestNode(snapshot);
+    const node = nearestNode(snapshot, Math.min(FARM_RADIUS, playerRadius));
     if (node && snapshot.gatherCapacity !== false) {
       const reach = node.range ?? GATHER_RANGE;
       if (getDistance(snapshot.playerPosition, node.position) <= reach) {
@@ -559,12 +568,13 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
 
     // 3. CAÇA AUTÔNOMA: hostil de menor nível até IDLE_HUNT_RADIUS. Engaja
     // qualquer criatura hostil, por mais forte que seja.
-    const prey = weakestTargetWithin(snapshot, IDLE_HUNT_RADIUS, true);
-    const stickyPrey = stickTarget(snapshot, prey, IDLE_HUNT_RADIUS * COMBAT_EXIT_FACTOR);
+    const prey = weakestTargetWithin(snapshot, huntRadius, true);
+    const stickyPrey = stickTarget(snapshot, prey, huntRadius * COMBAT_EXIT_FACTOR);
     if (stickyPrey) return engage(snapshot, stickyPrey, 'Caçando por perto');
 
     // 4. CAÇA PACÍFICA (comida) só se o jogador ligou o raio de caça.
-    const huntBase = snapshot.autoHuntRadius ?? 0;
+    // Pacífico (comida) segue até 35 m no máximo, como antes do slider ir a 45.
+    const huntBase = snapshot.autoHuntRadius === undefined ? 0 : Math.min(snapshot.autoHuntRadius, 35);
     if (huntBase > 0) {
       const quarry = weakestTargetWithin(snapshot, Math.max(huntBase, snapshot.attackRange ?? 0), false);
       if (quarry) return engage(snapshot, quarry, 'Caçando por perto');

@@ -608,7 +608,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   targetId: null,
   harvestNodes: createHarvestNodes(),
   autoPotion: true,
-  autoHuntRadius: 35,
+  autoHuntRadius: 45,
   pilotWeaponStyle: 'auto',
   pilotLastIntent: null,
   feedback: [],
@@ -2010,7 +2010,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   },
 
   setAutoHuntRadius: (radius) => {
-    const clamped = Math.round(Math.max(5, Math.min(35, radius)));
+    const clamped = Math.round(Math.max(5, Math.min(45, radius)));
     set(s => ({
       autoHuntRadius: clamped,
       ui: { ...s.ui, message: `Caça automática: raio ${clamped} m.` },
