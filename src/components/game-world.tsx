@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { OrthographicCamera, PerspectiveCamera, Stats, useGLTF } from '@react-three/drei';
+import { OrthographicCamera, PerformanceMonitor, PerspectiveCamera, Stats, useGLTF } from '@react-three/drei';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
@@ -2323,18 +2323,32 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   );
 }
 
+/** RESOLUÇÃO DINÂMICA (o "DLSS" do navegador): começa em 1 (como sempre foi); com FPS folgado
+ *  sobe a nitidez até a densidade da tela (teto 1,5); com FPS caindo desce até 0,75 e volta quando
+ *  melhora. Sombras/efeitos intocados. Limite de vaivém pra não ficar oscilando. */
+const DPR_MIN = 0.75;
+function maxDpr(): number {
+  if (typeof window === 'undefined') return 1;
+  return Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
+}
+
 export default function GameWorld(props: WorldProps) {
   const c = useMemo(palette, []);
   const cameraMode = props.cameraMode ?? 'iso';
+  const dprMax = useMemo(maxDpr, []);
+  const [dpr, setDpr] = useState(1);
+  const startFactor = (1 - DPR_MIN) / (dprMax - DPR_MIN);
 
   return (
     <>
-      <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
+      <Canvas shadows="percentage" dpr={dpr} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
         {cameraMode === 'iso' ? (
           <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={160} />
         ) : (
           <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={160} />
         )}
+        <PerformanceMonitor factor={startFactor} flipflops={4} onFallback={() => setDpr(1)}
+          onChange={({ factor }) => setDpr(Math.round((DPR_MIN + (dprMax - DPR_MIN) * factor) * 20) / 20)} />
         {/* Rede de segurança: qualquer erro de cena/asset que escape dos boundaries
             internos para aqui (em vez de derrubar o root error boundary do router). */}
         <AssetBoundary label="WorldScene" fallback={null}>
