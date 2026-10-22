@@ -15,9 +15,9 @@ export const RIFLE_URL = '/models/weapons/rifle.glb';
 export const PISTOL_URL = '/models/weapons/pistol.glb';
 
 type Spec = { url: string; length: number; yaw: number; grip: [number, number] };
-// Pega a 40% do comprimento (era 50%): arma ~12 cm pra frente — a coronha atravessava as costas
-// no disparo (Pedro, 22/10).
-const RIFLE: Spec = { url: RIFLE_URL, length: 1.15, yaw: -Math.PI / 2, grip: [0.4, 0.6] };
+// Pega a 36% do comprimento (era 50%): arma ~16 cm pra frente — a coronha atravessava as costas
+// no disparo (Pedro, 22/10: 12 cm melhorou, pediu mais 4–5 cm).
+const RIFLE: Spec = { url: RIFLE_URL, length: 1.15, yaw: -Math.PI / 2, grip: [0.36, 0.6] };
 const PISTOL: Spec = { url: PISTOL_URL, length: 0.45, yaw: Math.PI / 2, grip: [0.75, 0.66] };
 
 function useWeapon({ url, length, yaw, grip }: Spec): THREE.Group {
