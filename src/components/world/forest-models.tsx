@@ -1,5 +1,5 @@
 import { useGLTF } from '@react-three/drei';
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import treeUrl from '../../../art/packs/01-ashland-lowpoly/models/ashroot-tree.glb?url';
@@ -124,8 +124,58 @@ export function ForestTrees({ placements, c }: { placements: ForestPlacement[]; 
   return <>{parts.map((part, i) => <ForestBatch key={i} {...part} placements={placements} spheres={treeSpheres} />)}</>;
 }
 
-export function ForestRocks({ placements, c }: { placements: ForestPlacement[]; c: Palette }) {
+/** Pedras de DECORAÇÃO: forma da pedra GLB (mining-rock simplificada 75,6k→888 tri, 9,5 KB),
+ *  mesmo material/degradê de antes. A forma antiga (icosaedro de 80 tri) fica de reserva enquanto
+ *  o GLB carrega. Não são farmáveis (os nós de pedra/minério têm componente próprio). */
+export function ForestRocks(props: { placements: ForestPlacement[]; c: Palette }) {
+  return <Suspense fallback={<ForestRocksShape {...props} />}><ForestRocksGlb {...props} /></Suspense>;
+}
+
+const ROCK_DECO_URL = '/models/rocks/rock-deco.glb';
+function ForestRocksGlb({ placements, c }: { placements: ForestPlacement[]; c: Palette }) {
+  const { scene } = useGLTF(ROCK_DECO_URL);
+  const source = useMemo(() => {
+    scene.updateMatrixWorld(true);
+    let mesh: THREE.Mesh | null = null;
+    scene.traverse((o) => { if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh; });
+    const m = mesh as THREE.Mesh | null;
+    if (!m) return null;
+    const geo = m.geometry.clone().applyMatrix4(m.matrixWorld);
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox!;
+    const w = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) || 1;
+    const h = (bb.max.y - bb.min.y) || 1;
+    // Mesmo tamanho da forma antiga: ~1 de largura, ~0,8 de altura, base em y=0.
+    geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+    geo.scale(1 / w, 0.8 / h, 1 / w);
+    geo.computeVertexNormals();
+    // UV em caixa (projeção pelo eixo dominante da normal) pra textura de rocha de sempre.
+    const pos = geo.getAttribute('position'), nor = geo.getAttribute('normal');
+    const uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      const ax = Math.abs(nor.getX(i)), ay = Math.abs(nor.getY(i)), az = Math.abs(nor.getZ(i));
+      const [u, v] = ay >= ax && ay >= az ? [pos.getX(i), pos.getZ(i)] : ax >= az ? [pos.getZ(i), pos.getY(i)] : [pos.getX(i), pos.getY(i)];
+      uv[i * 2] = u * 1.5; uv[i * 2 + 1] = v * 1.5;
+    }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    return geo;
+  }, [scene]);
+  if (!source) return <ForestRocksShape placements={placements} c={c} />;
+  return <ForestRocksShape placements={placements} c={c} baseGeometry={source} />;
+}
+
+function ForestRocksShape({ placements, c, baseGeometry }: { placements: ForestPlacement[]; c: Palette; baseGeometry?: THREE.BufferGeometry }) {
   const geometry = useMemo(() => {
+    if (baseGeometry) {
+      // Forma GLB: só aplica o degradê de cor (base escura → topo claro), como a forma antiga.
+      const geo = baseGeometry.clone();
+      const positions = geo.getAttribute('position');
+      const colors = new Float32Array(positions.count * 3);
+      const base = new THREE.Color(c.rock), light = new THREE.Color(c['rock-light']), color = new THREE.Color();
+      for (let i = 0; i < positions.count; i++) { color.copy(base).lerp(light, Math.min(1, positions.getY(i) / 0.8) * 0.8); color.toArray(colors, i * 3); }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      return geo;
+    }
     const geo = new THREE.IcosahedronGeometry(0.5, 1);
     const positions = geo.getAttribute('position');
     const colors = new Float32Array(positions.count * 3);
@@ -142,7 +192,7 @@ export function ForestRocks({ placements, c }: { placements: ForestPlacement[]; 
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     return geo;
-  }, [c.rock, c['rock-light']]);
+  }, [c.rock, c['rock-light'], baseGeometry]);
   const material = useMemo(() => {
     const source = new THREE.MeshStandardMaterial({ ...pbrMaps('worn_rock_natural_01'), roughness: 1, normalScale: new THREE.Vector2(0.8, 0.8) });
     const result = fadeMaterial(source);

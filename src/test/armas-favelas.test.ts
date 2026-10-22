@@ -9,6 +9,7 @@ const LIMITS: [string, number, number][] = [
   ['weapons/pistol', 1_000_000, 10_000],
   ['map/favela-a', 3_000_000, 60_000],
   ['map/favela-b', 3_000_000, 60_000],
+  ['rocks/rock-deco', 100_000, 2_000], // pedra de decoração (75,6k → 888 tri)
 ];
 
 describe('armas e favelas GLB', () => {
