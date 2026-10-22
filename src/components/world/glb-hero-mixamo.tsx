@@ -1,7 +1,6 @@
 import { useGLTF, useAnimations } from '@react-three/drei';
-import { modelUrl } from '@/game/asset-path';
 import { createPortal, useFrame } from '@react-three/fiber';
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { useGameStore } from '@/game/state/game-store';
@@ -16,14 +15,14 @@ import { heldKindFor, selectedItemId } from './held-weapon';
  * Mesma interface do `GlbHero` (`actionRef`/`speedRef`/`weapon`) p/ trocar fácil.
  */
 // Preview local do novo herói Meshy; os clips Mixamo existentes continuam iguais.
-const RED_URL = modelUrl('red/hero-preview.glb');
+const RED_URL = '/models/red/hero-preview.glb';
 const CLIP_URL: Record<string, string> = {
-  idle: modelUrl('red/idle.glb'),
-  walk: modelUrl('red/walk.glb'),
-  run: modelUrl('red/run.glb'),
-  attack: modelUrl('red/attack.glb'),
-  attackBow: modelUrl('red/attack_bow.glb'),
-  jump: modelUrl('red/jump.glb'),
+  idle: '/models/red/idle.glb',
+  walk: '/models/red/walk.glb',
+  run: '/models/red/run.glb',
+  attack: '/models/red/attack.glb',
+  attackBow: '/models/red/attack_bow.glb',
+  jump: '/models/red/jump.glb',
 };
 /** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
  *  Mixamo são Y-up → a anim DEITA o herói. Cancela com +90° X num wrapper (fora do
@@ -36,16 +35,6 @@ const ATTACK_SPEED = 1.5;
  *  (perf: numa horda, o maior ganho — longe ninguém nota). */
 const ACTIVE_D2 = 40 * 40;
 const tmpHeroV = new THREE.Vector3();
-
-function OnDemandClip({ name, url, onLoaded }: {
-  name: string;
-  url: string;
-  onLoaded: (name: string, animations: THREE.AnimationClip[]) => void;
-}) {
-  const { animations } = useGLTF(url);
-  useEffect(() => onLoaded(name, animations), [animations, name, onLoaded]);
-  return null;
-}
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
@@ -148,9 +137,11 @@ export function GlbHeroMixamo({
   const inner = useRef<THREE.Group>(null);
   const { scene } = useGLTF(charUrl);
   const idleG = useGLTF(CLIP_URL['idle']!);
-  const [loadedClips, setLoadedClips] = useState<Record<string, THREE.AnimationClip[]>>({});
-  const [pendingClip, setPendingClip] = useState<string | null>(null);
-  const requestedClip = useRef<string | null>(null);
+  const walkG = useGLTF(CLIP_URL['walk']!);
+  const runG = useGLTF(CLIP_URL['run']!);
+  const attackG = useGLTF(CLIP_URL['attack']!);
+  const attackBowG = useGLTF(CLIP_URL['attackBow']!);
+  const jumpG = useGLTF(CLIP_URL['jump']!);
 
   const cloned = useMemo(() => {
     const c = skeletonClone(scene);
@@ -208,9 +199,9 @@ export function GlbHeroMixamo({
       a.tracks = a.tracks.filter((t) => boneNames.has(t.name.split('.')[0] ?? ''));
       return stripRootMotion(a, fixHipsY);
     };
-    return [mk(idleG, 'idle'), ...Object.entries(loadedClips).map(([name, animations]) => mk({ animations }, name))]
+    return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(jumpG, 'jump')]
       .filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, loadedClips, boneNames, cloned]);
+  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames, cloned]);
 
   const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
@@ -276,24 +267,15 @@ export function GlbHeroMixamo({
 
     const want = actionRef.current;
 
-    const request = (name: string) => {
-      if (name === 'idle' || actions[name] || requestedClip.current === name) return;
-      requestedClip.current = name;
-      setPendingClip(name);
-    };
-
     // Ataque POR ARMA (só o player): arma de longe → anim de arco; mão → combo.
     // Raiders (rangedAttack=false) sempre usam o combo. 'playingAtk' = clip em curso.
     let atkName = 'attack';
-    if (forceBow) {
+    if (forceBow && actions['attackBow']) {
       atkName = 'attackBow'; // arqueiro/xamã: só ataca de longe
-    } else if (rangedAttack) {
+    } else if (rangedAttack && actions['attackBow']) {
       const kind = heldKindFor(selectedItemId(useGameStore.getState()));
       if (kind === 'bow' || kind === 'pistol' || kind === 'rifle') atkName = 'attackBow';
     }
-    if (want === 'attack') request(atkName);
-    if (want === 'jump') request('jump');
-    if (want === 'walk' || want === 'run') request(want);
 
     // Clip que está REALMENTE tocando num estado (attack usa o playingAtk).
     const clipOf = (st: HeroAction | null): string | null =>
@@ -373,18 +355,6 @@ export function GlbHeroMixamo({
 
   return (
     <group ref={inner} rotation={[0, yaw, 0]} scale={scale}>
-      {pendingClip && !loadedClips[pendingClip] ? (
-        <Suspense fallback={null}>
-          <OnDemandClip
-            name={pendingClip}
-            url={CLIP_URL[pendingClip]!}
-            onLoaded={(name, animations) => {
-              setLoadedClips(current => ({ ...current, [name]: animations }));
-              setPendingClip(null);
-            }}
-          />
-        </Suspense>
-      ) : null}
       {/* Wrapper que "levanta" o herói (cancela o -90° X do rig Meshy FBX). */}
       <group rotation={[standFixX, 0, 0]} position={[0, STAND_FIX_Y, 0]}>
         <primitive object={cloned} />
@@ -407,3 +377,8 @@ export function GlbHeroMixamo({
 
 useGLTF.preload(RED_URL);
 useGLTF.preload(CLIP_URL['idle']!);
+useGLTF.preload(CLIP_URL['walk']!);
+useGLTF.preload(CLIP_URL['run']!);
+useGLTF.preload(CLIP_URL['attack']!);
+useGLTF.preload(CLIP_URL['attackBow']!);
+useGLTF.preload(CLIP_URL['jump']!);

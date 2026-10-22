@@ -2,7 +2,6 @@ import { useGLTF } from '@react-three/drei';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { registerTerrain } from './terrain-collision';
-import { modelUrl } from '@/game/asset-path';
 
 /**
  * Chão principal do mapa: GLB rio-wasteland FIXO no código (determinístico, vai pro
@@ -11,7 +10,7 @@ import { modelUrl } from '@/game/asset-path';
  * Pedro ajustou. De-shine (matte, mantém cor) + colisão (registerTerrain/BVH): o
  * player pisa em cima, e os props (árvore/pedra/camp/fábrica) assentam via glbSurfaceY.
  */
-const URL = modelUrl('map/rio-wasteland-iconic.glb');
+const URL = '/models/map/rio-wasteland-iconic.glb';
 const POS: [number, number, number] = [2.2, 9.6, 22.5];
 const YAW = -1.3;
 const SCALE: [number, number, number] = [80.3, 78.3, 71.2];

@@ -57,13 +57,6 @@ function noise2d(x: number, z: number, sx: number, sz: number): number {
 
 export { LAKE_CENTERS, RIVER_POINTS, riverDistance, RIVER_HALF_WIDTH };
 
-/** Decide se a coordenada pertence à água real do mapa, sem considerar margem. */
-export function isMapWaterPoint(x: number, z: number): boolean {
-  return LAKE_CENTERS.some((lake) =>
-    (x - lake.x) ** 2 + (z - lake.z) ** 2 < lake.r ** 2,
-  ) || riverDistance(x, z) < RIVER_HALF_WIDTH;
-}
-
 /**
  * Superfície da água dos lagos: fixa, logo ABAIXO do nível do chão (0). Como a
  * bacia do lago é escavada para baixo (ver `terrainHeight`), a água fica dentro

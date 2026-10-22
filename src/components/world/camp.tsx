@@ -13,7 +13,6 @@
  */
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
-import { modelUrl } from '@/game/asset-path';
 import { Suspense, useCallback, useMemo, useRef } from 'react';
 import { AssetBoundary } from './asset-boundary';
 import * as THREE from 'three';
@@ -344,7 +343,7 @@ function CampPiece({ spheres, children, ...rest }: {
  * ------------------------------------------------------------------ */
 /** Modelo GLB do acampamento (Meshy decimado ~99k tris) — escalado pro RAIO do
  *  camp (preenche o círculo) e fincado no chão. Troca o visual procedural feio. */
-const CAMP_URL = modelUrl('props/raider-camp.glb');
+const CAMP_URL = '/models/props/raider-camp.glb';
 /** Giro EXTRA de camps específicos (o padrão é um hash por id). Pedro: o camp perto
  *  do labirinto/estradinha estava virado errado → gira pra ficar de frente pra estrada. */
 const CAMP_YAW_EXTRA: Record<string, number> = {

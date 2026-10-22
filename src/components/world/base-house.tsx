@@ -10,7 +10,6 @@ import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { houseCollider, housePlayerInside } from './house-collider';
 import { AssetBoundary } from './asset-boundary';
 import type { BasePiece } from '@/game/types/playerbase';
-import { modelUrl } from '@/game/asset-path';
 
 /**
  * Casa completa (WoodHouse.obj + textura) como PRÉDIO central da base — 1 modelo
@@ -35,14 +34,14 @@ function BaseHouseInner({
 }: { pieces?: BasePiece[] | null; remote?: boolean } = {}) {
   const localPieces = useGameStore((s) => s.playerBase?.pieces);
   const pieces = remotePieces === undefined ? localPieces : remotePieces;
-  const obj = useLoader(OBJLoader, modelUrl('house/WoodHouse.obj'));
-  const diffuse = useTexture(modelUrl('house/Diffuse.webp'));
-  const normal = useTexture(modelUrl('house/normal.webp'));
+  const obj = useLoader(OBJLoader, '/models/house/WoodHouse.obj');
+  const diffuse = useTexture('/models/house/Diffuse.png');
+  const normal = useTexture('/models/house/normal.png');
   // Casa de PEDRA (evolução nível 10) e de METAL (nível >20): cada uma tem seu GLB
   // próprio (2 andares com rampa, PBR embutido). Carregam sempre; só renderizam quando
   // a evolução é paga. A madeira segue o OBJ original com diffuse/normal.
-  const stone = useGLTF(modelUrl('house/stone-house.glb'));
-  const metal = useGLTF(modelUrl('house/metal-house.glb'));
+  const stone = useGLTF('/models/house/stone-house.glb');
+  const metal = useGLTF('/models/house/metal-house.glb');
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
   const localBaseMetal = useGameStore((s) => s.baseMetal ?? false);
   // A evolução visual da base remota ainda não faz parte do payload de rede.

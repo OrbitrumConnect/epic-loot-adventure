@@ -62,23 +62,6 @@ const ray = new THREE.Raycaster();
 const ORIGIN = new THREE.Vector3();
 const DOWN = new THREE.Vector3(0, -1, 0);
 
-/**
- * Escolhe piso caminhável entre superfícies no mesmo (x,z).
- *
- * GLBs podem ter tabuleiro e grade sobrepostos. O piso válido é a menor
- * superfície que não ficou abaixo do piso esperado; assim a grade alta não
- * vira chão, enquanto rampas e relevo continuam válidos.
- */
-export function selectWalkableSurfaceY(surfaceYs: readonly number[], fallback: number): number {
-  const candidates = surfaceYs
-    .filter(Number.isFinite)
-    .filter((y) => y >= fallback - 0.35)
-    .sort((a, b) => a - b);
-  return candidates[0] ?? surfaceYs
-    .filter(Number.isFinite)
-    .reduce((nearest, y) => Math.abs(y - fallback) < Math.abs(nearest - fallback) ? y : nearest, fallback);
-}
-
 /** O quanto o jogador consegue SUBIR por quadro (degrau/ladeira). O raycast parte
  *  um pouco acima dos pés, então ladeira sobe mas parede vertical não (anda em volta). */
 const STEP_UP = 0.7;
@@ -121,30 +104,13 @@ export function terrainMeshTopY(x: number, z: number): number {
   return best;
 }
 
-function terrainMeshSurfaceYs(x: number, z: number): number[] {
-  if (terrains.size === 0) return [];
-  ORIGIN.set(x, 500, z);
-  ray.set(ORIGIN, DOWN);
-  ray.far = 700;
-  const previousFirstHitOnly = (ray as any).firstHitOnly;
-  (ray as any).firstHitOnly = false;
-  const surfaces: number[] = [];
-  try {
-    for (const root of terrains) {
-      for (const hit of ray.intersectObject(root, true)) surfaces.push(hit.point.y);
-    }
-  } finally {
-    (ray as any).firstHitOnly = previousFirstHitOnly;
-  }
-  return surfaces;
-}
-
 /** Altura da superfície do GLB de terreno em (x,z) p/ ASSENTAR props (árvore/pedra/
  *  cristal/camp/fábrica). Retorna o topo da malha se houver GLB ali, senão `fallback`
  *  (normalmente `terrainHeight`). Usar junto com `useTerrainVersion` p/ recomputar
  *  quando o GLB (que carrega async) entra. */
 export function glbSurfaceY(x: number, z: number, fallback: number): number {
-  return selectWalkableSurfaceY(terrainMeshSurfaceYs(x, z), fallback);
+  const m = terrainMeshTopY(x, z);
+  return m > -Infinity ? m : fallback;
 }
 
 /* ------------------------------------------------------------------ *
@@ -178,17 +144,6 @@ function imagePixels(img: TexImageSource): { data: Uint8ClampedArray; w: number;
 }
 
 const _sampleColor = new THREE.Color();
-export function isGreenSurfaceColor(c: THREE.Color): boolean {
-  const hsl = c.getHSL({ h: 0, s: 0, l: 0 });
-  return hsl.s >= 0.12 && c.g >= c.r * 0.70 && c.g >= c.b * 0.92 && c.g > 0.08;
-}
-
-export function hasGreenSurfaceSample(
-  isGreen: (c: THREE.Color) => boolean,
-  ...samples: readonly THREE.Color[]
-): boolean {
-  return samples.some(isGreen);
-}
 /** Cor da superfície do terreno em (x,z) (ou null se não há malha ali). */
 export function surfaceColorAt(x: number, z: number): THREE.Color | null {
   if (terrains.size === 0) return null;
@@ -237,7 +192,7 @@ function texColorAt(
 }
 
 const _ga = new THREE.Vector3(), _gb = new THREE.Vector3(), _gc = new THREE.Vector3();
-const _gcol = new THREE.Color(), _gcol0 = new THREE.Color(), _gcol1 = new THREE.Color(), _gcol2 = new THREE.Color(), _gsum = new THREE.Color();
+const _gcol = new THREE.Color(), _gsum = new THREE.Color();
 /**
  * Varre os TRIÂNGULOS das malhas de terreno e devolve a posição de mundo (x,z) dos
  * que caem em textura "verde" (via `isGreen`, em sRGB 0-1). O mapa é descampado: o
@@ -285,13 +240,11 @@ export function collectGreenSurfaceSpots(
         const cu = (u0 + u1 + u2) / 3, cv = (v0 + v1 + v2) / 3;
         // Amostra 3 vértices + centro: as manchas verde/oliva são MAIORES que um triângulo
         // e o centro sozinho perdia as bordas. Verde se QUALQUER ponto for verde → cobre bem.
-        const green = hasGreenSurfaceSample(
-          isGreen,
-          texColorAt(px, tex, cu, cv, _gcol),
-          texColorAt(px, tex, u0, v0, _gcol0),
-          texColorAt(px, tex, u1, v1, _gcol1),
-          texColorAt(px, tex, u2, v2, _gcol2),
-        );
+        const green =
+          isGreen(texColorAt(px, tex, cu, cv, _gcol)) ||
+          isGreen(texColorAt(px, tex, u0, v0, _gcol)) ||
+          isGreen(texColorAt(px, tex, u1, v1, _gcol)) ||
+          isGreen(texColorAt(px, tex, u2, v2, _gcol));
         if (!green) continue;
         texColorAt(px, tex, cu, cv, _gcol); // cor do centro p/ o tint
         _gsum.add(_gcol); n++;

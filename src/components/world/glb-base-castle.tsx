@@ -1,5 +1,4 @@
 import { useGLTF } from '@react-three/drei';
-import { modelUrl } from '@/game/asset-path';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
@@ -13,11 +12,11 @@ import { terrainHeight } from './world-kit';
  * vizinha (sem buracos). wall ~2×2 = BASE_GRID(2m). Reversível (USE_GLB_BASE).
  */
 const U = {
-  wall: modelUrl('castle/wall.glb'),
-  tbase: modelUrl('castle/tower-square-base.glb'),
-  tmid: modelUrl('castle/tower-square-mid.glb'),
-  troof: modelUrl('castle/tower-square-top-roof.glb'),
-  gate: modelUrl('castle/gate.glb'),
+  wall: '/models/castle/wall.glb',
+  tbase: '/models/castle/tower-square-base.glb',
+  tmid: '/models/castle/tower-square-mid.glb',
+  troof: '/models/castle/tower-square-top-roof.glb',
+  gate: '/models/castle/gate.glb',
 } as const;
 
 const WALL_H = 2.6; // muros/portão mais altos

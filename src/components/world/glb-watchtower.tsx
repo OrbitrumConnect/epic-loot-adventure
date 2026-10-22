@@ -6,7 +6,6 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { palette, terrainHeight } from './world-kit';
 import { resolveTowerLevel, towerHeight } from '@/game/systems/towerLevelSystem';
 import type { BasePiece } from '@/game/types/playerbase';
-import { modelUrl } from '@/game/asset-path';
 
 /**
  * Torre watchtower (GLB, PBR embutido) reutilizável:
@@ -14,12 +13,12 @@ import { modelUrl } from '@/game/asset-path';
  *   player-base por `USE_GLB_TOWER`; a COLISÃO da peça continua).
  * - `WatchtowerModel`: 1 instância solta (usada tbm no acampamento inimigo).
  */
-const WATCH_URL = modelUrl('watchtower/watchtower.glb');        // acampamentos + topo da montanha
-const LOUD_URL = modelUrl('watchtower/loudspeaker_tower.glb');  // 4 pontas da base (alarme/defesa que atira)
+const WATCH_URL = '/models/watchtower/watchtower.glb';        // acampamentos + topo da montanha
+const LOUD_URL = '/models/watchtower/loudspeaker_tower.glb';  // 4 pontas da base (alarme/defesa que atira)
 const ORNAMENT_URLS = [
-  modelUrl('castle/tower-square-base.glb'),
-  modelUrl('castle/tower-square-mid.glb'),
-  modelUrl('castle/tower-square-top-roof.glb'),
+  '/models/castle/tower-square-base.glb',
+  '/models/castle/tower-square-mid.glb',
+  '/models/castle/tower-square-top-roof.glb',
 ];
 
 /** Clona o GLB, escala pra `height`, centra em XZ e põe a base em y=0. */

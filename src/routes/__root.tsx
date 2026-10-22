@@ -9,14 +9,9 @@ import {
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { useGLTF } from "@react-three/drei";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-
-// Drei's useGLTF enables MeshoptDecoder by default (useMeshOpt=true) and
-// applies it through its shared GLTFLoader extension at module initialization.
-void useGLTF;
 
 function NotFoundComponent() {
   return (

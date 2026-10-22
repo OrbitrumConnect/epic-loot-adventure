@@ -55,7 +55,7 @@ import { factoryClip } from './world/factory-collider';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls, factoryRoofCutY } from './world/base-collision';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
-  isMapWaterPoint, markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
+  markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
   SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R, SAFE_ZONE, HERO_HEIGHT,
   type Palette,
 } from './world/world-kit';
@@ -68,8 +68,6 @@ import {
 import { FreeCamOverlay } from './world/free-cam-overlay';
 import { EditorWorldLayer } from './editor/editor-world';
 import { isEditorActive, useEditorStore as useEditorStoreCam } from './editor/editor-store';
-import { modelUrl } from '@/game/asset-path';
-import { GpuStats } from './world/gpu-stats';
 
 export type WorldProps = {
   mode: string;
@@ -370,6 +368,8 @@ const SHOW_OLD_ROAD = false;
  *  (só mostra onde afunda abaixo do nível). */
 const MAP_WATER_Y = -2.35;                            // superfície da água: ~0.25m acima do leito (-2.6). Abaixado 35cm (não encostar na ponte/margem)
                                                       // só mostra água onde o GLB AFUNDA (lago central + praias nas margens); terra seca fica por cima.
+const MAP_WATER_CENTER: [number, number] = [0, 0];   // cobre o mapa todo; a forma (lago + praias) vem da geometria do GLB
+const MAP_WATER_SIZE = 210;                           // lado do plano (m) — alcança as margens/praias
 
 /** Labirinto FIXO no mapa. Pedro 20/10: OFF — agora é colocado/ajustado pelo Editor ADM
  *  (Biblioteca GLB → "Labirinto"). Reversível: true volta o maze fixo. NOTA: o maze do
@@ -561,7 +561,7 @@ function Character({
     const DECEL = 28;
     const px = body.current.position.x;
     const pz = body.current.position.z;
-    const inLake = isMapWaterPoint(px, pz);
+    const inLake = LAKE_CENTERS.some(l => (px - l.x) ** 2 + (pz - l.z) ** 2 < l.r * l.r);
     const moveBonus = 1 + effectiveAttributes(useGameStore.getState().player).moveSpeed / 100;
     // Andar/correr com redução de 10%: correr 4.8→4.32, andar 2.0→1.8.
     const MAX_SPEED = (sprinting ? 4.32 : 1.8) * (inLake ? 0.4 : 1) * moveBonus;
@@ -1187,7 +1187,7 @@ const LIGHT_CULL_D2 = 24 * 24;
  *  Reinicia a cada reload de página = cada login entra na zona segura. */
 let didInitialSpawn = false;
 
-const LIGHT_POST_URL = modelUrl('props/light-post.glb');
+const LIGHT_POST_URL = '/models/props/light-post.glb';
 const LIGHT_POST_H = 4.2; // +30% (Pedro) — poste Mad Max mais alto
 
 function RoadLampInner({ x, y, z }: { x: number; y: number; z: number }) {
@@ -1235,7 +1235,7 @@ function RoadLamp(props: { x: number; y: number; z: number }) {
 // Preload sob demanda: RoadLampInner carrega LIGHT_POST_URL via useGLTF na montagem
 // (Suspense + AssetBoundary). Sem preload de import p/ não baixar no boot se não entra em cena.
 
-const MAZE_URL = modelUrl('props/maze.glb');
+const MAZE_URL = '/models/props/maze.glb';
 /** Labirinto gigante (Meshy decimado ~100k tris) numa área aberta distante — o
  *  personagem anda por ele. Escalado p/ `size` m de lado. Visual (colisão = TODO). */
 function MazeInner({ x, z, size = 52, yaw = 0 }: { x: number; z: number; size?: number; yaw?: number }) {
@@ -2109,14 +2109,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       {/* Água do MAPA: plano no nível do GLB, centrado na área azul CENTRAL (mapeada na
           textura). Aparece só onde o GLB afunda abaixo do nível (o rio); o chão seco
           esconde o resto. Centro/tamanho em MAP_WATER_CENTER/SIZE. */}
-      {LAKE_CENTERS.map((lake, i) => (
-        <mesh key={`map-lake-${i}`} position={[lake.x, MAP_WATER_Y, lake.z]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
-          <circleGeometry args={[lake.r, 32]} />
-          <WaterMaterial color={c.water} time={waterTime} />
-        </mesh>
-      ))}
-      <mesh geometry={river} renderOrder={1}>
-        <WaterMaterial color={c.water} time={waterTime} river />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[MAP_WATER_CENTER[0], MAP_WATER_Y, MAP_WATER_CENTER[1]]} renderOrder={1}>
+        <planeGeometry args={[MAP_WATER_SIZE, MAP_WATER_SIZE]} />
+        <WaterMaterial color={c.water} time={waterTime} />
       </mesh>
 
       {/* Água antiga (rio/lagos fixos) — OFF; posições não batiam com o GLB. */}
@@ -2195,7 +2190,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         { x: 38, z: -14, scale: 4.2, yaw: 3.1 }, { x: -36, z: -4, scale: 5, yaw: 1.8 },
         { x: 18, z: 4, scale: 4.5, yaw: 0.9 }, { x: -14, z: 14, scale: 4, yaw: 2.6 },
         { x: 46, z: -36, scale: 4.6, yaw: 0.2 }, { x: 2, z: -50, scale: 5, yaw: 1.5 },
-      ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url={modelUrl('trees/tree-split.glb')} x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
+      ].map((t, i) => <LandmarkTree key={`tree-s-${i}`} url="/models/trees/tree-split.glb" x={t.x} z={t.z} scale={t.scale} yaw={t.yaw ?? 0} />)}
       {/* Labirinto (área aberta a oeste do lago). -19% + mais pro oeste. */}
       {SHOW_HARDCODED_MAZE && <Maze x={-20} z={72} size={57} />}
       {/* Postes de luz DENTRO do labirinto — saem junto com o maze fixo (OFF). */}
@@ -2302,7 +2297,6 @@ export default function GameWorld(props: WorldProps) {
         </AssetBoundary>
         {/* Medidor de FPS — SÓ em dev E opt-in via `?stats` na URL; nunca vai pra produção. */}
         {SHOW_STATS && <Stats />}
-        <GpuStats />
       </Canvas>
       {/* HUD da câmera livre (fora do Canvas; só renderiza com o modo ativo). */}
       <FreeCamOverlay />

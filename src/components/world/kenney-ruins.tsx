@@ -2,17 +2,16 @@ import { useGLTF } from '@react-three/drei';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { terrainHeight } from './world-kit';
-import { modelUrl } from '@/game/asset-path';
 
 /**
  * Ruínas/estruturas Kenney espalhadas pelo mundo (pós-colapso) — landmarks de
  * exploração. Aditivo, só cenário (não toca gameplay). Texturizado (colormap).
  */
 const URLS = [
-  modelUrl('castle/tower-square-base.glb'),
-  modelUrl('castle/tower-square-mid.glb'),
-  modelUrl('castle/wall.glb'),
-  modelUrl('castle/gate.glb'),
+  '/models/castle/tower-square-base.glb',
+  '/models/castle/tower-square-mid.glb',
+  '/models/castle/wall.glb',
+  '/models/castle/gate.glb',
 ] as const;
 
 // Posições nas bordas do mapa (longe do spawn/base). {m:índice do modelo}

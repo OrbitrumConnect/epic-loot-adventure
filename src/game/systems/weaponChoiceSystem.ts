@@ -13,8 +13,6 @@ import type { WeaponType } from '../data/weapons';
 
 /** Até esta distância (m) o piloto prefere corpo a corpo, se houver melee usável. */
 export const MELEE_PREF_RANGE = 3.0;
-/** Entrada no melee exige chegar mais perto que a saída, criando banda morta. */
-export const MELEE_SWITCH_IN_FACTOR = 0.8;
 
 /**
  * Preferência de arma do piloto, escolhida pelo jogador no HUD:
@@ -104,11 +102,8 @@ export function maxAttackRange(weapons: AutoWeapon[], fallback: number): number 
  * Arma pra atacar um alvo a `dist` metros, respeitando a mecânica e o `style`:
  *
  *   'auto' (default, comportamento de hoje):
- *     - ao sair de ranged, só entra no melee em `MELEE_PREF_RANGE * 0.8`;
- *     - já no melee, só volta para ranged depois de `MELEE_PREF_RANGE`;
- *     - sem estado de arma empunhada, `dist <= MELEE_PREF_RANGE` e há melee usável
- *       → melhor melee;
- *     - fora da faixa de melee → entre as ranged usáveis que cobrem `dist`, a
+ *     - `dist <= MELEE_PREF_RANGE` e há melee usável → melhor melee;
+ *     - `dist > MELEE_PREF_RANGE` → entre as ranged usáveis que cobrem `dist`, a
  *       de maior DPS;
  *     - nenhuma ranged cobre a distância (ou falta munição) → melhor melee usável
  *       (o piloto vai se aproximar);
@@ -163,15 +158,8 @@ export function pickWeaponFor(
   }
 
   // 'auto' (comportamento de hoje).
-  // Banda morta: para entrar no melee vindo de ranged, o alvo precisa chegar a
-  // 80% da fronteira (2,4 m); já no melee, só sai depois de 3 m. Isso evita que
-  // pequenas oscilações em torno da fronteira troquem de arma a cada tick.
-  const meleeSwitchInRange = MELEE_PREF_RANGE * MELEE_SWITCH_IN_FACTOR;
-  const heldIsMelee = held != null && isMelee(held);
-  const meleePreferred = heldIsMelee
-    ? dist <= MELEE_PREF_RANGE
-    : dist <= (held != null ? meleeSwitchInRange : MELEE_PREF_RANGE);
-  if (meleePreferred && bestMelee) return bestMelee;
+  // Coladinho: melee preferido, se existir.
+  if (dist <= MELEE_PREF_RANGE && bestMelee) return bestMelee;
 
   // De longe: a ranged que cobre a distância com maior DPS.
   const bestRanged = bestRangedCovering(ranged, dist);

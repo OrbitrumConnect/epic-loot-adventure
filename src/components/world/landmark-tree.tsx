@@ -4,14 +4,13 @@ import * as THREE from 'three';
 import { terrainHeight } from './world-kit';
 import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { useEditorStore } from '../editor/editor-store';
-import { modelUrl } from '@/game/asset-path';
 
 /**
  * Árvore-marco GIGANTE (modelo Meshy detalhado, decimado 3,6M→108k triângulos).
  * Poucas no mapa (1-2) como landmark "bolado". Não é a fauna/floresta normal.
  * O modelo tem o pé ~0,97 abaixo da origem (raízes) → planta pela base.
  */
-const GNARLED = modelUrl('trees/tree-gnarled.glb');
+const GNARLED = '/models/trees/tree-gnarled.glb';
 const BASE_BELOW = 0.89; // minY do modelo → finca no chão (-~0.5 do que era; raiz tava alta)
 
 export function LandmarkTree({ x, z, scale = 5.5, yaw = 0, url = GNARLED, editorId }: { x: number; z: number; scale?: number; yaw?: number; url?: string; editorId?: string }) {

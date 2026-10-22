@@ -13,7 +13,7 @@ import { AssetBoundary } from '../world/asset-boundary';
 
 /** De-shine dos assets de mapa do Meshy (mesmo princípio do makeMatte do terreno):
  *  nulifica os mapas metal/rough e trava fosco, SEM tint (mantém a cor original).
- *  Aplicado só a `models/map/` → trees/mountains/watchtower ficam intactos. */
+ *  Aplicado só a `/models/map/` → trees/mountains/watchtower ficam intactos. */
 function matte(root: THREE.Object3D) {
   root.traverse((o) => {
     const m = o as THREE.Mesh;
@@ -34,7 +34,7 @@ function PlacedObjectInner({ item }: { item: EditorObject }) {
   const { scene } = useGLTF(item.assetUrl);
   const model = useMemo(() => {
     const clone = scene.clone(true);
-    if (item.assetUrl.includes('models/map/')) matte(clone);
+    if (item.assetUrl.includes('/models/map/')) matte(clone);
     const box = new THREE.Box3().setFromObject(clone);
     const span = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) || 1;
     const target = item.assetUrl.includes('/terrain/mountain') ? 12 : 4;

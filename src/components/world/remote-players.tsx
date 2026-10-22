@@ -9,8 +9,6 @@ import { labelTexture, markPointerConsumed, terrainHeight, HERO_HEIGHT } from '.
 import { glbSurfaceY } from './terrain-collision';
 import { useGameStore } from '@/game/state/game-store';
 import { hitRecently, markPvpHit, PVP_LOCK_BREAK, pvpStrike, pvpTarget, setPvpTarget } from './pvp-attack';
-import { resolveRemotePose } from './remote-player-interpolation';
-const INTERPOLATION_DELAY_MS = 100;
 
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
 const LABEL_RANGE = 12;
@@ -25,6 +23,7 @@ function RemotePlayer({ id }: { id: string }) {
   const labelGroup = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
   const enemyRing = useRef<THREE.Mesh>(null); // anel vermelho sob INIMIGOS (PvP, atualiza ao vivo)
+  const prevHp = useRef<number | null>(null);
   const initial = useNet.getState().players[id];
   const title = `${initial?.name ?? 'Viajante'} · Nv. ${initial?.level ?? 1}`;
   const texture = useMemo(() => labelTexture(title, '#fff3c4'), [title]);
@@ -32,26 +31,21 @@ function RemotePlayer({ id }: { id: string }) {
     const g = group.current;
     const p = useNet.getState().players[id];
     if (!g || !p) return;
-    const now = performance.now();
-    const pose = resolveRemotePose(useNet.getState().poseHistory[id] ?? [], now - INTERPOLATION_DELAY_MS, now);
-    if (!pose) return;
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
-    // Posição/yaw vêm da pose interpolada (atraso fixo). Pés: usa a altura REAL que o outro
-    // jogador mandou (ponte/casa/pulo/morro); sem `y` (cliente antigo) cai no cálculo pelo chão.
+    // Pés: usa a altura REAL que o outro jogador mandou (ponte/casa/pulo/morro) — antes
+    // recalculava só pelo terreno e o amigo aparecia com os pés enterrados. Sem `y` (cliente
+    // antigo) cai no cálculo pelo chão.
     const groundAt = (x: number, z: number) => glbSurfaceY(x, z, terrainHeight(x, z));
-    if (!inited.current) {
-      g.position.set(pose.x, Number.isFinite(p.y) ? (p.y as number) : groundAt(pose.x, pose.z), pose.z);
-      g.rotation.y = pose.yaw;
-      inited.current = true;
-    }
+    const targetY = (q: typeof p) => (Number.isFinite(q.y) ? (q.y as number) : groundAt(q.x, q.z));
+    if (!inited.current) { g.position.set(p.x, targetY(p), p.z); g.rotation.y = p.yaw; inited.current = true; }
     const dt = Math.min(delta, 0.1);
     const t = 1 - Math.exp(-15 * dt);
-    g.position.x += (pose.x - g.position.x) * t;
-    g.position.z += (pose.z - g.position.z) * t;
+    g.position.x += (p.x - g.position.x) * t;
+    g.position.z += (p.z - g.position.z) * t;
     g.position.y = Number.isFinite(p.y)
       ? g.position.y + ((p.y as number) - g.position.y) * t
       : groundAt(g.position.x, g.position.z);
-    let dy = pose.yaw - g.rotation.y;
+    let dy = p.yaw - g.rotation.y;
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
     g.rotation.y += dy * t;
@@ -70,6 +64,25 @@ function RemotePlayer({ id }: { id: string }) {
       (hpFill.current.material as THREE.MeshBasicMaterial).color.set(enemy ? '#ef4444' : '#55c979');
     }
     if (enemyRing.current) enemyRing.current.visible = enemy;
+
+    // Vida dele caiu (golpe de qualquer um) → número de dano em cima dele, pra todos verem.
+    const store = useGameStore.getState();
+    const prev = prevHp.current;
+    prevHp.current = p.hp;
+    if (prev !== null && p.hp < prev) {
+      store.reportDamage(`remote-${id}`, prev - p.hp, { x: g.position.x, z: g.position.z }, false);
+      if (p.hp <= 0 && prev > 0 && hitRecently(id)) {
+        store.setMessage(`💀 Você derrotou ${p.name}!`);
+        if (pvpTarget() === id) setPvpTarget(null);
+      }
+    }
+
+    // Alvo TRAVADO: segue golpeando no ritmo da arma (sem precisar ficar clicando).
+    if (pvpTarget() === id) {
+      const hostile = enemy || useNet.getState().selfSide === 'enemy';
+      if (!hostile || store.player.dead || p.hp <= 0 || dist > PVP_LOCK_BREAK) setPvpTarget(null);
+      else if (pvpStrike(p.name, g.position.x, g.position.z, 0.6, (raw) => broadcastPlayerHit(id, raw), true)) markPvpHit(id);
+    }
   });
   return (
     <group ref={group} onPointerDown={(event) => {
@@ -88,8 +101,11 @@ function RemotePlayer({ id }: { id: string }) {
         return;
       }
       // Cadência + alcance + munição da arma; o ALVO aplica o PvP justo (fração + armadura + teto).
+      // O clique TRAVA o alvo: o useFrame continua golpeando enquanto ele estiver no alcance.
+      setPvpTarget(id);
       if (pvpStrike(p.name, g.position.x, g.position.z, 0.6, (raw) => broadcastPlayerHit(id, raw))) {
-        store.setMessage(`⚔️ Você atingiu ${p.name}!`);
+        markPvpHit(id);
+        store.setMessage(`⚔️ Atacando ${p.name}!`);
       }
     }}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />

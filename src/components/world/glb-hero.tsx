@@ -1,5 +1,4 @@
 import { useGLTF, useAnimations } from '@react-three/drei';
-import { modelUrl } from '@/game/asset-path';
 import { createPortal, useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
@@ -10,8 +9,8 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
  * Animation Library 2 — mesmo rig (pelvis/spine/upperarm/hand...), então os
  * clips encaixam direto. Dirigido por estado via `actionRef` (sem re-render).
  */
-const CHAR_URL = modelUrl('ranger/Male_Ranger.gltf');
-const ANIM_URL = modelUrl('ranger/UAL2_Standard.glb');
+const CHAR_URL = '/models/ranger/Male_Ranger.gltf';
+const ANIM_URL = '/models/ranger/UAL2_Standard.glb';
 
 export type HeroAction = 'idle' | 'walk' | 'run' | 'attack' | 'jump';
 

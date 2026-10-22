@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { FACTORY_SITES, terrainHeight } from './world-kit';
 import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { factoryColliders, factoryClip } from './factory-collider';
-import { modelUrl } from '@/game/asset-path';
 
 /**
  * Complexo industrial desativado (prédio GLB, texturas embutidas) — ÁREA DE
@@ -13,7 +12,7 @@ import { modelUrl } from '@/game/asset-path';
  * TETO SOME no modo câmera longe (iso) — ver factory-collider + game-world. Chão
  * do GLB escondido → aparece o dirt do mapa. 4 sites, pad plano (world-kit).
  */
-const URL = modelUrl('factory/factory.glb');
+const URL = '/models/factory/factory.glb';
 const TARGET_H = 7.7; // -30% (porta proporcional ao boneco)
 /** Afunda 10 cm: o chão RETO do prédio fica logo abaixo do nosso. */
 const FACTORY_SINK = 0.1;
