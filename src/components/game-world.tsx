@@ -559,12 +559,11 @@ function Character({
     const sprinting = k.has('ShiftLeft') || k.has('ShiftRight') || autoFollowing;
     const ACCEL = 22;
     const DECEL = 28;
-    const px = body.current.position.x;
-    const pz = body.current.position.z;
-    const inLake = LAKE_CENTERS.some(l => (px - l.x) ** 2 + (pz - l.z) ** 2 < l.r * l.r);
     const moveBonus = 1 + effectiveAttributes(useGameStore.getState().player).moveSpeed / 100;
-    // Andar/correr com redução de 10%: correr 4.8→4.32, andar 2.0→1.8.
-    const MAX_SPEED = (sprinting ? 4.32 : 1.8) * (inLake ? 0.4 : 1) * moveBonus;
+    // Andar/correr com redução de 10%: correr 4.8→4.32, andar 2.0→1.8. Sem lentidão na água
+    // (Pedro 22/10): os círculos de LAKE_CENTERS são do mapa antigo/exclusão de props e
+    // travavam o herói na areia; os bichos já andavam normal.
+    const MAX_SPEED = (sprinting ? 4.32 : 1.8) * moveBonus;
 
     if (targetVx !== 0 || targetVz !== 0) {
       const len = Math.sqrt(targetVx * targetVx + targetVz * targetVz);
