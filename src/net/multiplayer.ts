@@ -195,6 +195,22 @@ export const useNet = create<NetState>((set, get) => ({
       creatureHitHandler?.(hit);
     });
 
+    // PvP fatia 4: inimigo bateu na MINHA base. Só vale com inimizade (aliado não tem fogo amigo).
+    ch.on('broadcast', { event: 'base-hit' }, ({ payload }) => {
+      const hit = payload as BaseHitIntent;
+      if (hit.ownerId !== selfId || hit.id === selfId || !Number.isFinite(hit.damage)) return;
+      // Bicho da MINHA horda (simulado no host) batendo na minha base: vale sempre, sem PvP.
+      if (!hit.mob && hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return;
+      baseHitHandler?.(hit);
+    });
+
+    // Convidado avisou que a horda DELE começou → o host (dono da simulação) spawna.
+    ch.on('broadcast', { event: 'wave-spawn' }, ({ payload }) => {
+      const req = payload as WaveSpawnIntent;
+      if (!get().isHost || req.id === selfId || !Number.isFinite(req.wave)) return;
+      waveSpawnHandler?.(req);
+    });
+
     // Mundo único: o bicho do HOST me acertou (eu sou convidado). Aplica com a MINHA armadura.
     ch.on('broadcast', { event: 'mob-hit' }, ({ payload }) => {
       const hit = payload as MobHitIntent;
@@ -329,6 +345,61 @@ export function broadcastPlayerHit(targetId: string, damage: number): void {
 /** Registrado pela camada de mundo/HUD pra aplicar o dano PvP recebido no jogador local. */
 export function registerPlayerHitHandler(handler: ((intent: PlayerHitIntent) => void) | null): void {
   playerHitHandler = handler;
+}
+
+/* ---- PvP fatia 4: golpe na BASE de um inimigo. O DONO da base valida e aplica. ---- */
+export type BaseHitIntent = {
+  id: string; ownerId: string; pieceId: string; damage: number; fromName: string; fromSide: PvpSide;
+  /** true = bicho da horda do dono (host simula) — dano cheio, sem regra de PvP. */
+  mob?: boolean;
+};
+let baseHitHandler: ((intent: BaseHitIntent) => void) | null = null;
+
+export function broadcastBaseHit(ownerId: string, pieceId: string, damage: number, mobName?: string): void {
+  if (!channel || !useNet.getState().connected || !Number.isFinite(damage) || damage <= 0) return;
+  const { selfId, selfName, selfSide } = useNet.getState();
+  if (ownerId === selfId) return;
+  void channel.send({
+    type: 'broadcast', event: 'base-hit',
+    payload: {
+      id: selfId, ownerId, pieceId, damage, fromName: mobName ?? selfName, fromSide: selfSide,
+      ...(mobName ? { mob: true } : {}),
+    } satisfies BaseHitIntent,
+  });
+}
+
+/* ---- Horda do CONVIDADO: ele avisa, o host spawna/simula (o mundo é um só) ---- */
+export type WaveSpawnIntent = { id: string; wave: number; center: { x: number; z: number } };
+let waveSpawnHandler: ((intent: WaveSpawnIntent) => void) | null = null;
+
+export function broadcastWaveSpawn(wave: number, center: { x: number; z: number }): void {
+  if (!channel || !useNet.getState().connected || useNet.getState().isHost) return;
+  void channel.send({
+    type: 'broadcast', event: 'wave-spawn',
+    payload: { id: useNet.getState().selfId, wave, center } satisfies WaveSpawnIntent,
+  });
+}
+
+export function registerWaveSpawnHandler(handler: ((intent: WaveSpawnIntent) => void) | null): void {
+  waveSpawnHandler = handler;
+}
+
+/** Dono de um bicho de horda pelo id (`wave3_oABC123_...`). null = horda sem dono (solo/antiga). */
+export function waveOwner(creatureId: string): string | null {
+  const m = /^wave\d+_o([A-Za-z0-9]+)_/.exec(creatureId);
+  return m ? m[1]! : null;
+}
+
+/** Esse bicho de horda é da MINHA base? Sem dono = de quem simula (host/solo). */
+export function isMyWave(creatureId: string): boolean {
+  const owner = waveOwner(creatureId);
+  const s = useNet.getState();
+  if (owner) return s.connected ? owner === s.selfId : true;
+  return canSimulateSharedWorld();
+}
+
+export function registerBaseHitHandler(handler: ((intent: BaseHitIntent) => void) | null): void {
+  baseHitHandler = handler;
 }
 
 /* ---- Mundo único: o host mira QUALQUER jogador e avisa o convidado quando o bicho bate ---- */

@@ -65,7 +65,15 @@ import {
   pushEvents, shotEvent, xpEvent,
 } from '../systems/feedbackSystem';
 import type { FeedbackDraft } from '../systems/feedbackSystem';
-import { broadcastCreatureHit, canSimulateSharedWorld } from '@/net/multiplayer';
+import { broadcastCreatureHit, broadcastWaveSpawn, canSimulateSharedWorld, isMyWave, useNet } from '@/net/multiplayer';
+import {
+  BOOMERANG_DMG_MULT, BOOMERANG_DURATION_MS, BOOMERANG_HIT_RADIUS, BOOMERANG_PUSH, HERO_POWER_LABEL,
+  HERO_POWER_TICK_MS, HERO_POWER_UNLOCK, LIGHTNING_BOLT_MS, LIGHTNING_DMG_MULT, LIGHTNING_SPLASH,
+  LIGHTNING_TARGETS, TORNADO_DMG_MULT, TORNADO_DURATION_MS, TORNADO_HIT_RADIUS as HERO_TORNADO_HIT_RADIUS,
+  TORNADO_PUSH as HERO_TORNADO_PUSH,
+  heroBoomerangPositions, heroPowerCooldown, heroPowerRadius, heroTornadoPositions, pushAway, type HeroPowerId,
+} from '../systems/heroPowersSystem';
+import { queueKnockback } from '../systems/knockbackSystem';
 
 /** Para onde o piloto automático recua e para onde aponta um `travel` sem alvo. */
 export const HOME_POSITION: Position = { x: 7, z: -26 };
@@ -82,6 +90,8 @@ type GameState = {
   specialKind: 'jump' | 'spin' | null;
   /** Cooldown (s, relógio absoluto) da Chuva de Flechas — poder de longe. Não persiste. */
   lastArrowRainAt: number;
+  /** Poderes do herói (bumerangue/furacão/raio): cooldowns (s), janelas ativas (ms) e clarões. */
+  heroPowers: HeroPowersState;
   base: BaseState;
   /** Base persistente no mundo (Fase 3). `null` = ainda não reivindicou terreno. */
   playerBase: PlayerBaseState | null;
@@ -138,6 +148,10 @@ type GameActions = {
    *  com o nível, 5 m → 18 m; cooldown 15 s → 5 s). Precisa de arma de longe equipada.
    *  `auto` (piloto idle): silencioso — não escreve mensagem quando ainda não pode disparar. */
   arrowRain: (auto?: boolean) => void;
+  /** Poder do herói por id (mesmo esquema da Chuva: só cooldown, desbloqueio por nível). */
+  castHeroPower: (id: HeroPowerId, auto?: boolean) => void;
+  /** Aplica o dano/empurrão contínuo do bumerangue/furacão ativos (throttled). */
+  tickHeroPowers: (nowMs: number) => void;
   collect: (nodeId: string) => void;
   collectNearest: () => void;
   /** Faz nascer o mini-boss (um por vez) perto do jogador. Chamado pelo timer. */
@@ -416,8 +430,17 @@ function baseCenter(base: PlayerBaseState | null): { x: number; z: number } | nu
   return core ? baseCellCenter(core.cell) : null;
 }
 
-/** Cria os raiders de uma onda ao redor da base (eles marcham até ela — ver hostile-ai). */
-function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: number): CreatureState[] {
+/** Convidado pedindo a própria horda ao host: reenvia a cada 4 s; desiste em 60 s (não trava). */
+const GUEST_WAVE_RETRY_MS = 4000;
+const GUEST_WAVE_GIVE_UP_MS = 60_000;
+let guestWaveAskedAt = 0;
+let guestWaveFirstAskAt = 0;
+
+/** Cria os raiders de uma onda ao redor da base (eles marcham até ela — ver hostile-ai).
+ *  `owner` (online): id do dono da base no id do bicho (`wave3_oABC_...`) — cada jogador tem
+ *  a própria horda no mesmo mundo. Vazio = solo (formato antigo). */
+export function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: number, owner = ''): CreatureState[] {
+  const ownerTag = owner ? `o${owner}_` : '';
   const hpScale = waveHpScale(wave);
   const clamp = (v: number) => Math.max(-WORLD_HALF + 2, Math.min(WORLD_HALF - 2, v));
   const out: CreatureState[] = [];
@@ -429,7 +452,7 @@ function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: n
     const r = 34 + Math.random() * 14; // nascem BEM fora da vista, marcham até a base
     const hp = Math.round(scaleEnemyHp(def.maxHp) * hpScale * hpMul);
     out.push({
-      id: `wave${wave}_${tag}${i}_${now}`,
+      id: `wave${wave}_${ownerTag}${tag}${i}_${now}`,
       speciesId: sp,
       name: def.name,
       hp, maxHp: hp,
@@ -480,6 +503,74 @@ export const ARROW_RAIN_WAVE_MS = 1000;
 /** Nível que DESBLOQUEIA a Chuva de Flechas (1º poder do herói). */
 export const ARROW_RAIN_UNLOCK_LEVEL = 5;
 
+/* ---------------- PODERES DO HERÓI (bumerangue nv10 · furacão nv15 · raio nv20) ---------------- */
+export type HeroPowersState = {
+  /** Último uso (s, relógio absoluto) — cooldown. Não persiste (igual à Chuva). */
+  lastAt: Record<HeroPowerId, number>;
+  boomerangStart: number; // ms
+  boomerangUntil: number; // ms
+  tornadoStart: number;   // ms
+  tornadoUntil: number;   // ms
+  /** De onde os 2 tornados saíram e pra onde vão (direção ao hostil mais perto). */
+  tornadoOrigin: { x: number; z: number };
+  tornadoDir: { x: number; z: number };
+  lastTickAt: number;     // ms
+  /** Clarões do raio (visual). */
+  bolts: { x: number; z: number; at: number }[];
+};
+export const INITIAL_HERO_POWERS: HeroPowersState = {
+  lastAt: { boomerang: 0, tornado: 0, lightning: 0 },
+  boomerangStart: 0, boomerangUntil: 0, tornadoStart: 0, tornadoUntil: 0,
+  tornadoOrigin: { x: 0, z: 0 }, tornadoDir: { x: 0, z: 1 }, lastTickAt: 0, bolts: [],
+};
+
+/** Hostil pra poder: vivo e não pacífico (igual aos poderes da base). */
+function isPowerTarget(c: CreatureState): boolean {
+  return c.behavior !== 'dead' && c.hp > 0 && !CREATURES[c.speciesId]?.peaceful;
+}
+
+/** Força base do herói pros poderes (mesma conta da Chuva de Flechas). */
+function heroPowerBase(st: GameState): number {
+  const selSlot = st.player.inventory.hotbar.slots[st.ui.selectedHotbar];
+  const heldId = selSlot != null ? st.player.inventory.slots[selSlot]?.itemId ?? null : null;
+  return (playerBaseAttack(st.player.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0)) * damageMultiplier(st.player);
+}
+
+/**
+ * Golpe de PODER em várias criaturas: dano (armadura + crítico), recompensa/drop, feedback e
+ * EMPURRÃO (fila do AI). Convidado em sala → manda a intenção pro host (cena única) e não
+ * mexe local (o host aplica e devolve no snapshot).
+ */
+function heroStrike(st: GameState, hits: Map<string, { power: number; push: Vec2 | null }>): Partial<GameState> | null {
+  if (hits.size === 0) return null;
+  if (!canSimulateSharedWorld()) {
+    for (const c of st.creatures) {
+      const h = hits.get(c.id);
+      if (h) broadcastCreatureHit({ targetId: c.id, source: c.position, damage: Math.round(h.power) });
+    }
+    return null;
+  }
+  let player = st.player;
+  let bags = st.deathBags;
+  const drafts: FeedbackDraft[] = [];
+  const crit = playerCritStats(st.player);
+  const creatures = st.creatures.map((c) => {
+    const h = hits.get(c.id);
+    if (!h || !isPowerTarget(c)) return c;
+    const r = resolveAttack(Math.max(1, Math.round(h.power)), c.hp, c.maxHp, c.armor, c.name, crit);
+    drafts.push(damageEvent(c.id, r.damage, c.position, { critical: !!r.critical }));
+    if (r.targetDied) {
+      const reward = rewardCreatureDeath(c, player, bags, drafts, Math.random);
+      player = reward.player;
+      bags = reward.bags;
+      return deadCreature(c, Date.now(), Math.random);
+    }
+    if (h.push) queueKnockback(c.id, h.push.x, h.push.z);
+    return { ...c, hp: r.targetHp, behavior: 'chase' as const };
+  });
+  return { player, creatures, deathBags: bags, feedback: pushEvents(st.feedback, drafts, Date.now()) };
+}
+
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
   player: createInitialPlayer(),
   creatures: [...createInitialCreatures(), ...createWildCreatures(), ...INITIAL_CAMP_WORLD.creatures],
@@ -489,6 +580,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   specialTick: 0,
   specialKind: null,
   lastArrowRainAt: 0,
+  heroPowers: INITIAL_HERO_POWERS,
   base: createInitialBase(Date.now()),
   playerBase: null,
   selectedBaseType: DEFAULT_BASE_TYPE,
@@ -550,6 +642,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const damage = towerDamage(tower, c, rng) * towerDamageMult(state.baseUpgrades.tower_damage);
       const hp = Math.max(0, c.hp - damage);
       const drafts = [shotEvent(tower, c.position, 'arrow', towerHeight(tower.tier, tower.level)), damageEvent(c.id, damage, c.position)];
+      if (!canSimulateSharedWorld()) {
+        // Convidado: o bicho vive no host — a torre pede o dano (armadura já entrou no towerDamage,
+        // então devolve a do bicho pro host não descontar 2×). A vida volta no snapshot.
+        broadcastCreatureHit({ targetId: c.id, source: { x: tower.x, z: tower.z }, damage: Math.round(damage + c.armor) });
+        set({
+          player: { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) },
+          towerLastShotAt: { ...state.towerLastShotAt, [tower.id]: now },
+          feedback: pushEvents(state.feedback, drafts, now),
+        });
+        continue;
+      }
       let player = { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) };
       let deathBags = state.deathBags;
       if (hp === 0) {
@@ -620,6 +723,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         const dz = c.position.z - center.z;
         const len = Math.hypot(dx, dz) || 1;
         next[i] = { ...c, hp, position: { x: c.position.x + (dx / len) * push, z: c.position.z + (dz / len) * push } };
+        queueKnockback(c.id, (dx / len) * push, (dz / len) * push); // o AI aplica de verdade (suave)
       }
       changed = true;
     }
@@ -1011,6 +1115,110 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     fireWave(); // onda 1 agora
     for (let w = 1; w < ARROW_RAIN_WAVES; w++) setTimeout(fireWave, w * ARROW_RAIN_WAVE_MS); // ondas 2 e 3
+  },
+
+  castHeroPower: (id, auto = false) => {
+    const st = get();
+    if (st.player.dead) return;
+    const label = HERO_POWER_LABEL[id];
+    const need = HERO_POWER_UNLOCK[id];
+    if (st.player.level < need) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: `${label} desbloqueia no nível ${need}.` } }));
+      return;
+    }
+    // SÓ cooldown gateia (igual à Chuva: sem mana/stamina/munição).
+    const now = Date.now() / 1000;
+    const cd = heroPowerCooldown(id, st.player.level);
+    const since = now - st.heroPowers.lastAt[id];
+    if (since < cd) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: `${label} recarregando (${Math.ceil(cd - since)}s).` } }));
+      return;
+    }
+    const me = st.player.position;
+    const radius = heroPowerRadius(id, st.player.level);
+    const reach = id === 'lightning' ? radius : radius + 3;
+    const near = st.creatures.filter(isPowerTarget)
+      .map((c) => ({ c, d: getDistance(me, c.position) }))
+      .filter((h) => h.d <= reach)
+      .sort((a, b) => a.d - b.d);
+    // No idle só gasta com hostil perto; o Raio precisa de alvo sempre.
+    if ((auto || id === 'lightning') && near.length === 0) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: `Nenhum alvo no alcance do ${label}.` } }));
+      return;
+    }
+    const nowMs = Date.now();
+    const lastAt = { ...st.heroPowers.lastAt, [id]: now };
+
+    if (id === 'boomerang') {
+      set(s => ({ heroPowers: { ...s.heroPowers, lastAt, boomerangStart: nowMs, boomerangUntil: nowMs + BOOMERANG_DURATION_MS }, ui: { ...s.ui, message: '🪃 Bumerangues!' } }));
+      audioManager.playShot();
+      return;
+    }
+    if (id === 'tornado') {
+      // 2 tornados saem na direção do hostil mais perto (sem alvo no manual: pra frente +z).
+      const aim = near[0]?.c.position;
+      const dir = aim ? { x: aim.x - me.x, z: aim.z - me.z } : { x: 0, z: 1 };
+      set(s => ({
+        heroPowers: { ...s.heroPowers, lastAt, tornadoStart: nowMs, tornadoUntil: nowMs + TORNADO_DURATION_MS, tornadoOrigin: { ...me }, tornadoDir: dir, lastTickAt: 0 },
+        ui: { ...s.ui, message: '🌪️ Furacão!' },
+      }));
+      get().tickHeroPowers(nowMs); // já acerta quem está colado
+      return;
+    }
+
+    // RAIO: relâmpagos nos hostis mais próximos (+ respingo pequeno em volta de cada um).
+    const power = heroPowerBase(st) * LIGHTNING_DMG_MULT;
+    const targets = near.slice(0, LIGHTNING_TARGETS);
+    const hits = new Map<string, { power: number; push: Vec2 | null }>();
+    for (const t of targets) hits.set(t.c.id, { power, push: null });
+    for (const t of targets) {
+      for (const c of st.creatures) {
+        if (!hits.has(c.id) && isPowerTarget(c) && getDistance(t.c.position, c.position) <= LIGHTNING_SPLASH) {
+          hits.set(c.id, { power: power * 0.5, push: null });
+        }
+      }
+    }
+    const bolts = [
+      ...st.heroPowers.bolts.filter((b) => nowMs - b.at < LIGHTNING_BOLT_MS),
+      ...targets.map((t) => ({ x: t.c.position.x, z: t.c.position.z, at: nowMs })),
+    ];
+    const patch = heroStrike(st, hits);
+    set(s => ({ ...(patch ?? {}), heroPowers: { ...s.heroPowers, lastAt, bolts }, ui: { ...s.ui, message: `⚡ Raio! ${targets.length} atingido(s).` } }));
+    audioManager.playGunShot();
+  },
+
+  tickHeroPowers: (nowMs) => {
+    const st = get();
+    const hp = st.heroPowers;
+    const boom = nowMs < hp.boomerangUntil;
+    const torn = nowMs < hp.tornadoUntil;
+    if ((!boom && !torn) || st.player.dead) return;
+    if (nowMs - hp.lastTickAt < HERO_POWER_TICK_MS) return;
+    const me = st.player.position;
+    const base = heroPowerBase(st); // força do herói (sobe com o nível)
+    const blades = boom
+      ? heroBoomerangPositions(me, (nowMs - hp.boomerangStart) / BOOMERANG_DURATION_MS, nowMs)
+      : [];
+    const twisters = torn
+      ? heroTornadoPositions(hp.tornadoOrigin, hp.tornadoDir, (nowMs - hp.tornadoStart) / TORNADO_DURATION_MS)
+      : [];
+    const bR2 = BOOMERANG_HIT_RADIUS * BOOMERANG_HIT_RADIUS;
+    const tR2 = HERO_TORNADO_HIT_RADIUS * HERO_TORNADO_HIT_RADIUS;
+    const hits = new Map<string, { power: number; push: Vec2 | null }>();
+    for (const c of st.creatures) {
+      if (!isPowerTarget(c)) continue;
+      // Furacão: quem o tornado cruza leva dano + EMPURRÃO forte pra longe dele.
+      const tw = twisters.find((t) => (t.x - c.position.x) ** 2 + (t.z - c.position.z) ** 2 <= tR2);
+      if (tw) {
+        hits.set(c.id, { power: base * TORNADO_DMG_MULT, push: pushAway(tw, c.position, HERO_TORNADO_PUSH) });
+        continue;
+      }
+      if (blades.some((b) => (b.x - c.position.x) ** 2 + (b.z - c.position.z) ** 2 <= bR2)) {
+        hits.set(c.id, { power: base * BOOMERANG_DMG_MULT, push: pushAway(me, c.position, BOOMERANG_PUSH) });
+      }
+    }
+    const patch = heroStrike(st, hits);
+    set(s => ({ ...(patch ?? {}), heroPowers: { ...s.heroPowers, lastTickAt: nowMs } }));
   },
 
   collect: (nodeId: string) => {
@@ -1581,7 +1789,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         xpToNext: xpForLevel(lostLevel),
         inventory: {
           ...kit, slots,
-          equipment: { primary: keepEq(eq.primary), secondary: keepEq(eq.secondary), armor: keepEq(eq.armor), accessory: keepEq(eq.accessory) },
+          // TODOS os slots (genérico: já cobre os 8 de armadura por tier do PR do Caio).
+          equipment: Object.fromEntries(
+            Object.entries(eq).map(([slot, id]) => [slot, keepEq((id as string | null | undefined) ?? null)]),
+          ) as typeof eq,
         },
       });
       const penaltyMsg = lostLevel < state.player.level
@@ -1838,14 +2049,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (s.player.dead) return {};
       const dmg = Math.max(1, Math.round(amount));
       const hp = Math.max(0, s.player.hp - dmg);
+      const feedback = pushEvent(s.feedback, damageEvent(s.player.id, dmg, s.player.position, { onPlayer: true }), now);
       if (hp <= 0) {
         return {
           player: { ...s.player, hp: 0, dead: true, respawnAt: now + 15_000, lastDamagedAt: now },
+          feedback,
           ui: { ...s.ui, message: `${sourceName} te derrotou!` },
         };
       }
       return {
         player: { ...s.player, hp, lastDamagedAt: now },
+        feedback,
         ui: { ...s.ui, message: `${sourceName} te atingiu! -${dmg} HP (${hp}/${s.player.maxHp})` },
       };
     });
@@ -1940,15 +2154,37 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let upgradeChoices = state.upgradeChoices;
     {
       const center = baseCenter(state.playerBase);
+      // Só conta a horda da MINHA base (online cada jogador tem a sua no mesmo mundo).
       const aliveWave = ticked.creatures.filter(
-        (c) => c.id.startsWith('wave') && c.hp > 0 && c.behavior !== 'dead',
+        (c) => c.id.startsWith('wave') && c.hp > 0 && c.behavior !== 'dead' && isMyWave(c.id),
       ).length;
       const wt = tickWaves(state.wave, now, center != null, aliveWave, state.playerBase?.enclosed === true);
       waveState = wt.state;
+      const guest = !canSimulateSharedWorld();
       if (wt.startedWave && center) {
-        const spawned = spawnWaveRaiders(wt.startedWave, center, now);
-        waveCreatures = [...ticked.creatures, ...spawned];
-        waveState = markSpawned(waveState, spawned.length);
+        if (guest) {
+          // Convidado: o mundo é do host — pede a horda; o pendente só zera quando ela aparecer.
+          broadcastWaveSpawn(wt.startedWave, center);
+          guestWaveAskedAt = now;
+          guestWaveFirstAskAt = now;
+        } else {
+          const net = useNet.getState();
+          const spawned = spawnWaveRaiders(wt.startedWave, center, now, net.connected ? net.selfId : '');
+          waveCreatures = [...ticked.creatures, ...spawned];
+          waveState = markSpawned(waveState, spawned.length);
+        }
+      } else if (waveState.phase === 'combat' && waveState.spawnPending > 0 && center) {
+        if (aliveWave > 0 || !guest) {
+          waveState = markSpawned(waveState, waveState.spawnPending); // horda chegou pelo mundo do host
+          guestWaveFirstAskAt = 0;
+        } else if (guestWaveFirstAskAt > 0 && now - guestWaveFirstAskAt > GUEST_WAVE_GIVE_UP_MS) {
+          waveState = markSpawned(waveState, waveState.spawnPending); // host não respondeu: não trava
+          guestWaveFirstAskAt = 0;
+        } else if (now - guestWaveAskedAt > GUEST_WAVE_RETRY_MS) {
+          broadcastWaveSpawn(waveState.wave, center);
+          guestWaveAskedAt = now;
+          if (guestWaveFirstAskAt === 0) guestWaveFirstAskAt = now;
+        }
       }
       // Onda repelida → oferece 3 cartas de evolução da base (draft do Pedro).
       if (wt.repelledWave && !upgradeChoices) {

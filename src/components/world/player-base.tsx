@@ -29,7 +29,8 @@ import { GlbBaseWalls } from './glb-base-walls';
 import { GlbTrainingCamps } from './glb-training-camp';
 import { TowerRuntime } from './tower-runtime';
 import { PowerOrbit } from './power-orbit';
-import { useNet, broadcastBase, MP_ENABLED } from '@/net/multiplayer';
+import { useNet, broadcastBase, broadcastBaseHit, MP_ENABLED } from '@/net/multiplayer';
+import { pvpStrike } from './pvp-attack';
 import { useShallow } from 'zustand/react/shallow';
 
 /** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
@@ -45,7 +46,7 @@ import {
   cycleBuildKind, cycleBuildTier, confirmClaim,
 } from './build-mode';
 import { makeInstanceFadeMaterial, registerInstancedFade } from './occlusion';
-import { labelTexture, pixelsPerUnit, terrainHeight, type Palette } from './world-kit';
+import { labelTexture, markPointerConsumed, pixelsPerUnit, terrainHeight, type Palette } from './world-kit';
 
 const noRaycast = () => {};
 
@@ -90,12 +91,14 @@ function crackKeyFor(kind: BasePieceKind, tier: number): CrackBatch['key'] | nul
   return null;
 }
 
-function BaseStructures({ c, piecesSource, interactive = true }: {
+function BaseStructures({ c, piecesSource, interactive = true, onPieceClick }: {
   c: Palette;
   /** Fonte das peças. Ausente = base LOCAL do store (comportamento original).
    *  Presente = base de outro jogador (online) — mesma geometria, sem clique. */
   piecesSource?: () => BasePiece[] | null;
   interactive?: boolean;
+  /** Base REMOTA: clique numa peça (PvP fatia 4 — golpe na base inimiga). */
+  onPieceClick?: ((pieceId: string, e: { nativeEvent?: { timeStamp: number } }) => void) | undefined;
 }) {
   const built = useMemo(() => {
     const assets = buildPieceAssets(c);
@@ -222,6 +225,12 @@ function BaseStructures({ c, piecesSource, interactive = true }: {
           object={b.mesh}
           onPointerDown={interactive ? (e: { button: number; instanceId?: number }) => {
             if (e.button === 0) inspect(b, e.instanceId);
+          } : onPieceClick ? (e: { button: number; instanceId?: number; stopPropagation: () => void; nativeEvent?: { timeStamp: number } }) => {
+            if (e.button !== 0 || e.instanceId === undefined) return;
+            const id = b.ids[e.instanceId];
+            if (!id) return;
+            e.stopPropagation();
+            onPieceClick(id, e);
           } : undefined}
         />
       ))}
@@ -867,7 +876,26 @@ function RemoteBase({ id, c }: { id: string; c: Palette }) {
   if (!base) return null;
   return (
     <>
-      <BaseStructures c={c} interactive={false} piecesSource={() => useNet.getState().bases[id]?.pieces ?? null} />
+      <BaseStructures c={c} interactive={false} piecesSource={() => useNet.getState().bases[id]?.pieces ?? null}
+        onPieceClick={(pieceId, e) => {
+          markPointerConsumed(e.nativeEvent);
+          const net = useNet.getState();
+          const owner = net.players[id];
+          const piece = net.bases[id]?.pieces.find((p) => p.id === pieceId);
+          if (!piece) return;
+          const ownerName = owner?.name ?? 'Viajante';
+          // PvP fatia 4: só com inimizade. Aliado (ou dono sem pose ainda) = só a ficha.
+          const hostile = owner?.side === 'enemy' || net.selfSide === 'enemy';
+          if (!hostile) {
+            useGameStore.getState().setMessage(`Base de ${ownerName} (aliado) · ${piece.hp}/${piece.maxHp} PV.`);
+            return;
+          }
+          const ctr = cellCenter(piece.cell);
+          if (pvpStrike(`A base de ${ownerName}`, ctr.x, ctr.z, 1.5, (raw) => broadcastBaseHit(id, pieceId, raw))) {
+            useGameStore.getState().setMessage(`🏹 Você atacou a base de ${ownerName}!`);
+          }
+        }} />
+      {USE_GLB_TOWER && <GlbWatchTowers pieces={base.pieces} />}
       <BaseHouse pieces={base.pieces} remote />
     </>
   );

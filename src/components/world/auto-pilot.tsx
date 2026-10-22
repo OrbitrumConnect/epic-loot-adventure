@@ -150,6 +150,11 @@ export function AutoPilot({
     // Chuva de Flechas AUTOMÁTICA no idle: chamada silenciosa (auto=true) — só dispara quando
     // há arma de longe na mão, alvo no alcance e o cooldown (que escala com o nível) pronto.
     useGameStore.getState().arrowRain(true);
+    // Poderes do herói no idle (mesmo esquema: silencioso, só com hostil perto + cooldown pronto).
+    const gsPow = useGameStore.getState();
+    gsPow.castHeroPower('boomerang', true);
+    gsPow.castHeroPower('tornado', true);
+    gsPow.castHeroPower('lightning', true);
 
     const now = Date.now();
     const snapshot = buildAutoSnapshot();

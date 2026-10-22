@@ -5,6 +5,7 @@
  * casa) e `playerBase.pieces` (a cerca) do store.
  */
 import { useGameStore } from '@/game/state/game-store';
+import { useNet } from '@/net/multiplayer';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { BASE_GRID } from '@/game/types/playerbase';
 import { BASE_TRAINING_WIDTH } from '@/game/data/base-pieces';
@@ -94,7 +95,7 @@ export function factoryRoofCutY(px: number, pz: number): number | null {
 /** Muro, torre e centro bloqueiam; portão/core/telhado passam. */
 export function pushOutBasePieces(x: number, z: number, self: number): [number, number] {
   const base = useGameStore.getState().playerBase;
-  if (!base) return [x, z];
+  if (!base) return pushOutRemoteBases(x, z, self);
   let rx = x, rz = z;
   for (const p of base.pieces) {
     if (p.kind === 'training') {
@@ -117,6 +118,22 @@ export function pushOutBasePieces(x: number, z: number, self: number): [number, 
     if (p.kind !== 'wall' && p.kind !== 'tower') continue; // portão/core/telhado: passa
     const ctr = cellCenter(p.cell);
     [rx, rz] = pushCircle(rx, rz, ctr.x, ctr.z, p.kind === 'tower' ? 1.0 : 0.9, self);
+  }
+  return pushOutRemoteBases(rx, rz, self);
+}
+
+/** Online: muro/torre das bases dos OUTROS jogadores também são sólidos (antes atravessava). */
+function pushOutRemoteBases(x: number, z: number, self: number): [number, number] {
+  const bases = useNet.getState().bases;
+  let rx = x, rz = z;
+  for (const id in bases) {
+    const pieces = bases[id]?.pieces;
+    if (!pieces) continue;
+    for (const p of pieces) {
+      if (p.kind !== 'wall' && p.kind !== 'tower') continue;
+      const ctr = cellCenter(p.cell);
+      [rx, rz] = pushCircle(rx, rz, ctr.x, ctr.z, p.kind === 'tower' ? 1.0 : 0.9, self);
+    }
   }
   return [rx, rz];
 }

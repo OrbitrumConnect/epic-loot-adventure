@@ -542,6 +542,8 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .levelup-chip { margin-left: 8px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--primary); background: color-mix(in oklch,var(--primary) 18%,transparent); color: var(--primary); font-family: var(--font-sans); font-size: 9px; font-weight: 700; letter-spacing: 1px; }
 @keyframes level-up-glow { 0%,100% { text-shadow: none; } 50% { text-shadow: 0 0 12px var(--primary); } }
 .hotbar-row { display: flex; align-items: stretch; gap: 14px; }
+.hotbar-note-row { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.footer-settings { display: none; }
 .potion-ctl { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 0 0 14px; border-left: 1px solid var(--border); }
 .potion-toggle { height: 29px; padding: 0 9px; gap: 6px; font-size: 9px; letter-spacing: 1px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted-foreground); background: var(--card); }
 .potion-toggle svg { width: 14px; height: 14px; }
@@ -676,6 +678,11 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .slot-key { font-size: 6px; left: 2px; top: 1px; }
   .slot-count { font-size: 6px; right: 2px; bottom: 1px; }
   .hotbar-note { font-size: 7px; margin-top: 2px; }
+  /* Engrenagem (Preferências/Sair/Zerar) no canto inferior esquerdo, abaixo dos atalhos:
+     no topo ela some/fica fora da vista no celular. */
+  .hotbar-note-row { justify-content: space-between; }
+  .footer-settings { display: inline-flex; width: 26px; height: 22px; margin-top: 2px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted-foreground); }
+  .footer-settings svg { width: 13px; height: 13px; }
   .world-action { width: 26px; height: 26px; }
   /* Coluna da direita (AUTO + triggers) bem compacta p/ o rodapé preto encolher. */
   .potion-ctl { padding-left: 4px; gap: 2px; }

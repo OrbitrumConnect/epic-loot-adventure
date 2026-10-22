@@ -107,8 +107,9 @@ function LeveledTower({ piece }: { piece: BasePiece }) {
 }
 
 /** Torres das 4 pontas da BASE = loudspeaker (torre de alarme/defesa que atira). */
-export function GlbWatchTowers() {
-  const pieces = useGameStore((s) => s.playerBase?.pieces);
+export function GlbWatchTowers({ pieces: remotePieces }: { pieces?: BasePiece[] } = {}) {
+  const localPieces = useGameStore((s) => s.playerBase?.pieces);
+  const pieces = remotePieces ?? localPieces;
   const towers = useMemo(() => (pieces ?? []).filter((p) => p.kind === 'tower'), [pieces]);
   if (towers.length === 0) return null;
   return (

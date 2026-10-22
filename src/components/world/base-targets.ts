@@ -34,6 +34,19 @@ function refresh(): void {
   }
 }
 
+/** Igual a `nearestBasePiece`, mas numa lista qualquer (base de OUTRO jogador online). Sem cache. */
+export function nearestPieceIn(pieces: BasePiece[], x: number, z: number, reach: number = BASE_HIT_RANGE): BaseTarget | null {
+  let best: BaseTarget | null = null;
+  let bestD = reach * reach;
+  for (const p of pieces) {
+    if (p.kind === 'core') continue;
+    const c = cellCenter(p.cell);
+    const d = (c.x - x) ** 2 + (c.z - z) ** 2;
+    if (d < bestD) { bestD = d; best = { id: p.id, kind: p.kind, x: c.x, z: c.z }; }
+  }
+  return best;
+}
+
 /** Peça mais próxima dentro de `reach` metros de (x, z), ou null. Resultado reaproveitado. */
 export function nearestBasePiece(x: number, z: number, reach: number = BASE_HIT_RANGE): BaseTarget | null {
   refresh();

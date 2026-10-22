@@ -4,11 +4,13 @@ import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
   Circle, CircleDot, CloudRain, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
   Heart, Home, Landmark, Leaf, ListChecks, Lock, LogOut, Map, Menu, MessageSquare, Mountain, Package,
-  PanelLeftClose, Pickaxe, Repeat, RotateCcw, Settings, Shield, ShieldCheck, Skull,
+  PanelLeftClose, Pickaxe, Repeat, RotateCcw, RotateCw, Settings, Shield, ShieldCheck, Skull,
+  Tornado, CloudLightning,
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Trophy, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore, arrowRainCooldownFor } from '@/game/state/game-store';
+import { heroPowerCooldown, HERO_POWER_UNLOCK, type HeroPowerId } from '@/game/systems/heroPowersSystem';
 import { startLocalPersistence } from '@/game/state/local-persistence';
 import { startAccountPersistence } from '@/game/state/account-persistence';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
@@ -195,6 +197,9 @@ function Index() {
   const specialLeft = Math.max(0, Math.ceil(effectiveSpecialCooldown(player) - (Date.now() / 1000 - (player.lastSpecialAt ?? 0))));
   const lastArrowRainAt = useGameStore(s => s.lastArrowRainAt);
   const arrowRainLeft = Math.max(0, Math.ceil(arrowRainCooldownFor(player.level) - (Date.now() / 1000 - lastArrowRainAt)));
+  const heroPowerLast = useGameStore(s => s.heroPowers.lastAt);
+  const heroPowerLeft = (id: HeroPowerId) =>
+    Math.max(0, Math.ceil(heroPowerCooldown(id, player.level) - (Date.now() / 1000 - heroPowerLast[id])));
 
   const activeObjective = objectives.items.find(o => o.status === 'active')
     ?? objectives.items.find(o => o.status === 'queued')
@@ -245,7 +250,9 @@ function Index() {
     ? `Onda ${wave.wave} ⚔️`
     : wave.phase === 'peace'
       ? `Paz · Onda ${wave.wave + 1} em ${Math.max(0, Math.ceil((wave.phaseEndsAt - Date.now()) / 1000))}s`
-      : null;
+      : playerBase && !playerBase.enclosed
+        ? 'Feche o perímetro p/ armar a horda'
+        : null;
   const useHotbarSlot = useGameStore(s => s.useHotbarSlot);
   const craftItem = useGameStore(s => s.craftItem);
   const rest = useGameStore(s => s.rest);
@@ -382,6 +389,9 @@ function Index() {
       if (e.code === 'KeyQ' && !inCity && !freeCam) specialAttack('jump');
       if (e.code === 'KeyR' && !inCity && !freeCam) specialAttack('spin');
       if (e.code === 'KeyF' && !inCity && !freeCam) arrowRain();
+      if (e.code === 'KeyZ' && !inCity && !freeCam) useGameStore.getState().castHeroPower('boomerang');
+      if (e.code === 'KeyX' && !inCity && !freeCam) useGameStore.getState().castHeroPower('tornado');
+      if (e.code === 'KeyC' && !inCity && !freeCam) useGameStore.getState().castHeroPower('lightning');
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'Backquote' && !inCity) toggleFreeCam();
       if (e.code === 'KeyV' && !inCity) toggleCamera();
@@ -434,6 +444,23 @@ function Index() {
       {player.level >= 5 && (
         <Button variant="ghost" className="world-action" data-cooldown={arrowRainLeft > 0} aria-label="Chuva de Flechas" title="Chuva de Flechas — 3 ondas em área · F" onClick={() => arrowRain()}><CloudRain />{arrowRainLeft > 0 && <span className="cd">{arrowRainLeft}</span>}</Button>
       )}
+      {/* Poderes do herói: cada botão só aparece quando DESBLOQUEIA (igual à Chuva). */}
+      {([
+        ['boomerang', 'Bumerangue — 3 lâminas em espiral até 10 m · Z', <RotateCw key="i" />],
+        ['tornado', 'Furacão — 2 tornados até 12 m, empurram · X', <Tornado key="i" />],
+        ['lightning', 'Raio — relâmpagos nos 4 hostis mais perto · C', <CloudLightning key="i" />],
+      ] as [HeroPowerId, string, React.ReactNode][])
+        .filter(([pid]) => player.level >= HERO_POWER_UNLOCK[pid])
+        .map(([pid, label, icon]) => {
+          const left = heroPowerLeft(pid);
+          return (
+            <Button key={pid} variant="ghost" className="world-action" data-cooldown={left > 0}
+              aria-label={label.split(' — ')[0]} title={label}
+              onClick={() => useGameStore.getState().castHeroPower(pid)}>
+              {icon}{left > 0 && <span className="cd">{left}</span>}
+            </Button>
+          );
+        })}
       <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
       {!playerBase && (
@@ -1124,7 +1151,10 @@ function Index() {
                 {!panel && <div className="world-actions world-actions--footer">{actionButtons}</div>}
               </div>
             </div>
-            <div className="hotbar-note">{hotbarItems[ui.selectedHotbar]?.name ?? 'Vazio'} <span className="text-primary">·</span> Guerreiro</div>
+            <div className="hotbar-note-row">
+              <Button variant="ghost" size="icon" className="footer-settings" aria-label="Preferências" title="Preferências · Sair · Zerar" onClick={() => open('settings')}><Settings /></Button>
+              <div className="hotbar-note">{hotbarItems[ui.selectedHotbar]?.name ?? 'Vazio'} <span className="text-primary">·</span> Guerreiro</div>
+            </div>
           </div>
           <div className="bag-summary">
             <div className="footer-label"><Backpack />MOCHILA</div>

@@ -10,7 +10,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { useGameStore } from '@/game/state/game-store';
+import { spawnWaveRaiders, useGameStore } from '@/game/state/game-store';
 import { Beast } from './beast';
 import { Camp } from './camp';
 import { flushPositions } from './hostile-ai';
@@ -19,10 +19,12 @@ import { isRaider, Raider } from './raider';
 import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
 import {
-  broadcastWorld, fetchResumeSnapshot, MP_ENABLED, registerCreatureHitHandler, registerMobHitHandler,
-  registerPlayerHitHandler, registerWorldSnapshotProvider, useNet,
+  broadcastWorld, fetchResumeSnapshot, MP_ENABLED, registerBaseHitHandler, registerCreatureHitHandler,
+  registerMobHitHandler, registerPlayerHitHandler, registerWaveSpawnHandler, registerWorldSnapshotProvider, useNet,
 } from '@/net/multiplayer';
+import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
+import { pvpBaseDamage, pvpPlayerDamage } from '@/game/systems/pvpSystem';
 
 const SYNC_INTERVAL = 0.2;
 
@@ -112,15 +114,39 @@ export function MultiplayerWorldSync() {
   // inimizade e que o alvo sou eu). Vale pra host e convidado.
   useEffect(() => {
     if (!MP_ENABLED || !connected) return;
+    // PvP JUSTO: o alvo aplica fração do dano + própria armadura + teto de 20% da vida máx.
     registerPlayerHitHandler((hit) => {
-      useGameStore.getState().takePlayerDamage(hit.damage, hit.fromName);
+      const st = useGameStore.getState();
+      st.takePlayerDamage(pvpPlayerDamage(hit.damage, st.player.maxHp, (d) => mitigateDamage(d, st.player)), hit.fromName);
+    });
+    // PvP fatia 4: inimigo bateu na MINHA base → eu (dono) aplico na peça.
+    registerBaseHitHandler((hit) => {
+      const st = useGameStore.getState();
+      const piece = st.playerBase?.pieces.find((p) => p.id === hit.pieceId);
+      if (!piece) return;
+      // Bicho da minha horda (simulado no host): dano cheio, igual ao solo. Jogador inimigo: PvP.
+      const dmg = hit.mob ? Math.max(1, Math.round(hit.damage)) : pvpBaseDamage(hit.damage);
+      const at = cellCenter(piece.cell);
+      st.reportDamage(piece.id, dmg, { x: at.x, z: at.z }, false);
+      st.damageBasePiece(hit.pieceId, dmg);
+      if (useGameStore.getState().playerBase) {
+        st.setMessage(hit.mob ? `${hit.fromName} ataca sua base! -${dmg}` : `🏹 ${hit.fromName} está atacando sua base! -${dmg}`);
+      }
+    });
+    // Host: a horda de um CONVIDADO começou → spawna no mundo único (uma vez por onda).
+    registerWaveSpawnHandler((req) => {
+      const prefix = `wave${req.wave}_o${req.id}_`;
+      const st = useGameStore.getState();
+      if (st.creatures.some((c) => c.id.startsWith(prefix) && c.behavior !== 'dead')) return;
+      const spawned = spawnWaveRaiders(req.wave, req.center, Date.now(), req.id);
+      useGameStore.setState((s) => ({ creatures: [...s.creatures, ...spawned] }));
     });
     // Mundo único: bicho do host me acertou (sou convidado) → minha armadura mitiga.
     registerMobHitHandler((hit) => {
       const st = useGameStore.getState();
       st.takePlayerDamage(mitigateDamage(Math.max(1, hit.damage), st.player), hit.creatureName);
     });
-    return () => { registerPlayerHitHandler(null); registerMobHitHandler(null); };
+    return () => { registerPlayerHitHandler(null); registerMobHitHandler(null); registerBaseHitHandler(null); registerWaveSpawnHandler(null); };
   }, [connected]);
 
   useEffect(() => {

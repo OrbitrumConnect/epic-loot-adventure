@@ -32,6 +32,7 @@ import {
 } from './world/occlusion';
 import { TargetRoute } from './world/target-route';
 import { PlayerBase, NetBases } from './world/player-base';
+import { HeroPowers } from './world/hero-powers';
 import { BaseFireFX } from './world/base-fire';
 import { audioManager } from '@/game/audio/audio-manager';
 import { BaseNightLights } from './world/base-night-lights';
@@ -2247,6 +2248,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       {/* Acampamentos inimigos e todas as criaturas da store (lobos + saqueadores) */}
       <HarvestNodes c={c} />
       <PlayerBase c={c} playerRef={playerRef} paused={Boolean(props.paused)} />
+      {/* Poderes do herói (bumerangue/furacão/raio): visual + tick do dano/empurrão. */}
+      <HeroPowers playerRef={playerRef} paused={Boolean(props.paused)} />
       {/* Online: base dos outros jogadores (+ transmite a local). */}
       <NetBases c={c} />
       <BaseFireFX />
