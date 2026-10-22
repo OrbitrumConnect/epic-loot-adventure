@@ -32,7 +32,7 @@ import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
 import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, riverDistance, RIVER_HALF_WIDTH, type Palette } from './world-kit';
 import { glbSurfaceY, collectGreenSurfaceSpots, surfaceColorAt, useTerrainVersion } from './terrain-collision';
-import { ForestRocks, ForestTrees } from './forest-models';
+import { ForestRocks } from './forest-models';
 import { LivingTrees } from './living-trees';
 import { GroundCover } from './ground-cover';
 
@@ -410,7 +410,7 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
 
   return (
     <>
-      <Suspense fallback={(['pine', 'broad', 'dead'] as const).map(v => (
+      <Suspense fallback={(['pine', 'broad'] as const).map(v => (
         <BillboardField
           key={`flora-${v}`}
           tex={spriteTex(floraUrl(FLORA[v]))}
@@ -423,7 +423,8 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
       ))}>
         <LivingTrees placements={flora.pine} species="pine" c={c} />
         <LivingTrees placements={flora.broad} species="oak" c={c} />
-        <ForestTrees placements={flora.dead} c={c} />
+        {/* Árvore morta (ashroot pintada de preto + seiva brilhante) REMOVIDA — Pedro: objeto escuro
+            estranho (print 22/10). Os 10% de árvores 'dead' simplesmente não aparecem. */}
       </Suspense>
       {/* Arbusto de outono (billboard branco/vermelho) REMOVIDO — não ficou bom. */}
       <ForestRocks placements={rocks.large} c={c} />
