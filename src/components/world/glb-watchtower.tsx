@@ -6,6 +6,8 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { palette, terrainHeight } from './world-kit';
 import { resolveTowerLevel, towerHeight } from '@/game/systems/towerLevelSystem';
 import type { BasePiece } from '@/game/types/playerbase';
+import { pieceGroundY } from './base-ground';
+import { useTerrainVersion } from './terrain-collision';
 
 /**
  * Torre watchtower (GLB, PBR embutido) reutilizável:
@@ -47,6 +49,7 @@ export function WatchtowerModel({ height = 5.3 }: { height?: number }) {
 
 /** Uma instância estável por peça: dano/recarga não recriam GLBs nem materiais. */
 function LeveledTower({ piece }: { piece: BasePiece }) {
+  useTerrainVersion(); // re-assenta quando o chão GLB do mapa termina de carregar
   const { scene } = useGLTF(LOUD_URL);
   const ornaments = useGLTF(ORNAMENT_URLS);
   const baseScene = ornaments[0]!.scene;
@@ -101,7 +104,7 @@ function LeveledTower({ piece }: { piece: BasePiece }) {
   useEffect(() => () => { materials.forEach(material => material.dispose()); }, [materials]);
   const ctr = cellCenter(piece.cell);
   return <primitive object={model} dispose={null}
-    position={[ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z]}
+    position={[ctr.x, pieceGroundY(ctr.x, ctr.z), ctr.z]}
     rotation={[0, (piece.rotation * Math.PI) / 180, 0]} />;
 }
 

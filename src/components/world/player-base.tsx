@@ -47,6 +47,8 @@ import {
 } from './build-mode';
 import { makeInstanceFadeMaterial, registerInstancedFade } from './occlusion';
 import { labelTexture, markPointerConsumed, pixelsPerUnit, terrainHeight, type Palette } from './world-kit';
+import { pieceGroundY } from './base-ground';
+import { useTerrainVersion } from './terrain-collision';
 
 const noRaycast = () => {};
 
@@ -150,14 +152,17 @@ function BaseStructures({ c, piecesSource, interactive = true, onPieceClick }: {
 
   const last = useRef<BasePiece[] | null | undefined>(undefined);
   const lastTier = useRef(-1);
+  const tv = useTerrainVersion();
+  const lastTv = useRef(-1);
 
   useFrame(() => {
     const pieces = piecesSource ? piecesSource() : (useGameStore.getState().playerBase?.pieces ?? null);
     // Tier visual da base LOCAL: 0=madeira, 1=pedra, 2=metal (remoto fica madeira).
     const gs = piecesSource ? null : useGameStore.getState();
     const baseTier = gs ? (gs.baseMetal ? 2 : gs.baseEvolved ? 1 : 0) : 0;
-    if (pieces === last.current && baseTier === lastTier.current) return;
+    if (pieces === last.current && baseTier === lastTier.current && tv === lastTv.current) return;
     last.current = pieces;
+    lastTv.current = tv;
     lastTier.current = baseTier;
 
     for (const b of built.batches) { b.mesh.count = 0; b.ids.length = 0; }
@@ -176,7 +181,7 @@ function BaseStructures({ c, piecesSource, interactive = true, onPieceClick }: {
         const ratio = p.maxHp > 0 ? Math.max(0, Math.min(1, p.hp / p.maxHp)) : 1;
         const hurt = 1 - ratio;
         const lean = p.kind === 'core' ? 0 : hurt * 0.2 * pieceSign(p.id);
-        dummy.position.set(ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z);
+        dummy.position.set(ctr.x, pieceGroundY(ctr.x, ctr.z), ctr.z);
         dummy.rotation.set(lean, (p.rotation * Math.PI) / 180, lean * 0.35);
         // Muro/portão e torre mais altos (+~1.5–2 m): estica em Y a partir do chão
         // (a base fica no terreno, o topo sobe). Core/telhado ficam como são.

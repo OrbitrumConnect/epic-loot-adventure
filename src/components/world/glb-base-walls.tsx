@@ -7,6 +7,8 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { BASE_GRID, type BasePiece } from '@/game/types/playerbase';
 import { terrainHeight } from './world-kit';
 import { AssetBoundary } from './asset-boundary';
+import { pieceGroundY } from './base-ground';
+import { useTerrainVersion } from './terrain-collision';
 
 /**
  * Muros da base em GLB (pedra / metal), que ENTRAM no lugar do muro procedural de
@@ -69,17 +71,20 @@ function WallInstances({ url }: { url: string }) {
   }, [mesh, prep]);
 
   const last = useRef<BasePiece[] | null | undefined>(undefined);
+  const tv = useTerrainVersion();
+  const lastTv = useRef(-1);
   useFrame(() => {
     if (!mesh) return;
     const pieces = useGameStore.getState().playerBase?.pieces ?? null;
-    if (pieces === last.current) return;
+    if (pieces === last.current && tv === lastTv.current) return;
     last.current = pieces;
+    lastTv.current = tv;
     let n = 0;
     if (pieces) {
       for (const p of pieces) {
         if (p.kind !== 'wall' || n >= CAP) continue;
         const ctr = cellCenter(p.cell);
-        dummy.position.set(ctr.x, terrainHeight(ctr.x, ctr.z), ctr.z);
+        dummy.position.set(ctr.x, pieceGroundY(ctr.x, ctr.z), ctr.z);
         dummy.rotation.set(0, (p.rotation * Math.PI) / 180, 0);
         dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
