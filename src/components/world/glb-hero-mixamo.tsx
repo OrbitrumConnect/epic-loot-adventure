@@ -6,6 +6,7 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
+import { retargetTwist } from './mixamo-retarget';
 
 /**
  * Herói com rig **Mixamo** (ex.: Survivor Red do Meshy — que rigga via Mixamo).
@@ -194,17 +195,21 @@ export function GlbHeroMixamo({
         }
       });
     }
-    const mk = (g: { animations: THREE.AnimationClip[] }, name: string): THREE.AnimationClip | null => {
+    // Só o HERÓI (hero-preview, do Blender): os ossos dele têm outro "rolo" e a cópia direta
+    // girava coxas/tronco ~180° → cintura "embrulhada". Raiders seguem a cópia direta.
+    const fixTwist = charUrl === RED_URL;
+    const mk = (g: { animations: THREE.AnimationClip[]; scene: THREE.Object3D }, name: string): THREE.AnimationClip | null => {
       const src = g.animations[0];
       if (!src) return null;
-      const a = src.clone();
+      let a = src.clone();
       a.name = name;
       a.tracks = a.tracks.filter((t) => boneNames.has(t.name.split('.')[0] ?? ''));
+      if (fixTwist) a = retargetTwist(a, g.scene, cloned, standFixX);
       return stripRootMotion(a, fixHipsY);
     };
     return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(jumpG, 'jump')]
       .filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames, cloned]);
+  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames, cloned, charUrl, standFixX]);
 
   const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
