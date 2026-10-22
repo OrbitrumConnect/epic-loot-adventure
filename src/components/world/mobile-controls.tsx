@@ -7,15 +7,20 @@
  * - Direita: PULAR (dispara a tecla Espaço, mesma mecânica do salto) e ATACAR (mesmo
  *   `onAttack` do clique esquerdo). Não duplica lógica nem toca nos gatilhos de auto-farm.
  */
-import { useRef, useState } from 'react';
-import { ChevronsUp, Swords, Footprints } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronsUp, Crosshair, Swords, Footprints } from 'lucide-react';
+import { aimFire, setAiming, useAim } from './aim';
 import { clearVirtualMove, setVirtualMove } from './virtual-input';
 
 const RADIUS = 54; // px: distância máxima do knob ao centro (satura em magnitude 1).
 
 type Stick = { bx: number; by: number; kx: number; ky: number };
 
-export function MobileControls({ onAttack }: { onAttack: () => void }) {
+export function MobileControls({ onAttack, canAim = false }: { onAttack: () => void; canAim?: boolean }) {
+  const aiming = useAim(s => s.active);
+  // Sem 3ª pessoa (ou desmontou): nunca fica preso mirando.
+  useEffect(() => { if (!canAim) setAiming(false); return () => setAiming(false); }, [canAim]);
+  const toggleAim = (e: React.PointerEvent) => { e.preventDefault(); setAiming(!useAim.getState().active); };
   const origin = useRef<{ x: number; y: number; id: number } | null>(null);
   const [stick, setStick] = useState<Stick | null>(null);
 
@@ -49,7 +54,8 @@ export function MobileControls({ onAttack }: { onAttack: () => void }) {
   };
   const attack = (e: React.PointerEvent) => {
     e.preventDefault();
-    onAttack();
+    // Mirando: atira no que está no pontinho; sem nada na mira, o ataque de sempre.
+    if (!(useAim.getState().active && aimFire())) onAttack();
   };
   // CORRER = alterna o sprint (tecla Shift). Toggle (não precisa segurar: o outro dedo
   // fica no joystick). Ligado = keydown ShiftLeft fica "preso"; desligado = keyup.
@@ -74,6 +80,8 @@ export function MobileControls({ onAttack }: { onAttack: () => void }) {
       <div className="mobile-action-btns">
         <button className={`mobile-btn mobile-btn--run${running ? ' is-on' : ''}`} aria-label="Correr"
           aria-pressed={running} onPointerDown={toggleRun}><Footprints /></button>
+        {canAim && <button className={`mobile-btn mobile-btn--aim${aiming ? ' is-on' : ''}`} aria-label="Mirar"
+          aria-pressed={aiming} onPointerDown={toggleAim}><Crosshair /></button>}
         <button className="mobile-btn mobile-btn--jump" aria-label="Pular" onPointerDown={jump}><ChevronsUp /></button>
         <button className="mobile-btn mobile-btn--attack" aria-label="Atacar" onPointerDown={attack}><Swords /></button>
       </div>

@@ -837,3 +837,10 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   color: var(--primary);
   background: color-mix(in oklch, var(--primary) 22%, var(--overlay));
 }
+
+/* MIRA em 3ª pessoa (botão direito / MIRAR no celular): um PONTINHO no centro do mundo
+   (Pedro), com contorno escuro pra aparecer em qualquer fundo. Só leitura (não captura clique). */
+.aim-crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 5; }
+.aim-crosshair__dot { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.6); }
+.aim-crosshair__zoom { position: absolute; left: 0; top: 10px; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 3px #000; white-space: nowrap; }
+.mobile-btn--aim.is-on { background: rgba(239, 68, 68, .55); }

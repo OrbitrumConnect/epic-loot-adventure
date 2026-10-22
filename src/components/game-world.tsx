@@ -13,6 +13,7 @@ import { queueNearestNode } from './world/objective-bridge';
 import { CombatFeedback } from './world/combat-feedback';
 import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
+import { aimFire, aimZoomStep, setAimCamera, setAiming, useAim } from './world/aim';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
@@ -449,8 +450,9 @@ function Character({
       attackTimer.current = 0;
     }
     // Vira de frente pro bicho vivo mais próximo, dentro do alcance da arma.
+    // Mirando (3ª pessoa): quem manda é a mira — ele já está virado pra câmera.
     const b = body.current;
-    if (b) {
+    if (b && !useAim.getState().active) {
       const st = useGameStore.getState();
       const range = weaponRangeFor(selectedItemId(st), st.player.level) + 1;
       let best: { x: number; z: number } | null = null;
@@ -629,6 +631,8 @@ function Character({
     if (moving) {
       targetRotY.current = Math.atan2(velocity.current.x, velocity.current.y);
     }
+    // Mirando: o herói olha pra onde a câmera aponta (mesmo andando de lado).
+    if (useAim.getState().active) targetRotY.current = cameraYawRef.current;
     let rotDiff = targetRotY.current - currentRotY.current;
     while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
     while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
@@ -1647,6 +1651,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       }
       if (cameraMode !== 'third') return;
       e.preventDefault();
+      // Mirando: a MESMA rodinha vira o zoom da mira (mirar de longe).
+      if (useAim.getState().active) { aimZoomStep(e.deltaY < 0 ? 1 : -1); return; }
       camDistTarget.current = THREE.MathUtils.clamp(camDistTarget.current + e.deltaY * 0.01, 3, 8);
     };
 
@@ -1665,6 +1671,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       }
       // Botão DIREITO no modo de cima: inicia o giro 360° da câmera (não ataca/anda).
       if (e.button === 2 && cameraMode === 'iso') { isoDragging.current = true; return; }
+      // Botão DIREITO em 3ª pessoa: MIRA (segurar). Trava o mouse se ainda não travou.
+      if (e.button === 2 && cameraMode === 'third' && !props.paused && !isBuildActive()) {
+        if (!pointerLocked.current) canvas.requestPointerLock();
+        setAiming(true);
+        return;
+      }
       // Câmera livre (Caio): clique nunca ataca — a inspeção é pela mira central.
       if (cameraMode === 'free') return;
       // Clique já consumido por um inimigo / estrutura / recurso não ataca.
@@ -1673,16 +1685,17 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       if (isBuildActive()) return;
       if (e.button === 0 && !props.paused && props.onAttack) {
         if (pointerLocked.current || e.target === canvas) {
-          props.onAttack();
+          // Mirando: atira no que está SOB a mira; sem nada na mira, segue o ataque de sempre.
+          if (!(useAim.getState().active && aimFire())) props.onAttack();
         }
       }
     };
 
     const onMouseUp = (e: MouseEvent) => {
-      if (e.button === 2) { isoDragging.current = false; editorPanning.current = false; }
+      if (e.button === 2) { isoDragging.current = false; editorPanning.current = false; setAiming(false); }
     };
-    // Botão direito gira a câmera no modo de cima → suprime o menu de contexto do navegador.
-    const onContextMenu = (e: MouseEvent) => { if (cameraMode === 'iso') e.preventDefault(); };
+    // Botão direito gira (cima) / mira (3ª pessoa) → suprime o menu de contexto do navegador.
+    const onContextMenu = (e: MouseEvent) => { if (cameraMode === 'iso' || cameraMode === 'third') e.preventDefault(); };
 
     // Touch (mobile): arrastar 1 dedo gira a câmera (iso/3ª pessoa). O TAP no chão NÃO anda mais
     // — quem move é o JOYSTICK (Pedro: "tirar o andar-clicando pra não confundir MOBA e 3ª
@@ -1747,8 +1760,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       canvas.removeEventListener('touchend', onTouchEnd);
       canvas.removeEventListener('touchcancel', onTouchEnd);
       if (pointerLocked.current) document.exitPointerLock();
+      setAiming(false); // trocou de câmera/pausou: nunca fica preso mirando
     };
   }, [gl, cameraMode, props.paused]);
+
+  useEffect(() => { setAimCamera(camera); return () => setAimCamera(null); }, [camera]);
 
   useEffect(() => {
     isoDragging.current = false; // ao trocar de modo, nunca fica "preso" girando
@@ -1893,12 +1909,22 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     } else {
       const yaw = cameraYaw.current;
       const pitch = cameraPitch.current;
-      camDist.current = THREE.MathUtils.lerp(camDist.current, camDistTarget.current, 0.1);
+      // MIRA: câmera no ombro (perto e mais baixa, estilo GTA) + campo de visão fechando com o zoom.
+      const aimNow = useAim.getState();
+      const aiming = aimNow.active;
+      camDist.current = THREE.MathUtils.lerp(camDist.current, aiming ? 1.7 : camDistTarget.current, aiming ? 0.2 : 0.1);
       const dist = camDist.current;
-      const shoulderOffset = 0.7;
+      const shoulderOffset = aiming ? 0.75 : 0.7;
+      if (camera instanceof THREE.PerspectiveCamera) {
+        const wantFov = aiming ? 52 / aimNow.zoom : 65;
+        if (Math.abs(camera.fov - wantFov) > 0.05) {
+          camera.fov = THREE.MathUtils.lerp(camera.fov, wantFov, 0.2);
+          camera.updateProjectionMatrix();
+        }
+      }
 
       const camX = px - Math.sin(yaw) * Math.cos(pitch) * dist + Math.cos(yaw) * shoulderOffset;
-      const camY = py + 2.8 - Math.sin(pitch) * dist;
+      const camY = py + (aiming ? 1.95 : 2.8) - Math.sin(pitch) * dist;
       const camZ = pz - Math.cos(yaw) * Math.cos(pitch) * dist - Math.sin(yaw) * shoulderOffset;
       const wantPos = tmpWant.current.set(camX, camY, camZ);
 
@@ -1928,14 +1954,25 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         camLookAt.current.set(lookX, py + 1.2, lookZ);
       }
 
-      camTarget.current.lerp(wantPos, 0.12);
+      camTarget.current.lerp(wantPos, aiming ? 0.3 : 0.12);
       camera.position.copy(camTarget.current);
 
-      const lookAhead = 4;
-      const lookX = px + Math.sin(yaw) * lookAhead;
-      const lookZ = pz + Math.cos(yaw) * lookAhead;
-      const lookY = py + 1.2 + Math.sin(pitch) * 2;
-      camLookAt.current.lerp(tmpLook.current.set(lookX, lookY, lookZ), 0.12);
+      if (aiming) {
+        // Olha LONGE na direção da câmera: o centro da tela = para onde a mira atira.
+        const far = 60;
+        tmpLook.current.set(
+          camera.position.x + Math.sin(yaw) * Math.cos(pitch) * far,
+          camera.position.y + Math.sin(pitch) * far,
+          camera.position.z + Math.cos(yaw) * Math.cos(pitch) * far,
+        );
+        camLookAt.current.lerp(tmpLook.current, 0.35);
+      } else {
+        const lookAhead = 4;
+        const lookX = px + Math.sin(yaw) * lookAhead;
+        const lookZ = pz + Math.cos(yaw) * lookAhead;
+        const lookY = py + 1.2 + Math.sin(pitch) * 2;
+        camLookAt.current.lerp(tmpLook.current.set(lookX, lookY, lookZ), 0.12);
+      }
       camera.lookAt(camLookAt.current);
     }
 

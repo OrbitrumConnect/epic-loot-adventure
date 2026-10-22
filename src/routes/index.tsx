@@ -55,6 +55,7 @@ import { useEditorStore } from '@/components/editor/editor-store';
 import { LoginGate } from '@/components/LoginGate';
 import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
+import { useAim } from '@/components/world/aim';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
 import { supabase, setAway } from '@/net/multiplayer';
@@ -69,6 +70,19 @@ const ARMOR_SLOT_ICON: Record<ArmorSlot, typeof Shield> = {
   head: Shield, chest: Shield, gloves: Shield, legs: Shield, boots: Shield,
   amulet: Gem, ring1: Gem, ring2: Gem,
 };
+
+/** Mira no centro do MUNDO (não da janela): só aparece mirando; mostra o zoom (rodinha). */
+function AimCrosshair() {
+  const active = useAim(s => s.active);
+  const zoom = useAim(s => s.zoom);
+  if (!active) return null;
+  return (
+    <div className="aim-crosshair" aria-hidden="true">
+      <span className="aim-crosshair__dot" />
+      {zoom > 1 && <small className="aim-crosshair__zoom">{zoom.toFixed(1).replace('.0', '')}×</small>}
+    </div>
+  );
+}
 
 function itemStatsLabel(item: Item): string {
   const stats = item.stats ?? {};
@@ -576,6 +590,7 @@ function Index() {
               <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel) || editorActive} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
+          {ready && !inCity && <AimCrosshair />}
           {ready && ui.mode === 'world' && <BossSpawner />}
           {player.dead && !inCity && (
             <div style={{
@@ -765,7 +780,7 @@ function Index() {
             </div>
             <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}
-          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} />}
+          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={cameraMode === 'third'} />}
           </>)}
 
           {!inCity && !panel && <PiecePicker />}
