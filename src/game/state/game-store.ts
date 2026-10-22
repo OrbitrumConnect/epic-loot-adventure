@@ -2143,7 +2143,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
 
     const discovery = discoverCamps(state.camps, state.player.position);
-    const ticked = tickCamps(discovery.camps, state.creatures, now);
+    // Convidado de sala: os bichos são do host (o snapshot dele sobrescreve) — aqui o tick só
+    // cuida do que é MEU (onda da minha base, poção, coleta, objetivos), sem mexer nos bichos.
+    const ticked = canSimulateSharedWorld()
+      ? tickCamps(discovery.camps, state.creatures, now)
+      : { camps: discovery.camps, creatures: state.creatures, newlyCleared: [], respawned: [] };
 
     let player = state.player;
     const messages: string[] = [];

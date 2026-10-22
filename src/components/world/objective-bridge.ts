@@ -59,8 +59,10 @@ export function toggleRepeat() {
   useGameStore.getState().toggleRepeat();
 }
 
+/** Roda pra TODOS: no convidado o próprio tick deixa os bichos (do host) intactos — antes o
+ *  convidado nem rodava, e a horda/timer dele e a poção automática ficavam congelados. */
 export function tickWorld() {
-  if (canSimulateSharedWorld()) useGameStore.getState().tickWorld();
+  useGameStore.getState().tickWorld();
 }
 
 export function buildAutoSnapshot(): AutoSnapshot {

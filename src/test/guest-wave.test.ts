@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { PlayerBaseState } from '@/game/types/playerbase';
 import { spawnWaveRaiders, useGameStore } from '@/game/state/game-store';
 import { isMyWave, useNet, waveOwner } from '@/net/multiplayer';
+import { tickWorld as bridgeTickWorld } from '@/components/world/objective-bridge';
 
 const base = (): PlayerBaseState => ({
   id: 'base_test',
@@ -64,6 +65,19 @@ describe('horda online — cada jogador tem a sua', () => {
     useGameStore.setState({ creatures: mine.map((c) => ({ ...c, hp: 0, behavior: 'dead' as const })) });
     useGameStore.getState().tickWorld();
     expect(useGameStore.getState().wave.phase).toBe('peace');
+  });
+
+  it('convidado: o relógio do jogo (mesmo caminho do jogo) avança a MINHA onda e não mexe nos bichos do host', () => {
+    useNet.setState({ connected: true, isHost: false, selfId: 'guest1' });
+    const hostMobs = spawnWaveRaiders(2, { x: 50, z: 50 }, 1, 'host99');
+    useGameStore.setState({
+      playerBase: base(), creatures: hostMobs,
+      wave: { phase: 'peace', wave: 0, phaseEndsAt: Date.now() - 1, spawnPending: 0 },
+    });
+    bridgeTickWorld();
+    const st = useGameStore.getState();
+    expect(st.wave.phase).toBe('combat');
+    expect(st.creatures).toBe(hostMobs); // intocado
   });
 
   it('solo segue igual: spawna local na hora', () => {
