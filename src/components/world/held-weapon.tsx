@@ -246,8 +246,10 @@ function Rifle({ k }: { k: Kit }) {
   );
 }
 
-export function HeldItem({ c }: { c: Palette }) {
-  const kind = useGameStore(s => heldKindFor(selectedItemId(s)));
+/** `itemId` definido = arma de OUTRO jogador (online); sem ele, a do jogador local. */
+export function HeldItem({ c, itemId }: { c: Palette; itemId?: string | null }) {
+  const localKind = useGameStore(s => heldKindFor(selectedItemId(s)));
+  const kind = itemId === undefined ? localKind : heldKindFor(itemId);
   const k = kitFor(c);
   switch (kind) {
     case 'sword': return <Sword k={k} />;

@@ -14,7 +14,11 @@ export function connectLocalPersistence(store: PersistenceStore, storage: SaveSt
     const raw = storage.getItem(SAVE_KEY);
     const save = parseLocalSave(raw);
     if (save) store.setState(restoreLocalSave(save, store.getState(), now()));
-    else if (raw !== null) storage.removeItem(SAVE_KEY);
+    else if (raw !== null) {
+      // Save que não validou: guarda uma CÓPIA antes de tirar do caminho (dá pra recuperar).
+      try { storage.setItem(`${SAVE_KEY}.rejeitado`, raw); } catch { /* quota */ }
+      storage.removeItem(SAVE_KEY);
+    }
   } catch { /* Storage bloqueado/corrompido: mantém o protótipo local jogável. */ }
 
   let dirty = false;

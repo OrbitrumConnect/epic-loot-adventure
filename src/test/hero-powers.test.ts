@@ -49,7 +49,7 @@ describe('poderes do herói — regras puras', () => {
 });
 
 describe('poderes do herói — no jogo', () => {
-  beforeEach(() => setup(25, [{ id: 'f1', x: 3, z: 0 }, { id: 'f2', x: 6, z: 0 }, { id: 'longe', x: 60, z: 0 }]));
+  beforeEach(() => { useGameStore.setState({ lastArrowRainAt: 0 }); setup(25, [{ id: 'f1', x: 3, z: 0 }, { id: 'f2', x: 6, z: 0 }, { id: 'longe', x: 60, z: 0 }]); });
 
   it('abaixo do nível NÃO dispara', () => {
     setup(12, [{ id: 'f1', x: 3, z: 0 }]);
@@ -77,6 +77,20 @@ describe('poderes do herói — no jogo', () => {
     const c = useGameStore.getState().creatures.find((x) => x.id === 'colado')!;
     expect(c.hp).toBeLessThan(5000);
     expect(pendingKnockback('colado')).not.toBeNull();
+  });
+
+  it('um poder de cada vez: 3 s de intervalo entre poderes diferentes (inclui a Chuva)', () => {
+    useGameStore.setState({ lastArrowRainAt: 0 });
+    useGameStore.getState().castHeroPower('lightning');
+    expect(useGameStore.getState().heroPowers.lastAt.lightning).toBeGreaterThan(0);
+    useGameStore.getState().castHeroPower('tornado');
+    expect(useGameStore.getState().heroPowers.lastAt.tornado).toBe(0); // bloqueado pelo intervalo
+    useGameStore.getState().arrowRain();
+    expect(useGameStore.getState().lastArrowRainAt).toBe(0);
+    // 3 s depois: libera
+    useGameStore.setState((s) => ({ heroPowers: { ...s.heroPowers, lastAt: { ...s.heroPowers.lastAt, lightning: Date.now() / 1000 - 3.1 } } }));
+    useGameStore.getState().castHeroPower('tornado');
+    expect(useGameStore.getState().heroPowers.lastAt.tornado).toBeGreaterThan(0);
   });
 
   it('bumerangue: lâminas abrem e cortam quem está no caminho', () => {

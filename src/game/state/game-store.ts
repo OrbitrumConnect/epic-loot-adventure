@@ -504,6 +504,14 @@ export const ARROW_RAIN_WAVE_MS = 1000;
 export const ARROW_RAIN_UNLOCK_LEVEL = 5;
 
 /* ---------------- PODERES DO HERÓI (bumerangue nv10 · furacão nv15 · raio nv20) ---------------- */
+/** Intervalo COMUM entre poderes do herói (Chuva, Bumerangue, Furacão, Raio): um de cada vez. */
+export const POWER_GAP_S = 3;
+/** Segundos que faltam pra liberar o próximo poder (0 = livre). Tempos em segundos. */
+function powerGapLeft(st: { lastArrowRainAt: number; heroPowers: HeroPowersState }, nowS: number): number {
+  const last = Math.max(st.lastArrowRainAt, ...Object.values(st.heroPowers.lastAt));
+  return Math.max(0, POWER_GAP_S - (nowS - last));
+}
+
 export type HeroPowersState = {
   /** Último uso (s, relógio absoluto) — cooldown. Não persiste (igual à Chuva). */
   lastAt: Record<HeroPowerId, number>;
@@ -791,6 +799,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // comum volta no snapshot do anfitrião para todos os jogadores.
     if (!canSimulateSharedWorld()) {
       broadcastCreatureHit({ targetId, source: state.player.position, damage: finalPower });
+      // O tiro/golpe aparece e soa NA HORA pra quem atira (antes o convidado não via nada
+      // sair — parecia que não atirava); a vida do bicho volta no snapshot do host.
+      if (heldItemId === 'bow') audioManager.playShot();
+      else if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
+      else if (!usingRanged) audioManager.playMelee();
       set({
         player: {
           ...state.player,
@@ -798,7 +811,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           inventory: ammoItem ? removeItem(state.player.inventory, ammoItem, 1) : state.player.inventory,
         },
         attackTick: state.attackTick + 1,
-        ui: { ...state.ui, message: `Golpe enviado contra ${creature.name}.` },
+        feedback: usingRanged && prof.projectile
+          ? pushEvent(state.feedback, shotEvent(state.player.position, creature.position, prof.projectile), Date.now())
+          : state.feedback,
+        ui: { ...state.ui, message: `Atacando ${creature.name}.` },
       });
       return;
     }
@@ -1038,6 +1054,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (!auto) set(s => ({ ui: { ...s.ui, message: `Chuva de Flechas recarregando (${Math.ceil(cooldown - since)}s).` } }));
       return;
     }
+    const gap = powerGapLeft(state, now);
+    if (gap > 0) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: `Aguarde ${Math.ceil(gap)}s entre um poder e outro.` } }));
+      return;
+    }
 
     const usesBullet = prof.projectile === 'bullet'; // só define o SOM (tiro x flecha)
 
@@ -1132,6 +1153,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const since = now - st.heroPowers.lastAt[id];
     if (since < cd) {
       if (!auto) set(s => ({ ui: { ...s.ui, message: `${label} recarregando (${Math.ceil(cd - since)}s).` } }));
+      return;
+    }
+    const gap = powerGapLeft(st, now);
+    if (gap > 0) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: `Aguarde ${Math.ceil(gap)}s entre um poder e outro.` } }));
       return;
     }
     const me = st.player.position;
@@ -1810,7 +1836,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         upgradeChoices: null,
         orbitExpiresWave: 0,
         tornadoExpiresWave: 0,
-        creatures: state.creatures.filter((c) => !c.id.startsWith('wave')),
+        // Só a MINHA horda some (online a sala tem a horda de cada jogador).
+        creatures: state.creatures.filter((c) => !(c.id.startsWith('wave') && isMyWave(c.id))),
         ui: { ...state.ui, message: penaltyMsg, baseFell: true },
       });
       return;

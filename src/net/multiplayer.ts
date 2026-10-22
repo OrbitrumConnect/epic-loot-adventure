@@ -38,6 +38,8 @@ export type RemotePose = {
   /** Altura REAL dos pés de quem envia (ponte, assoalho da casa, pulo, morro). Opcional:
    *  cliente antigo sem `y` → o receptor calcula pelo chão (compatível). */
   y?: number;
+  /** Item na mão (id) — o outro jogador desenha a mesma arma. Opcional (cliente antigo). */
+  w?: string;
   action: string; t: number;
   /** Aliado ou Inimigo (declarado no card ao entrar). Default 'ally'. */
   side: PvpSide;
@@ -273,7 +275,7 @@ export const useNet = create<NetState>((set, get) => ({
 
 /** Envia a pose do jogador local (chamar do loop; throttla sozinho a ~11Hz). */
 let lastSent = 0;
-export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number, y?: number): void {
+export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number, y?: number, weapon?: string | null): void {
   if (!channel || !useNet.getState().connected) return;
   const now = performance.now();
   if (now - lastSent < 88) return;
@@ -284,6 +286,7 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
     payload: {
       id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now, side: selfSide,
       ...(y !== undefined && Number.isFinite(y) ? { y } : {}),
+      ...(weapon ? { w: weapon } : {}),
     } satisfies RemotePose,
   });
 }

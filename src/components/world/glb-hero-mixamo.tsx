@@ -111,10 +111,13 @@ export function GlbHeroMixamo({
   gripScale = 1,
   gripPos = [0.04, 0.04, 0.08],
   gripRot = [0, Math.PI / 2, Math.PI / 2],
+  heldItemOf,
 }: {
   actionRef: React.MutableRefObject<HeroAction>;
   speedRef?: React.MutableRefObject<number>;
   weapon?: ReactNode;
+  /** Item na mão de OUTRO jogador (online) p/ escolher a anim de ataque; sem ele, o local. */
+  heldItemOf?: () => string | null;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -273,7 +276,7 @@ export function GlbHeroMixamo({
     if (forceBow && actions['attackBow']) {
       atkName = 'attackBow'; // arqueiro/xamã: só ataca de longe
     } else if (rangedAttack && actions['attackBow']) {
-      const kind = heldKindFor(selectedItemId(useGameStore.getState()));
+      const kind = heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState()));
       if (kind === 'bow' || kind === 'pistol' || kind === 'rifle') atkName = 'attackBow';
     }
 

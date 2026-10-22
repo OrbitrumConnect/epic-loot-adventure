@@ -25,11 +25,14 @@ export function startAccountPersistence(userId: string): () => void {
 
   let stopped = false;
   let dirty = false;
+  // A conta TEM save mas ele não passou na validação: nunca sobrescrever (subiria um
+  // personagem zerado por cima do progresso real). Fica só no local até alguém corrigir.
+  let locked = false;
   let debounce: ReturnType<typeof setTimeout> | undefined;
   let maxWait: ReturnType<typeof setTimeout> | undefined;
 
   const push = () => {
-    if (!dirty) return;
+    if (!dirty || locked) return;
     dirty = false;
     const blob = createLocalSave(store.getState());
     void client.from(TABLE).upsert(
@@ -65,6 +68,10 @@ export function startAccountPersistence(userId: string): () => void {
     } else if (parsed) {
       dirty = true;
       push(); // local está à frente da conta: sobe o local (não perde progresso).
+    } else if (data?.save) {
+      locked = true;
+      console.warn('[save conta] save da conta não passou na validação — NÃO sobrescrevo.');
+      store.getState().setMessage('⚠️ Seu save da conta não carregou. Nada foi apagado — avise o suporte antes de jogar.');
     } else {
       dirty = true;
       push(); // genuinamente sem save nesta conta: sobe o que o jogador já tem.

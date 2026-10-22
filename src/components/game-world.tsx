@@ -494,7 +494,7 @@ function Character({
     // Online: parado num painel (Salas, mochila...) ou morto o herói não anda, mas a pose
     // continua indo — senão o outro jogador simplesmente não te vê na sala.
     if (paused || ps.dead) {
-      broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, 'idle', ps.level, ps.dead ? 0 : ps.hp, ps.maxHp, body.current.position.y);
+      broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, 'idle', ps.level, ps.dead ? 0 : ps.hp, ps.maxHp, body.current.position.y, selectedItemId(useGameStore.getState()));
     }
     if (paused) return;
     const dt = Math.min(delta, 0.05);
@@ -634,7 +634,7 @@ function Character({
 
     // Multiplayer: transmite a pose do jogador local (throttla sozinho ~11Hz).
     const netPlayer = useGameStore.getState().player;
-    broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, heroAction.current, netPlayer.level, netPlayer.hp, netPlayer.maxHp, body.current.position.y);
+    broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, heroAction.current, netPlayer.level, netPlayer.hp, netPlayer.maxHp, body.current.position.y, selectedItemId(useGameStore.getState()));
 
     // Especial (Q/R): pulo pro 'jump', giro 360° pro 'spin'. O dano/feedback
     // acontece no store; aqui é só a animação. O soco de impacto vem dos eventos.

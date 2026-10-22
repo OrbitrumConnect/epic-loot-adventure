@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { useNet, broadcastPlayerHit } from '@/net/multiplayer';
 import { GlbHeroMixamo } from './glb-hero-mixamo';
 import type { HeroAction } from './glb-hero';
-import { labelTexture, markPointerConsumed, terrainHeight, HERO_HEIGHT } from './world-kit';
+import { labelTexture, markPointerConsumed, palette, terrainHeight, HERO_HEIGHT } from './world-kit';
+import { HeldItem } from './held-weapon';
 import { glbSurfaceY } from './terrain-collision';
 import { useGameStore } from '@/game/state/game-store';
 import { hitRecently, markPvpHit, PVP_LOCK_BREAK, pvpStrike, pvpTarget, setPvpTarget } from './pvp-attack';
@@ -108,7 +109,9 @@ function RemotePlayer({ id }: { id: string }) {
         store.setMessage(`⚔️ Atacando ${p.name}!`);
       }
     }}>
-      <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} />
+      <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack
+        heldItemOf={() => useNet.getState().players[id]?.w ?? null}
+        weapon={<RemoteHeld id={id} />} />
       {/* Anel vermelho sob INIMIGOS (PvP). Fica invisível pra aliado; toggle no useFrame. */}
       <mesh ref={enemyRing} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} visible={false} raycast={noRaycast}>
         <ringGeometry args={[0.55, 0.72, 36]} />
@@ -130,6 +133,13 @@ function RemotePlayer({ id }: { id: string }) {
       </group>
     </group>
   );
+}
+
+/** Arma na mão do jogador remoto: re-renderiza só quando ELE troca de item. */
+function RemoteHeld({ id }: { id: string }) {
+  const itemId = useNet((s) => s.players[id]?.w ?? null);
+  const c = useMemo(() => palette(), []);
+  return <HeldItem c={c} itemId={itemId} />;
 }
 
 /** Renderiza todos os jogadores remotos. Re-renderiza só quando a LISTA muda
