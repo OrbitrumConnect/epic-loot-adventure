@@ -64,19 +64,19 @@ describe('waveSystem · ciclo', () => {
     expect(r.state.phaseEndsAt).toBe(30_000 + peaceDurationMs(1));
   });
 
-  it('tempo de paz escala ~1min/onda (3min cedo, teto 8min até a 20, até 12min acima da 20)', () => {
+  it('tempo de paz escala ~1min/onda (3min cedo, teto 10min até a 20, até 14min acima da 20)', () => {
     expect(peaceDurationMs(1)).toBe(180_000);   // 3 min cedo
     expect(peaceDurationMs(5)).toBe(180_000);   // 3 min
-    expect(peaceDurationMs(6)).toBe(240_000);   // 4 min
-    expect(peaceDurationMs(8)).toBe(360_000);   // 6 min
-    expect(peaceDurationMs(10)).toBe(480_000);  // 8 min (teto médio, hordas grandes)
-    expect(peaceDurationMs(20)).toBe(480_000);  // 8 min até a 20
-    expect(peaceDurationMs(21)).toBe(540_000);  // 9 min acima de 20
-    expect(peaceDurationMs(24)).toBe(720_000);  // 12 min (teto)
-    expect(peaceDurationMs(30)).toBe(720_000);  // 12 min
+    expect(peaceDurationMs(6)).toBe(360_000);   // 6 min (+2, Pedro 22/10)
+    expect(peaceDurationMs(8)).toBe(480_000);   // 8 min
+    expect(peaceDurationMs(10)).toBe(600_000);  // 10 min (teto médio, hordas grandes)
+    expect(peaceDurationMs(20)).toBe(600_000);  // 10 min até a 20
+    expect(peaceDurationMs(21)).toBe(660_000);  // 11 min acima de 20
+    expect(peaceDurationMs(24)).toBe(840_000);  // 14 min (teto)
+    expect(peaceDurationMs(30)).toBe(840_000);  // 14 min
     // a transição combate→paz usa o tempo escalado:
     const r = tickWaves({ phase: 'combat', wave: 16, phaseEndsAt: 0, spawnPending: 0 }, 1000, true, 0);
-    expect(r.state.phaseEndsAt).toBe(1000 + 480_000); // onda 16 = 8 min (horda grande)
+    expect(r.state.phaseEndsAt).toBe(1000 + 600_000); // onda 16 = 10 min (horda grande, +2 Pedro 22/10)
   });
 
   it('markSpawned desconta o pendente sem passar de 0', () => {

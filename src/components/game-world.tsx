@@ -2332,23 +2332,31 @@ function maxDpr(): number {
   return Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
 }
 
+/** Ajusta a resolução DENTRO do motor (setDpr do renderizador): não redesenha o GameWorld —
+ *  antes o setState reaplicava zoom={33} na câmera de cima a cada ajuste e o zoom da rodinha "sumia". */
+function AdaptiveResolution() {
+  const setDpr = useThree((st) => st.setDpr);
+  const dprMax = useMemo(maxDpr, []);
+  const startFactor = (1 - DPR_MIN) / (dprMax - DPR_MIN);
+  return (
+    <PerformanceMonitor factor={startFactor} flipflops={4} onFallback={() => setDpr(1)}
+      onChange={({ factor }) => setDpr(Math.round((DPR_MIN + (dprMax - DPR_MIN) * factor) * 20) / 20)} />
+  );
+}
+
 export default function GameWorld(props: WorldProps) {
   const c = useMemo(palette, []);
   const cameraMode = props.cameraMode ?? 'iso';
-  const dprMax = useMemo(maxDpr, []);
-  const [dpr, setDpr] = useState(1);
-  const startFactor = (1 - DPR_MIN) / (dprMax - DPR_MIN);
 
   return (
     <>
-      <Canvas shadows="percentage" dpr={dpr} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
+      <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
         {cameraMode === 'iso' ? (
           <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={160} />
         ) : (
           <PerspectiveCamera makeDefault position={[0, 3, -5]} fov={65} near={0.1} far={160} />
         )}
-        <PerformanceMonitor factor={startFactor} flipflops={4} onFallback={() => setDpr(1)}
-          onChange={({ factor }) => setDpr(Math.round((DPR_MIN + (dprMax - DPR_MIN) * factor) * 20) / 20)} />
+        <AdaptiveResolution />
         {/* Rede de segurança: qualquer erro de cena/asset que escape dos boundaries
             internos para aqui (em vez de derrubar o root error boundary do router). */}
         <AssetBoundary label="WorldScene" fallback={null}>

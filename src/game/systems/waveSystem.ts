@@ -35,8 +35,9 @@ export function peaceDurationMs(wave: number): number {
   // inclusive porque o mundo segue rodando nos menus/modo cidade. +2 min nos tetos.
   let minutes: number;
   if (wave <= 5) minutes = 3;
-  else if (wave <= 20) minutes = Math.min(8, 3 + (wave - 5)); // 6=4, 7=5, 8=6, 9=7, 10..20=8
-  else minutes = Math.min(12, 8 + (wave - 20));               // 21=9 … 24+=12
+  // Pedro (22/10, nv 35): na onda 7 ainda matava bicho a 45 s da 8 e não deu tempo de evoluir → +2 min.
+  else if (wave <= 20) minutes = Math.min(10, 5 + (wave - 5)); // 6=6, 7=7, 8=8, 9=9, 10..20=10
+  else minutes = Math.min(14, 10 + (wave - 20));              // 21=11 … 24+=14
   return minutes * 60_000;
 }
 export const BASE_WAVE_ENEMIES = 4;  // referência de quantidade
