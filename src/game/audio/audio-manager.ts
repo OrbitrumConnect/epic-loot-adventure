@@ -129,6 +129,23 @@ class AudioManager {
   playGunShot() { this.ensure(); if (!this.gun) return; this.gun.volume = Math.min(0.26, this.master * 0.36); this.gun.currentTime = 0; void this.gun.play().catch(() => {}); }
   playHarvest() { this.ensure(); if (!this.harvest) return; this.harvest.volume = Math.min(0.16, this.master * 0.158); this.harvest.currentTime = 0; void this.harvest.play().catch(() => {}); }
   playMelee() { this.ensure(); if (!this.melee) return; this.melee.volume = Math.min(0.16, this.master * 0.158); this.melee.currentTime = 0; void this.melee.play().catch(() => {}); }
+  /** Ataque de OUTRO jogador (online): cópias próprias (não corta o som local) e volume pela
+   *  distância (`gain` 0..1). Pool pequeno por tipo, reaproveitado em rodízio. */
+  private remotePool: Record<'bow' | 'gun' | 'melee', HTMLAudioElement[]> = { bow: [], gun: [], melee: [] };
+  private remoteNext: Record<'bow' | 'gun' | 'melee', number> = { bow: 0, gun: 0, melee: 0 };
+  playRemote(kind: 'bow' | 'gun' | 'melee', gain: number) {
+    this.ensure();
+    const src = kind === 'gun' ? this.gun : kind === 'bow' ? this.shot : this.melee;
+    if (!src || gain <= 0.03) return;
+    const pool = this.remotePool[kind];
+    if (pool.length < 3) pool.push(src.cloneNode(true) as HTMLAudioElement);
+    const a = pool[this.remoteNext[kind] % pool.length]!;
+    this.remoteNext[kind]++;
+    const base = kind === 'gun' ? 0.26 : kind === 'bow' ? 0.22 : 0.16;
+    a.volume = Math.min(base, this.master * base * 1.2) * Math.min(1, gain);
+    a.currentTime = 0;
+    void a.play().catch(() => {});
+  }
   setFootsteps(active: boolean, sprinting = false) {
     this.ensure(); if (!this.footsteps) return;
     this.footsteps.volume = Math.min(0.16, this.master * (sprinting ? 0.211 : 0.182));

@@ -6,13 +6,15 @@ import { useNet, broadcastPlayerHit } from '@/net/multiplayer';
 import { GlbHeroMixamo } from './glb-hero-mixamo';
 import type { HeroAction } from './glb-hero';
 import { labelTexture, markPointerConsumed, palette, terrainHeight, HERO_HEIGHT } from './world-kit';
-import { HeldItem } from './held-weapon';
+import { HeldItem, heldKindFor } from './held-weapon';
+import { audioManager } from '@/game/audio/audio-manager';
 import { glbSurfaceY } from './terrain-collision';
 import { useGameStore } from '@/game/state/game-store';
 import { hitRecently, markPvpHit, PVP_LOCK_BREAK, pvpStrike, pvpTarget, setPvpTarget } from './pvp-attack';
 
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
 const LABEL_RANGE = 12;
+const REMOTE_SOUND_RANGE = 35; // m: além disso o ataque do outro é mudo
 const noRaycast = () => {};
 
 /** Um jogador remoto: lê a pose do net (via getState, sem re-render) e interpola
@@ -25,6 +27,7 @@ function RemotePlayer({ id }: { id: string }) {
   const hpFill = useRef<THREE.Mesh>(null);
   const enemyRing = useRef<THREE.Mesh>(null); // anel vermelho sob INIMIGOS (PvP, atualiza ao vivo)
   const prevHp = useRef<number | null>(null);
+  const lastAction = useRef<string>('idle');
   const initial = useNet.getState().players[id];
   const title = `${initial?.name ?? 'Viajante'} · Nv. ${initial?.level ?? 1}`;
   const texture = useMemo(() => labelTexture(title, '#fff3c4'), [title]);
@@ -33,6 +36,15 @@ function RemotePlayer({ id }: { id: string }) {
     const p = useNet.getState().players[id];
     if (!g || !p) return;
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
+    // SOM do ataque dele (online): quando a ação vira 'attack', toca o som da arma que ele tem na
+    // mão, mais baixo quanto mais longe (some a partir de ~35 m).
+    if (p.action === 'attack' && lastAction.current !== 'attack') {
+      const me = useGameStore.getState().player.position;
+      const gain = 1 - Math.hypot(me.x - p.x, me.z - p.z) / REMOTE_SOUND_RANGE;
+      const kind = heldKindFor(p.w ?? null);
+      audioManager.playRemote(kind === 'bow' ? 'bow' : kind === 'pistol' || kind === 'rifle' ? 'gun' : 'melee', gain);
+    }
+    lastAction.current = p.action;
     // Pés: usa a altura REAL que o outro jogador mandou (ponte/casa/pulo/morro) — antes
     // recalculava só pelo terreno e o amigo aparecia com os pés enterrados. Sem `y` (cliente
     // antigo) cai no cálculo pelo chão.
