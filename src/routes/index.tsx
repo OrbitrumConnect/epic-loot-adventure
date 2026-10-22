@@ -366,6 +366,12 @@ function Index() {
   const isMobile = useIsMobile();
   const authUser = useAuth(s => s.user);
   const signOut = useAuth(s => s.signOut);
+  // O mundo 3D só monta DEPOIS do login (Caio, 22/10: no Android fraco o jogo carregava atrás da
+  // tela de login e travava até digitar — nem dava pra criar conta). Uma vez montado, fica
+  // (sessão que expira no meio não recarrega o mapa inteiro).
+  const worldUnlocked = useRef(false);
+  if (!AUTH_ENABLED || authUser) worldUnlocked.current = true;
+  const worldOn = ready && worldUnlocked.current;
 
   // Novo personagem (zerar): apaga o save LOCAL e, se logado, o da CONTA (senão recarrega
   // o antigo), depois recarrega a página pro estado inicial.
@@ -603,18 +609,18 @@ function Index() {
         </header>
 
         <section className="world-viewport" aria-label="Mundo de TRIBOS">
-          {ready && inCity && (
+          {worldOn && inCity && (
             <Suspense fallback={<div className="world-loading">Abrindo a cidade…</div>}>
               <CityView />
             </Suspense>
           )}
-          {ready && !inCity && (
+          {worldOn && !inCity && (
             <Suspense fallback={<div className="world-loading">Entrando no vale…</div>}>
               <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel) || editorActive} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
-          {ready && !inCity && <AimCrosshair />}
-          {ready && ui.mode === 'world' && <BossSpawner />}
+          {worldOn && !inCity && <AimCrosshair />}
+          {worldOn && ui.mode === 'world' && <BossSpawner />}
           {player.dead && !inCity && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 50,
