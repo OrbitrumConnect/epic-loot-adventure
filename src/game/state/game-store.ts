@@ -505,7 +505,7 @@ export const ARROW_RAIN_UNLOCK_LEVEL = 5;
 
 /* ---------------- PODERES DO HERÓI (bumerangue nv10 · furacão nv15 · raio nv20) ---------------- */
 /** Intervalo COMUM entre poderes do herói (Chuva, Bumerangue, Furacão, Raio): um de cada vez. */
-export const POWER_GAP_S = 3;
+export const POWER_GAP_S = 5;
 /** Segundos que faltam pra liberar o próximo poder (0 = livre). Tempos em segundos. */
 function powerGapLeft(st: { lastArrowRainAt: number; heroPowers: HeroPowersState }, nowS: number): number {
   const last = Math.max(st.lastArrowRainAt, ...Object.values(st.heroPowers.lastAt));

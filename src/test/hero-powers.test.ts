@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useGameStore, INITIAL_HERO_POWERS } from '../game/state/game-store';
+import { useGameStore, INITIAL_HERO_POWERS, POWER_GAP_S } from '../game/state/game-store';
 import { CREATURES } from '../game/data/creatures';
 import {
   BOOMERANG_R0, BOOMERANG_R1, HERO_POWER_UNLOCK, TORNADO_RANGE, boomerangSpiralRadius,
@@ -79,7 +79,7 @@ describe('poderes do herói — no jogo', () => {
     expect(pendingKnockback('colado')).not.toBeNull();
   });
 
-  it('um poder de cada vez: 3 s de intervalo entre poderes diferentes (inclui a Chuva)', () => {
+  it('um poder de cada vez: 5 s de intervalo entre poderes diferentes (inclui a Chuva)', () => {
     useGameStore.setState({ lastArrowRainAt: 0 });
     useGameStore.getState().castHeroPower('lightning');
     expect(useGameStore.getState().heroPowers.lastAt.lightning).toBeGreaterThan(0);
@@ -87,8 +87,12 @@ describe('poderes do herói — no jogo', () => {
     expect(useGameStore.getState().heroPowers.lastAt.tornado).toBe(0); // bloqueado pelo intervalo
     useGameStore.getState().arrowRain();
     expect(useGameStore.getState().lastArrowRainAt).toBe(0);
-    // 3 s depois: libera
+    // 3 s depois: AINDA bloqueado (Pedro: 3 s ficava junto demais no idle)
     useGameStore.setState((s) => ({ heroPowers: { ...s.heroPowers, lastAt: { ...s.heroPowers.lastAt, lightning: Date.now() / 1000 - 3.1 } } }));
+    useGameStore.getState().castHeroPower('tornado', true);
+    expect(useGameStore.getState().heroPowers.lastAt.tornado).toBe(0);
+    // 5 s depois: libera
+    useGameStore.setState((s) => ({ heroPowers: { ...s.heroPowers, lastAt: { ...s.heroPowers.lastAt, lightning: Date.now() / 1000 - (POWER_GAP_S + 0.1) } } }));
     useGameStore.getState().castHeroPower('tornado');
     expect(useGameStore.getState().heroPowers.lastAt.tornado).toBeGreaterThan(0);
   });
