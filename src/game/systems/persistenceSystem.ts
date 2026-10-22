@@ -9,6 +9,8 @@ import type { PlayerBaseState } from '../types/playerbase';
 import { createHarvestNodes, tickHarvestNodes } from './harvestSystem';
 import { cellInSquare, worldToCell } from './playerBaseSystem';
 import { INVENTORY_SLOTS } from './inventorySystem';
+import { peaceDurationMs, type WaveState } from './waveSystem';
+import type { UpgradeId } from '../data/base-upgrades';
 
 export const SAVE_KEY = 'tribos.local.v1';
 export type PersistState = {
@@ -19,7 +21,19 @@ export type PersistState = {
   towerLastShotAt: Record<string, number>;
   harvestNodes: HarvestNodeState[];
   resources: ResourceNode[];
+  // Progresso da base/hordas (opcional: saves antigos não têm). Sem isso, recarregar zerava a
+  // onda e voltava a casa pra madeira → casa de METAL (onda ≥ 8) era praticamente impossível.
+  wave?: WaveState;
+  baseLevel?: number;
+  baseEvolved?: boolean;
+  baseMetal?: boolean;
+  stats?: { basesEvolved: number; basesLost: number; survivalStart: number };
+  baseUpgrades?: Record<UpgradeId, number>;
+  orbitExpiresWave?: number;
+  tornadoExpiresWave?: number;
 };
+
+const UPGRADE_IDS: UpgradeId[] = ['tower_damage', 'wall_hp', 'base_repair', 'core_hp', 'orbit_boomerang', 'tornado'];
 
 const number = z.number().finite().nonnegative();
 const integer = number.int();
@@ -102,6 +116,16 @@ const schema = z.object({
   }),
   towerLastShotAt: z.record(number),
   harvest: z.array(z.object({ id, quantity: integer, depleted: z.boolean(), respawnAt: number.nullable() })).max(2000),
+  progress: z.object({
+    wave: z.object({ phase: z.enum(['idle', 'peace', 'combat']), wave: integer.max(10000), phaseEndsAt: number, spawnPending: integer }),
+    baseLevel: integer.positive().max(1000),
+    baseEvolved: z.boolean(),
+    baseMetal: z.boolean(),
+    stats: z.object({ basesEvolved: integer, basesLost: integer, survivalStart: number }),
+    baseUpgrades: z.object(Object.fromEntries(UPGRADE_IDS.map(u => [u, integer.max(1000).default(0)])) as Record<UpgradeId, z.ZodDefault<typeof integer>>),
+    orbitExpiresWave: integer,
+    tornadoExpiresWave: integer,
+  }).optional(),
 });
 export type LocalSave = z.infer<typeof schema>;
 
@@ -111,6 +135,8 @@ export const SAVED_PLAYER_KEYS = ['inventory', 'level', 'xp', 'xpToNext', 'total
 
 export function persistedStateChanged(a: PersistState, b: PersistState): boolean {
   return a.base !== b.base || a.playerBase !== b.playerBase || a.harvestNodes !== b.harvestNodes || a.towerLastShotAt !== b.towerLastShotAt
+    || a.wave !== b.wave || a.baseEvolved !== b.baseEvolved || a.baseMetal !== b.baseMetal || a.baseUpgrades !== b.baseUpgrades
+    || a.stats !== b.stats || a.baseLevel !== b.baseLevel
     || SAVED_PLAYER_KEYS.some(key => a.player[key] !== b.player[key]);
 }
 
@@ -143,7 +169,32 @@ export function createLocalSave(state: PersistState): LocalSave {
     // Só deltas: posição, capacidade e seed são reconstruídas pelos dados atuais.
     harvest: state.harvestNodes.filter(n => n.quantity !== n.maxQuantity || n.depleted || n.respawnAt !== null)
       .map(n => ({ id: n.id, quantity: n.quantity, depleted: n.depleted, respawnAt: n.respawnAt })),
+    ...(state.wave && state.stats && state.baseUpgrades ? {
+      progress: {
+        wave: { ...state.wave },
+        baseLevel: state.baseLevel ?? 1,
+        baseEvolved: state.baseEvolved ?? false,
+        baseMetal: state.baseMetal ?? false,
+        stats: { ...state.stats },
+        baseUpgrades: { ...state.baseUpgrades },
+        orbitExpiresWave: state.orbitExpiresWave ?? 0,
+        tornadoExpiresWave: state.tornadoExpiresWave ?? 0,
+      },
+    } : {}),
   };
+}
+
+/**
+ * Onda ao carregar: os bichos da horda NÃO são salvos → onda em COMBATE volta pra PAZ da mesma
+ * onda (ela se repete, sem cartas de graça). Paz mantém o tempo que faltava (se já passou, 1 min).
+ */
+export function restoreWave(w: WaveState, hasBase: boolean, now: number): WaveState {
+  if (!hasBase || w.phase === 'idle') return { phase: 'idle', wave: hasBase ? w.wave : 0, phaseEndsAt: 0, spawnPending: 0 };
+  if (w.phase === 'combat') {
+    const wave = Math.max(0, w.wave - 1);
+    return { phase: 'peace', wave, phaseEndsAt: now + Math.min(peaceDurationMs(Math.max(1, wave)), 120_000), spawnPending: 0 };
+  }
+  return { ...w, phaseEndsAt: w.phaseEndsAt > now ? w.phaseEndsAt : now + 60_000, spawnPending: 0 };
 }
 
 /** Falha fechada: versão/desenho desconhecido deixa o jogo inicial intacto. */
@@ -249,5 +300,16 @@ export function restoreLocalSave(save: LocalSave, initial: PersistState, now: nu
       hp: save.player.maxHp, mana: save.player.maxMana,
       stamina: save.player.maxStamina, dead: false, respawnAt: 0 },
     harvestNodes: tickHarvestNodes(nodes, now), resources: initial.resources.filter(r => outside(r.position)),
+    ...(save.progress ? {
+      wave: restoreWave(save.progress.wave, claim !== null, now),
+      baseLevel: save.progress.baseLevel,
+      // Casa de pedra/metal só existe com base no chão (base caída zera — regra do Pedro).
+      baseEvolved: claim !== null && save.progress.baseEvolved,
+      baseMetal: claim !== null && save.progress.baseMetal,
+      stats: save.progress.stats,
+      baseUpgrades: save.progress.baseUpgrades as Record<UpgradeId, number>,
+      orbitExpiresWave: save.progress.orbitExpiresWave,
+      tornadoExpiresWave: save.progress.tornadoExpiresWave,
+    } : {}),
   };
 }
