@@ -23,6 +23,8 @@ const CLIP_URL: Record<string, string> = {
   run: '/models/red/run.glb',
   attack: '/models/red/attack.glb',
   attackBow: '/models/red/attack_bow.glb',
+  // Pistola/rifle: disparo de rifle (Mixamo Shooter Pack) — antes usavam a anim do ARCO.
+  attackGun: '/models/red/attack_gun.glb',
   jump: '/models/red/jump.glb',
 };
 /** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
@@ -148,6 +150,7 @@ export function GlbHeroMixamo({
   const runG = useGLTF(CLIP_URL['run']!);
   const attackG = useGLTF(CLIP_URL['attack']!);
   const attackBowG = useGLTF(CLIP_URL['attackBow']!);
+  const attackGunG = useGLTF(CLIP_URL['attackGun']!);
   const jumpG = useGLTF(CLIP_URL['jump']!);
 
   const cloned = useMemo(() => {
@@ -211,9 +214,9 @@ export function GlbHeroMixamo({
       if (fixTwist) a = retargetTwist(a, g.scene, cloned, standFixX);
       return stripRootMotion(a, fixHipsY);
     };
-    return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(jumpG, 'jump')]
+    return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump')]
       .filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames, cloned, charUrl, standFixX, twistFix]);
+  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, boneNames, cloned, charUrl, standFixX, twistFix]);
 
   const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
@@ -286,7 +289,8 @@ export function GlbHeroMixamo({
       atkName = 'attackBow'; // arqueiro/xamã: só ataca de longe
     } else if (rangedAttack && actions['attackBow']) {
       const kind = heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState()));
-      if (kind === 'bow' || kind === 'pistol' || kind === 'rifle') atkName = 'attackBow';
+      if (kind === 'bow') atkName = 'attackBow';
+      else if (kind === 'pistol' || kind === 'rifle') atkName = actions['attackGun'] ? 'attackGun' : 'attackBow';
     }
 
     // Clip que está REALMENTE tocando num estado (attack usa o playingAtk).
@@ -393,4 +397,5 @@ useGLTF.preload(CLIP_URL['walk']!);
 useGLTF.preload(CLIP_URL['run']!);
 useGLTF.preload(CLIP_URL['attack']!);
 useGLTF.preload(CLIP_URL['attackBow']!);
+useGLTF.preload(CLIP_URL['attackGun']!);
 useGLTF.preload(CLIP_URL['jump']!);

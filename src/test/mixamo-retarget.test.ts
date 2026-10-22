@@ -109,7 +109,7 @@ describe('inimigos Mixamo (standFix 90°): nunca pior que hoje (GLB reais)', () 
 });
 
 describe('herói: animação Mixamo sem "embrulhar" a cintura (GLB reais)', () => {
-  for (const name of ['idle', 'walk', 'run', 'attack']) {
+  for (const name of ['idle', 'walk', 'run', 'attack', 'attack_gun']) {
     it(`${name}: juntas giram como na animação original e os membros apontam igual`, () => {
       const cg = glb(`public/models/red/${name}.glb`);
       const hero = glb('public/models/red/hero-preview.glb');
