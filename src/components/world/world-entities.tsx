@@ -24,6 +24,7 @@ import {
 } from '@/net/multiplayer';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
+import { effectiveMaxHp } from '@/game/systems/equipmentStatsSystem';
 import { pvpBaseDamage, pvpPlayerDamage } from '@/game/systems/pvpSystem';
 
 const SYNC_INTERVAL = 0.2;
@@ -117,7 +118,7 @@ export function MultiplayerWorldSync() {
     // PvP JUSTO: o alvo aplica fração do dano + própria armadura + teto de 20% da vida máx.
     registerPlayerHitHandler((hit) => {
       const st = useGameStore.getState();
-      st.takePlayerDamage(pvpPlayerDamage(hit.damage, st.player.maxHp, (d) => mitigateDamage(d, st.player)), hit.fromName);
+      st.takePlayerDamage(pvpPlayerDamage(hit.damage, effectiveMaxHp(st.player), (d) => mitigateDamage(d, st.player)), hit.fromName);
     });
     // PvP fatia 4: inimigo bateu na MINHA base → eu (dono) aplico na peça.
     registerBaseHitHandler((hit) => {
