@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { terrainHeight } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
+import { modelUrl } from '@/game/asset-path';
 
 /**
  * Pedra farmável BONITA como GLB (Meshy, decimado 75k tris) sobre os nós de
@@ -12,7 +13,7 @@ import { glbSurfaceY } from './terrain-collision';
  * player; os distantes ficam no procedural barato. `raycast` OFF → o clique vai
  * pro nó procedural atrás (mineração intacta).
  */
-const URL = '/models/rocks/mining-rock.glb';
+const URL = modelUrl('rocks/mining-rock.glb');
 const TARGET_H = 1.7;
 const POOL = 6;
 

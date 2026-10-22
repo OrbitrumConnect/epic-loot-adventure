@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { BASE_GRID, type BasePiece } from '@/game/types/playerbase';
+import { modelUrl } from '@/game/asset-path';
 import { terrainHeight } from './world-kit';
 import { AssetBoundary } from './asset-boundary';
 
@@ -18,8 +19,8 @@ import { AssetBoundary } from './asset-boundary';
  * os muros do perímetro — barato, no espírito de `BaseStructures`. Muros não têm
  * colisão no jogo (só a casa tem), então aqui é puramente visual + alvo da horda.
  */
-const STONE_URL = '/models/base/stone-wall.glb';
-const METAL_URL = '/models/base/metal-wall.glb';
+const STONE_URL = modelUrl('base/stone-wall.glb');
+const METAL_URL = modelUrl('base/metal-wall.glb');
 
 const CAP = 64; // uma célula por quadrícula do claim (teto seguro)
 const TARGET_W = BASE_GRID * 1.05; // preenche a célula (2 m) com leve sobra p/ não abrir fresta

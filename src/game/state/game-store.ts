@@ -2033,7 +2033,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       feedback: pushEvent(s.feedback, damageEvent(targetId, Math.round(amount), position, { onPlayer }), now),
       // Dano no jogador = sinal de agressão: o piloto prioriza combate sobre farm
       // por uma janela curta (ver RECENT_DAMAGE_WINDOW_MS em objectiveSystem).
-      ...(onPlayer ? { player: { ...s.player, lastDamagedAt: now } } : {}),
+      ...(onPlayer && s.player.lastDamagedAt !== now ? { player: { ...s.player, lastDamagedAt: now } } : {}),
     }));
   },
 

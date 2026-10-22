@@ -1,4 +1,5 @@
 import { useGLTF } from '@react-three/drei';
+import { modelUrl } from '@/game/asset-path';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -9,9 +10,9 @@ import type { BasePiece } from '@/game/types/playerbase';
 import { markPointerConsumed, palette, terrainHeight } from './world-kit';
 import { trainingColliders } from './training-collider';
 
-const WALL = '/models/castle/wall.glb';
-const GATE = '/models/castle/gate.glb';
-const ROOF = '/models/castle/tower-square-top-roof.glb';
+const WALL = modelUrl('castle/wall.glb');
+const GATE = modelUrl('castle/gate.glb');
+const ROOF = modelUrl('castle/tower-square-top-roof.glb');
 /** Uma célula de 2 m, com 10 cm de margem em cada lado. */
 export const TRAINING_FOOTPRINT = BASE_TRAINING_WIDTH;
 

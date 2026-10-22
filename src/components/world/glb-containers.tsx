@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { MAP_HALF, rand, terrainHeight, riverDistance, RIVER_HALF_WIDTH, SNOW_MOUNTAIN, LAKE_CENTERS } from './world-kit';
 import { FOREST_ZONES } from '@/game/systems/harvestSystem';
 import { CAMP_PLACEMENTS, CAMPS } from '@/game/data/camps';
+import { modelUrl } from '@/game/asset-path';
 
 /**
  * Containers industriais 3D espalhados (pós-colapso) — substituem o billboard
@@ -11,7 +12,7 @@ import { CAMP_PLACEMENTS, CAMPS } from '@/game/data/camps';
  * NÃO caem em cima de floresta (árvores), de acampamento (torre) nem na montanha
  * — fica em terreno aberto. Metade ganha um tint de outra cor (variedade).
  */
-const URL = '/models/props/container.glb';
+const URL = modelUrl('props/container.glb');
 const COUNT = 0;                // Pedro 20/10: containers REMOVIDOS (era 8) p/ o mapa novo. Religar = subir o número.
 const TARGET_H = 3.0;            // +15% (era 2.6)
 const ALT_TINT = '#5a7d9a';     // 2ª cor (azul-aço) p/ metade dos containers

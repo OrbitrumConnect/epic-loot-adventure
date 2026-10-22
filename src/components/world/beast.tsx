@@ -15,33 +15,34 @@ import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING, type HostileTuning } from './hostile-ai';
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 import { GlbCreature } from './glb-creature';
+import { modelUrl } from '@/game/asset-path';
 
 /** Espécies com modelo GLB (anim própria). Visual troca; IA/colisão/HP ficam.
  *  Os GLB "demo" vêm sem baseColor (brancos) → `tint` dá a cor natural. */
 const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number; tint?: string; groundBias?: number; fixedScale?: number }> = {
   // groundBias negativo = desce (os "demo" skinned flutuam ~30cm: bind-pose ≠ anim).
-  rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a', groundBias: -0.12 },
-  deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c', groundBias: -0.3 },
-  boar: { url: '/models/animals/alligator.glb', height: 0.7, yaw: 0, tint: '#5a6b4a', groundBias: -1.15 },
-  bear: { url: '/models/animals/buffalo.glb', height: 2.0, yaw: 0, tint: '#4b3a2a', groundBias: -0.35 },
-  wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.3, yaw: 0, tint: '#c49a5e', groundBias: -0.3 },
+  rabbit: { url: modelUrl('animals/rabbit.glb'), height: 0.42, yaw: 0, tint: '#b7a58a', groundBias: -0.12 },
+  deer: { url: modelUrl('animals/deer.glb'), height: 1.7, yaw: 0, tint: '#a8743c', groundBias: -0.3 },
+  boar: { url: modelUrl('animals/alligator.glb'), height: 0.7, yaw: 0, tint: '#5a6b4a', groundBias: -1.15 },
+  bear: { url: modelUrl('animals/buffalo.glb'), height: 2.0, yaw: 0, tint: '#4b3a2a', groundBias: -0.35 },
+  wolf_alpha: { url: modelUrl('animals/lioness.glb'), height: 1.3, yaw: 0, tint: '#c49a5e', groundBias: -0.3 },
   // Aves (texturas próprias → sem tint). OBS: a geometria vem com ASAS ABERTAS, então
   // a envergadura (X/Z) é bem maior que a altura (Y) — por isso a altura aqui é BAIXA
   // (normalizamos por Y): assim a maior dimensão fica ~0.8-1.0 m (tamanho de ave real).
-  goose: { url: '/models/animals/goose.glb', height: 0.61, yaw: 0, groundBias: -0.05 },
-  pheasant: { url: '/models/animals/pheasant.glb', height: 0.74, yaw: 0, groundBias: -0.05 },
-  pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
+  goose: { url: modelUrl('animals/goose.glb'), height: 0.61, yaw: 0, groundBias: -0.05 },
+  pheasant: { url: modelUrl('animals/pheasant.glb'), height: 0.74, yaw: 0, groundBias: -0.05 },
+  pigeon: { url: modelUrl('animals/pigeon.glb'), fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
   // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
-  eel: { url: '/models/animals/eel.glb', fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m + DUPLA-FACE no arquivo (sumia ao virar/single-sided); fixedScale MEDIDO (~4m alto)
+  eel: { url: modelUrl('animals/eel.glb'), fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m + DUPLA-FACE no arquivo (sumia ao virar/single-sided); fixedScale MEDIDO (~4m alto)
   // Aberração: minha versão (albedo + fixedScale MEDIDO) — a do Caio (height 1,3x)
   // ficou ENORME. real 296m -> ~2.5m.
-  monster: { url: '/models/animals/monster.glb', fixedScale: 0.0085, yaw: 0, groundBias: 0 },
-  collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // fora do spawn (quantize)
-  civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // spawn 0 (removido): demo azul + T-pose
-  zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4, tint: '#7a8a66' },     // tint esverdeado
-  pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.57, yaw: Math.PI, groundBias: -1.1 }, // mech complexo: grounding oscila; -1.1 traz pro chão (bind vs anim)
-  flintmaw: { url: '/models/animals/flintmaw.glb', fixedScale: 1.1, yaw: 0, groundBias: 0.3 }, // yaw 0 = vira de frente (vinha de costas ao atacar); voa ~1m (Pedro aprovou)
+  monster: { url: modelUrl('animals/monster.glb'), fixedScale: 0.0085, yaw: 0, groundBias: 0 },
+  collector: { url: modelUrl('animals/collector.glb'), height: 2.2, yaw: 0, groundBias: 0 },        // fora do spawn (quantize)
+  civilian: { url: modelUrl('animals/civilian.glb'), fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // spawn 0 (removido): demo azul + T-pose
+  zombie: { url: modelUrl('animals/zombie.glb'), fixedScale: 0.57, yaw: 0, groundBias: 0.4, tint: '#7a8a66' },     // tint esverdeado
+  pelter: { url: modelUrl('animals/pelter.glb'), fixedScale: 0.57, yaw: Math.PI, groundBias: -1.1 }, // mech complexo: grounding oscila; -1.1 traz pro chão (bind vs anim)
+  flintmaw: { url: modelUrl('animals/flintmaw.glb'), fixedScale: 1.1, yaw: 0, groundBias: 0.3 }, // yaw 0 = vira de frente (vinha de costas ao atacar); voa ~1m (Pedro aprovou)
 };
 
 type V3 = [number, number, number];
