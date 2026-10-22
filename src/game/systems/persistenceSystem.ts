@@ -30,7 +30,12 @@ const item = id.refine(value => Object.hasOwn(ITEMS, value)).nullable();
 const inventory = z.object({
   slots: z.array(z.object({ itemId: item, quantity: integer })).max(1000),
   maxSlots: integer.positive().max(1000), maxWeight: number,
-  equipment: z.object({ primary: item, secondary: item, armor: item, accessory: item }),
+  equipment: z.object({
+    primary: item.optional().default(null), secondary: item.optional().default(null),
+    armor: item.optional().default(null), accessory: item.optional().default(null),
+    head: item.optional().default(null), gloves: item.optional().default(null), legs: item.optional().default(null),
+    boots: item.optional().default(null), amulet: item.optional().default(null), ring1: item.optional().default(null), ring2: item.optional().default(null),
+  }),
   hotbar: z.object({ slots: z.array(integer.nullable()).max(100) }),
 }).refine(v => v.slots.length === v.maxSlots && v.hotbar.slots.every(i => i === null || i < v.slots.length));
 const playerBaseSchema = z.object({
@@ -114,7 +119,22 @@ export function createLocalSave(state: PersistState): LocalSave {
   return {
     v: 1, playerBase: state.playerBase, base: state.base,
     player: {
-      inventory: p.inventory, level: p.level, xp: p.xp, xpToNext: p.xpToNext, totalXp: p.totalXp,
+      inventory: {
+        ...p.inventory,
+        equipment: {
+          primary: p.inventory.equipment.primary ?? null,
+          secondary: p.inventory.equipment.secondary ?? null,
+          armor: p.inventory.equipment.armor ?? null,
+          accessory: p.inventory.equipment.accessory ?? null,
+          head: p.inventory.equipment.head ?? null,
+          gloves: p.inventory.equipment.gloves ?? null,
+          legs: p.inventory.equipment.legs ?? null,
+          boots: p.inventory.equipment.boots ?? null,
+          amulet: p.inventory.equipment.amulet ?? null,
+          ring1: p.inventory.equipment.ring1 ?? null,
+          ring2: p.inventory.equipment.ring2 ?? null,
+        },
+      }, level: p.level, xp: p.xp, xpToNext: p.xpToNext, totalXp: p.totalXp,
       maxHp: p.maxHp, maxMana: p.maxMana, maxStamina: p.maxStamina, gold: p.gold,
       attributes: p.attributes ?? { damage: 0, dexterity: 0, carry: 0, moveSpeed: 0 },
       skillPoints: p.skillPoints ?? 0, huntValue: p.huntValue ?? 0, huntSeen: p.huntSeen ?? {},

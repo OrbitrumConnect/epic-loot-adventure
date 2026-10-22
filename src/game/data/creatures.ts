@@ -502,3 +502,10 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 };
+
+// Drops common/uncommon distribuídos pela fauna; tiers raros ficam nos pools de caça.
+const huntArmorIds = ['head_common', 'leather_armor', 'gloves_common', 'legs_common', 'boots_common', 'amulet_common', 'ring1_common', 'ring2_common', 'head_uncommon', 'chest_uncommon', 'gloves_uncommon', 'legs_uncommon', 'boots_uncommon', 'amulet_uncommon', 'ring1_uncommon', 'ring2_uncommon'];
+const huntableCreatures = Object.values(CREATURES).filter(creature => creature.peaceful || creature.id.startsWith('raider_') || creature.id === 'wolf');
+huntArmorIds.forEach((itemId, index) => {
+  huntableCreatures[index % huntableCreatures.length]!.lootTable.push({ itemId, quantity: 1, chance: index < 8 ? 0.08 : 0.04 });
+});

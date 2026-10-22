@@ -8,6 +8,21 @@ export type Recipe = {
 };
 
 export const RECIPES: Record<string, Recipe> = {
+  head_common: { id: 'head_common', result: { itemId: 'head_common', quantity: 1 }, materials: [{ itemId: 'wolf_pelt', quantity: 2 }, { itemId: 'sinew', quantity: 1 }], station: 'none', craftTime: 3 },
+  gloves_common: { id: 'gloves_common', result: { itemId: 'gloves_common', quantity: 1 }, materials: [{ itemId: 'wolf_pelt', quantity: 1 }, { itemId: 'sinew', quantity: 2 }], station: 'none', craftTime: 3 },
+  legs_common: { id: 'legs_common', result: { itemId: 'legs_common', quantity: 1 }, materials: [{ itemId: 'wolf_pelt', quantity: 2 }, { itemId: 'wood', quantity: 2 }], station: 'none', craftTime: 3 },
+  boots_common: { id: 'boots_common', result: { itemId: 'boots_common', quantity: 1 }, materials: [{ itemId: 'wolf_pelt', quantity: 1 }, { itemId: 'sinew', quantity: 1 }], station: 'none', craftTime: 3 },
+  amulet_common: { id: 'amulet_common', result: { itemId: 'amulet_common', quantity: 1 }, materials: [{ itemId: 'bone', quantity: 2 }, { itemId: 'sinew', quantity: 1 }], station: 'none', craftTime: 3 },
+  ring1_common: { id: 'ring1_common', result: { itemId: 'ring1_common', quantity: 1 }, materials: [{ itemId: 'wood', quantity: 2 }, { itemId: 'wolf_fang', quantity: 1 }], station: 'none', craftTime: 2 },
+  ring2_common: { id: 'ring2_common', result: { itemId: 'ring2_common', quantity: 1 }, materials: [{ itemId: 'bone', quantity: 2 }, { itemId: 'wolf_fang', quantity: 1 }], station: 'none', craftTime: 2 },
+  chest_uncommon: { id: 'chest_uncommon', result: { itemId: 'chest_uncommon', quantity: 1 }, materials: [{ itemId: 'iron_ore', quantity: 4 }, { itemId: 'wolf_pelt', quantity: 3 }], station: 'forge', craftTime: 6 },
+  head_uncommon: { id: 'head_uncommon', result: { itemId: 'head_uncommon', quantity: 1 }, materials: [{ itemId: 'iron_ore', quantity: 2 }, { itemId: 'wolf_pelt', quantity: 1 }], station: 'forge', craftTime: 4 },
+  gloves_uncommon: { id: 'gloves_uncommon', result: { itemId: 'gloves_uncommon', quantity: 1 }, materials: [{ itemId: 'iron_ore', quantity: 2 }, { itemId: 'sinew', quantity: 2 }], station: 'forge', craftTime: 4 },
+  legs_uncommon: { id: 'legs_uncommon', result: { itemId: 'legs_uncommon', quantity: 1 }, materials: [{ itemId: 'iron_ore', quantity: 3 }, { itemId: 'wolf_pelt', quantity: 2 }], station: 'forge', craftTime: 5 },
+  boots_uncommon: { id: 'boots_uncommon', result: { itemId: 'boots_uncommon', quantity: 1 }, materials: [{ itemId: 'iron_ore', quantity: 2 }, { itemId: 'sinew', quantity: 2 }], station: 'forge', craftTime: 4 },
+  amulet_uncommon: { id: 'amulet_uncommon', result: { itemId: 'amulet_uncommon', quantity: 1 }, materials: [{ itemId: 'iron_ore', quantity: 1 }, { itemId: 'bone', quantity: 3 }], station: 'forge', craftTime: 4 },
+  ring1_uncommon: { id: 'ring1_uncommon', result: { itemId: 'ring1_uncommon', quantity: 1 }, materials: [{ itemId: 'iron_ore', quantity: 1 }, { itemId: 'wolf_fang', quantity: 2 }], station: 'forge', craftTime: 3 },
+  ring2_uncommon: { id: 'ring2_uncommon', result: { itemId: 'ring2_uncommon', quantity: 1 }, materials: [{ itemId: 'iron_ore', quantity: 1 }, { itemId: 'bone', quantity: 2 }], station: 'forge', craftTime: 3 },
   iron_sword: {
     id: 'iron_sword',
     result: { itemId: 'iron_sword', quantity: 1 },

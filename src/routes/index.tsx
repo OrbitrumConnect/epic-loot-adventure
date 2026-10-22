@@ -29,6 +29,9 @@ import { getWeight, getUsedSlots, getItemCount } from '@/game/systems/inventoryS
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock, WORLD_EPOCH } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
+import { effectiveMaxHp, effectiveResistance, equipmentStats, luckMultiplier } from '@/game/systems/equipmentStatsSystem';
+import { ARMOR_SLOTS, equipmentKeyForArmorSlot, isEquipped } from '@/game/systems/equipmentSlots';
+import { RARITY_LABEL, type ArmorSlot, type Item } from '@/game/types/item';
 import { baseLv1Progress } from '@/game/systems/baseLv1';
 import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { RECIPES } from '@/game/data/recipes';
@@ -57,6 +60,33 @@ import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
 import { supabase, setAway } from '@/net/multiplayer';
 import { SAVE_KEY } from '@/game/systems/persistenceSystem';
 const CityView = lazy(() => import('@/components/city-view'));
+
+const ARMOR_SLOT_LABEL: Record<ArmorSlot, string> = {
+  head: 'Cabeça', chest: 'Peitoral', gloves: 'Luvas', legs: 'Calças', boots: 'Botas',
+  amulet: 'Amuleto', ring1: 'Anel 1', ring2: 'Anel 2',
+};
+const ARMOR_SLOT_ICON: Record<ArmorSlot, typeof Shield> = {
+  head: Shield, chest: Shield, gloves: Shield, legs: Shield, boots: Shield,
+  amulet: Gem, ring1: Gem, ring2: Gem,
+};
+
+function itemStatsLabel(item: Item): string {
+  const stats = item.stats ?? {};
+  const values = [
+    item.armor !== undefined ? `+${item.armor} DEF` : '',
+    stats.health ? `+${stats.health} VIDA` : '',
+    stats.damage ? `+${stats.damage} DANO` : '',
+    stats.resistance ? `+${stats.resistance} RES` : '',
+    stats.speed ? `+${stats.speed} VEL` : '',
+    stats.luck ? `+${stats.luck} SORTE` : '',
+  ].filter(Boolean);
+  return values.join(' ');
+}
+
+function itemTooltip(item: Item): string {
+  const stats = itemStatsLabel(item);
+  return `${item.name} · ${RARITY_LABEL[item.rarity]}${stats ? ` · ${stats}` : ''}`;
+}
 
 export const Route = createFileRoute('/')({
   head: () => ({
@@ -249,6 +279,10 @@ function Index() {
   const weight = getWeight(player.inventory);
   const usedSlots = getUsedSlots(player.inventory);
   const attrs = effectiveAttributes(player);
+  const equipment = equipmentStats(player);
+  const maxHp = effectiveMaxHp(player);
+  const resistancePct = Math.round(effectiveResistance(equipment.resistance) * 100);
+  const luckPct = Math.round((luckMultiplier(equipment.luck) - 1) * 100);
 
   const woodCount = useGameStore(s => s.getItemCount)('wood');
   const stoneCount = useGameStore(s => s.getItemCount)('stone');
@@ -507,7 +541,7 @@ function Index() {
           </div>
           <div className="vitals">
             {[
-              { name: 'Vida', val: player.hp, max: player.maxHp, icon: Heart, kind: 'health' },
+              { name: 'Vida', val: player.hp, max: maxHp, icon: Heart, kind: 'health' },
               { name: 'Mana', val: player.mana, max: player.maxMana, icon: Sparkles, kind: 'mana' },
               { name: 'Vigor', val: player.stamina, max: player.maxStamina, icon: Zap, kind: 'energy' },
               ...(playerBase ? [{ name: 'Núcleo', val: baseHp, max: baseMaxHp, icon: ShieldCheck, kind: 'base' }] : []),
@@ -762,6 +796,42 @@ function Index() {
                         <div className="char-ident"><strong>{player.name}</strong><small>Guerreiro · Nível {player.level}</small></div>
                       </div>
                       <div className="char-slots">
+                        <div className="equip-slots-grid">
+                          <button className={`equip-slot rarity-${player.inventory.equipment.primary ? ITEMS[player.inventory.equipment.primary]?.rarity ?? 'common' : 'empty'}`} data-filled={!!player.inventory.equipment.primary}
+                            title={player.inventory.equipment.primary ? itemTooltip(ITEMS[player.inventory.equipment.primary]!) : 'Arma (vazio)'}
+                            aria-label={player.inventory.equipment.primary ? `Arma: ${ITEMS[player.inventory.equipment.primary]?.name}` : 'Arma vazia'}
+                            onClick={() => { if (player.inventory.equipment.primary) unequipSlot('primary'); }}>
+                            {player.inventory.equipment.primary ? <ItemSprite itemId={player.inventory.equipment.primary} size={34} /> : <Swords strokeWidth={1.4} />}
+                            <span>{player.inventory.equipment.primary ? ITEMS[player.inventory.equipment.primary]?.name : 'Arma'}</span>
+                          </button>
+                          {ARMOR_SLOTS.map(armorSlot => {
+                            const slot = equipmentKeyForArmorSlot(armorSlot);
+                            const id = player.inventory.equipment[slot];
+                            const it = id ? ITEMS[id] : null;
+                            const Icon = ARMOR_SLOT_ICON[armorSlot];
+                            return (
+                              <button key={armorSlot} className={`equip-slot rarity-${it?.rarity ?? 'empty'}`} data-filled={!!it}
+                                title={it ? itemTooltip(it) : `${ARMOR_SLOT_LABEL[armorSlot]} (vazio)`}
+                                aria-label={it ? `${ARMOR_SLOT_LABEL[armorSlot]}: ${it.name}` : `${ARMOR_SLOT_LABEL[armorSlot]} vazio`}
+                                onClick={() => { if (it) unequipSlot(slot); }}>
+                                {it ? <ItemSprite itemId={id!} size={34} /> : <Icon strokeWidth={1.4} />}
+                                <span>{it ? it.name : ARMOR_SLOT_LABEL[armorSlot]}</span>
+                              </button>
+                            );
+                          })}
+                          {player.inventory.equipment.accessory && (() => {
+                            const id = player.inventory.equipment.accessory;
+                            const it = ITEMS[id];
+                            if (!it) return null;
+                            return <button className={`equip-slot equip-slot--legacy rarity-${it.rarity}`} data-filled="true"
+                              title={itemTooltip(it)} aria-label={`Acessório legado: ${it.name}`} onClick={() => unequipSlot('accessory')}>
+                              <ItemSprite itemId={id} size={34} /><span>{it.name}</span>
+                            </button>;
+                          })()}
+                        </div>
+                        <div className="equipment-summary" aria-label="Bônus de equipamento">
+                          <strong>Equipamento:</strong> DEF {equipment.defense} · VIDA +{equipment.health} · DANO +{equipment.damage} · RES {resistancePct}% · VEL +{equipment.speed} · SORTE +{luckPct}%
+                        </div>
                         {([
                           { slot: 'primary', label: 'Arma', Icon: Swords },
                           { slot: 'armor', label: 'Armadura', Icon: Shield },
@@ -790,15 +860,17 @@ function Index() {
                         );
                         const item = ITEMS[slot.itemId];
                         if (!item) return null;
-                        const equipped = item.equippable && (player.inventory.equipment.primary === slot.itemId || player.inventory.equipment.armor === slot.itemId || player.inventory.equipment.accessory === slot.itemId);
+                        const equipped = item.equippable && isEquipped(player.inventory.equipment, slot.itemId);
+                        const detail = item.category === 'armor' ? `${RARITY_LABEL[item.rarity]}${itemStatsLabel(item) ? ` · ${itemStatsLabel(item)}` : ''}` : item.category === 'weapon' ? `Arma · ${RARITY_LABEL[item.rarity]}` : item.category;
                         return (
                           <div className="inventory-item" key={i} draggable
                             data-equippable={item.equippable || undefined} data-equipped={equipped || undefined}
-                            title={item.equippable ? `${item.name} · clique p/ equipar` : `${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
+                            title={item.equippable ? `${itemTooltip(item)} · clique p/ equipar` : `${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
                             aria-label={`${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
                             onClick={() => { if (item.equippable && slot.itemId) equipItem(slot.itemId); }}
                             onDragStart={e => e.dataTransfer.setData('text/plain', String(i))}>
-                            <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{item.category === 'resource' ? 'Recurso' : item.category === 'weapon' ? 'Arma · ' + item.rarity : item.category === 'consumable' ? 'Consumível' : item.category === 'tool' ? 'Ferramenta' : item.category === 'armor' ? 'Armadura · ' + item.rarity : item.category}</small>
+                            {item.category === 'armor' && <small className="item-tier-stats">{RARITY_LABEL[item.rarity]} · {itemStatsLabel(item) || 'Sem bônus'}</small>}
+                            <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{detail}</small>
                             <em>{slot.quantity > 1 ? slot.quantity : ''}</em>
                             {equipped && <i className="equipped-tag">equipado</i>}
                             <button type="button" className="inventory-drop"

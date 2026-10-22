@@ -8,6 +8,13 @@ export type EquipmentSlots = {
   secondary: string | null;
   armor: string | null;
   accessory: string | null;
+  head?: string | null;
+  gloves?: string | null;
+  legs?: string | null;
+  boots?: string | null;
+  amulet?: string | null;
+  ring1?: string | null;
+  ring2?: string | null;
 };
 
 export type HotbarState = {

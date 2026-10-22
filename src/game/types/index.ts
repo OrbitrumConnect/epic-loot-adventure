@@ -1,4 +1,4 @@
-export type { Item, ItemCategory, Rarity } from './item';
+export type { Item, ItemCategory, Rarity, ArmorSlot, ItemStats } from './item';
 export type { InventorySlot, EquipmentSlots, HotbarState, InventoryState } from './inventory';
 export type { PlayerState, Position } from './player';
 export type { LevelUpGains, ProgressionState, LevelUpResult } from './progression';

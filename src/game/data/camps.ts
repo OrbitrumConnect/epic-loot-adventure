@@ -137,6 +137,7 @@ export const CAMPS: Record<string, CampDefinition> = {
       items: [
         { itemId: 'wood', quantity: 10 },
         { itemId: 'cooked_meat', quantity: 3 },
+        { itemId: 'head_common', quantity: 1 },
       ],
     },
     respawnMs: 240_000,
@@ -170,6 +171,7 @@ export const CAMPS: Record<string, CampDefinition> = {
         { itemId: 'iron_ore', quantity: 6 },
         { itemId: 'health_potion', quantity: 2 },
         { itemId: 'wolf_pelt', quantity: 2 },
+        { itemId: 'chest_uncommon', quantity: 1 },
       ],
     },
     respawnMs: 360_000,

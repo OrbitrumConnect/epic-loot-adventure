@@ -5,6 +5,7 @@ import type {
   HarvestNodeState, FeedbackEvent,
 } from '../types';
 import { ITEMS } from '../data/items';
+import { slotForItem, ringSlotForEquipment, type EquipmentKey } from '../systems/equipmentSlots';
 import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
 import { audioManager } from '../audio/audio-manager';
@@ -51,6 +52,7 @@ import {
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
+import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
 import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
@@ -161,7 +163,7 @@ type GameActions = {
   /** Equipa um item da bolsa no slot certo pela categoria (arma/armadura/acessório). */
   equipItem: (itemId: string) => void;
   /** Tira o equipamento de um slot (volta pro "nu"). */
-  unequipSlot: (slot: 'primary' | 'secondary' | 'armor' | 'accessory') => void;
+  unequipSlot: (slot: EquipmentKey) => void;
   useHotbarSlot: (index: number, opts?: { manual?: boolean }) => void;
   /** Descarta (joga fora) o item do slot do inventário — tira da hotbar/equipamento também. */
   dropItem: (slotIndex: number) => void;
@@ -261,10 +263,11 @@ function deadCreature(c: CreatureState, now: number, rng: () => number): Creatur
 function rewardCreatureDeath(c: CreatureState, player: PlayerState, bags: DeathBag[], drafts: FeedbackDraft[], rng: () => number) {
   const def = CREATURES[c.speciesId];
   if (def) {
-    const loot = rollCreatureLoot(def, rng);
+    const luck = equipmentStats(player).luck;
+    const loot = rollCreatureLoot(def, rng, luck);
     const newHunt = (player.huntValue ?? 0) + creatureXp(def);
     const seen = player.huntSeen?.[c.speciesId] ?? 0;
-    const bonus = rollBonusLoot(def, newHunt, seen, rng);
+    const bonus = rollBonusLoot(def, newHunt, seen, rng, luck);
     player = { ...player, huntValue: newHunt, huntSeen: { ...(player.huntSeen ?? {}), [c.speciesId]: seen + 1 } };
     if (bonus) loot.push(bonus);
     // Loot vai DIRETO pro inventário, empilhando nos slots (madeira/pedra/bala/poção
@@ -781,7 +784,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       : base + heldWeaponPower;
 
     // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
-    const finalPower = Math.round(totalPower * damageMultiplier(state.player));
+    const finalPower = Math.round((totalPower + equipmentStats(state.player).damage) * damageMultiplier(state.player));
 
     // Em sala convidada o inimigo pertence ao anfitrião. O convidado conserva
     // apenas o próprio cooldown/munição e envia a intenção do golpe; a vida
@@ -835,12 +838,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (result.targetDied) {
       const def = CREATURES[creature.speciesId];
       if (def) {
-        const loot = rollCreatureLoot(def);
+        const luck = equipmentStats(updatedPlayer).luck;
+        const loot = rollCreatureLoot(def, Math.random, luck);
         // Economia de loot: acumula valor de caça e rola um bônus de raridade
         // por marco (aditivo à lootTable; diminishing por espécie).
         const newHunt = (updatedPlayer.huntValue ?? 0) + creatureXp(def);
         const seen = updatedPlayer.huntSeen?.[creature.speciesId] ?? 0;
-        const bonus = rollBonusLoot(def, newHunt, seen);
+        const bonus = rollBonusLoot(def, newHunt, seen, Math.random, luck);
         updatedPlayer = {
           ...updatedPlayer,
           huntValue: newHunt,
@@ -972,7 +976,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const critStats = playerCritStats(state.player);
     // Jump: dano alto, raio menor. Spin: 360°, raio maior, dano menor.
     const radius = kind === 'spin' ? 3.8 : 3.2;
-    const power = Math.round(base * (kind === 'jump' ? 1.8 : 1.2) * dmgMult);
+    const power = Math.round((base + equipmentStats(state.player).damage) * (kind === 'jump' ? 1.8 : 1.2) * dmgMult);
 
     const pos = state.player.position;
     const drafts: FeedbackDraft[] = [];
@@ -1066,7 +1070,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (usesBullet) audioManager.playGunShot(); else audioManager.playShot();
       const radius = arrowRainRadiusFor(st.player.level);
       const base = playerBaseAttack(st.player.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
-      const power = Math.round(base * 1.3 * damageMultiplier(st.player));
+      const power = Math.round((base + equipmentStats(st.player).damage) * 1.3 * damageMultiplier(st.player));
       const critStats = playerCritStats(st.player);
       const drafts: FeedbackDraft[] = [];
 
@@ -1321,7 +1325,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const newInv = DEV_INFINITE_POTIONS
         ? state.player.inventory
         : removeItem(state.player.inventory, slot.itemId!, 1);
-      const newHp = Math.min(state.player.maxHp, state.player.hp + item.healAmount);
+      const newHp = Math.min(effectiveMaxHp(state.player), state.player.hp + item.healAmount);
       set({
         player: { ...state.player, hp: newHp, inventory: newInv },
         feedback: newHp > state.player.hp
@@ -1379,7 +1383,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   rest: () => {
     set(s => ({
-      player: { ...s.player, hp: s.player.maxHp, mana: s.player.maxMana, stamina: s.player.maxStamina },
+      player: { ...s.player, hp: effectiveMaxHp(s.player), mana: s.player.maxMana, stamina: s.player.maxStamina },
       ui: { ...s.ui, panelMessage: 'Descansou na base. Vida, mana e vigor restaurados.' },
     }));
   },
@@ -1464,11 +1468,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   equipItem: (itemId) => {
     const item = ITEMS[itemId];
     if (!item || !item.equippable) return;
-    // Roteia pelo tipo: armadura → armor, resto (arma/ferramenta) → primary.
-    const slot: 'primary' | 'armor' | 'accessory' =
-      item.equipSlot === 'accessory' ? 'accessory' : item.category === 'armor' ? 'armor' : 'primary';
+    const routed = slotForItem(item);
+    if (!routed) return;
     set(s => {
       const inv = s.player.inventory;
+      const slot: EquipmentKey = routed === 'ring1' || routed === 'ring2' ? ringSlotForEquipment(inv.equipment) : routed;
+      const previous = inv.equipment[slot];
       let hotbar = inv.hotbar;
       // Arma: além de equipar, coloca no SLOT ATIVO da hotbar pra ficar na mão e
       // usar o perfil dela (alcance/anim). Tocha fica fora disso (não é equipável).
@@ -1480,12 +1485,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           hotbar = { ...hotbar, slots };
         }
       }
+      const withReturned = previous && previous !== itemId ? addItem(inv, previous, 1) : inv;
+      const equipped = { ...s.player, inventory: { ...withReturned, hotbar, equipment: { ...withReturned.equipment, [slot]: itemId } } };
       return {
         // armadura/acessório mexem em carga% → peso máx acompanha.
-        player: syncCarry({
-          ...s.player,
-          inventory: { ...inv, hotbar, equipment: { ...inv.equipment, [slot]: itemId } },
-        }),
+        player: syncCarry({ ...equipped, hp: Math.min(equipped.hp, effectiveMaxHp(equipped)) }),
         ui: { ...s.ui, message: `${item.name} equipado.` },
       };
     });
@@ -1496,11 +1500,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const current = s.player.inventory.equipment[slot];
       if (!current) return {};
       const name = ITEMS[current]?.name ?? 'Item';
+      const inventory = addItem(s.player.inventory, current, 1);
       return {
-        player: syncCarry({
-          ...s.player,
-          inventory: { ...s.player.inventory, equipment: { ...s.player.inventory.equipment, [slot]: null } },
-        }),
+        player: (() => {
+          const unequipped = { ...s.player, inventory: { ...inventory, equipment: { ...inventory.equipment, [slot]: null } } };
+          return syncCarry({ ...unequipped, hp: Math.min(unequipped.hp, effectiveMaxHp(unequipped)) });
+        })(),
         ui: { ...s.ui, message: `${name} desequipado.` },
       };
     });
@@ -2011,7 +2016,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const state = get();
     if (state.player.dead) return;
     const result = drinkBestPotion(
-      state.player.inventory, state.player.hp, state.player.maxHp, DEV_INFINITE_POTIONS,
+      state.player.inventory, state.player.hp, effectiveMaxHp(state.player), DEV_INFINITE_POTIONS,
     );
     if (!result.ok) {
       set(s => ({ ui: { ...s.ui, message: result.message } }));
@@ -2133,7 +2138,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     // Cura automática também no jogo manual: a regra é pura (`shouldAutoDrink`),
     // quem a aciona é este tick, que roda nos dois modos.
-    if (shouldAutoDrink(state.player, state.autoPotion)) {
+    if (shouldAutoDrink({ ...state.player, maxHp: effectiveMaxHp(state.player) }, state.autoPotion)) {
       get().drinkPotion();
     }
 

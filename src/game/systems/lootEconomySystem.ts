@@ -11,6 +11,7 @@
  */
 import type { CreatureDefinition } from '../types';
 import { creatureXp } from './progressionSystem';
+import { luckMultiplier } from './equipmentStatsSystem';
 
 /** Drop de bônus: item garantidamente identificado (itemId nunca nulo). */
 export type BonusDrop = { itemId: string; quantity: number };
@@ -22,11 +23,13 @@ export const HUNT_THRESHOLDS: Record<BonusRarity, number> = { rare: 180, epic: 3
 
 /** Pools de recompensa por raridade (itens que existem em `ITEMS`). */
 export const BONUS_POOLS: Record<BonusRarity, readonly string[]> = {
-  rare: ['hunter_bow', 'bone_armor', 'iron_axe', 'iron_pickaxe', 'gold_ore', 'arcane_essence'],
-  epic: ['ancestral_blade', 'guardian_plate'],
-  legendary: ['eclipse_blade'],
+  rare: ['hunter_bow', 'bone_armor', 'iron_axe', 'iron_pickaxe', 'gold_ore', 'arcane_essence', 'head_rare', 'chest_rare', 'gloves_rare', 'legs_rare', 'boots_rare', 'amulet_rare', 'ring1_rare', 'ring2_rare'],
+  epic: ['ancestral_blade', 'guardian_plate', 'head_epic', 'chest_epic', 'gloves_epic', 'legs_epic', 'boots_epic', 'amulet_epic', 'ring1_epic', 'ring2_epic'],
+  legendary: ['eclipse_blade', 'head_legendary', 'chest_legendary', 'gloves_legendary', 'legs_legendary', 'boots_legendary', 'amulet_legendary', 'ring1_legendary', 'ring2_legendary'],
   ancestral: [], // grade ancestral entra na Fase 1b (fórmula); pool vazio = não dropa ainda
 };
+// Armaduras ancestrais também entram no roll desbloqueado pelo marco ancestral.
+BONUS_POOLS.ancestral = ['head_ancestral', 'chest_ancestral', 'gloves_ancestral', 'legs_ancestral', 'boots_ancestral', 'amulet_ancestral', 'ring1_ancestral', 'ring2_ancestral'];
 
 type Def = Pick<CreatureDefinition, 'maxHp' | 'attackPower' | 'armor'>;
 
@@ -55,13 +58,14 @@ export function rollBonusLoot(
   huntValue: number,
   speciesSeen: number,
   rng: () => number = Math.random,
+  luck = 0,
 ): BonusDrop | null {
   const tiers = accessibleRarities(huntValue);
   if (tiers.length === 0) return null;
 
   const value = creatureXp(def);
   // Chance base pela dificuldade: bicho forte dropa mais (≈2%–45%).
-  let chance = Math.min(0.45, 0.02 + value / 500);
+  let chance = Math.min(0.45, (0.02 + value / 500) * luckMultiplier(luck));
   // Diminishing returns: repetir a mesma espécie derruba a chance (cap em ~/3,4).
   const eff = Math.min(speciesSeen, 12);
   chance /= 1 + eff * 0.2;
