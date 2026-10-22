@@ -50,7 +50,10 @@ const byName = (r: THREE.Object3D) => { const m = new Map<string, THREE.Object3D
 const deg = (r: number) => (r * 180) / Math.PI;
 
 /** Mede: junta mais girada vs a pose em que a malha foi presa, e pior erro de direção dos membros. */
-function measure(clip: THREE.AnimationClip, applied: THREE.AnimationClip, srcRoot: THREE.Object3D, tgtRoot: THREE.Object3D) {
+function measure(clip: THREE.AnimationClip, applied: THREE.AnimationClip, srcRoot: THREE.Object3D, tgtRoot: THREE.Object3D, standFixX = 0) {
+  const shown = new THREE.Object3D(); // grupo de correção de pé (igual ao jogo)
+  shown.rotation.x = standFixX;
+  shown.add(tgtRoot);
   const S = byName(srcRoot), T = byName(tgtRoot);
   const restT = new Map([...T].map(([n, o]) => [n, o.quaternion.clone()]));
   const restS = new Map([...S].map(([n, o]) => [n, o.quaternion.clone()]));
@@ -62,11 +65,13 @@ function measure(clip: THREE.AnimationClip, applied: THREE.AnimationClip, srcRoo
   const wp = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
   const ms = new THREE.AnimationMixer(srcRoot), mt = new THREE.AnimationMixer(tgtRoot);
   ms.clipAction(clip).play(); mt.clipAction(applied).play();
-  let def = 0, src = 0, dir = 0;
+  let def = 0, src = 0, dir = 0, standing = true;
   const armWorld = new Map<string, THREE.Quaternion>();
   for (const f of [0.1, 0.35, 0.6, 0.85]) {
     ms.setTime(clip.duration * f); mt.setTime(applied.duration * f);
-    srcRoot.updateMatrixWorld(true); tgtRoot.updateMatrixWorld(true);
+    srcRoot.updateMatrixWorld(true); shown.updateMatrixWorld(true);
+    const head = T.get('mixamorigHead'), foot = T.get('mixamorigLeftFoot');
+    if (head && foot && !(wp(head).y > wp(foot).y)) standing = false;
     for (const b of JOINTS) {
       const o = T.get(b), s = S.get(b);
       if (!o || !s) continue;
@@ -80,8 +85,28 @@ function measure(clip: THREE.AnimationClip, applied: THREE.AnimationClip, srcRoo
       dir = Math.max(dir, deg(wp(bb).sub(wp(a)).normalize().angleTo(wp(y).sub(wp(x)).normalize())));
     }
   }
-  return { def, src, dir, armWorld };
+  return { def, src, dir, armWorld, standing };
 }
+
+describe('inimigos Mixamo (standFix 90°): nunca pior que hoje (GLB reais)', () => {
+  // Só os ligados em raider.tsx (twistFix). spiked/pirate/swamp pioravam ~3° em algum quadro → desligados.
+  for (const m of ['scrap_brute', 'rope_archer', 'alien_brute']) {
+    for (const name of ['idle', 'walk', 'attack']) {
+      it(`${m} · ${name}: menos giro, mesma direção, braços iguais, em pé`, () => {
+        const cg = glb(`public/models/red/${name}.glb`);
+        const tg = glb(`public/models/raiders/${m}.glb`);
+        const clip = clipOf(cg);
+        const fixed = retargetTwist(clip, skeleton(cg), skeleton(tg), Math.PI / 2);
+        const now = measure(clip, clip, skeleton(cg), skeleton(tg), Math.PI / 2);
+        const after = measure(clip, fixed, skeleton(cg), skeleton(tg), Math.PI / 2);
+        expect(after.def).toBeLessThanOrEqual(now.def + 0.5);
+        expect(after.dir).toBeLessThanOrEqual(now.dir + 1);
+        for (const [k, q] of now.armWorld) expect(deg(q.angleTo(after.armWorld.get(k)!))).toBeLessThan(0.5);
+        expect(after.standing).toBe(now.standing);
+      });
+    }
+  }
+});
 
 describe('herói: animação Mixamo sem "embrulhar" a cintura (GLB reais)', () => {
   for (const name of ['idle', 'walk', 'run', 'attack']) {

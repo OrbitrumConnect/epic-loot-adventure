@@ -91,6 +91,7 @@ export function retargetTwist(clip: THREE.AnimationClip, srcRoot: THREE.Object3D
       const ax = axis.get(o.name);
       // Quadril e braços (ombro→dedos) ficam EXATAMENTE como na cópia direta: o defeito é no
       // tronco/pernas, e nos braços a malha foi presa em outra pose (mexer piorava ~10°).
+      // (Corrigir o quadril também foi testado: derruba o corpo dos raiders — descartado.)
       if (o.name === hipsName || keepAsIs.has(o.name)) Gf = Gn.get(o.name)!.clone();
       else if (ax) {
         const want = ax.clone().applyQuaternion(Gn.get(o.name)!);

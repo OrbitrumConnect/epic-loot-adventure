@@ -113,12 +113,15 @@ export function GlbHeroMixamo({
   gripPos = [0.04, 0.04, 0.08],
   gripRot = [0, Math.PI / 2, Math.PI / 2],
   heldItemOf,
+  twistFix,
 }: {
   actionRef: React.MutableRefObject<HeroAction>;
   speedRef?: React.MutableRefObject<number>;
   weapon?: ReactNode;
   /** Item na mão de OUTRO jogador (online) p/ escolher a anim de ataque; sem ele, o local. */
   heldItemOf?: () => string | null;
+  /** Corrige o giro dos ossos (ver `mixamo-retarget.ts`). Padrão: só o herói. */
+  twistFix?: boolean;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -195,9 +198,10 @@ export function GlbHeroMixamo({
         }
       });
     }
-    // Só o HERÓI (hero-preview, do Blender): os ossos dele têm outro "rolo" e a cópia direta
-    // girava coxas/tronco ~180° → cintura "embrulhada". Raiders seguem a cópia direta.
-    const fixTwist = charUrl === RED_URL;
+    // Os ossos têm outro "rolo" que o esqueleto dos clips e a cópia direta girava coxas/tronco
+    // ~180° → cintura "embrulhada". Ligado no herói e nos raiders onde a medição nos GLB reais
+    // (`mixamo-retarget.test.ts`) prova que nunca piora (`twistFix`).
+    const fixTwist = twistFix ?? charUrl === RED_URL;
     const mk = (g: { animations: THREE.AnimationClip[]; scene: THREE.Object3D }, name: string): THREE.AnimationClip | null => {
       const src = g.animations[0];
       if (!src) return null;
@@ -209,7 +213,7 @@ export function GlbHeroMixamo({
     };
     return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(jumpG, 'jump')]
       .filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames, cloned, charUrl, standFixX]);
+  }, [idleG, walkG, runG, attackG, attackBowG, jumpG, boneNames, cloned, charUrl, standFixX, twistFix]);
 
   const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
