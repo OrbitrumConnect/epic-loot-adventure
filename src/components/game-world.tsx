@@ -489,10 +489,16 @@ function Character({
   }, []);
 
   useFrame((_state, delta) => {
-    if (!body.current || paused) return;
+    if (!body.current) return;
+    const ps = useGameStore.getState().player;
+    // Online: parado num painel (Salas, mochila...) ou morto o herói não anda, mas a pose
+    // continua indo — senão o outro jogador simplesmente não te vê na sala.
+    if (paused || ps.dead) {
+      broadcastPose(body.current.position.x, body.current.position.z, currentRotY.current, 'idle', ps.level, ps.dead ? 0 : ps.hp, ps.maxHp, body.current.position.y);
+    }
+    if (paused) return;
     const dt = Math.min(delta, 0.05);
 
-    const ps = useGameStore.getState().player;
     if (ps.dead) {
       if (ps.respawnAt > 0 && Date.now() >= ps.respawnAt) {
         // Renasce na CAMA da base, se já tiver uma; senão na ZONA SEGURA do spawn.
