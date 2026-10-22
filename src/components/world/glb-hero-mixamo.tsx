@@ -369,6 +369,25 @@ export function GlbHeroMixamo({
     return 1 / (Math.abs(s.x) || 1);
   }, [cloned, handBone]);
 
+  // MIRA (Pedro): durante o disparo de pistola/rifle a arma deixa de seguir o pulso e aponta
+  // RETO pra frente do herói (cano na horizontal), presa na mão; entra/sai suave. Fora do
+  // tiro, fica exatamente na pega de sempre (gripRot).
+  const weaponRef = useRef<THREE.Group>(null);
+  const aimW = useRef(0);
+  const gripQuat = useMemo(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(gripRot[0], gripRot[1], gripRot[2])), [gripRot]);
+  useFrame((_, dt) => {
+    const w = weaponRef.current;
+    const root = inner.current;
+    if (!w || !root || !handBone) return;
+    const aiming = current.current === 'attack' && playingAtk.current === 'attackGun';
+    aimW.current += ((aiming ? 1 : 0) - aimW.current) * Math.min(1, dt * 14);
+    if (aimW.current < 0.001) { w.quaternion.copy(gripQuat); return; }
+    handBone.updateWorldMatrix(true, false);
+    root.updateWorldMatrix(true, false);
+    const aimLocal = handBone.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(root.getWorldQuaternion(new THREE.Quaternion()));
+    w.quaternion.copy(gripQuat).slerp(aimLocal, aimW.current);
+  });
+
   return (
     <group ref={inner} rotation={[0, yaw, 0]} scale={scale}>
       {/* Wrapper que "levanta" o herói (cancela o -90° X do rig Meshy FBX). */}
@@ -378,6 +397,7 @@ export function GlbHeroMixamo({
       {weapon && handBone
         ? createPortal(
             <group
+              ref={weaponRef}
               position={[gripPos[0] * gripNorm, gripPos[1] * gripNorm, gripPos[2] * gripNorm]}
               rotation={gripRot}
               scale={gripScale * gripNorm}
