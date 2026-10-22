@@ -565,6 +565,10 @@ function Character({
     // travavam o herói na areia; os bichos já andavam normal.
     const MAX_SPEED = (sprinting ? 4.32 : 1.8) * moveBonus;
 
+    // Atacando (tiro ou golpe, ~0,4 s): PARA pra atacar (Pedro) — antes seguia deslizando com a
+    // pose de tiro ("rastejando"). Freia como ao soltar o movimento; depois retoma o destino.
+    if (attackPhase.current !== 'idle') { targetVx = 0; targetVz = 0; }
+
     if (targetVx !== 0 || targetVz !== 0) {
       const len = Math.sqrt(targetVx * targetVx + targetVz * targetVz);
       const nx = targetVx / len;
