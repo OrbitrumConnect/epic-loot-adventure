@@ -1689,8 +1689,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       if (isBuildActive()) return;
       if (e.button === 0 && !props.paused && props.onAttack) {
         if (pointerLocked.current || e.target === canvas) {
-          // Mirando: atira no que está SOB a mira; sem nada na mira, segue o ataque de sempre.
-          if (!(useAim.getState().active && aimFire())) props.onAttack();
+          // Mirando OU em 3ª pessoa: atira no que está no CENTRO da tela (Pedro, 22/10); sem nada no
+          // centro, o ataque de sempre (bicho mais perto no alcance). Câmera de cima: igual a antes.
+          if (!((useAim.getState().active || cameraMode === 'third') && aimFire())) props.onAttack();
         }
       }
     };
