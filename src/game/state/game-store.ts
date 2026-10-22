@@ -1060,8 +1060,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
 
-    const usesBullet = prof.projectile === 'bullet'; // só define o SOM (tiro x flecha)
-
     // Alcance de MIRA do poder (fixo, independente da arma — a chuva vem do céu): pega o hostil
     // mais próximo até 20 m pra virar o centro da 1ª onda.
     const reach = 20;
@@ -1087,8 +1085,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (st.player.dead) return;
       const center = nearestHostile(); // recalcula: a chuva acompanha os bichos a cada onda
       if (!center) return;
-      // Som por onda: tiro de bala pras armas de fogo, "flecha" pro arco.
-      if (usesBullet) audioManager.playGunShot(); else audioManager.playShot();
+      // Som por onda: sempre FLECHA — a chuva é de flechas, com qualquer arma na mão (Pedro).
+      audioManager.playShot();
       const radius = arrowRainRadiusFor(st.player.level);
       const base = playerBaseAttack(st.player.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0);
       const power = Math.round((base + equipmentStats(st.player).damage) * 1.3 * damageMultiplier(st.player));
