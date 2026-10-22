@@ -25,6 +25,10 @@ export const EDITOR_ASSETS = [
   { name: 'Ponte de sucata', assetUrl: '/models/map/wasteland-scrap-bridge.glb', scale: 8 },
   // stone-house: arquivo real vive em /models/house/ (confirmado com test -f), não /models/map/.
   { name: 'Casa de pedra', assetUrl: '/models/house/stone-house.glb', scale: 6 },
+  // Favelas (Pedro, 22/10): 2 conjuntos Meshy otimizados (499 mil→40 mil e 50 mil→25 mil triângulos,
+  // textura 1024). Modelo ~1 m de lado → escala 40 ≈ 40 m de quarteirão (ajustável no gizmo).
+  { name: 'Favela A (casinhas densas)', assetUrl: '/models/map/favela-a.glb', scale: 40 },
+  { name: 'Favela B (rua e pracinha)', assetUrl: '/models/map/favela-b.glb', scale: 40 },
 ] as const;
 const KEY = 'tribos.editor.local.v1';
 const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;

@@ -844,3 +844,9 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .aim-crosshair__dot { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.6); }
 .aim-crosshair__zoom { position: absolute; left: 0; top: 10px; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 3px #000; white-space: nowrap; }
 .mobile-btn--aim.is-on { background: rgba(239, 68, 68, .55); }
+
+/* Editor ADM: o card não passa do fim da tela (Pedro) — rola por dentro; listas longas
+   (hierarquia/biblioteca) com rolagem curta pra Seleção ficar à vista; Salvar grudado embaixo. */
+.editor-panel { max-height: calc(100dvh - 28px); overflow-y: auto; overscroll-behavior: contain; }
+.editor-panel .editor-list { max-height: 150px; overflow-y: auto; display: grid; gap: 6px; padding-right: 2px; }
+.editor-panel footer { position: sticky; bottom: -12px; margin-bottom: -12px; padding: 8px 0 12px; background: color-mix(in oklch, var(--world-dark) 96%, transparent); z-index: 1; }

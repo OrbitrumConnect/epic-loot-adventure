@@ -16,7 +16,8 @@
  * são compartilhados.
  */
 import { useFrame } from '@react-three/fiber';
-import { useRef } from 'react';
+import { Suspense, useRef } from 'react';
+import { PistolModel, RifleModel } from './weapon-models';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mixColor, type Palette } from './world-kit';
@@ -259,8 +260,9 @@ export function HeldItem({ c, itemId }: { c: Palette; itemId?: string | null }) 
     case 'iron_pickaxe': return <Pickaxe k={k} iron />;
     case 'torch': return <Torch k={k} />;
     case 'bow': return <Bow k={k} />;
-    case 'pistol': return <Pistol k={k} />;
-    case 'rifle': return <Rifle k={k} />;
+    // GLB (Pedro, 22/10) na mesma pega; a arma desenhada fica de reserva enquanto carrega.
+    case 'pistol': return <Suspense fallback={<Pistol k={k} />}><PistolModel /></Suspense>;
+    case 'rifle': return <Suspense fallback={<Rifle k={k} />}><RifleModel /></Suspense>;
     default: return <Fist k={k} />;
   }
 }
