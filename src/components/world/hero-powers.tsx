@@ -1,5 +1,6 @@
 import { useFrame } from '@react-three/fiber';
-import { useRef } from 'react';
+import { Suspense, useRef } from 'react';
+import { BoomerangModel, HurricaneModel } from './fx-models';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import {
@@ -12,8 +13,8 @@ import { terrainHeight } from './world-kit';
 /**
  * Render dos PODERES DO HERÓI (o dano/empurrão é do store: `tickHeroPowers`, throttled; aqui
  * só agenda o tick e anima). Tamanho do HERÓI, não gigante como os da base.
- *  - Bumerangue: 3 lâminas girando em espiral em volta do herói.
- *  - Furacão: 2 tornados (cones) viajando em zigue-zague até ~12 m.
+ *  - Bumerangue: 3 bumerangues (GLB Mad Max) girando em espiral em volta do herói.
+ *  - Furacão: 2 furacões (GLB, semi-transparentes) viajando em zigue-zague até ~12 m.
  *  - Raio: clarões verticais nos alvos atingidos.
  * Malhas fixas (sem realocar).
  */
@@ -77,22 +78,32 @@ export function HeroPowers({ playerRef, paused }: { playerRef: React.RefObject<T
     <>
       {Array.from({ length: BOOMERANG_BLADES }, (_, i) => (
         <group key={`hb-${i}`} ref={(el) => { blades.current[i] = el; }} visible={false}>
-          <mesh castShadow rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[0.32, 0.07, 6, 14, Math.PI * 1.3]} />
-            <meshStandardMaterial color="#fde68a" emissive="#f59e0b" emissiveIntensity={0.8} metalness={0.4} roughness={0.35} />
-          </mesh>
+          {/* GLB do bumerangue Mad Max; o anel antigo fica de reserva enquanto carrega. */}
+          <Suspense fallback={
+            <mesh castShadow rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[0.32, 0.07, 6, 14, Math.PI * 1.3]} />
+              <meshStandardMaterial color="#fde68a" emissive="#f59e0b" emissiveIntensity={0.8} metalness={0.4} roughness={0.35} />
+            </mesh>
+          }>
+            <BoomerangModel />
+          </Suspense>
         </group>
       ))}
       {Array.from({ length: TORNADO_COUNT }, (_, i) => (
         <group key={`ht-${i}`} ref={(el) => { tornados.current[i] = el; }} visible={false}>
-          <mesh position={[0, 1.8, 0]} rotation={[Math.PI, 0, 0]}>
-            <coneGeometry args={[1.5, 3.6, 12, 1, true]} />
-            <meshStandardMaterial color="#cbd5e1" transparent opacity={0.4} emissive="#94a3b8" emissiveIntensity={0.3} side={THREE.DoubleSide} depthWrite={false} />
-          </mesh>
-          <mesh position={[0, 0.8, 0]} rotation={[Math.PI, 0, 0]}>
-            <coneGeometry args={[0.7, 1.6, 10, 1, true]} />
-            <meshStandardMaterial color="#e2e8f0" transparent opacity={0.55} side={THREE.DoubleSide} depthWrite={false} />
-          </mesh>
+          {/* GLB do furacão, semi-transparente; os cones antigos ficam de reserva. */}
+          <Suspense fallback={<>
+            <mesh position={[0, 1.8, 0]} rotation={[Math.PI, 0, 0]}>
+              <coneGeometry args={[1.5, 3.6, 12, 1, true]} />
+              <meshStandardMaterial color="#cbd5e1" transparent opacity={0.4} emissive="#94a3b8" emissiveIntensity={0.3} side={THREE.DoubleSide} depthWrite={false} />
+            </mesh>
+            <mesh position={[0, 0.8, 0]} rotation={[Math.PI, 0, 0]}>
+              <coneGeometry args={[0.7, 1.6, 10, 1, true]} />
+              <meshStandardMaterial color="#e2e8f0" transparent opacity={0.55} side={THREE.DoubleSide} depthWrite={false} />
+            </mesh>
+          </>}>
+            <HurricaneModel opacity={0.5} />
+          </Suspense>
         </group>
       ))}
       {Array.from({ length: MAX_BOLTS }, (_, i) => (

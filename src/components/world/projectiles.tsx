@@ -4,11 +4,19 @@
  * alocação por tiro — respeita o orçamento de performance.
  */
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import type { FeedbackEvent } from '@/game/types/feedback';
 import { terrainHeight } from './world-kit';
+import { useArrowAsset } from './fx-models';
+
+/** Carrega a flecha GLB fora do caminho crítico: até chegar, a flecha simples segue valendo. */
+function ArrowAssetLoader({ onReady }: { onReady: (a: { geometry: THREE.BufferGeometry; material: THREE.Material }) => void }) {
+  const asset = useArrowAsset();
+  useEffect(() => { onReady(asset); }, [asset, onReady]);
+  return null;
+}
 
 const POOL = 16;
 const SPEED = 40; // m/s
@@ -31,6 +39,11 @@ export function Projectiles() {
   const lastArr = useRef<unknown>(null);
 
   const geo = useMemo(() => new THREE.CylinderGeometry(0.025, 0.025, 0.55, 5), []);
+  // Flecha GLB (Mad Max) pros tiros de ARCO; bala segue o cilindro brilhante. Material de cada
+  // mesh do pool fica guardado pra voltar quando o tiro é de bala.
+  const arrow = useRef<{ geometry: THREE.BufferGeometry; material: THREE.Material } | null>(null);
+  const ownMats = useRef<(THREE.Material | null)[]>(Array.from({ length: POOL }, () => null));
+  const onArrowReady = useMemo(() => (a: { geometry: THREE.BufferGeometry; material: THREE.Material }) => { arrow.current = a; }, []);
 
   const spawn = (ev: FeedbackEvent) => {
     if (!ev.to) return;
@@ -45,7 +58,11 @@ export function Projectiles() {
     s.active = true;
     if (m) {
       const bullet = ev.projectile === 'bullet';
-      const mat = m.material as THREE.MeshStandardMaterial;
+      if (!ownMats.current[i]) ownMats.current[i] = m.material as THREE.Material;
+      const glbArrow = !bullet ? arrow.current : null;
+      m.geometry = glbArrow ? glbArrow.geometry : geo;
+      m.material = glbArrow ? glbArrow.material : ownMats.current[i]!;
+      const mat = ownMats.current[i] as THREE.MeshStandardMaterial;
       mat.color.set(bullet ? '#ffe08a' : '#caa36a');
       mat.emissive.set(bullet ? '#ffb020' : '#000000');
       mat.emissiveIntensity = bullet ? 1.4 : 0;
@@ -84,6 +101,7 @@ export function Projectiles() {
 
   return (
     <>
+      <Suspense fallback={null}><ArrowAssetLoader onReady={onArrowReady} /></Suspense>
       {Array.from({ length: POOL }, (_, i) => (
         <mesh key={i} ref={el => { meshes.current[i] = el; }} visible={false} geometry={geo} raycast={() => {}}>
           <meshStandardMaterial color="#caa36a" />
