@@ -369,8 +369,12 @@ const SHOW_OLD_ROAD = false;
  *  (só mostra onde afunda abaixo do nível). */
 const MAP_WATER_Y = -2.35;                            // superfície da água: ~0.25m acima do leito (-2.6). Abaixado 35cm (não encostar na ponte/margem)
                                                       // só mostra água onde o GLB AFUNDA (lago central + praias nas margens); terra seca fica por cima.
-const MAP_WATER_CENTER: [number, number] = [0, 0];   // cobre o mapa todo; a forma (lago + praias) vem da geometria do GLB
-const MAP_WATER_SIZE = 210;                           // lado do plano (m) — alcança as margens/praias
+// Só a área do LAGO CENTRAL (azul do GLB dentro do jogo: x −8→33, z −6→51, + margem). Antes o
+// plano cobria o mapa todo (210 m) e mostrava uma faixa de água numa VALA do GLB logo depois do
+// limite (sul z≈90–94, x≈33–48; canto SE) — o "vão" entre a borda e o terreno de fora (Pedro).
+const MAP_WATER_CENTER: [number, number] = [12.5, 22.5];
+const MAP_WATER_SIZE_X = 66;
+const MAP_WATER_SIZE_Z = 82;
 
 /** Labirinto FIXO no mapa. Pedro 20/10: OFF — agora é colocado/ajustado pelo Editor ADM
  *  (Biblioteca GLB → "Labirinto"). Reversível: true volta o maze fixo. NOTA: o maze do
@@ -2150,7 +2154,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
           textura). Aparece só onde o GLB afunda abaixo do nível (o rio); o chão seco
           esconde o resto. Centro/tamanho em MAP_WATER_CENTER/SIZE. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[MAP_WATER_CENTER[0], MAP_WATER_Y, MAP_WATER_CENTER[1]]} renderOrder={1}>
-        <planeGeometry args={[MAP_WATER_SIZE, MAP_WATER_SIZE]} />
+        <planeGeometry args={[MAP_WATER_SIZE_X, MAP_WATER_SIZE_Z]} />
         <WaterMaterial color={c.water} time={waterTime} />
       </mesh>
 

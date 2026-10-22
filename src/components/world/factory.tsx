@@ -102,10 +102,23 @@ export function Factory() {
     return { wrap, wallSegs, halfX, halfZ };
   }, [scene]);
 
+  // Base Y = chão MAIS BAIXO sob o contorno (grade 5x5, já girada). Antes pegava só o centro e,
+  // em terreno inclinado (até 1,5 m de desnível), o muro do lado baixo ficava no ar (Pedro).
+  const baseYs = useMemo(() => FACTORY_SITES.map((f) => {
+    const cos = Math.cos(f.rot), sin = Math.sin(f.rot);
+    let min = Infinity;
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
+      const lx = proto.halfX * (i / 2 - 1), lz = proto.halfZ * (j / 2 - 1);
+      const x = f.x + lx * cos - lz * sin, z = f.z + lx * sin + lz * cos;
+      min = Math.min(min, glbSurfaceY(x, z, terrainHeight(x, z)));
+    }
+    return min - FACTORY_SINK;
+  }), [proto, tv]);
+
   // Registra os colisores (paredes rotacionadas por site + footprint + base Y).
   useEffect(() => {
     factoryColliders.length = 0;
-    for (const f of FACTORY_SITES) {
+    FACTORY_SITES.forEach((f, idx) => {
       const cos = Math.cos(f.rot), sin = Math.sin(f.rot);
       const segs: number[] = [];
       for (let i = 0; i < proto.wallSegs.length; i += 2) {
@@ -116,12 +129,12 @@ export function Factory() {
         cx: f.x, cz: f.z,
         halfX: Math.abs(proto.halfX * cos) + Math.abs(proto.halfZ * sin),
         halfZ: Math.abs(proto.halfX * sin) + Math.abs(proto.halfZ * cos),
-        baseY: glbSurfaceY(f.x, f.z, terrainHeight(f.x, f.z)) - FACTORY_SINK,
+        baseY: baseYs[idx]!,
         wallSegs: segs,
       });
-    }
+    });
     return () => { factoryColliders.length = 0; };
-  }, [proto, tv]);
+  }, [proto, baseYs]);
 
   return (
     <>
@@ -129,7 +142,7 @@ export function Factory() {
         <primitive
           key={i}
           object={proto.wrap.clone()}
-          position={[f.x, glbSurfaceY(f.x, f.z, terrainHeight(f.x, f.z)) - FACTORY_SINK, f.z]}
+          position={[f.x, baseYs[i]!, f.z]}
           rotation={[0, f.rot, 0]}
         />
       ))}
