@@ -10,7 +10,7 @@ import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
 import { audioManager } from '../audio/audio-manager';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
-import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
+import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES, harvestRangeFor } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
@@ -263,7 +263,7 @@ function syncCarry(player: PlayerState): PlayerState {
 function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
   const respawnAt = c.speciesId === 'raider_warlord'
     ? null
-    : now + Math.round((180_000 + rng() * 120_000) * ENEMY_RESPAWN_MULT);
+    : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
   return { ...c, hp: 0, behavior: 'dead', respawnAt };
 }
 

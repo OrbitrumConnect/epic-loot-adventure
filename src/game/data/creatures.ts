@@ -9,6 +9,10 @@ import type { CreatureDefinition } from '../types';
 export const ENEMY_HP_MULT = 1.15;
 /** Reaparecem 20% mais rápido (mundo mais vivo). */
 export const ENEMY_RESPAWN_MULT = 0.8;
+/** Bichos SOLTOS do mapa (`wild_*`) voltam mais rápido (Pedro, 22/10 — nv 37 limpava o mapa e o
+ *  piloto ficava parado): 3–5 min base × 0,5 = 1,5–2,5 min (era × 0,8 = 2,4–4 min). Acampamentos e
+ *  horda seguem com `ENEMY_RESPAWN_MULT`. */
+export const WILD_RESPAWN_MULT = 0.5;
 /** Vida instanciada de um inimigo a partir da vida-base do dado. */
 export function scaleEnemyHp(baseHp: number): number {
   return Math.round(baseHp * ENEMY_HP_MULT);

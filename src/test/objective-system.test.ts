@@ -555,15 +555,24 @@ describe('objectiveSystem · caça autônoma por nível', () => {
     expect(intent).toMatchObject({ kind: 'attack', creatureId: 'rato' });
   });
 
-  it('bolsa cheia e nada a fazer → retreat pra base (não fica inerte)', () => {
+  // Pedro, 22/10: antes recuava pro nascedouro (não a base dele) e ficava indo e voltando.
+  it('bolsa cheia e nada a fazer → fica onde está (não vai pra zona segura)', () => {
     const intent = decideIntent(snapshot({
       gatherCapacity: false,
       homePosition: { x: 0, z: 1 },
     }), T0);
-    expect(intent.kind).toBe('retreat');
-    if (intent.kind === 'retreat') {
-      expect(intent.to).toEqual({ x: 0, z: 1 });
-      expect(intent.reason).toContain('Bolsa cheia');
-    }
+    expect(intent.kind).toBe('idle');
+    if (intent.kind === 'idle') expect(intent.reason).toContain('Bolsa cheia');
+  });
+
+  it('bolsa cheia com bicho no raio → continua caçando/defendendo', () => {
+    const intent = decideIntent(snapshot({
+      gatherCapacity: false,
+      homePosition: { x: 0, z: 1 },
+      creatures: [{ id: 'lobo', position: { x: 5, z: -26 }, behavior: 'chase', hp: 10, hostile: true, level: 1 }],
+    }), T0);
+    expect(['attack', 'move']).toContain(intent.kind); // engaja (ataca ou vai até o bicho)
+    expect(intent.kind).not.toBe('retreat');
+    if (intent.kind === 'move') expect(intent.reason).toMatch(/Defendendo|Caçando/);
   });
 });

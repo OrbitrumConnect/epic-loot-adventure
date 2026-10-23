@@ -580,9 +580,12 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
       if (quarry) return engage(snapshot, quarry, 'Caçando por perto');
     }
 
-    // 5. Bolsa cheia e nada a fazer → volta pra base em vez de ficar inerte.
+    // 5. Bolsa cheia e nada a fazer → FICA onde está (Pedro, 22/10). Antes recuava pro
+    // `homePosition` — que é o nascedouro da zona segura, não a base dele — e, como caçar tem
+    // prioridade, ficava indo e voltando (vê bicho → caça → lembra da bolsa → volta...). Depósito
+    // automático NÃO: a casa de pedra/metal paga com a madeira/pedra da MOCHILA.
     if (snapshot.gatherCapacity === false) {
-      return { kind: 'retreat', to: { ...snapshot.homePosition }, reason: 'Bolsa cheia: voltando pra base.' };
+      return { kind: 'idle', reason: 'Bolsa cheia: sem espaço pra coletar.' };
     }
 
     // 6
