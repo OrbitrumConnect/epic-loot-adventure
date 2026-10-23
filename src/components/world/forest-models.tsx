@@ -29,11 +29,14 @@ export function fadeMaterial(source: THREE.Material): THREE.Material {
   return material;
 }
 
-export function ForestBatch({ geometry, material, placements, spheres, yOffset = 0 }: {
+export function ForestBatch({ geometry, material, placements, spheres, yOffset = 0, castShadow = true }: {
   geometry: THREE.BufferGeometry; material: THREE.Material;
   placements: ForestPlacement[]; spheres: FadeSphere[];
   /** Desloca o Y (m) após o terreno. Pedras usam -0.25 p/ semienterrar; árvores ficam em 0. */
   yOffset?: number;
+  /** Projeta sombra? Default true (árvores/pedras). A GRAMA passa false: 62k tufos no passe
+   *  de sombra eram ~71% do custo, sem ganho visual relevante. */
+  castShadow?: boolean;
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   // aFade belongs to a batch, never to the cached GLTF geometry.
@@ -60,7 +63,7 @@ export function ForestBatch({ geometry, material, placements, spheres, yOffset =
     if (spheres.length === 0) return;
     return registerInstancedFade(mesh, spheres);
   }, [placements, spheres, ownGeometry, yOffset, tv]);
-  return <instancedMesh ref={ref} args={[ownGeometry, material, Math.max(1, placements.length)]} castShadow receiveShadow />;
+  return <instancedMesh ref={ref} args={[ownGeometry, material, Math.max(1, placements.length)]} castShadow={castShadow} receiveShadow />;
 }
 
 export function ForestTrees({ placements, c }: { placements: ForestPlacement[]; c: Palette }) {
