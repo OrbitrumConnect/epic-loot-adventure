@@ -48,6 +48,8 @@ export type TroopFoe = {
   hp: number;
   attackPower: number;
   attackCooldown: number; // s
+  /** Jogador INIMIGO (raid): vem antes dos bichos na escolha de alvo (Pedro, 23/10). */
+  priority?: boolean;
 };
 
 export const isTroopUnit = (id: string): id is TroopUnitId => id in TROOP_STATS;
@@ -118,10 +120,12 @@ export function stepTroops(
       }
     }
     if (t.hp <= 0) { dead.push({ ...t, hp: 0 }); continue; }
-    // Alvo: o hostil mais perto da tropa.
+    // Alvo: o JOGADOR inimigo mais perto (raid) se houver; senão o hostil mais perto.
     let target: TroopFoe | null = null;
     let best = Infinity;
+    const anyPriority = alive.some((f) => f.priority);
     for (const f of alive) {
+      if (anyPriority && !f.priority) continue;
       const d = Math.hypot(f.position.x - t.x, f.position.z - t.z);
       if (d < best) { best = d; target = f; }
     }

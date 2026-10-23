@@ -12,7 +12,7 @@ import { creatureAnchors } from './hostile-ai';
 import { markPvpHit, pvpStrike } from './pvp-attack';
 import { bigWallBetween } from './base-collision';
 import { glbSurfaceY, worldBlocksShot, worldShotHitDistance } from './terrain-collision';
-import { isHostileBaseOwner, STRIKABLE_REMOTE, strikeRemotePiece } from './remote-base-strike';
+import { isHostileBaseOwner, STRIKABLE_REMOTE, strikeRemotePiece, strikeRemoteTroop } from './remote-base-strike';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { weaponRangeFor } from '@/game/data/weapons';
 
@@ -42,7 +42,8 @@ let aimCamera: THREE.Camera | null = null;
 export function setAimCamera(c: THREE.Camera | null): void { aimCamera = c; }
 
 export type AimTarget = { kind: 'creature'; id: string } | { kind: 'player'; id: string; name: string; x: number; z: number }
-  | { kind: 'piece'; ownerId: string; pieceId: string };
+  | { kind: 'piece'; ownerId: string; pieceId: string }
+  | { kind: 'troop'; ownerId: string; troopId: string };
 
 /** Ímã da mira: QUASE NADA (Pedro, 22/10 — "igual CS"). Só perdoa ~meio grau fora do corpo. */
 export const AIM_ASSIST_DEG = 0.5;
@@ -109,6 +110,16 @@ export function pickAimTarget(camera: THREE.Camera): AimTarget | null {
       if (s !== null) cands.push({ ang: s, t: { kind: 'piece', ownerId, pieceId: pc.id }, p });
     }
   }
+  // Tropas de jogador INIMIGO (raid): o pontinho acerta também.
+  for (const ownerId in net.troops) {
+    if (!isHostileBaseOwner(ownerId)) continue;
+    for (const t of net.troops[ownerId] ?? []) {
+      if (t.h <= 0) continue;
+      const p = new THREE.Vector3(t.x, glbSurfaceY(t.x, t.z, 0) + 1.0, t.z);
+      const s = aimScore(origin, dir, p, 0.5);
+      if (s !== null) cands.push({ ang: s, t: { kind: 'troop', ownerId, troopId: t.i }, p });
+    }
+  }
   cands.sort((a, b) => a.ang - b.ang);
   for (const c of cands) if (!shotBlocked(origin, c.p)) return c.t;
   return null;
@@ -146,6 +157,10 @@ export function aimFire(): boolean {
   }
   if (t.kind === 'piece') {
     strikeRemotePiece(t.ownerId, t.pieceId);
+    return true;
+  }
+  if (t.kind === 'troop') {
+    strikeRemoteTroop(t.ownerId, t.troopId);
     return true;
   }
   if (pvpStrike(t.name, t.x, t.z, 0.6, (raw) => broadcastPlayerHit(t.id, raw))) markPvpHit(t.id);

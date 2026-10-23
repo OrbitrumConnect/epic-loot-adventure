@@ -17,7 +17,7 @@ import { HARVEST_NODES, harvestRangeFor } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
 import { resolveAttack, getDistance, calculateDamage } from '../systems/combatSystem';
-import { deployTroops, stepTroops, type FieldTroop } from '../systems/troopSystem';
+import { deployTroops, stepTroops, type FieldTroop, type TroopFoe } from '../systems/troopSystem';
 import { UNITS } from '../data/units';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
 import { rollBonusLoot } from '../systems/lootEconomySystem';
@@ -69,7 +69,7 @@ import {
   pushEvents, shotEvent, xpEvent,
 } from '../systems/feedbackSystem';
 import type { FeedbackDraft } from '../systems/feedbackSystem';
-import { broadcastCreatureHit, broadcastWaveSpawn, canSimulateSharedWorld, isMyWave, useNet } from '@/net/multiplayer';
+import { broadcastCreatureHit, broadcastPlayerHit, broadcastWaveSpawn, canSimulateSharedWorld, isMyWave, useNet } from '@/net/multiplayer';
 import {
   BOOMERANG_DMG_MULT, BOOMERANG_DURATION_MS, BOOMERANG_HIT_RADIUS, BOOMERANG_PUSH, HERO_POWER_LABEL,
   HERO_POWER_TICK_MS, HERO_POWER_UNLOCK, LIGHTNING_BOLT_MS, LIGHTNING_DMG_MULT, LIGHTNING_SPLASH,
@@ -107,6 +107,8 @@ type GameState = {
   troopSeq: number;
   /** Tropas nas ondas: sai/luta/volta (ver `troopSystem`). `dt` em segundos. */
   tickTroops: (now: number, dt: number) => void;
+  /** RAID: inimigo acertou uma tropa minha (chega pela rede). A morte sai no próximo `tickTroops`. */
+  damageFieldTroop: (troopId: string, damage: number) => void;
   /** Último tick dos powers orbitais (throttle do dano). */
   powerLastTickAt: number;
   /** Ciclo de HORDAS (Fase 5): paz ↔ combate, ondas cada vez mais difíceis. */
@@ -294,6 +296,11 @@ export function pushBag(bags: DeathBag[], bag: DeathBag): DeathBag[] {
   const now = Date.now();
   return [...bags.filter(b => now - b.createdAt < BAG_TTL_MS), bag].slice(-BAG_CAP);
 }
+
+/** Alvo-jogador das tropas (raid): id com prefixo; golpes somados e enviados no máx. 2×/s. */
+const PLAYER_FOE = 'player:';
+const troopPlayerDamage = new Map<string, number>();
+let troopPlayerFlushAt = 0;
 
 /** Caminho comum de morte para armas, especiais e defesa da base. */
 function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
@@ -741,10 +748,31 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const warCamp = st.base.buildings.find((b) => b.defId === 'war_camp')?.level ?? 1;
     const dep = deployTroops(st.base.troops, st.fieldTroops, center, warCamp, st.troopSeq, half);
     if (dep.field.length === 0) return;
-    const foes = st.creatures
+    const foes: TroopFoe[] = st.creatures
       .filter((c) => c.behavior !== 'dead' && c.hp > 0 && CREATURES[c.speciesId]?.peaceful === false)
       .map((c) => ({ id: c.id, position: c.position, hp: c.hp, attackPower: c.attackPower, attackCooldown: c.attackCooldown }));
+    // RAID (online): jogador INIMIGO na área da base vira alvo PRIORITÁRIO. Ele não bate por contato
+    // (o golpe dele chega pela rede: `troop-hit`).
+    const net = useNet.getState();
+    if (net.connected) {
+      for (const p of Object.values(net.players)) {
+        if (p.hp <= 0 || !(p.side === 'enemy' || net.selfSide === 'enemy')) continue;
+        foes.push({ id: `${PLAYER_FOE}${p.id}`, position: { x: p.x, z: p.z }, hp: p.hp, attackPower: 0, attackCooldown: 1, priority: true });
+      }
+    }
     const r = stepTroops(dep.field, foes, center, warCamp, dt, now);
+    // Golpes em JOGADOR: somados e enviados no máx. 2×/s por alvo (sem uma mensagem por tropa — lag).
+    for (const h of r.hits) {
+      if (!h.creatureId.startsWith(PLAYER_FOE)) continue;
+      const pid = h.creatureId.slice(PLAYER_FOE.length);
+      troopPlayerDamage.set(pid, (troopPlayerDamage.get(pid) ?? 0) + h.damage);
+    }
+    if (troopPlayerDamage.size && now - troopPlayerFlushAt >= 500) {
+      troopPlayerFlushAt = now;
+      for (const [pid, dmg] of troopPlayerDamage) broadcastPlayerHit(pid, dmg, `Tropas de ${net.selfName}`);
+      troopPlayerDamage.clear();
+    }
+    r.hits = r.hits.filter((h) => !h.creatureId.startsWith(PLAYER_FOE));
     // Golpe da tropa = mesmo caminho da TORRE (armadura, loot/XP pro jogador, convidado pede ao host).
     let creatures = st.creatures;
     let player = st.player;
@@ -791,6 +819,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       ...(drafts.length ? { feedback: pushEvents(st.feedback, drafts, now) } : {}),
       ...(message ? { ui: { ...st.ui, message } } : {}),
     });
+  },
+
+  damageFieldTroop: (troopId, damage) => {
+    const st = get();
+    if (!st.fieldTroops.some((t) => t.id === troopId) || !(damage > 0)) return;
+    set({ fieldTroops: st.fieldTroops.map((t) => (t.id === troopId ? { ...t, hp: Math.max(0, t.hp - Math.round(damage)) } : t)) });
   },
 
   tickPowers: (now) => {

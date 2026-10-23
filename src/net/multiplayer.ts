@@ -211,6 +211,14 @@ export const useNet = create<NetState>((set, get) => ({
       baseHitHandler?.(hit);
     });
 
+    // RAID: inimigo (golpe/torre) acertou uma TROPA minha. Só com inimizade; o dono aplica.
+    ch.on('broadcast', { event: 'troop-hit' }, ({ payload }) => {
+      const hit = payload as TroopHitIntent;
+      if (hit.ownerId !== selfId || hit.id === selfId || !Number.isFinite(hit.damage)) return;
+      if (hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return;
+      troopHitHandler?.(hit);
+    });
+
     // Convidado avisou que a horda DELE começou → o host (dono da simulação) spawna.
     ch.on('broadcast', { event: 'wave-spawn' }, ({ payload }) => {
       const req = payload as WaveSpawnIntent;
@@ -442,6 +450,25 @@ export function isMyWave(creatureId: string): boolean {
 
 export function registerBaseHitHandler(handler: ((intent: BaseHitIntent) => void) | null): void {
   baseHitHandler = handler;
+}
+
+/* ---- RAID: golpe numa TROPA de outro jogador. O DONO valida e aplica (23/10). ---- */
+export type TroopHitIntent = { id: string; ownerId: string; troopId: string; damage: number; fromName: string; fromSide: PvpSide };
+let troopHitHandler: ((intent: TroopHitIntent) => void) | null = null;
+
+/** Só manda quando alguém ATACA (clique/mira/torre) — nada contínuo. */
+export function broadcastTroopHit(ownerId: string, troopId: string, damage: number, fromName?: string): void {
+  if (!channel || !useNet.getState().connected || !Number.isFinite(damage) || damage <= 0) return;
+  const { selfId, selfName, selfSide } = useNet.getState();
+  if (ownerId === selfId) return;
+  void channel.send({
+    type: 'broadcast', event: 'troop-hit',
+    payload: { id: selfId, ownerId, troopId, damage, fromName: fromName ?? selfName, fromSide: selfSide } satisfies TroopHitIntent,
+  });
+}
+
+export function registerTroopHitHandler(handler: ((intent: TroopHitIntent) => void) | null): void {
+  troopHitHandler = handler;
 }
 
 /* ---- Mundo único: o host mira QUALQUER jogador e avisa o convidado quando o bicho bate ---- */

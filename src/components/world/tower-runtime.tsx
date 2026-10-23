@@ -4,7 +4,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { selectTowerPlayerTarget, type TowerSource } from '@/game/systems/towerSystem';
 import { towerLevelStats } from '@/game/systems/towerLevelSystem';
-import { broadcastPlayerHit, MP_ENABLED, setOutgoingTroops, useNet } from '@/net/multiplayer';
+import { broadcastPlayerHit, broadcastTroopHit, MP_ENABLED, setOutgoingTroops, useNet } from '@/net/multiplayer';
 import type { BasePiece } from '@/game/types/playerbase';
 
 /** O render apenas agenda; seleção, cooldown e dano pertencem ao sistema/store. */
@@ -58,15 +58,30 @@ export function TowerRuntime({ paused }: { paused: boolean }) {
 function towersHitEnemyPlayers(towers: readonly TowerSource[], now: number): void {
   const net = useNet.getState();
   if (!net.connected) return;
-  const hostile = Object.values(net.players).filter((r) => r.hp > 0 && (r.side === 'enemy' || net.selfSide === 'enemy'));
-  if (hostile.length === 0) return;
+  const isHostile = (id: string) => net.players[id]?.side === 'enemy' || net.selfSide === 'enemy';
+  const hostile = Object.values(net.players).filter((r) => r.hp > 0 && isHostile(r.id));
+  // Tropas do invasor (raid): alvo DEPOIS do jogador — elas tankam a torre (visão do Pedro).
+  const troops: { x: number; z: number; hp: number; owner: string; id: string }[] = [];
+  for (const owner in net.troops) {
+    if (!isHostile(owner)) continue;
+    for (const t of net.troops[owner] ?? []) if (t.h > 0) troops.push({ x: t.x, z: t.z, hp: t.h, owner, id: t.i });
+  }
+  if (hostile.length === 0 && troops.length === 0) return;
   for (const tower of towers) {
     const st = useGameStore.getState();
+    const dmg = towerLevelStats(tower.tier, tower.level).damage;
     const i = selectTowerPlayerTarget(tower, hostile, st.towerLastShotAt[tower.id], now);
-    if (i < 0) continue;
-    const r = hostile[i]!;
-    const chestY = Number.isFinite(r.y) ? (r.y as number) + 1.0 : undefined;
-    if (!st.towerFireAtPlayer(tower, { x: r.x, z: r.z }, chestY, now)) return; // sem bala: nenhuma atira
-    broadcastPlayerHit(r.id, towerLevelStats(tower.tier, tower.level).damage, `Torre de ${net.selfName}`);
+    if (i >= 0) {
+      const r = hostile[i]!;
+      const chestY = Number.isFinite(r.y) ? (r.y as number) + 1.0 : undefined;
+      if (!st.towerFireAtPlayer(tower, { x: r.x, z: r.z }, chestY, now)) return; // sem bala: nenhuma atira
+      broadcastPlayerHit(r.id, dmg, `Torre de ${net.selfName}`);
+      continue;
+    }
+    const j = selectTowerPlayerTarget(tower, troops, st.towerLastShotAt[tower.id], now);
+    if (j < 0) continue;
+    const t = troops[j]!;
+    if (!st.towerFireAtPlayer(tower, { x: t.x, z: t.z }, undefined, now)) return;
+    broadcastTroopHit(t.owner, t.id, dmg, `Torre de ${net.selfName}`);
   }
 }

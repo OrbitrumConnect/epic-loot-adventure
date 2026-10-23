@@ -4,7 +4,7 @@
  * os raiders Mixamo já corrigidos (sem modelo novo): brutamonte (Guerreiro/Lanceiro) e arqueira de
  * corda (Arqueiro). Anel e barra: VERDE = minhas/aliadas · VERMELHO = de jogador inimigo.
  */
-import { useFrame } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Suspense, useRef } from 'react';
 import * as THREE from 'three';
 import { useShallow } from 'zustand/react/shallow';
@@ -14,7 +14,8 @@ import { useNet } from '@/net/multiplayer';
 import { GlbHeroMixamo } from './glb-hero-mixamo';
 import type { HeroAction } from './glb-hero';
 import { glbSurfaceY } from './terrain-collision';
-import { terrainHeight } from './world-kit';
+import { markPointerConsumed, terrainHeight } from './world-kit';
+import { strikeRemoteTroop } from './remote-base-strike';
 
 const MODEL: Record<TroopUnitId, { url: string; height: number; forceBow?: boolean }> = {
   warrior: { url: '/models/raiders/scrap_brute.glb', height: 1.9 },
@@ -28,7 +29,7 @@ const noRaycast = () => {};
 /** O que uma tropa precisa pra ser desenhada (minha ou da rede). */
 type TroopView = { x: number; z: number; yaw: number; action: string; hp: number; maxHp: number };
 
-function Troop({ unitId, get, color }: { unitId: TroopUnitId; get: () => TroopView | undefined; color: string }) {
+function Troop({ unitId, get, color, onHit }: { unitId: TroopUnitId; get: () => TroopView | undefined; color: string; onHit?: (() => void) | undefined }) {
   const group = useRef<THREE.Group>(null);
   const bar = useRef<THREE.Group>(null);
   const fill = useRef<THREE.Mesh>(null);
@@ -58,7 +59,12 @@ function Troop({ unitId, get, color }: { unitId: TroopUnitId; get: () => TroopVi
     if (bar.current) bar.current.quaternion.copy(state.camera.quaternion).premultiply(g.quaternion.clone().invert());
   });
   return (
-    <group ref={group}>
+    <group ref={group} {...(onHit ? { onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+      if (e.button !== 0 || document.pointerLockElement) return; // mouse travado: o clique é da mira
+      e.stopPropagation();
+      markPointerConsumed(e.nativeEvent);
+      onHit();
+    } } : {})}>
       <Suspense fallback={null}>
         <GlbHeroMixamo actionRef={action} charUrl={m.url} autoHeight={m.height} standFixX={Math.PI / 2} twistFix forceBow={m.forceBow ?? false} />
       </Suspense>
@@ -105,6 +111,7 @@ export function RemoteTroops() {
         const net = useNet.getState();
         const hostile = net.players[owner]?.side === 'enemy' || net.selfSide === 'enemy';
         return <Troop key={`${owner}:${id}`} unitId={unitId} color={hostile ? ENEMY : ALLY}
+          onHit={hostile ? () => strikeRemoteTroop(owner, id) : undefined}
           get={() => {
             const t = useNet.getState().troops[owner]?.find((x) => x.i === id);
             return t ? { x: t.x, z: t.z, yaw: t.r, action: t.a, hp: t.h, maxHp: t.m } : undefined;

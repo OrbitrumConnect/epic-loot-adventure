@@ -20,7 +20,7 @@ import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
 import {
   broadcastWorld, fetchResumeSnapshot, MP_ENABLED, registerBaseHitHandler, registerCreatureHitHandler,
-  registerMobHitHandler, registerPlayerHitHandler, registerWaveSpawnHandler, registerWorldSnapshotProvider, useNet,
+  registerMobHitHandler, registerPlayerHitHandler, registerTroopHitHandler, registerWaveSpawnHandler, registerWorldSnapshotProvider, useNet,
 } from '@/net/multiplayer';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
@@ -121,6 +121,11 @@ export function MultiplayerWorldSync() {
       st.takePlayerDamage(pvpPlayerDamage(hit.damage, effectiveMaxHp(st.player), (d) => mitigateDamage(d, st.player)), hit.fromName, true);
     });
     // PvP fatia 4: inimigo bateu na MINHA base → eu (dono) aplico na peça.
+    registerTroopHitHandler((hit) => {
+      const st = useGameStore.getState();
+      st.damageFieldTroop(hit.troopId, hit.damage);
+      st.setMessage(`⚔️ ${hit.fromName} está atacando suas tropas! -${Math.round(hit.damage)}`);
+    });
     registerBaseHitHandler((hit) => {
       const st = useGameStore.getState();
       const piece = st.playerBase?.pieces.find((p) => p.id === hit.pieceId);
@@ -147,7 +152,7 @@ export function MultiplayerWorldSync() {
       const st = useGameStore.getState();
       st.takePlayerDamage(mitigateDamage(Math.max(1, hit.damage), st.player), hit.creatureName);
     });
-    return () => { registerPlayerHitHandler(null); registerMobHitHandler(null); registerBaseHitHandler(null); registerWaveSpawnHandler(null); };
+    return () => { registerPlayerHitHandler(null); registerMobHitHandler(null); registerBaseHitHandler(null); registerTroopHitHandler(null); registerWaveSpawnHandler(null); };
   }, [connected]);
 
   useEffect(() => {
