@@ -25,27 +25,50 @@ const METAL_URL = '/models/base/metal-wall.glb';
 
 const CAP = 64; // uma célula por quadrícula do claim (teto seguro)
 const TARGET_W = BASE_GRID * 1.05; // preenche a célula (2 m) com leve sobra p/ não abrir fresta
-const HEIGHT_MULT = 1.45;          // estica a altura p/ o muro ficar alto como o procedural
+/** Altura EXATA do muro de madeira (procedural `wall1`: 2,37 m × 1,8 de "tall" no player-base) —
+ *  pedra e metal ficam iguais a ele (Pedro, 23/10). Guarda em `muro-pedra-metal.test`. */
+export const WALL_TARGET_H = 4.27;
+
+/** Copia o atributo pra Float32 "de verdade". Os muros vêm COMPACTADOS (Int16 normalizado, −1..1):
+ *  esticar em cima disso estoura o inteiro e o valor "dá a volta" — o topo ia pra baixo do chão
+ *  (medido: metade dos vértices abaixo de y=0, altura travada em 2 m; metal "de cabeça pra baixo"). */
+function toFloat(attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): THREE.BufferAttribute {
+  const n = attr.itemSize;
+  const out = new Float32Array(attr.count * n);
+  for (let i = 0; i < attr.count; i++) {
+    out[i * n] = attr.getX(i);
+    if (n > 1) out[i * n + 1] = attr.getY(i);
+    if (n > 2) out[i * n + 2] = attr.getZ(i);
+    if (n > 3) out[i * n + 3] = attr.getW(i);
+  }
+  return new THREE.BufferAttribute(out, n);
+}
 
 const dummy = new THREE.Object3D();
 dummy.rotation.order = 'YXZ';
 
 /** Extrai geometria + material do GLB já normalizados: centro em XZ, base em y=0,
- *  largura = TARGET_W (altura esticada por HEIGHT_MULT). */
-function prepareWall(scene: THREE.Object3D): { geo: THREE.BufferGeometry; mat: THREE.Material } | null {
+ *  largura = TARGET_W e altura = WALL_TARGET_H (igual ao muro de madeira). */
+export function prepareWall(scene: THREE.Object3D): { geo: THREE.BufferGeometry; mat: THREE.Material } | null {
   scene.updateMatrixWorld(true);
   let mesh: THREE.Mesh | null = null;
   scene.traverse((m) => { const n = m as THREE.Mesh; if (!mesh && n.isMesh) mesh = n; });
   if (!mesh) return null;
   const src = mesh as THREE.Mesh;
   const geo = src.geometry.clone();
+  // Descompacta ANTES de qualquer transformação (ver `toFloat`).
+  for (const name of ['position', 'normal']) {
+    const a = geo.getAttribute(name);
+    if (a && (a.normalized || !(a.array instanceof Float32Array))) geo.setAttribute(name, toFloat(a));
+  }
   geo.applyMatrix4(src.matrixWorld); // baka o transform do nó (flatten já deixa ~identidade)
   geo.computeBoundingBox();
   const bb = geo.boundingBox!;
   const w = bb.max.x - bb.min.x || 1;
+  const h = bb.max.y - bb.min.y || 1;
   const s = TARGET_W / w;
   geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); // centro XZ, base em 0
-  geo.scale(s, s * HEIGHT_MULT, s);
+  geo.scale(s, WALL_TARGET_H / h, s);
   const material = (Array.isArray(src.material) ? src.material[0]! : src.material).clone();
   material.side = THREE.DoubleSide;
   return { geo, mat: material };
