@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { harvestFits } from '@/game/systems/harvestSystem';
 import { createInventory } from '@/game/systems/inventorySystem';
 import { ITEMS } from '@/game/data/items';
-import { decideIntent } from '@/game/systems/objectiveSystem';
+import { addObjective, createQueue, decideIntent, tickObjectives } from '@/game/systems/objectiveSystem';
 import type { AutoSnapshot } from '@/game/types';
 import type { HarvestNodeState } from '@/game/types';
 
@@ -41,5 +41,35 @@ describe('bolsa cheia × recurso', () => {
     // com espaço, a mesma árvore volta a ser farmada (subiu de nível / bolsa maior)
     const comEspaco = decideIntent({ ...base, creatures: [], resources: [{ ...base.resources[0]!, canCollect: true }] }, 0);
     expect(comEspaco.kind === 'gather' || (comEspaco.kind === 'move' && /Farmando/.test(comEspaco.reason))).toBe(true);
+  });
+});
+
+describe('fila de objetivos × bolsa cheia', () => {
+  const T0 = 1_000;
+  const world = (canCollect: boolean) => ({
+    playerPosition: { x: 0, z: 0 },
+    creatures: [] as { id: string; behavior: string; hp: number }[],
+    camps: [] as { id: string; cleared: boolean; creatureIds: string[] }[],
+    resources: [{ id: 'arv', depleted: false, canCollect }],
+  });
+  const queue = () => {
+    let q = createQueue();
+    q = addObjective(q, { kind: 'gather_node', targetId: 'arv', position: { x: 2, z: 0 }, label: 'Cortar árvore' }, T0);
+    q = addObjective(q, { kind: 'travel', targetId: null, position: { x: 30, z: 0 }, label: 'Ir longe' }, T0);
+    return q;
+  };
+
+  it('com espaço: segue no "coletar" (não muda nada)', () => {
+    const r = tickObjectives(queue(), world(true), T0 + 1);
+    expect(r.failed).toHaveLength(0);
+    expect(r.queue.items[0]!.status).toBe('active');
+  });
+
+  it('bolsa cheia: cancela o "coletar" com motivo e a fila ANDA pro próximo (antes travava)', () => {
+    const ativo = tickObjectives(queue(), world(true), T0 + 1).queue;
+    const r = tickObjectives(ativo, world(false), T0 + 2);
+    expect(r.failed.map(o => o.label)).toEqual(['Cortar árvore']);
+    expect(r.failed[0]!.failedReason).toMatch(/bolsa/);
+    expect(r.queue.items.find(o => o.label === 'Ir longe')!.status).toBe('active');
   });
 });

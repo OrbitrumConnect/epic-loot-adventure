@@ -2297,7 +2297,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         playerPosition: player.position,
         creatures: ticked.creatures,
         camps: ticked.camps,
-        resources: [...state.resources, ...state.harvestNodes],
+        resources: [...state.resources, ...state.harvestNodes.map(n => ({ ...n, canCollect: harvestFits(n, player.inventory) }))],
       },
       now,
     );

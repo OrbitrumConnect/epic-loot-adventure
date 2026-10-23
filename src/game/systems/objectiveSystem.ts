@@ -64,7 +64,8 @@ export type ObjectiveWorld = {
   playerPosition: Position;
   creatures: { id: string; behavior: string; hp: number }[];
   camps: { id: string; cleared: boolean; creatureIds: string[] }[];
-  resources: { id: string; depleted: boolean }[];
+  /** `canCollect` false = o próximo golpe não cabe na bolsa (ou falta ferramenta). */
+  resources: { id: string; depleted: boolean; canCollect?: boolean }[];
 };
 
 export type ObjectiveTickResult = {
@@ -185,7 +186,11 @@ function judge(objective: Objective, world: ObjectiveWorld): Verdict {
   if (objective.kind === 'gather_node') {
     const node = world.resources.find(r => r.id === objective.targetId);
     if (!node) return { status: 'failed', reason: 'Recurso não existe mais.' };
-    return node.depleted ? { status: 'done' } : RUNNING;
+    if (node.depleted) return { status: 'done' };
+    // Bolsa cheia pra esse recurso: antes a fila travava nele pra sempre (coleta recusada a cada
+    // golpe). Cancela com motivo e a fila anda (Pedro, 22/10).
+    if (node.canCollect === false) return { status: 'failed', reason: 'sem espaço na bolsa (ou falta a ferramenta)' };
+    return RUNNING;
   }
 
   // Área de caça nunca termina sozinha: só some se o jogador cancelar.
@@ -628,6 +633,7 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   if (active.kind === 'gather_node') {
     const node = snapshot.resources.find(r => r.id === active.targetId);
     if (!node || node.depleted) return { kind: 'idle', reason: 'Recurso indisponível.' };
+    if (node.canCollect === false) return { kind: 'idle', reason: 'Bolsa cheia: esse recurso não cabe.' };
     const reach = node.range ?? GATHER_RANGE;
     if (getDistance(snapshot.playerPosition, node.position) <= reach) {
       return { kind: 'gather', nodeId: node.id, to: { ...node.position } };
