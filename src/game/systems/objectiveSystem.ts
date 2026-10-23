@@ -395,7 +395,7 @@ function nearestNode(
   let best: AutoSnapshot['resources'][number] | null = null;
   let bestDist = Infinity;
   for (const node of snapshot.resources) {
-    if (node.depleted) continue;
+    if (node.depleted || node.canCollect === false) continue; // não cabe na bolsa / sem ferramenta
     const dist = getDistance(snapshot.playerPosition, node.position);
     if (dist > radius) continue;
     if (dist < bestDist) {

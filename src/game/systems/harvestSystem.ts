@@ -197,6 +197,20 @@ function refuse(
   return { ok: false, harvested: 0, xp: 0, message, missingTool, node, inventory, resourceId: null };
 }
 
+/**
+ * O próximo golpe neste nó CABE na mochila (mesma conta do `harvestNode`: ferramenta × rendimento,
+ * coleta atômica)? Pro piloto não ir até a árvore e ficar parado batendo com a bolsa cheia
+ * (Pedro, 22/10): o "tem espaço" genérico dizia sim, mas as 4 madeiras do golpe não cabiam.
+ */
+export function harvestFits(node: HarvestNodeState, inventory: InventoryState): boolean {
+  const def = HARVEST_NODES[node.kind];
+  if (!def || node.depleted || node.quantity <= 0) return false;
+  const multiplier = getToolMultiplier(def.tool, null, inventory);
+  const perHit = multiplier != null ? Math.ceil(def.yieldPerHit * multiplier) : def.handYield;
+  if (perHit <= 0) return false; // sem a ferramenta e não rende na mão
+  return canAddItem(inventory, def.resourceId, Math.min(perHit, node.quantity));
+}
+
 export function harvestNode(
   node: HarvestNodeState,
   equippedToolItemId: string | null,

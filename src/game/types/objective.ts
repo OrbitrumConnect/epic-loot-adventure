@@ -58,7 +58,9 @@ export type AutoSnapshot = {
   creatures: { id: string; position: Position; behavior: string; hp: number; hostile?: boolean; level?: number }[];
   camps: { id: string; position: Position; radius: number; creatureIds: string[]; cleared: boolean }[];
   /** `kind`/`range` opcionais: nó de colheita novo carrega o alcance da definição. */
-  resources: { id: string; position: Position; depleted: boolean; kind?: string; range?: number }[];
+  /** `canCollect` false = o próximo golpe não cabe na mochila (ou falta a ferramenta) → o piloto
+   *  não vai até ele. Ausente = sem informação (comportamento antigo). */
+  resources: { id: string; position: Position; depleted: boolean; kind?: string; range?: number; canCollect?: boolean }[];
   objectives: ObjectiveQueueState;
   homePosition: Position;
   /** Zona segura do spawn: nenhum hostil entra nela (`pushOutSafeZone`). Dentro

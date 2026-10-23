@@ -53,7 +53,7 @@ import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
-import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
+import { createHarvestNodes, harvestFits, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
@@ -2446,6 +2446,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           depleted: n.depleted,
           kind: n.kind,
           range: HARVEST_NODES[n.kind] ? harvestRangeFor(HARVEST_NODES[n.kind]!.range, state.player.level) : undefined,
+          // Bolsa cheia PRA ESTE recurso (ou sem ferramenta) → o piloto não vai ficar parado nele.
+          canCollect: harvestFits(n, state.player.inventory),
         })),
         ...state.resources.map(r => ({ id: r.id, position: r.position, depleted: r.depleted })),
       ],
