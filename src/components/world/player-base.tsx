@@ -540,7 +540,9 @@ function BuildLayer({
     const p = playerRef.current;
     if (!p) return st.claimCheck;
     const cell = worldToCell({ x: p.position.x, z: p.position.z });
-    const origin: GridCell = { gx: cell.gx - CLAIM_SIZE / 2, gz: cell.gz - CLAIM_SIZE / 2 };
+    // Célula INTEIRA (11 é ímpar: 11/2 = 5,5 dava meia célula e o save era recusado — 23/10).
+    const half = Math.floor(CLAIM_SIZE / 2);
+    const origin: GridCell = { gx: cell.gx - half, gz: cell.gz - half };
     const key = `${origin.gx},${origin.gz}`;
     if (key !== st.originKey || !st.claimCheck) {
       st.originKey = key;
