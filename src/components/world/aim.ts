@@ -11,7 +11,9 @@ import { broadcastPlayerHit, useNet } from '@/net/multiplayer';
 import { creatureAnchors } from './hostile-ai';
 import { markPvpHit, pvpStrike } from './pvp-attack';
 import { bigWallBetween } from './base-collision';
-import { worldBlocksShot, worldShotHitDistance } from './terrain-collision';
+import { glbSurfaceY, worldBlocksShot, worldShotHitDistance } from './terrain-collision';
+import { isHostileBaseOwner, STRIKABLE_REMOTE, strikeRemotePiece } from './remote-base-strike';
+import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { weaponRangeFor } from '@/game/data/weapons';
 
 /** Item na mão (igual `held-weapon.selectedItemId` — sem importar modelos 3D: este módulo carrega
@@ -39,7 +41,8 @@ let aimCamera: THREE.Camera | null = null;
 /** A câmera do mundo se registra aqui (a mira é o centro da tela dela). */
 export function setAimCamera(c: THREE.Camera | null): void { aimCamera = c; }
 
-export type AimTarget = { kind: 'creature'; id: string } | { kind: 'player'; id: string; name: string; x: number; z: number };
+export type AimTarget = { kind: 'creature'; id: string } | { kind: 'player'; id: string; name: string; x: number; z: number }
+  | { kind: 'piece'; ownerId: string; pieceId: string };
 
 /** Ímã da mira: QUASE NADA (Pedro, 22/10 — "igual CS"). Só perdoa ~meio grau fora do corpo. */
 export const AIM_ASSIST_DEG = 0.5;
@@ -94,6 +97,18 @@ export function pickAimTarget(camera: THREE.Camera): AimTarget | null {
     const s = aimScore(origin, dir, p, PLAYER_BODY_R);
     if (s !== null) cands.push({ ang: s, t: { kind: 'player', id: r.id, name: r.name, x: r.x, z: r.z }, p });
   }
+  // Peças da base INIMIGA (muro/torre/porta): o pontinho também acerta (raid em 3ª pessoa).
+  for (const ownerId in net.bases) {
+    if (!isHostileBaseOwner(ownerId)) continue;
+    for (const pc of net.bases[ownerId]?.pieces ?? []) {
+      if (!STRIKABLE_REMOTE.has(pc.kind) || pc.hp <= 0) continue;
+      const ctr = cellCenter(pc.cell);
+      const tower = pc.kind === 'tower';
+      const p = new THREE.Vector3(ctr.x, glbSurfaceY(ctr.x, ctr.z, 0) + (tower ? 2.5 : 1.2), ctr.z);
+      const s = aimScore(origin, dir, p, tower ? 1.2 : 1.1);
+      if (s !== null) cands.push({ ang: s, t: { kind: 'piece', ownerId, pieceId: pc.id }, p });
+    }
+  }
   cands.sort((a, b) => a.ang - b.ang);
   for (const c of cands) if (!shotBlocked(origin, c.p)) return c.t;
   return null;
@@ -127,6 +142,10 @@ export function aimFire(): boolean {
   if (!t) { const p = missPoint(aimCamera); return useGameStore.getState().fireMiss({ x: p.x, z: p.z }, p.y); }
   if (t.kind === 'creature') {
     useGameStore.getState().attack(t.id);
+    return true;
+  }
+  if (t.kind === 'piece') {
+    strikeRemotePiece(t.ownerId, t.pieceId);
     return true;
   }
   if (pvpStrike(t.name, t.x, t.z, 0.6, (raw) => broadcastPlayerHit(t.id, raw))) markPvpHit(t.id);

@@ -325,13 +325,14 @@ export function registerCreatureHitHandler(handler: ((intent: CreatureHitIntent)
 
 /** PvP (fatia 2): manda um golpe num jogador inimigo. O ALVO valida/aplica (não há autoridade
  *  central pra players). Inclui minha postura pra o alvo saber se há inimizade. */
-export function broadcastPlayerHit(targetId: string, damage: number): void {
+export function broadcastPlayerHit(targetId: string, damage: number, fromName?: string): void {
   if (!channel || !useNet.getState().connected || !targetId || !Number.isFinite(damage) || damage <= 0) return;
   const { selfId, selfName, selfSide } = useNet.getState();
   if (targetId === selfId) return;
+  // `fromName` opcional: torre da base ("Torre de X") — o golpe continua sendo DESTE jogador.
   void channel.send({
     type: 'broadcast', event: 'player-hit',
-    payload: { id: selfId, targetId, damage, fromName: selfName, fromSide: selfSide } satisfies PlayerHitIntent,
+    payload: { id: selfId, targetId, damage, fromName: fromName ?? selfName, fromSide: selfSide } satisfies PlayerHitIntent,
   });
 }
 

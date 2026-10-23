@@ -29,8 +29,8 @@ import { GlbBaseWalls } from './glb-base-walls';
 import { GlbTrainingCamps } from './glb-training-camp';
 import { TowerRuntime } from './tower-runtime';
 import { PowerOrbit } from './power-orbit';
-import { useNet, broadcastBase, broadcastBaseHit, MP_ENABLED } from '@/net/multiplayer';
-import { pvpStrike } from './pvp-attack';
+import { useNet, broadcastBase, MP_ENABLED } from '@/net/multiplayer';
+import { strikeRemotePiece } from './remote-base-strike';
 import { useShallow } from 'zustand/react/shallow';
 
 /** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
@@ -232,6 +232,8 @@ function BaseStructures({ c, piecesSource, interactive = true, onPieceClick }: {
             if (e.button === 0) inspect(b, e.instanceId);
           } : onPieceClick ? (e: { button: number; instanceId?: number; stopPropagation: () => void; nativeEvent?: { timeStamp: number } }) => {
             if (e.button !== 0 || e.instanceId === undefined) return;
+            // Mouse travado (3ª pessoa): o clique é da mira central, não do cursor parado.
+            if (document.pointerLockElement) return;
             const id = b.ids[e.instanceId];
             if (!id) return;
             e.stopPropagation();
@@ -879,28 +881,16 @@ export function NetBases({ c }: { c: Palette }) {
 function RemoteBase({ id, c }: { id: string; c: Palette }) {
   const base = useNet((s) => s.bases[id] ?? null);
   if (!base) return null;
+  // PvP fatia 4: só com inimizade (aliado = só a ficha). Mesmo golpe pro muro/porta/telhado e TORRE.
+  const onPieceClick = (pieceId: string, e: { nativeEvent?: { timeStamp: number } }) => {
+    markPointerConsumed(e.nativeEvent);
+    strikeRemotePiece(id, pieceId);
+  };
   return (
     <>
       <BaseStructures c={c} interactive={false} piecesSource={() => useNet.getState().bases[id]?.pieces ?? null}
-        onPieceClick={(pieceId, e) => {
-          markPointerConsumed(e.nativeEvent);
-          const net = useNet.getState();
-          const owner = net.players[id];
-          const piece = net.bases[id]?.pieces.find((p) => p.id === pieceId);
-          if (!piece) return;
-          const ownerName = owner?.name ?? 'Viajante';
-          // PvP fatia 4: só com inimizade. Aliado (ou dono sem pose ainda) = só a ficha.
-          const hostile = owner?.side === 'enemy' || net.selfSide === 'enemy';
-          if (!hostile) {
-            useGameStore.getState().setMessage(`Base de ${ownerName} (aliado) · ${piece.hp}/${piece.maxHp} PV.`);
-            return;
-          }
-          const ctr = cellCenter(piece.cell);
-          if (pvpStrike(`A base de ${ownerName}`, ctr.x, ctr.z, 1.5, (raw) => broadcastBaseHit(id, pieceId, raw))) {
-            useGameStore.getState().setMessage(`🏹 Você atacou a base de ${ownerName}!`);
-          }
-        }} />
-      {USE_GLB_TOWER && <GlbWatchTowers pieces={base.pieces} />}
+        onPieceClick={onPieceClick} />
+      {USE_GLB_TOWER && <GlbWatchTowers pieces={base.pieces} onPieceClick={onPieceClick} />}
       <BaseHouse pieces={base.pieces} remote />
     </>
   );
