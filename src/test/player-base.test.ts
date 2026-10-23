@@ -351,7 +351,8 @@ describe('playerBase · store', () => {
     expect(pb.owner.kind).toBe('player');
 
     // Custo das peças dobrou (BASE_COST_MULT): garante material pras 4 paredes.
-    useGameStore.setState(st => ({ player: { ...st.player, inventory: RICH } }));
+    // armazém vazio → a bolsa paga (armazém compartilhado tem teste próprio)
+    useGameStore.setState(st => ({ player: { ...st.player, inventory: RICH }, base: { ...st.base, resources: { wood: 0, stone: 0, food: 0, essence: 0 } } }));
 
     const preview: BuildPreview = previewLine(
       cellCenter(pb.origin), cellCenter({ gx: pb.origin.gx + 3, gz: pb.origin.gz }),

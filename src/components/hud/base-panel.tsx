@@ -7,6 +7,7 @@ import { ITEMS } from '@/game/data/items';
 import { UNITS } from '@/game/data/units';
 import { UnitSprite } from '@/components/hud/unit-sprite';
 import { getItemCount } from '@/game/systems/inventorySystem';
+import { combineStorage } from '@/game/systems/baseStorageSystem';
 import { getQueueCapacity, getRemainingMs, getTroopCount, getUpgradeBlockReason } from '@/game/systems/baseSystem';
 import { nextWall } from '@/game/systems/trainingCampSystem';
 import { basePieceCost } from '@/game/systems/baseTypeSystem';
@@ -73,7 +74,11 @@ function useNow(enabled: boolean): number {
 export function BasePanel({ onClose }: { onClose: () => void }) {
   // Assinaturas estreitas: a referência de `playerBase` só muda quando a base muda.
   const base = useGameStore(s => s.playerBase);
-  const inventory = useGameStore(s => s.player.inventory);
+  const bag = useGameStore(s => s.player.inventory);
+  const storage = useGameStore(s => s.base.resources);
+  // Armazém compartilhado (23/10): o "disponível"/"falta" conta bolsa + armazém da cidade — é o
+  // que as construções da base cobram (armazém primeiro). Sem armazém novo na tela (Pedro).
+  const inventory = useMemo(() => combineStorage(bag, storage), [bag, storage]);
   const upgradeTower = useGameStore(s => s.upgradeTower);
   const setMode = useGameStore(s => s.setMode);
   const setPanel = useGameStore(s => s.setPanel);

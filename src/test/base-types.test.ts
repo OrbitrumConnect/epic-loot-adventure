@@ -60,7 +60,8 @@ describe('tipos de base', () => {
   it('entrega automática usa os mesmos bônus e cobra cada peça uma vez', () => {
     for (const type of ['fortress', 'workshop'] as const) {
       const base = freshBase(type);
-      useGameStore.setState({ playerBase: base, player: { ...initial.player, inventory: rich() } });
+      // armazém vazio → a bolsa paga (armazém compartilhado tem teste próprio)
+      useGameStore.setState({ playerBase: base, base: { ...initial.base, resources: { wood: 0, stone: 0, food: 0, essence: 0 } }, player: { ...initial.player, inventory: rich() } });
       useGameStore.getState().deliverToBase();
       const state = useGameStore.getState();
       const layout = baseLv1Layout(origin, 11);

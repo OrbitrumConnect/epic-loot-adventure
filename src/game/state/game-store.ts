@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import type {
   PlayerState, CreatureState, ResourceNode, DeathBag, UIState, BaseState, BaseResult, BuildingId,
   CampState, ObjectiveQueueState, ObjectiveKind, AutoMode, AutoSnapshot, AutoIntent, Position,
-  HarvestNodeState, FeedbackEvent,
+  HarvestNodeState, FeedbackEvent, InventoryState,
 } from '../types';
+import { combineStorage, hordeStorageLoss, splitSpend } from '../systems/baseStorageSystem';
 import { ITEMS } from '../data/items';
 import { slotForItem, ringSlotForEquipment, type EquipmentKey } from '../systems/equipmentSlots';
 import { weaponFor, weaponRangeFor } from '../data/weapons';
@@ -259,6 +260,22 @@ function syncCarry(player: PlayerState): PlayerState {
   const maxWeight = effectiveMaxWeight(player);
   if (player.inventory.maxWeight === maxWeight) return player;
   return { ...player, inventory: { ...player.inventory, maxWeight } };
+}
+
+/**
+ * Caixa único das construções da BASE (armazém compartilhado — `baseStorageSystem`): roda a
+ * cobrança de sempre numa bolsa virtual (bolsa + armazém) e devolve a bolsa e o armazém já
+ * descontados (armazém primeiro). `base` = cidade já com a produção até agora.
+ */
+function payWithBaseStorage<T extends { inventory: InventoryState }>(
+  s: { base: BaseState; player: PlayerState },
+  run: (combined: InventoryState, base: BaseState) => T,
+): { result: T; inventory: InventoryState; resources: BaseState['resources']; base: BaseState } {
+  const base = resolveBase(s.base, Date.now());
+  const combined = combineStorage(s.player.inventory, base.resources);
+  const result = run(combined, base);
+  const paid = splitSpend(s.player.inventory, base.resources, combined, result.inventory);
+  return { result, inventory: paid.inventory, resources: paid.resources, base };
 }
 
 /** Caminho comum de morte para armas, especiais e defesa da base. */
@@ -640,8 +657,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   upgradeTower: (pieceId) => {
     const state = get();
     if (!state.playerBase) return;
-    const result = upgradePlayerTower(state.playerBase, pieceId, state.player.inventory);
-    set({ playerBase: result.base, player: result.ok ? { ...state.player, inventory: result.inventory } : state.player,
+    const pb = state.playerBase;
+    const pay = payWithBaseStorage(state, (inv) => upgradePlayerTower(pb, pieceId, inv));
+    const result = pay.result;
+    set({ playerBase: result.base,
+      ...(result.ok ? { player: { ...state.player, inventory: pay.inventory }, base: { ...pay.base, resources: pay.resources } } : {}),
       ui: { ...state.ui, message: result.message } });
   },
 
@@ -1664,15 +1684,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       set({ ui: { ...s.ui, message: `Casa de pedra: precisa ser nível ${LEVEL}.` } });
       return;
     }
-    const inv = s.player.inventory;
-    const w = getItemCount(inv, 'wood'), st = getItemCount(inv, 'stone');
-    if (w < WOOD || st < STONE) {
-      set({ ui: { ...s.ui, message: `Falta material: ${WOOD} madeira + ${STONE} pedra (tem ${w}/${st}).` } });
+    // Armazém compartilhado: paga com armazém + bolsa (armazém primeiro).
+    const pay = payWithBaseStorage(s, (inv) => {
+      const w = getItemCount(inv, 'wood'), st = getItemCount(inv, 'stone');
+      if (w < WOOD || st < STONE) return { inventory: inv, ok: false, w, st };
+      return { inventory: removeItem(removeItem(inv, 'wood', WOOD), 'stone', STONE), ok: true, w, st };
+    });
+    if (!pay.result.ok) {
+      set({ ui: { ...s.ui, message: `Falta material: ${WOOD} madeira + ${STONE} pedra (armazém + bolsa: ${pay.result.w}/${pay.result.st}).` } });
       return;
     }
-    let nextInv = removeItem(inv, 'wood', WOOD);
-    nextInv = removeItem(nextInv, 'stone', STONE);
-    set({ baseEvolved: true, stats: { ...s.stats, basesEvolved: s.stats.basesEvolved + 1 }, player: syncCarry({ ...s.player, inventory: nextInv }), ui: { ...s.ui, message: 'Casa evoluída para PEDRA! 🏰' } });
+    set({ baseEvolved: true, base: { ...pay.base, resources: pay.resources }, stats: { ...s.stats, basesEvolved: s.stats.basesEvolved + 1 }, player: syncCarry({ ...s.player, inventory: pay.inventory }), ui: { ...s.ui, message: 'Casa evoluída para PEDRA! 🏰' } });
   },
 
   evolveBaseToMetal: () => {
@@ -1691,15 +1713,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       set({ ui: { ...s.ui, message: `Casa de metal: precisa ser acima do nível ${LEVEL}.` } });
       return;
     }
-    const inv = s.player.inventory;
-    const w = getItemCount(inv, 'wood'), st = getItemCount(inv, 'stone');
-    if (w < WOOD || st < STONE) {
-      set({ ui: { ...s.ui, message: `Falta material: ${WOOD} madeira + ${STONE} pedra (tem ${w}/${st}).` } });
+    // Armazém compartilhado: paga com armazém + bolsa (armazém primeiro).
+    const pay = payWithBaseStorage(s, (inv) => {
+      const w = getItemCount(inv, 'wood'), st = getItemCount(inv, 'stone');
+      if (w < WOOD || st < STONE) return { inventory: inv, ok: false, w, st };
+      return { inventory: removeItem(removeItem(inv, 'wood', WOOD), 'stone', STONE), ok: true, w, st };
+    });
+    if (!pay.result.ok) {
+      set({ ui: { ...s.ui, message: `Falta material: ${WOOD} madeira + ${STONE} pedra (armazém + bolsa: ${pay.result.w}/${pay.result.st}).` } });
       return;
     }
-    let nextInv = removeItem(inv, 'wood', WOOD);
-    nextInv = removeItem(nextInv, 'stone', STONE);
-    set({ baseMetal: true, stats: { ...s.stats, basesEvolved: s.stats.basesEvolved + 1 }, player: syncCarry({ ...s.player, inventory: nextInv }), ui: { ...s.ui, message: 'Casa evoluída para METAL! ⚙️' } });
+    set({ baseMetal: true, base: { ...pay.base, resources: pay.resources }, stats: { ...s.stats, basesEvolved: s.stats.basesEvolved + 1 }, player: syncCarry({ ...s.player, inventory: pay.inventory }), ui: { ...s.ui, message: 'Casa evoluída para METAL! ⚙️' } });
   },
 
   enqueueUnit: (instanceId, unitId) => {
@@ -1749,14 +1773,24 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   constructTrainingCamp: () => {
     const s = get();
-    const result = buildTrainingCamp(s.base, s.playerBase, s.player.inventory, Date.now());
-    set({ base: result.base, playerBase: result.playerBase, player: { ...s.player, inventory: result.inventory }, ui: { ...s.ui, message: result.message } });
+    // 2 passos: o prédio Campo de Guerra (cidade) já cobra do armazém por conta própria; a peça física
+    // paga com o que SOBROU no armazém + bolsa (sem contar a mesma madeira 2×).
+    const now = Date.now();
+    const city0 = resolveBase(s.base, now);
+    const dry = buildTrainingCamp(city0, s.playerBase, combineStorage(s.player.inventory, city0.resources), now);
+    if (!dry.ok) { set({ ui: { ...s.ui, message: dry.message } }); return; }
+    const combined = combineStorage(s.player.inventory, dry.base.resources);
+    const result = buildTrainingCamp(city0, s.playerBase, combined, now);
+    if (!result.ok) { set({ ui: { ...s.ui, message: result.message } }); return; }
+    const paid = splitSpend(s.player.inventory, dry.base.resources, combined, result.inventory);
+    set({ base: { ...result.base, resources: paid.resources }, playerBase: result.playerBase, player: { ...s.player, inventory: paid.inventory }, ui: { ...s.ui, message: result.message } });
   },
 
   constructNextWall: () => {
     const s = get();
-    const result = buildNextWall(s.playerBase, s.player.inventory, Date.now());
-    set({ playerBase: result.playerBase, player: { ...s.player, inventory: result.inventory }, ui: { ...s.ui, message: result.message } });
+    const pay = payWithBaseStorage(s, (inv) => buildNextWall(s.playerBase, inv, Date.now()));
+    const result = pay.result;
+    set({ playerBase: result.playerBase, ...(result.ok ? { base: { ...pay.base, resources: pay.resources } } : {}), player: { ...s.player, inventory: pay.inventory }, ui: { ...s.ui, message: result.message } });
   },
 
   trainTroop: (unitId) => {
@@ -1778,7 +1812,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const layout = baseLv1Layout(pb.origin, pb.size);
     const have = new Set(pb.pieces.map(p => baseCellKey(p.cell)));
     let base = pb;
-    let inv = s.player.inventory;
+    // Armazém compartilhado: entrega com armazém + bolsa (armazém primeiro).
+    const city = resolveBase(s.base, Date.now());
+    const combined = combineStorage(s.player.inventory, city.resources);
+    let inv = combined;
     let placed = 0;
     // Entrega o que der: cada peça ainda não erguida é cobrada da bolsa e colocada.
     for (const piece of layout) {
@@ -1797,20 +1834,24 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       ? (prog.pct >= 100 ? 'Base Nível 1 concluída! 🏯 O Clash abriu.' : `Construção: ${prog.pct}% (+${placed} peças). Farme mais madeira/pedra.`)
       : (prog.pct >= 100 ? 'A base já está no Nível 1.' : 'Sem material. Farme madeira/pedra e volte pra entregar.');
     console.log('[BASE] construir (martelo): +' + placed + ' peças · progresso ' + prog.pct + '% · ' + message);
-    set({ playerBase: base, player: { ...s.player, inventory: inv }, ui: { ...s.ui, message } });
+    const paid = splitSpend(s.player.inventory, city.resources, combined, inv);
+    set({ playerBase: base, base: { ...city, resources: paid.resources }, player: { ...s.player, inventory: paid.inventory }, ui: { ...s.ui, message } });
   },
 
   placeBasePieces: (preview, tier = 1) => {
     const state = get();
     if (!state.playerBase) return;
-    const result = placePlayerPieces(state.playerBase, preview, state.player.inventory, Date.now(), tier);
+    const pb = state.playerBase;
+    const pay = payWithBaseStorage(state, (inv) => placePlayerPieces(pb, preview, inv, Date.now(), tier));
+    const result = pay.result;
     if (!result.ok) {
       set({ ui: { ...state.ui, message: result.message } });
       return;
     }
     set({
       playerBase: advanceStageFully(result.base),
-      player: { ...state.player, inventory: result.inventory },
+      base: { ...pay.base, resources: pay.resources },
+      player: { ...state.player, inventory: pay.inventory },
       ui: { ...state.ui, message: result.message },
     });
   },
@@ -1865,10 +1906,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         },
       });
       const penaltyMsg = lostLevel < state.player.level
-        ? `${message} Você perdeu 5 níveis (${state.player.level}→${lostLevel}) e o farm; armas/armaduras/raros ficaram. Reconstrua a base.`
-        : `${message} Você perdeu o farm; armas/armaduras/raros ficaram. Reconstrua a base.`;
+        ? `${message} Você perdeu 5 níveis (${state.player.level}→${lostLevel}), o farm e 25% do armazém; armas/armaduras/raros ficaram. Reconstrua a base.`
+        : `${message} Você perdeu o farm e 25% do armazém; armas/armaduras/raros ficaram. Reconstrua a base.`;
+      // Armazém compartilhado (Pedro, 23/10): base caída na HORDA perde 25% do armazém (raid de jogador = 35%, futuro).
+      const cityAfterFall = resolveBase(state.base, Date.now());
       set({
         player: penalized,
+        base: { ...cityAfterFall, resources: hordeStorageLoss(cityAfterFall.resources) },
         stats: { ...state.stats, basesLost: state.stats.basesLost + 1 },
         playerBase: null,
         baseEvolved: false, // base some inteira: evolução volta pra madeira (Pedro)

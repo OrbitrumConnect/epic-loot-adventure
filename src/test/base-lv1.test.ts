@@ -39,6 +39,8 @@ describe('deliverToBase (construção por recurso)', () => {
   beforeEach(() => {
     useGameStore.setState(s => ({
       playerBase: baseAt(),
+      // armazém da cidade vazio → a BOLSA paga (regra do armazém compartilhado em `armazem-compartilhado.test`)
+      base: { ...s.base, resources: { wood: 0, stone: 0, food: 0, essence: 0 } },
       player: { ...s.player, inventory: createInventory([{ itemId: 'wood', quantity: 500 }, { itemId: 'stone', quantity: 500 }]) },
     }));
   });
