@@ -2025,6 +2025,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   setAutoMode: (mode) => {
     set(s => ({
       objectives: setQueueMode(s.objectives, mode),
+      // Ligar/desligar o automático ZERA a memória do piloto (alvo "grudado"). Antes: liga no ponto
+      // A, anda no manual até B, liga de novo → voltava pro bicho de A (vivo a até 63 m). Pedro, 23/10.
+      pilotLastIntent: null,
       ui: {
         ...s.ui,
         message: mode === 'idle' ? 'Piloto automático ligado.' : 'Controle manual retomado.',
