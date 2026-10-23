@@ -7,6 +7,17 @@ import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
 import { retargetTwist } from './mixamo-retarget';
+import {
+  HERO_EXTRA_CLIPS, HIT_CLIPS, HIT_REACT_GAP_S, SIDE_SUSTAIN_S, SLASH_COMBO, localMoveDir, moveClipFor,
+  upperBodyOnly, type HeroExtraClip, type MoveDir,
+} from './hero-moves';
+
+const EXTRA_KEYS = Object.keys(HERO_EXTRA_CLIPS) as HeroExtraClip[];
+const EXTRA_URLS = EXTRA_KEYS.map((k) => HERO_EXTRA_CLIPS[k]);
+/** Peso das camadas "só metade de cima" sobre a locomoção (soma normalizada no mixer):
+ *  golpe 1,5 → ~60% (um tranco, não trava); gesto de poder 3 → ~75%. */
+const HIT_WEIGHT = 1.5;
+const CAST_WEIGHT = 3;
 
 /**
  * Herói com rig **Mixamo** (ex.: Survivor Red do Meshy — que rigga via Mixamo).
@@ -38,6 +49,8 @@ const ATTACK_SPEED = 1.5;
  *  (perf: numa horda, o maior ganho — longe ninguém nota). */
 const ACTIVE_D2 = 40 * 40;
 const tmpHeroV = new THREE.Vector3();
+const tmpQuat = new THREE.Quaternion();
+const tmpEuler = new THREE.Euler();
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
@@ -115,8 +128,11 @@ export function GlbHeroMixamo({
   gripPos = [0.04, 0.04, 0.08],
   gripRot = [0, Math.PI / 2, Math.PI / 2],
   heldItemOf,
+  hpOf,
   twistFix,
 }: {
+  /** Vida de OUTRO jogador (online) p/ a reação de golpe; sem ela, a vida do jogador local. */
+  hpOf?: () => number;
   actionRef: React.MutableRefObject<HeroAction>;
   speedRef?: React.MutableRefObject<number>;
   weapon?: ReactNode;
@@ -152,6 +168,8 @@ export function GlbHeroMixamo({
   const attackBowG = useGLTF(CLIP_URL['attackBow']!);
   const attackGunG = useGLTF(CLIP_URL['attackGun']!);
   const jumpG = useGLTF(CLIP_URL['jump']!);
+  // Extras do jogador (strafe/costas, golpe, gesto de poder, combo de espada) — ~700 KB, 1 vez.
+  const extraG = useGLTF(EXTRA_URLS) as unknown as { animations: THREE.AnimationClip[]; scene: THREE.Object3D }[];
 
   const cloned = useMemo(() => {
     const c = skeletonClone(scene);
@@ -214,9 +232,16 @@ export function GlbHeroMixamo({
       if (fixTwist) a = retargetTwist(a, g.scene, cloned, standFixX);
       return stripRootMotion(a, fixHipsY);
     };
-    return [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump')]
-      .filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, boneNames, cloned, charUrl, standFixX, twistFix]);
+    const base = [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump')];
+    // Só JOGADORES (rangedAttack) ganham os extras; raiders ficam exatamente como antes.
+    const extra = rangedAttack
+      ? EXTRA_KEYS.map((k, i) => {
+          const c = mk(extraG[i]!, k);
+          return c && (k === 'cast' || (HIT_CLIPS as string[]).includes(k)) ? upperBodyOnly(c) : c;
+        })
+      : [];
+    return [...base, ...extra].filter((c): c is THREE.AnimationClip => c != null);
+  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix]);
 
   const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
@@ -265,7 +290,21 @@ export function GlbHeroMixamo({
     }
   }, [actions]);
 
-  useFrame(() => {
+  // Extras (jogadores): clip de locomoção em uso, combo de espada, direção do movimento
+  // (velocidade medida pela própria posição — vale igual pro local e pro remoto) e camadas
+  // "metade de cima" (golpe / gesto de poder).
+  const playingLoco = useRef<string | null>(null);
+  const combo = useRef(0);
+  const lastPos = useRef<THREE.Vector3 | null>(null);
+  const vel = useRef({ x: 0, z: 0 });
+  const sideDir = useRef<{ dir: MoveDir; t: number }>({ dir: 'fwd', t: 0 });
+  const overlay = useRef<string | null>(null);
+  const lastHp = useRef<number | null>(null);
+  const lastHitAt = useRef(-Infinity);
+  const lastCastSeen = useRef<number | null>(null);
+  const clock = useRef(0);
+
+  useFrame((_, rawDt) => {
     // PERF: longe do player → pausa o mixer + tira sombra e nem processa o estado.
     const g = inner.current;
     if (g) {
@@ -281,10 +320,65 @@ export function GlbHeroMixamo({
     }
 
     const want = actionRef.current;
+    const dt = Math.min(rawDt, 0.1);
+    clock.current += dt;
+    const extras = rangedAttack && !!actions['slash1'];
+
+    // Direção do movimento em relação a pra onde ele OLHA (mirando ele anda de lado/de costas).
+    // Só troca depois de SIDE_SUSTAIN_S — a virada normal do corpo não pisca strafe.
+    if (extras && g && dt > 0) {
+      g.getWorldPosition(tmpHeroV);
+      if (!lastPos.current) lastPos.current = tmpHeroV.clone();
+      const k = Math.min(1, dt * 10);
+      vel.current.x += ((tmpHeroV.x - lastPos.current.x) / dt - vel.current.x) * k;
+      vel.current.z += ((tmpHeroV.z - lastPos.current.z) / dt - vel.current.z) * k;
+      lastPos.current.copy(tmpHeroV);
+      const yaw = tmpEuler.setFromQuaternion(g.getWorldQuaternion(tmpQuat), 'YXZ').y;
+      const raw = Math.hypot(vel.current.x, vel.current.z) > 0.3 ? localMoveDir(vel.current.x, vel.current.z, yaw) : 'fwd';
+      if (raw === 'fwd') sideDir.current = { dir: 'fwd', t: 0 };
+      else if (raw === sideDir.current.dir) sideDir.current.t += dt;
+      else sideDir.current = { dir: raw, t: 0 };
+    }
+    const moveDir: MoveDir = sideDir.current.t >= SIDE_SUSTAIN_S ? sideDir.current.dir : 'fwd';
+
+    // Camadas "metade de cima": GESTO ao lançar poder (local) e TRANCO ao tomar golpe.
+    if (extras) {
+      const st = useGameStore.getState();
+      const ov = overlay.current ? actions[overlay.current] : null;
+      if (ov && (!ov.isRunning() || ov.time >= ov.getClip().duration - 0.2 || current.current === 'attack')) {
+        ov.fadeOut(0.2);
+        overlay.current = null;
+      }
+      const playOverlay = (name: string, w: number) => {
+        const a = actions[name];
+        if (!a) return;
+        if (overlay.current && overlay.current !== name) actions[overlay.current]?.fadeOut(0.1);
+        a.reset();
+        a.setLoop(THREE.LoopOnce, 1);
+        a.clampWhenFinished = false;
+        a.setEffectiveWeight(w);
+        a.fadeIn(0.08).play();
+        overlay.current = name;
+      };
+      if (!heldItemOf) {
+        const castAt = Math.max(st.lastArrowRainAt, ...Object.values(st.heroPowers.lastAt));
+        if (lastCastSeen.current !== null && castAt > lastCastSeen.current && current.current !== 'attack') playOverlay('cast', CAST_WEIGHT);
+        lastCastSeen.current = castAt;
+      }
+      const hp = hpOf ? hpOf() : st.player.hp;
+      if (lastHp.current !== null && hp < lastHp.current && hp > 0
+        && clock.current - lastHitAt.current >= HIT_REACT_GAP_S
+        && current.current !== 'attack' && overlay.current !== 'cast') {
+        lastHitAt.current = clock.current;
+        playOverlay(HIT_CLIPS[Math.floor(Math.random() * HIT_CLIPS.length)]!, HIT_WEIGHT);
+      }
+      lastHp.current = hp;
+    }
 
     // Ataque POR ARMA (só o player): arma de longe → anim de arco; mão → combo.
     // Raiders (rangedAttack=false) sempre usam o combo. 'playingAtk' = clip em curso.
-    let atkName = 'attack';
+    // Jogador com espada/mão: COMBO de 3 cortes curtos (Sword&Shield) em vez do combo longo.
+    let atkName = extras ? SLASH_COMBO[combo.current % SLASH_COMBO.length]! : 'attack';
     if (forceBow && actions['attackBow']) {
       atkName = 'attackBow'; // arqueiro/xamã: só ataca de longe
     } else if (rangedAttack && actions['attackBow']) {
@@ -295,7 +389,7 @@ export function GlbHeroMixamo({
 
     // Clip que está REALMENTE tocando num estado (attack usa o playingAtk).
     const clipOf = (st: HeroAction | null): string | null =>
-      st === 'attack' ? playingAtk.current : st;
+      st === 'attack' ? playingAtk.current : (st === 'walk' || st === 'run') && playingLoco.current ? playingLoco.current : st;
     const curClipName = clipOf(current.current);
     const playing = curClipName ? actions[curClipName] : null;
     const playDur = playing?.getClip().duration ?? 0;
@@ -317,6 +411,8 @@ export function GlbHeroMixamo({
         atk.fadeIn(0.08).play();
         current.current = 'attack';
         playingAtk.current = atkName;
+        playingLoco.current = null;
+        if ((SLASH_COMBO as string[]).includes(atkName)) combo.current++;
       }
       return;
     }
@@ -331,14 +427,22 @@ export function GlbHeroMixamo({
         jmp.clampWhenFinished = true;
         jmp.fadeIn(0.08).play();
         current.current = 'jump';
+        playingLoco.current = null;
       }
       return;
     }
 
     // Idle / Walk / Run (loop). Re-dispara ao mudar de estado ou se o loop parou.
-    const nextName = actions[want] ? want : 'idle';
+    // Andando de LADO/de COSTAS (jogador mirando): clip de strafe/costas da arma na mão.
+    let nextName: string = actions[want] ? want : 'idle';
+    let directional = false;
+    if (extras && (want === 'walk' || want === 'run') && moveDir !== 'fwd') {
+      const kind = heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState()));
+      const mc = moveClipFor(moveDir, kind === 'bow' ? 'bow' : 'other', want === 'run');
+      if (mc && actions[mc]) { nextName = mc; directional = true; }
+    }
     const curRunning = curClipName ? !!actions[curClipName]?.isRunning() : false;
-    if (actions[nextName] && (want !== current.current || !curRunning)) {
+    if (actions[nextName] && (want !== current.current || !curRunning || curClipName !== nextName)) {
       if (curClipName && curClipName !== nextName && actions[curClipName]) actions[curClipName]!.fadeOut(0.18);
       const a = actions[nextName]!;
       a.reset();
@@ -347,13 +451,15 @@ export function GlbHeroMixamo({
       a.clampWhenFinished = false;
       a.fadeIn(0.15).play();
       current.current = want;
+      playingLoco.current = want === 'walk' || want === 'run' ? nextName : null;
     }
     // Cadência do walk/run acompanha a velocidade real (anti foot-sliding).
     // Run usa um sync MENOR (passada maior → não "patina" o pé).
-    if ((current.current === 'walk' || current.current === 'run') && speedRef) {
-      const a = actions[current.current];
-      const sync = current.current === 'run' ? runSync : walkSync;
-      if (a) a.timeScale = THREE.MathUtils.clamp(speedRef.current * sync, 0.4, 3.0);
+    if ((current.current === 'walk' || current.current === 'run')) {
+      const a = actions[clipOf(current.current) ?? current.current];
+      const spd = speedRef ? speedRef.current : Math.hypot(vel.current.x, vel.current.z);
+      if (a && directional) a.timeScale = THREE.MathUtils.clamp(spd / (current.current === 'run' ? 4.3 : 1.8), 0.6, 1.5);
+      else if (a && speedRef) a.timeScale = THREE.MathUtils.clamp(spd * (current.current === 'run' ? runSync : walkSync), 0.4, 3.0);
     }
   });
 
@@ -419,3 +525,4 @@ useGLTF.preload(CLIP_URL['attack']!);
 useGLTF.preload(CLIP_URL['attackBow']!);
 useGLTF.preload(CLIP_URL['attackGun']!);
 useGLTF.preload(CLIP_URL['jump']!);
+useGLTF.preload(EXTRA_URLS);

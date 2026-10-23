@@ -125,6 +125,7 @@ function RemotePlayer({ id }: { id: string }) {
     }}>
       <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack
         heldItemOf={() => useNet.getState().players[id]?.w ?? null}
+        hpOf={() => useNet.getState().players[id]?.hp ?? 0}
         weapon={<RemoteHeld id={id} />} />
       {/* Anel vermelho sob INIMIGOS (PvP). Fica invisível pra aliado; toggle no useFrame. */}
       <mesh ref={enemyRing} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} visible={false} raycast={noRaycast}>

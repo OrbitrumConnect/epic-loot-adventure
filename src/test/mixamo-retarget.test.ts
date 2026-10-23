@@ -109,7 +109,10 @@ describe('inimigos Mixamo (standFix 90°): nunca pior que hoje (GLB reais)', () 
 });
 
 describe('herói: animação Mixamo sem "embrulhar" a cintura (GLB reais)', () => {
-  for (const name of ['idle', 'walk', 'run', 'attack', 'attack_gun']) {
+  for (const name of ['idle', 'walk', 'run', 'attack', 'attack_gun',
+    // extras do jogador (22/10): strafe/costas, golpe, gesto de poder, combo de espada
+    'move_gun_left', 'move_gun_right', 'move_gun_back', 'move_gun_back_run', 'move_bow_left', 'move_bow_right',
+    'move_bow_back', 'hit_1', 'hit_2', 'cast', 'slash_1', 'slash_2', 'slash_3']) {
     it(`${name}: juntas giram como na animação original e os membros apontam igual`, () => {
       const cg = glb(`public/models/red/${name}.glb`);
       const hero = glb('public/models/red/hero-preview.glb');
