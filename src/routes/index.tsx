@@ -630,6 +630,13 @@ function Index() {
             }}>
               <Skull style={{ width: 64, height: 64, color: '#ef4444', marginBottom: 16 }} />
               <h2 style={{ fontSize: 32, fontWeight: 700, margin: 0, color: '#ef4444', textShadow: '0 0 20px rgba(239,68,68,0.5)' }}>Você morreu!</h2>
+              {/* Quem te matou (Pedro, 22/10): outro jogador em destaque; bicho em texto simples. */}
+              {ui.deathBy && (
+                <p style={{ fontSize: ui.deathBy.pvp ? 22 : 16, marginTop: 10, fontWeight: ui.deathBy.pvp ? 700 : 400, opacity: 0.95 }}>
+                  {ui.deathBy.pvp ? '⚔️ ' : ''}
+                  <span style={{ color: ui.deathBy.pvp ? '#fca5a5' : '#fde68a' }}>{ui.deathBy.name}</span> te matou
+                </p>
+              )}
               <p style={{ fontSize: 18, marginTop: 12, opacity: 0.9 }}>
                 {deathCountdown > 0
                   ? <>Renascendo em <strong style={{ fontSize: 28, color: '#fbbf24' }}>{deathCountdown}s</strong></>

@@ -39,7 +39,11 @@ const number = z.number().finite().nonnegative();
 const integer = number.int();
 const id = z.string().min(1).max(160);
 const position = z.object({ x: z.number().finite(), z: z.number().finite() });
-const cell = z.object({ gx: z.number().int(), gz: z.number().int() });
+// Célula da base: aceita meia célula (ex.: -35.5). O terreno tem 11 células (ímpar) e a
+// reivindicação centrava com 11/2 = 5,5 → bases nasciam em .5 e o save INTEIRO era recusado ao
+// carregar (Pedro nv 38 voltou pro nv 1 na tela em 23/10; a conta ficou protegida). Não arredonda:
+// a base carrega exatamente onde estava.
+const cell = z.object({ gx: z.number().finite(), gz: z.number().finite() });
 const item = id.refine(value => Object.hasOwn(ITEMS, value)).nullable();
 const inventory = z.object({
   slots: z.array(z.object({ itemId: item, quantity: integer })).max(1000),

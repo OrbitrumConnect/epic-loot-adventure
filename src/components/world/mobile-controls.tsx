@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronsUp, Crosshair, Swords, Footprints } from 'lucide-react';
 import { aimFire, setAiming, useAim } from './aim';
 import { clearVirtualMove, setVirtualMove } from './virtual-input';
+import { useGameStore } from '@/game/state/game-store';
 
 const RADIUS = 54; // px: distância máxima do knob ao centro (satura em magnitude 1).
 
@@ -38,6 +39,12 @@ export function MobileControls({ onAttack, canAim = false }: { onAttack: () => v
     if (len > RADIUS) { dx = (dx / len) * RADIUS; dy = (dy / len) * RADIUS; }
     setStick({ bx: o.x, by: o.y, kx: o.x + dx, ky: o.y + dy });
     setVirtualMove(dx / RADIUS, dy / RADIUS); // x: direita+ (D), z: baixo+ (S)
+    // Joystick = assumir o controle, IGUAL ao WASD no PC (Pedro, 23/10): antes o automático seguia
+    // ligado por baixo e, ao soltar o dedo, o piloto voltava pro alvo do lugar antigo.
+    if (len > 8) {
+      const st = useGameStore.getState();
+      if (st.objectives.mode === 'idle') st.setAutoMode('manual');
+    }
   };
   const end = (e: React.PointerEvent) => {
     if (origin.current?.id !== e.pointerId) return;

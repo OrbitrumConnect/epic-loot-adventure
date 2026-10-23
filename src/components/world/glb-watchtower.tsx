@@ -1,4 +1,5 @@
 import { useGLTF } from '@react-three/drei';
+import type { ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
@@ -48,7 +49,7 @@ export function WatchtowerModel({ height = 5.3 }: { height?: number }) {
 }
 
 /** Uma instância estável por peça: dano/recarga não recriam GLBs nem materiais. */
-function LeveledTower({ piece }: { piece: BasePiece }) {
+function LeveledTower({ piece, onClick }: { piece: BasePiece; onClick?: ((pieceId: string, e: ThreeEvent<PointerEvent>) => void) | undefined }) {
   useTerrainVersion(); // re-assenta quando o chão GLB do mapa termina de carregar
   const { scene } = useGLTF(LOUD_URL);
   const ornaments = useGLTF(ORNAMENT_URLS);
@@ -105,18 +106,28 @@ function LeveledTower({ piece }: { piece: BasePiece }) {
   const ctr = cellCenter(piece.cell);
   return <primitive object={model} dispose={null}
     position={[ctr.x, pieceGroundY(ctr.x, ctr.z), ctr.z]}
-    rotation={[0, (piece.rotation * Math.PI) / 180, 0]} />;
+    rotation={[0, (piece.rotation * Math.PI) / 180, 0]}
+    {...(onClick ? { onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+      if (e.button !== 0) return;
+      // Mouse travado (3ª pessoa): o clique é da mira central, não do cursor parado.
+      if (typeof document !== 'undefined' && document.pointerLockElement) return;
+      e.stopPropagation();
+      onClick(piece.id, e);
+    } } : {})} />;
 }
 
-/** Torres das 4 pontas da BASE = loudspeaker (torre de alarme/defesa que atira). */
-export function GlbWatchTowers({ pieces: remotePieces }: { pieces?: BasePiece[] } = {}) {
+/** Torres das 4 pontas da BASE = loudspeaker (torre de alarme/defesa que atira).
+ *  `onPieceClick` só na base REMOTA (atacar torre inimiga no PvP); a local segue sem clique. */
+export function GlbWatchTowers({ pieces: remotePieces, onPieceClick }: {
+  pieces?: BasePiece[]; onPieceClick?: (pieceId: string, e: ThreeEvent<PointerEvent>) => void;
+} = {}) {
   const localPieces = useGameStore((s) => s.playerBase?.pieces);
   const pieces = remotePieces ?? localPieces;
   const towers = useMemo(() => (pieces ?? []).filter((p) => p.kind === 'tower'), [pieces]);
   if (towers.length === 0) return null;
   return (
     <>
-      {towers.map(p => <LeveledTower key={p.id} piece={p} />)}
+      {towers.map(p => <LeveledTower key={p.id} piece={p} onClick={onPieceClick} />)}
     </>
   );
 }

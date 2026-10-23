@@ -22,6 +22,7 @@ import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSaf
 import { glbSurfaceY } from './terrain-collision';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
+import { isBuildActive } from './build-mode';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece, nearestPieceIn } from './base-targets';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
@@ -29,12 +30,16 @@ import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTarget
 import { takeKnockback } from '@/game/systems/knockbackSystem';
 
 /**
- * Clique num inimigo: esquerdo seleciona, Shift+esquerdo enfileira uma caçada.
+ * Clique num inimigo: esquerdo seleciona E JÁ ATACA (no alcance — Pedro, 22/10: antes só
+ * selecionava e precisava de um 2º clique), Shift+esquerdo enfileira uma caçada.
  * Marca o clique como consumido para o atalho de ataque não disparar também.
+ * Mouse TRAVADO (3ª pessoa/câmera livre): o cursor é invisível e fica parado — o clique é da
+ * MIRA central (`aimFire`), então aqui não seleciona nem consome.
  */
 export function useEnemyClick(creatureId: string, name: string) {
   return useCallback((e: ThreeEvent<PointerEvent>) => {
     if (e.button !== 0) return;
+    if (typeof document !== 'undefined' && document.pointerLockElement) return;
     e.stopPropagation();
     markPointerConsumed(e.nativeEvent);
     if (e.shiftKey) {
@@ -42,7 +47,9 @@ export function useEnemyClick(creatureId: string, name: string) {
       return;
     }
     setTarget(creatureId);
-    useGameStore.getState().setMessage(`Alvo: ${name}.`);
+    const store = useGameStore.getState();
+    store.setMessage(`Alvo: ${name}.`);
+    if (!store.player.dead && !isBuildActive()) store.attack(creatureId);
   }, [creatureId, name]);
 }
 
@@ -417,7 +424,7 @@ export function useHostileAI(opts: HostileOptions) {
             if (hp <= 0) {
               return {
                 player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 },
-                ui: { ...s.ui, message: `${creature.name} te matou!` },
+                ui: { ...s.ui, message: `${creature.name} te matou!`, deathBy: { name: creature.name, pvp: false } },
               };
             }
             return {

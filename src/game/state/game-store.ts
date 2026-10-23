@@ -10,7 +10,7 @@ import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
 import { audioManager } from '../audio/audio-manager';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
-import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
+import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES, harvestRangeFor } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
@@ -53,7 +53,7 @@ import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
-import { createHarvestNodes, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
+import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
@@ -132,6 +132,8 @@ type GameState = {
   pilotWeaponStyle: PilotWeaponStyle;
   /** Última intenção do piloto, realimentada pelo executor pra dar histerese. */
   pilotLastIntent: AutoIntent | null;
+  /** Onde o automático foi LIGADO (volta pra cá quando acaba tudo em volta). Só sessão. */
+  pilotAnchor: Position | null;
   /** Eventos efêmeros (dano, XP, loot) para o mundo 3D e o HUD. Somem pelo `ttl`. */
   feedback: FeedbackEvent[];
 };
@@ -143,6 +145,13 @@ type GameActions = {
   /** Aplica o dano dos powers orbitais (bumerangues) na horda. Throttled. */
   tickPowers: (now: number) => void;
   attack: (targetId: string) => void;
+  /** Tiro NO VAZIO (mira em 3ª pessoa, pontinho sem alvo — igual CS): arma de longe gasta
+   *  munição/cadência, toca o som e o projétil sai rumo a `toward`. Não acerta ninguém.
+   *  Retorna false se a arma na mão não é de longe (aí o chamador usa o ataque de sempre). */
+  fireMiss: (toward: Position, towardY?: number) => boolean;
+  /** Torre da base atira num JOGADOR inimigo (online): gasta 1 bala do pool, marca a recarga da
+   *  torre e mostra o projétil. O dano vai pela rede (quem decide é o alvo). false = sem bala. */
+  towerFireAtPlayer: (tower: TowerSource, to: Position, toY: number | undefined, now: number) => boolean;
   specialAttack: (kind: 'jump' | 'spin') => void;
   /** Chuva de Flechas: poder de longe, flechas caem do céu e dão dano em ÁREA (raio escala
    *  com o nível, 5 m → 18 m; cooldown 15 s → 5 s). Precisa de arma de longe equipada.
@@ -235,7 +244,8 @@ type GameActions = {
   reportDamage: (targetId: string, amount: number, position: Position, onPlayer: boolean) => void;
   /** Aplica dano ao jogador LOCAL (usado pelo PvP: golpe de um inimigo remoto). Reduz HP,
    *  mata em 0 (respawn) e marca agressão. `sourceName` = quem bateu (pra mensagem). */
-  takePlayerDamage: (amount: number, sourceName: string) => void;
+  /** `pvp` = veio de outro jogador (ou torre dele) → a tela de morte mostra quem te matou. */
+  takePlayerDamage: (amount: number, sourceName: string, pvp?: boolean) => void;
   pruneFeedback: () => void;
   buildAutoSnapshot: () => AutoSnapshot;
 };
@@ -255,7 +265,7 @@ function syncCarry(player: PlayerState): PlayerState {
 function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
   const respawnAt = c.speciesId === 'raider_warlord'
     ? null
-    : now + Math.round((180_000 + rng() * 120_000) * ENEMY_RESPAWN_MULT);
+    : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
   return { ...c, hp: 0, behavior: 'dead', respawnAt };
 }
 
@@ -611,6 +621,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   autoHuntRadius: 45,
   pilotWeaponStyle: 'auto',
   pilotLastIntent: null,
+  pilotAnchor: null,
   feedback: [],
   ui: {
     mode: 'world',
@@ -740,6 +751,40 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       creatures: next, player, deathBags, powerLastTickAt: now,
       feedback: pushEvents(state.feedback, drafts, now),
     });
+  },
+
+  fireMiss: (toward: Position, towardY?: number) => {
+    const state = get();
+    if (state.player.dead) return false;
+    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+    const heldItemId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    const prof = weaponFor(heldItemId);
+    if (!prof.ranged || !prof.projectile) return false;
+    const now = Date.now() / 1000;
+    if (now - state.player.lastAttackAt < prof.cooldown) return true; // cadência: clique engolido
+    const ammoItem = prof.projectile === 'bullet' ? 'ammo' : 'arrow';
+    if (getItemCount(state.player.inventory, ammoItem) <= 0) {
+      set(s => ({ ui: { ...s.ui, message: ammoItem === 'ammo' ? 'Sem munição!' : 'Sem flechas!' } }));
+      return true;
+    }
+    if (heldItemId === 'bow') audioManager.playShot(); else audioManager.playGunShot();
+    set({
+      player: { ...state.player, lastAttackAt: now, inventory: removeItem(state.player.inventory, ammoItem, 1) },
+      attackTick: state.attackTick + 1,
+      feedback: pushEvent(state.feedback, shotEvent(state.player.position, toward, prof.projectile, undefined, towardY), Date.now()),
+    });
+    return true;
+  },
+
+  towerFireAtPlayer: (tower, to, toY, now) => {
+    const state = get();
+    if (getItemCount(state.player.inventory, 'ammo') <= 0) return false;
+    set({
+      player: { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) },
+      towerLastShotAt: { ...state.towerLastShotAt, [tower.id]: now },
+      feedback: pushEvent(state.feedback, shotEvent(tower, to, 'arrow', towerHeight(tower.tier, tower.level), toY), now),
+    });
+    return true;
   },
 
   attack: (targetId: string) => {
@@ -958,7 +1003,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       deathBags: updatedBags,
       attackTick: state.attackTick + 1,
       feedback: pushEvents(state.feedback, drafts, stamp),
-      ui: { ...state.ui, message: msg },
+      ui: { ...state.ui, message: msg, ...(updatedPlayer.dead && !state.player.dead ? { deathBy: { name: creature.name, pvp: false } } : {}) },
     });
   },
 
@@ -1983,6 +2028,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   setAutoMode: (mode) => {
     set(s => ({
       objectives: setQueueMode(s.objectives, mode),
+      // Ligar/desligar o automático ZERA a memória do piloto (alvo "grudado"). Antes: liga no ponto
+      // A, anda no manual até B, liga de novo → voltava pro bicho de A (vivo a até 63 m). Pedro, 23/10.
+      pilotLastIntent: null,
+      // Ligou = marca o ponto de partida; desligou = esquece.
+      pilotAnchor: mode === 'idle' ? { ...s.player.position } : null,
       ui: {
         ...s.ui,
         message: mode === 'idle' ? 'Piloto automático ligado.' : 'Controle manual retomado.',
@@ -2067,7 +2117,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }));
   },
 
-  takePlayerDamage: (amount, sourceName) => {
+  takePlayerDamage: (amount, sourceName, pvp = false) => {
     if (amount <= 0) return;
     const now = Date.now();
     set(s => {
@@ -2079,7 +2129,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         return {
           player: { ...s.player, hp: 0, dead: true, respawnAt: now + 15_000, lastDamagedAt: now },
           feedback,
-          ui: { ...s.ui, message: `${sourceName} te derrotou!` },
+          ui: { ...s.ui, message: `${sourceName} te derrotou!`, deathBy: { name: sourceName, pvp } },
         };
       }
       return {
@@ -2255,7 +2305,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         playerPosition: player.position,
         creatures: ticked.creatures,
         camps: ticked.camps,
-        resources: [...state.resources, ...state.harvestNodes],
+        resources: [...state.resources, ...(() => { const fits = harvestFitsChecker(player.inventory); return state.harvestNodes.map(n => ({ ...n, canCollect: fits(n) })); })()],
       },
       now,
     );
@@ -2398,17 +2448,24 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Todos os tipos de HARVEST_NODES (madeira/pedra/ferro/ouro/cristal) são
       // elegíveis; o `range` sai da definição do nó pra casar com a coleta real.
       resources: [
-        ...state.harvestNodes.map(n => ({
+        ...(() => { const fitsNode = harvestFitsChecker(state.player.inventory); return state.harvestNodes.map(n => ({
           id: n.id,
           position: n.position,
           depleted: n.depleted,
           kind: n.kind,
           range: HARVEST_NODES[n.kind] ? harvestRangeFor(HARVEST_NODES[n.kind]!.range, state.player.level) : undefined,
-        })),
+          // Bolsa cheia PRA ESTE recurso (ou sem ferramenta) → o piloto não vai ficar parado nele.
+          canCollect: fitsNode(n),
+        })); })(),
         ...state.resources.map(r => ({ id: r.id, position: r.position, depleted: r.depleted })),
       ],
       objectives: state.objectives,
       homePosition: HOME_POSITION,
+      ...(state.pilotAnchor ? { autoAnchor: state.pilotAnchor } : {}),
+      ...(() => {
+        const core = state.playerBase?.pieces.find(p => p.kind === 'core');
+        return core ? { baseCenter: baseCellCenter(core.cell) } : {};
+      })(),
       safeZone: SAFE_ZONE,
       baseUnderSiege: state.wave.phase === 'combat',
     };

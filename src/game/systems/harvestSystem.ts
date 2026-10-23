@@ -197,6 +197,41 @@ function refuse(
   return { ok: false, harvested: 0, xp: 0, message, missingTool, node, inventory, resourceId: null };
 }
 
+/**
+ * O próximo golpe neste nó CABE na mochila (mesma conta do `harvestNode`: ferramenta × rendimento,
+ * coleta atômica)? Pro piloto não ir até a árvore e ficar parado batendo com a bolsa cheia
+ * (Pedro, 22/10): o "tem espaço" genérico dizia sim, mas as 4 madeiras do golpe não cabiam.
+ */
+export function harvestFits(node: HarvestNodeState, inventory: InventoryState): boolean {
+  return harvestFitsChecker(inventory)(node);
+}
+
+/**
+ * Mesma conta do `harvestFits`, mas pra MUITOS nós com a mesma mochila (piloto/fila, ~400 nós):
+ * a resposta só depende do TIPO do nó e de quanto ele rende → calcula 1× por (tipo, quantidade)
+ * em vez de 1× por nó. Medido: 386 nós = 2,5 ms → poucos µs (importa no celular).
+ */
+export function harvestFitsChecker(inventory: InventoryState): (node: HarvestNodeState) => boolean {
+  const perHitByKind = new Map<string, number>();
+  const fitsBy = new Map<string, boolean>();
+  return (node) => {
+    const def = HARVEST_NODES[node.kind];
+    if (!def || node.depleted || node.quantity <= 0) return false;
+    let perHit = perHitByKind.get(node.kind);
+    if (perHit === undefined) {
+      const multiplier = getToolMultiplier(def.tool, null, inventory);
+      perHit = multiplier != null ? Math.ceil(def.yieldPerHit * multiplier) : def.handYield;
+      perHitByKind.set(node.kind, perHit);
+    }
+    if (perHit <= 0) return false; // sem a ferramenta e não rende na mão
+    const amount = Math.min(perHit, node.quantity);
+    const key = `${def.resourceId}:${amount}`;
+    let fits = fitsBy.get(key);
+    if (fits === undefined) { fits = canAddItem(inventory, def.resourceId, amount); fitsBy.set(key, fits); }
+    return fits;
+  };
+}
+
 export function harvestNode(
   node: HarvestNodeState,
   equippedToolItemId: string | null,

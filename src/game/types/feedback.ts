@@ -43,6 +43,9 @@ export type FeedbackEvent = {
   projectile?: 'arrow' | 'bullet';
   /** Altura da origem sobre o terreno; ausente mantém arma do jogador. */
   sourceHeight?: number;
+  /** `shot`: altura ABSOLUTA (mundo) do destino — tiro da mira segue o pontinho pra cima/baixo.
+   *  Ausente: peito do alvo (chão + 0,8). */
+  toY?: number;
   createdAt: number;
   /** Duração em milissegundos antes de sumir. */
   ttl: number;

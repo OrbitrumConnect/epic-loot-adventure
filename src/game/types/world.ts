@@ -33,4 +33,6 @@ export type UIState = {
   sidebarCollapsed: boolean;
   /** Base destruída na horda → tela de GAME OVER ("Sobreviver de novo"). */
   baseFell?: boolean;
+  /** Quem te matou (tela de morte). `pvp` = outro jogador ou torre dele. Não vai pro save. */
+  deathBy?: { name: string; pvp: boolean } | null;
 };

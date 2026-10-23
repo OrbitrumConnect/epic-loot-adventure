@@ -19,6 +19,13 @@ export type HouseCollider = {
    * (sem parede) fica aberto sozinho; janelas (altas) não entram. Sem chute.
    */
   wallSegs: number[];
+  /**
+   * Só casa de PEDRA/METAL (2 andares + escada): Y mundial da base do modelo, fatias de parede por
+   * altura e malha do piso caminhável (ver `house-levels.ts`). Ausente = colisão antiga (madeira).
+   */
+  baseY?: number;
+  levels?: import('./house-levels').HouseLevels;
+  floorMesh?: import('three').Mesh | null;
 };
 
 export const houseCollider: { current: HouseCollider | null } = { current: null };
@@ -36,3 +43,6 @@ export const HOUSE_WALLS_SOLID = true;
  * top-down 2D/3D. Fora singleton de propósito (lido/escrito fora do ciclo React).
  */
 export const housePlayerInside = { current: false };
+
+/** Y dos pés do jogador (escrito pelo loop do mundo) — o corte do teto acompanha o ANDAR dele. */
+export const housePlayerFeetY = { current: -Infinity };

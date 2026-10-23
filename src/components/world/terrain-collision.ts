@@ -259,6 +259,45 @@ export function collectGreenSurfaceSpots(
   return { spots, tint };
 }
 
+/* ---- LINHA DE TIRO: terreno/morro/labirinto bloqueiam (mira em 3ª pessoa) ---- */
+const shotRay = new THREE.Raycaster();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(shotRay as any).firstHitOnly = true;
+const _shotDir = new THREE.Vector3();
+
+/**
+ * Algo GRANDE (malha do mapa/morro, parede de labirinto) entre `from` e `to`? Ignora acertos
+ * a menos de `skipNear` m da origem (câmera no ombro que encosta no barranco) e os últimos
+ * 0,6 m (chão sob o alvo). Usa o BVH que já existe — microssegundos por tiro.
+ */
+export function worldBlocksShot(from: THREE.Vector3, to: THREE.Vector3, skipNear = 0): boolean {
+  const len = _shotDir.subVectors(to, from).length();
+  if (len < 1e-3) return false;
+  shotRay.set(from, _shotDir.multiplyScalar(1 / len));
+  shotRay.near = skipNear;
+  shotRay.far = Math.max(skipNear, len - 0.6);
+  for (const set of [terrains, walls]) {
+    for (const root of set) if (shotRay.intersectObject(root, true).length > 0) return true;
+  }
+  return false;
+}
+
+/** Distância até a 1ª coisa GRANDE (mapa/morro/labirinto) no raio `from`+`dir` (dir unitário),
+ *  ignorando os primeiros `skipNear` m; null = nada até `far`. Tiro no vazio para ali. */
+export function worldShotHitDistance(from: THREE.Vector3, dir: THREE.Vector3, far: number, skipNear = 0): number | null {
+  shotRay.set(from, dir);
+  shotRay.near = skipNear;
+  shotRay.far = far;
+  let best: number | null = null;
+  for (const set of [terrains, walls]) {
+    for (const root of set) {
+      const h = shotRay.intersectObject(root, true)[0];
+      if (h && (best === null || h.distance < best)) best = h.distance;
+    }
+  }
+  return best;
+}
+
 /* ---- PAREDES (labirinto): colisão horizontal simples ---- */
 const walls = new Set<THREE.Object3D>();
 

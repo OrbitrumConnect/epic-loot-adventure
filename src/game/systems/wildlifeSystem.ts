@@ -3,22 +3,23 @@ import { CREATURES, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, CAMP_PLACEMENTS, LAKE_CENTERS, PLAYER_SPAWN, RIVER_HALF_WIDTH, RUINS_POSITION, RUINS_RADIUS, WORLD_HALF, riverDistance } from '../data/camps';
 
 /** Quantas de cada espécie `createWildCreatures` posiciona. */
+// +10% (Pedro, 22/10): nv alto limpava o mapa. 155 → 173. Bicho longe (>40 m) não anima (custo baixo).
 export const WILD_SPAWN_COUNTS: Record<string, number> = {
-  rabbit: 14,
-  deer: 18,
-  boar: 16,
-  wolf: 10,
-  wolf_alpha: 6,
-  bear: 6,
-  goose: 5,
-  pheasant: 5,
-  pigeon: 55, // Pombo Bravo: mais pelo mapa (Pedro curtiu). Hostil, voa e mergulha.
+  rabbit: 15,
+  deer: 20,
+  boar: 18,
+  wolf: 11,
+  wolf_alpha: 7,
+  bear: 7,
+  goose: 6,
+  pheasant: 6,
+  pigeon: 60, // Pombo Bravo: mais pelo mapa (Pedro curtiu). Hostil, voa e mergulha.
   eel: 0,    // REMOVIDA (Pedro): modelo Tripo quebrado (nó escala-100 + single-sided). Survivor Red entra no lugar.
-  monster: 6, // Aberração: monstro ~3m (anim própria)
+  monster: 7, // Aberração: monstro ~3m (anim própria)
   collector: 0, // FORA por ora: quantizado (não medi) → risco de gigante; reprocessar sem quantize depois
   civilian: 0, // REMOVIDO (Pedro): modelo demo vinha azul + T-pose (anim mixamo não roda). Fora do jogo.
-  zombie: 5,   // Morto-Vivo (humanoide Mixamo, walk próprio)
-  pelter: 6,   // Mecha Pelter (anim própria) — 5-6 espalhados (Pedro)
+  zombie: 6,   // Morto-Vivo (humanoide Mixamo, walk próprio)
+  pelter: 7,   // Mecha Pelter (anim própria) — 5-6 espalhados (Pedro)
   flintmaw: 3, // Fauce de Sílex (meio voador, anim própria)
 };
 

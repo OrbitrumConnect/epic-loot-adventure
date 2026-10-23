@@ -7,7 +7,8 @@ import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { terrainHeight } from './world-kit';
 import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
-import { houseCollider, housePlayerInside } from './house-collider';
+import { houseCollider, housePlayerFeetY, housePlayerInside } from './house-collider';
+import { buildFloorMesh, collectTris, sliceLevels, type HouseLevels } from './house-levels';
 import { AssetBoundary } from './asset-boundary';
 import type { BasePiece } from '@/game/types/playerbase';
 
@@ -139,16 +140,30 @@ function BaseHouseInner({
         }
       }
     });
-    return { wrap, halfX, halfZ, wallSegs, owned };
-  }, [obj, stone, metal, baseEvolved, metalTier, diffuse, normal, clipPlane]);
+    // PEDRA/METAL (2 andares + escada): colisão por ALTURA (piso por raio + parede no joelho).
+    // Madeira segue só com a fatia única acima (zero mudança). Remota não colide → não calcula.
+    let levels: HouseLevels | undefined;
+    let floorMesh: THREE.Mesh | null = null;
+    if (glb && !remote) {
+      const tris = collectTris(wrap);
+      levels = sliceLevels(tris, TARGET_H * VSTRETCH);
+      floorMesh = buildFloorMesh(tris);
+    }
+    return { wrap, halfX, halfZ, wallSegs, owned, levels, floorMesh };
+  }, [obj, stone, metal, baseEvolved, metalTier, diffuse, normal, clipPlane, remote]);
 
   // Descarta os materiais clonados ao trocar de tier/desmontar (evita leak de shader).
-  useEffect(() => () => { for (const m of prepared.owned) m.dispose(); }, [prepared]);
+  useEffect(() => () => {
+    for (const m of prepared.owned) m.dispose();
+    prepared.floorMesh?.geometry.dispose();
+  }, [prepared]);
 
-  // Teto some ao entrar: baixa o plano de corte pra ~2,6 m acima do piso.
+  // Teto some ao entrar: baixa o plano de corte pra ~2,6 m acima do piso — na casa de 2 andares,
+  // acima do piso em que o herói ESTÁ (no 2º andar some o telhado e aparece o andar de cima).
   useFrame(() => {
     const h = houseCollider.current;
-    clipPlane.constant = h && housePlayerInside.current ? h.floorY + 2.6 : 1e6;
+    const floor = h?.levels ? Math.max(h.floorY, housePlayerFeetY.current) : h?.floorY ?? 0;
+    clipPlane.constant = h && housePlayerInside.current ? floor + 2.6 : 1e6;
   });
 
   const core = pieces?.find((p) => p.kind === 'core');
@@ -178,11 +193,12 @@ function BaseHouseInner({
       halfZ: prepared.halfZ,
       floorY,
       wallSegs: prepared.wallSegs,
+      ...(prepared.levels ? { baseY: baseGroundY(ctr.x, ctr.z), levels: prepared.levels, floorMesh: prepared.floorMesh } : {}),
     };
     return () => {
       houseCollider.current = null;
     };
-  }, [ctr?.x, ctr?.z, prepared.halfX, prepared.halfZ, prepared.wallSegs, remote, tv]);
+  }, [ctr?.x, ctr?.z, prepared, remote, tv]);
 
   if (!ctr) return null;
   return (

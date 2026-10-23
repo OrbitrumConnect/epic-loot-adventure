@@ -29,6 +29,10 @@ export const AUTO_ENGAGE_RADIUS = 10;
 /** DURANTE A ONDA: o piloto defende a base atacando o hostil mais próximo até
  *  este raio (pedido do Pedro: ~35m, foca o mais perto e NÃO persegue além). */
 export const BASE_DEFENSE_RADIUS = 35;
+/** Na horda, mais longe que isso do núcleo da base = volta pra base. */
+export const SIEGE_HOLD_RADIUS = 12;
+/** Chegou no ponto de partida do automático (folga pra não ficar "dançando" em cima do ponto). */
+export const ANCHOR_ARRIVAL = 4;
 
 /** Caça ociosa: sem objetivo e sem recurso válido, persegue o hostil de MENOR
  *  nível dentro deste raio (bem maior que AUTO_ENGAGE_RADIUS pra não travar
@@ -64,7 +68,8 @@ export type ObjectiveWorld = {
   playerPosition: Position;
   creatures: { id: string; behavior: string; hp: number }[];
   camps: { id: string; cleared: boolean; creatureIds: string[] }[];
-  resources: { id: string; depleted: boolean }[];
+  /** `canCollect` false = o próximo golpe não cabe na bolsa (ou falta ferramenta). */
+  resources: { id: string; depleted: boolean; canCollect?: boolean }[];
 };
 
 export type ObjectiveTickResult = {
@@ -185,7 +190,11 @@ function judge(objective: Objective, world: ObjectiveWorld): Verdict {
   if (objective.kind === 'gather_node') {
     const node = world.resources.find(r => r.id === objective.targetId);
     if (!node) return { status: 'failed', reason: 'Recurso não existe mais.' };
-    return node.depleted ? { status: 'done' } : RUNNING;
+    if (node.depleted) return { status: 'done' };
+    // Bolsa cheia pra esse recurso: antes a fila travava nele pra sempre (coleta recusada a cada
+    // golpe). Cancela com motivo e a fila anda (Pedro, 22/10).
+    if (node.canCollect === false) return { status: 'failed', reason: 'sem espaço na bolsa (ou falta a ferramenta)' };
+    return RUNNING;
   }
 
   // Área de caça nunca termina sozinha: só some se o jogador cancelar.
@@ -370,6 +379,19 @@ function nearestThreat(snapshot: AutoSnapshot): AutoSnapshot['creatures'][number
 }
 
 /** Inimigo (hostil) vivo mais próximo dentro de `radius` — pra DEFESA (ignora pacífico). */
+/** Hostil vivo a até `radius` de um PONTO (ex.: a base), o mais perto do jogador. */
+function hostileNear(snapshot: AutoSnapshot, at: Position, radius: number): AutoSnapshot['creatures'][number] | null {
+  let best: AutoSnapshot['creatures'][number] | null = null;
+  let bestDist = Infinity;
+  for (const creature of snapshot.creatures) {
+    if (!isCreatureAlive(creature) || creature.hostile === false) continue;
+    if (getDistance(at, creature.position) > radius) continue;
+    const d = getDistance(snapshot.playerPosition, creature.position);
+    if (d < bestDist) { bestDist = d; best = creature; }
+  }
+  return best;
+}
+
 function nearestHostileWithin(snapshot: AutoSnapshot, radius: number): AutoSnapshot['creatures'][number] | null {
   let best: AutoSnapshot['creatures'][number] | null = null;
   let bestDist = Infinity;
@@ -395,7 +417,7 @@ function nearestNode(
   let best: AutoSnapshot['resources'][number] | null = null;
   let bestDist = Infinity;
   for (const node of snapshot.resources) {
-    if (node.depleted) continue;
+    if (node.depleted || node.canCollect === false) continue; // não cabe na bolsa / sem ferramenta
     const dist = getDistance(snapshot.playerPosition, node.position);
     if (dist > radius) continue;
     if (dist < bestDist) {
@@ -518,6 +540,17 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   if (snapshot.baseUnderSiege) {
     const foe = nearestHostileWithin(snapshot, BASE_DEFENSE_RADIUS);
     if (foe) return engage(snapshot, foe, 'Defendendo a base');
+    // Na HORDA a base vem primeiro (Pedro, 23/10): longe dela, o piloto VOLTA e guarda a região
+    // da base — não sai caçando longe enquanto a onda bate nas peças.
+    const base = snapshot.baseCenter;
+    if (base) {
+      const atBase = hostileNear(snapshot, base, BASE_DEFENSE_RADIUS);
+      if (atBase) return engage(snapshot, atBase, 'Defendendo a base');
+      if (getDistance(snapshot.playerPosition, base) > SIEGE_HOLD_RADIUS) {
+        return { kind: 'move', to: { ...base }, reason: 'Horda! Voltando pra defender a base' };
+      }
+      return { kind: 'idle', reason: 'Guardando a base (horda)' };
+    }
   }
 
   // 4c. SOB ATAQUE — se o jogador levou dano há menos de RECENT_DAMAGE_WINDOW_MS
@@ -580,9 +613,20 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
       if (quarry) return engage(snapshot, quarry, 'Caçando por perto');
     }
 
-    // 5. Bolsa cheia e nada a fazer → volta pra base em vez de ficar inerte.
+    // 4d. Acabou tudo em volta → VOLTA pro ponto onde ligou o automático (Pedro, 23/10). Ele vai
+    // "somando" de bicho em bicho; quando não sobra nada no raio, retorna e espera renascer — e no
+    // caminho, se aparecer bicho no raio, os passos acima pegam primeiro (re-decide a cada tique).
+    const anchor = snapshot.autoAnchor;
+    if (anchor && getDistance(snapshot.playerPosition, anchor) > ANCHOR_ARRIVAL) {
+      return { kind: 'move', to: { ...anchor }, reason: 'Voltando pro ponto de partida' };
+    }
+
+    // 5. Bolsa cheia e nada a fazer → FICA onde está (Pedro, 22/10). Antes recuava pro
+    // `homePosition` — que é o nascedouro da zona segura, não a base dele — e, como caçar tem
+    // prioridade, ficava indo e voltando (vê bicho → caça → lembra da bolsa → volta...). Depósito
+    // automático NÃO: a casa de pedra/metal paga com a madeira/pedra da MOCHILA.
     if (snapshot.gatherCapacity === false) {
-      return { kind: 'retreat', to: { ...snapshot.homePosition }, reason: 'Bolsa cheia: voltando pra base.' };
+      return { kind: 'idle', reason: 'Bolsa cheia: sem espaço pra coletar.' };
     }
 
     // 6
@@ -625,6 +669,7 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   if (active.kind === 'gather_node') {
     const node = snapshot.resources.find(r => r.id === active.targetId);
     if (!node || node.depleted) return { kind: 'idle', reason: 'Recurso indisponível.' };
+    if (node.canCollect === false) return { kind: 'idle', reason: 'Bolsa cheia: esse recurso não cabe.' };
     const reach = node.range ?? GATHER_RANGE;
     if (getDistance(snapshot.playerPosition, node.position) <= reach) {
       return { kind: 'gather', nodeId: node.id, to: { ...node.position } };
