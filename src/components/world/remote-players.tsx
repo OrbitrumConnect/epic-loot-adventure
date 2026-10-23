@@ -100,6 +100,8 @@ function RemotePlayer({ id }: { id: string }) {
   return (
     <group ref={group} onPointerDown={(event) => {
       if (event.button !== 0) return;
+      // Mouse travado (3ª pessoa): o clique é da mira central (`aimFire`), não do cursor parado.
+      if (document.pointerLockElement) return;
       event.stopPropagation();
       markPointerConsumed(event.nativeEvent);
       const p = useNet.getState().players[id];
