@@ -32,7 +32,8 @@ const HOUSE_LIGHT_D2 = 22 * 22;
 function BaseHouseInner({
   pieces: remotePieces,
   remote = false,
-}: { pieces?: BasePiece[] | null; remote?: boolean } = {}) {
+  tier = 0,
+}: { pieces?: BasePiece[] | null; remote?: boolean; tier?: number } = {}) {
   const localPieces = useGameStore((s) => s.playerBase?.pieces);
   const pieces = remotePieces === undefined ? localPieces : remotePieces;
   const obj = useLoader(OBJLoader, '/models/house/WoodHouse.obj');
@@ -47,8 +48,9 @@ function BaseHouseInner({
   const localBaseMetal = useGameStore((s) => s.baseMetal ?? false);
   // A evolução visual da base remota ainda não faz parte do payload de rede.
   // Ela continua sendo uma casa de madeira, mas fica no mesmo core da cerca.
-  const baseEvolved = remote ? false : localBaseEvolved;
-  const metalTier = !remote && localBaseMetal; // pedra -> metal após pagar o upgrade (nível>20)
+  // Remota: evolução vem da rede (`tier`: 0 madeira · 1 pedra · 2 metal — 23/10).
+  const baseEvolved = remote ? tier >= 1 : localBaseEvolved;
+  const metalTier = remote ? tier >= 2 : localBaseMetal; // pedra -> metal após pagar o upgrade (nível>20)
 
   const gl = useThree((s) => s.gl);
   useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // habilita o corte do teto
@@ -212,7 +214,7 @@ function BaseHouseInner({
 
 /** Casa central da base, blindada: falha de fetch de qualquer asset (OBJ/GLB/textura)
  *  vira fallback `null` em vez de derrubar a cena/aplicação. */
-export function BaseHouse(props: { pieces?: BasePiece[] | null; remote?: boolean } = {}) {
+export function BaseHouse(props: { pieces?: BasePiece[] | null; remote?: boolean; tier?: number } = {}) {
   return (
     <AssetBoundary label="BaseHouse" fallback={null}>
       <Suspense fallback={null}>

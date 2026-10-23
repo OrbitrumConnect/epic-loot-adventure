@@ -43,7 +43,13 @@ export type RemotePose = {
   action: string; t: number;
   /** Aliado ou Inimigo (declarado no card ao entrar). Default 'ally'. */
   side: PvpSide;
+  /** Tropas em campo de quem envia (de carona na pose, 1 a cada 3 envios — sem mensagem nova).
+   *  Lista vazia = recolheu. Ausente = sem novidade. */
+  tr?: NetTroop[];
 };
+
+/** Tropa em campo vista pela rede (forma curta). */
+export type NetTroop = { i: string; u: string; x: number; z: number; r: number; a: string; h: number; m: number };
 
 export type CreatureHitIntent = {
   id: string;
@@ -78,6 +84,10 @@ type NetState = {
   players: Record<string, RemotePose>;
   /** Base de cada outro jogador (pra renderizar a base dele no mapa). */
   bases: Record<string, PlayerBaseState>;
+  /** Evolução visual da base de cada um: 0 madeira · 1 pedra · 2 metal (23/10). */
+  baseTiers: Record<string, number>;
+  /** Tropas em campo de cada outro jogador (na horda dele). */
+  troops: Record<string, NetTroop[]>;
   /** Snapshot do mundo enviado pelo anfitrião. Clientes convidados nunca o simulam. */
   world: CreatureState[] | null;
   join: (code?: string) => void;
@@ -142,6 +152,8 @@ export const useNet = create<NetState>((set, get) => ({
   sideChosen: false,
   players: {},
   bases: {},
+  baseTiers: {},
+  troops: {},
   world: null,
 
   setName: (n) => set({ selfName: n.trim() || get().selfName }),
@@ -162,16 +174,17 @@ export const useNet = create<NetState>((set, get) => ({
     ch.on('broadcast', { event: 'pose' }, ({ payload }) => {
       const p = payload as RemotePose;
       if (p.id === selfId) return;
-      set((s) => ({ players: { ...s.players, [p.id]: p } }));
+      set((s) => ({ players: { ...s.players, [p.id]: p }, troops: applyPoseTroops(s.troops, p.id, p.tr) }));
     });
 
     ch.on('broadcast', { event: 'base' }, ({ payload }) => {
-      const p = payload as { id: string; base: PlayerBaseState | null };
+      const p = payload as { id: string; base: PlayerBaseState | null; tier?: number };
       if (p.id === selfId) return;
       set((s) => {
         const next = { ...s.bases };
-        if (p.base) next[p.id] = p.base; else delete next[p.id];
-        return { bases: next };
+        const tiers = { ...s.baseTiers };
+        if (p.base) { next[p.id] = p.base; tiers[p.id] = p.tier ?? 0; } else { delete next[p.id]; delete tiers[p.id]; }
+        return { bases: next, baseTiers: tiers };
       });
     });
 
@@ -227,11 +240,15 @@ export const useNet = create<NetState>((set, get) => ({
       set((s) => {
         const players: Record<string, RemotePose> = {};
         const bases: Record<string, PlayerBaseState> = {};
+        const baseTiers: Record<string, number> = {};
+        const troops: Record<string, NetTroop[]> = {};
         for (const id of ids) if (id !== selfId) {
           if (s.players[id]) players[id] = s.players[id]!;
           if (s.bases[id]) bases[id] = s.bases[id]!;
+          if (s.baseTiers[id] !== undefined) baseTiers[id] = s.baseTiers[id]!;
+          if (s.troops[id]) troops[id] = s.troops[id]!;
         }
-        return { players, bases, full: ids.length >= MAX_PLAYERS };
+        return { players, bases, baseTiers, troops, full: ids.length >= MAX_PLAYERS };
       });
       // MIGRAÇÃO DE HOST: se o host saiu (ou a sala estava vazia), o mais antigo assume e
       // segue simulando a partir do último snapshot que já tem no store. Nada quebra.
@@ -261,7 +278,7 @@ export const useNet = create<NetState>((set, get) => ({
     channel = ch;
     // Host entra como aliado (não escolhe); convidado (entrou por código/link) declara a
     // postura no card → `sideChosen=false` faz o card aparecer. (fatia 1 do PvP)
-    set({ room, connected: false, isHost, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: isHost });
+    set({ room, connected: false, isHost, players: {}, bases: {}, baseTiers: {}, troops: {}, world: null, selfSide: 'ally', sideChosen: isHost });
     if (isHost) void registerRoom(room); // publica a sala no lobby (aba de salas)
   },
 
@@ -269,7 +286,7 @@ export const useNet = create<NetState>((set, get) => ({
     retrack = null;
     unregisterRoom();
     if (channel && supabase) { void supabase.removeChannel(channel); channel = null; }
-    set({ room: null, connected: false, isHost: false, players: {}, bases: {}, world: null, selfSide: 'ally', sideChosen: false });
+    set({ room: null, connected: false, isHost: false, players: {}, bases: {}, baseTiers: {}, troops: {}, world: null, selfSide: 'ally', sideChosen: false });
   },
 }));
 
@@ -281,21 +298,52 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
   if (now - lastSent < 88) return;
   lastSent = now;
   const { selfId, selfName, selfSide } = useNet.getState();
+  // Tropas de carona: 1 a cada 3 poses (~3,5×/s) enquanto houver; uma lista vazia ao recolher.
+  poseCount++;
+  const pick = troopPiggyback(outgoingTroops, poseCount);
+  const troops = pick.send;
+  outgoingTroops = pick.next;
   void channel.send({
     type: 'broadcast', event: 'pose',
     payload: {
       id: selfId, name: selfName, level, hp, maxHp, x, z, yaw, action, t: now, side: selfSide,
       ...(y !== undefined && Number.isFinite(y) ? { y } : {}),
       ...(weapon ? { w: weapon } : {}),
+      ...(troops ? { tr: troops } : {}),
     } satisfies RemotePose,
   });
 }
 
+let poseCount = 0;
+let outgoingTroops: NetTroop[] | null = null;
+
+/** Tropas de carona na pose: com tropas, 1 a cada 3 poses; lista vazia (recolheu) vai 1× e para. */
+export function troopPiggyback(outgoing: NetTroop[] | null, count: number): { send: NetTroop[] | null; next: NetTroop[] | null } {
+  if (!outgoing) return { send: null, next: null };
+  if (outgoing.length === 0) return { send: [], next: null };
+  return { send: count % 3 === 0 ? outgoing : null, next: outgoing };
+}
+
+/** Pose recebida: `tr` ausente = sem novidade; vazia = recolheu (apaga); com itens = substitui. */
+export function applyPoseTroops(troops: Record<string, NetTroop[]>, id: string, tr: NetTroop[] | undefined): Record<string, NetTroop[]> {
+  if (!tr) return troops;
+  const next = { ...troops };
+  if (tr.length) next[id] = tr; else delete next[id];
+  return next;
+}
+/** A camada de mundo informa as tropas em campo (vão de carona na próxima pose). Vazio = recolheu. */
+export function setOutgoingTroops(list: NetTroop[]): void {
+  // Sem tropas e já avisado (null): nada a mandar. Senão guarda (lista vazia = avisa 1× que recolheu).
+  if (list.length === 0 && outgoingTroops === null) return;
+  outgoingTroops = list;
+}
+
 /** Transmite a base do jogador local (chamar ao mudar + heartbeat; raro). */
-export function broadcastBase(base: PlayerBaseState | null): void {
+export function broadcastBase(base: PlayerBaseState | null, tier = 0): void {
   if (!channel || !useNet.getState().connected) return;
   const { selfId } = useNet.getState();
-  void channel.send({ type: 'broadcast', event: 'base', payload: { id: selfId, base } });
+  // tier = evolução visual (0 madeira · 1 pedra · 2 metal) — os outros desenham igual (23/10).
+  void channel.send({ type: 'broadcast', event: 'base', payload: { id: selfId, base, tier } });
 }
 
 /** Estado comum dos inimigos. Só o anfitrião publica; convidados apenas o consomem. */

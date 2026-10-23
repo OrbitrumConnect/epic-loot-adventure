@@ -74,7 +74,7 @@ export function prepareWall(scene: THREE.Object3D): { geo: THREE.BufferGeometry;
   return { geo, mat: material };
 }
 
-function WallInstances({ url }: { url: string }) {
+function WallInstances({ url, piecesSource }: { url: string; piecesSource?: (() => BasePiece[] | null) | undefined }) {
   const { scene } = useGLTF(url);
   const prep = useMemo(() => prepareWall(scene), [scene]);
   const mesh = useMemo(() => {
@@ -98,7 +98,7 @@ function WallInstances({ url }: { url: string }) {
   const lastTv = useRef(-1);
   useFrame(() => {
     if (!mesh) return;
-    const pieces = useGameStore.getState().playerBase?.pieces ?? null;
+    const pieces = piecesSource ? piecesSource() : (useGameStore.getState().playerBase?.pieces ?? null);
     if (pieces === last.current && tv === lastTv.current) return;
     last.current = pieces;
     lastTv.current = tv;
@@ -124,15 +124,18 @@ function WallInstances({ url }: { url: string }) {
   return <primitive object={mesh} />;
 }
 
-/** Muros GLB da base LOCAL: só montam quando a casa já evoluiu (pedra/metal). */
-export function GlbBaseWalls() {
-  const evolved = useGameStore((s) => s.baseEvolved ?? false);
-  const metal = useGameStore((s) => s.baseMetal ?? false);
+/** Muros GLB da base: só montam quando a casa já evoluiu (pedra/metal). Sem props = base LOCAL;
+ *  com `piecesSource` + `tier` = base de OUTRO jogador (online, 23/10). */
+export function GlbBaseWalls({ piecesSource, tier }: { piecesSource?: () => BasePiece[] | null; tier?: number } = {}) {
+  const localEvolved = useGameStore((s) => s.baseEvolved ?? false);
+  const localMetal = useGameStore((s) => s.baseMetal ?? false);
+  const evolved = tier !== undefined ? tier >= 1 : localEvolved;
+  const metal = tier !== undefined ? tier >= 2 : localMetal;
   if (!evolved && !metal) return null;
   return (
     <AssetBoundary label="GlbBaseWalls" fallback={null}>
       <Suspense fallback={null}>
-        <WallInstances url={metal ? METAL_URL : STONE_URL} />
+        <WallInstances url={metal ? METAL_URL : STONE_URL} piecesSource={piecesSource} />
       </Suspense>
     </AssetBoundary>
   );

@@ -31,7 +31,7 @@ import { TowerRuntime } from './tower-runtime';
 import { PowerOrbit } from './power-orbit';
 import { useNet, broadcastBase, MP_ENABLED } from '@/net/multiplayer';
 import { strikeRemotePiece } from './remote-base-strike';
-import { AllyTroops } from './ally-troops';
+import { AllyTroops, RemoteTroops } from './ally-troops';
 import { useShallow } from 'zustand/react/shallow';
 
 /** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
@@ -94,8 +94,10 @@ function crackKeyFor(kind: BasePieceKind, tier: number): CrackBatch['key'] | nul
   return null;
 }
 
-function BaseStructures({ c, piecesSource, interactive = true, onPieceClick }: {
+function BaseStructures({ c, piecesSource, tierSource, interactive = true, onPieceClick }: {
   c: Palette;
+  /** Base REMOTA: evolução (0 madeira · 1 pedra · 2 metal) vinda da rede. */
+  tierSource?: (() => number) | undefined;
   /** Fonte das peças. Ausente = base LOCAL do store (comportamento original).
    *  Presente = base de outro jogador (online) — mesma geometria, sem clique. */
   piecesSource?: () => BasePiece[] | null;
@@ -160,7 +162,7 @@ function BaseStructures({ c, piecesSource, interactive = true, onPieceClick }: {
     const pieces = piecesSource ? piecesSource() : (useGameStore.getState().playerBase?.pieces ?? null);
     // Tier visual da base LOCAL: 0=madeira, 1=pedra, 2=metal (remoto fica madeira).
     const gs = piecesSource ? null : useGameStore.getState();
-    const baseTier = gs ? (gs.baseMetal ? 2 : gs.baseEvolved ? 1 : 0) : 0;
+    const baseTier = gs ? (gs.baseMetal ? 2 : gs.baseEvolved ? 1 : 0) : (tierSource?.() ?? 0);
     if (pieces === last.current && baseTier === lastTier.current && tv === lastTv.current) return;
     last.current = pieces;
     lastTv.current = tv;
@@ -861,14 +863,17 @@ export function NetBases({ c }: { c: Palette }) {
   useEffect(() => {
     if (!MP_ENABLED) return;
     let lastPieces: BasePiece[] | null | undefined = undefined;
+    let lastTier = -1;
+    const tierOf = () => { const s = useGameStore.getState(); return s.baseMetal ? 2 : s.baseEvolved ? 1 : 0; };
     const unsub = useGameStore.subscribe(() => {
       if (!useNet.getState().connected) return;
       const base = useGameStore.getState().playerBase;
       const pieces = base?.pieces ?? null;
-      if (pieces !== lastPieces) { lastPieces = pieces; broadcastBase(base); }
+      const tier = tierOf();
+      if (pieces !== lastPieces || tier !== lastTier) { lastPieces = pieces; lastTier = tier; broadcastBase(base, tier); }
     });
     const hb = setInterval(() => {
-      if (useNet.getState().connected) broadcastBase(useGameStore.getState().playerBase);
+      if (useNet.getState().connected) broadcastBase(useGameStore.getState().playerBase, tierOf());
     }, 5000);
     return () => { unsub(); clearInterval(hb); };
   }, []);
@@ -877,6 +882,8 @@ export function NetBases({ c }: { c: Palette }) {
   return (
     <>
       {ids.map((id) => <RemoteBase key={`remote-base-${id}`} id={id} c={c} />)}
+      {/* Tropas dos outros (online) — mesmo sem base minha. */}
+      <RemoteTroops />
     </>
   );
 }
@@ -884,7 +891,9 @@ export function NetBases({ c }: { c: Palette }) {
 /** A mesma base do anfitrião/convidado: cerca, peças e a casa central. */
 function RemoteBase({ id, c }: { id: string; c: Palette }) {
   const base = useNet((s) => s.bases[id] ?? null);
+  const tier = useNet((s) => s.baseTiers[id] ?? 0);
   if (!base) return null;
+  const piecesSource = () => useNet.getState().bases[id]?.pieces ?? null;
   // PvP fatia 4: só com inimizade (aliado = só a ficha). Mesmo golpe pro muro/porta/telhado e TORRE.
   const onPieceClick = (pieceId: string, e: { nativeEvent?: { timeStamp: number } }) => {
     markPointerConsumed(e.nativeEvent);
@@ -892,10 +901,11 @@ function RemoteBase({ id, c }: { id: string; c: Palette }) {
   };
   return (
     <>
-      <BaseStructures c={c} interactive={false} piecesSource={() => useNet.getState().bases[id]?.pieces ?? null}
-        onPieceClick={onPieceClick} />
+      <BaseStructures c={c} interactive={false} piecesSource={piecesSource}
+        tierSource={() => useNet.getState().baseTiers[id] ?? 0} onPieceClick={onPieceClick} />
+      {tier > 0 && <GlbBaseWalls piecesSource={piecesSource} tier={tier} />}
       {USE_GLB_TOWER && <GlbWatchTowers pieces={base.pieces} onPieceClick={onPieceClick} />}
-      <BaseHouse pieces={base.pieces} remote />
+      <BaseHouse pieces={base.pieces} remote tier={tier} />
     </>
   );
 }

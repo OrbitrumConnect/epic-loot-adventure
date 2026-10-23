@@ -4,7 +4,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { selectTowerPlayerTarget, type TowerSource } from '@/game/systems/towerSystem';
 import { towerLevelStats } from '@/game/systems/towerLevelSystem';
-import { broadcastPlayerHit, MP_ENABLED, useNet } from '@/net/multiplayer';
+import { broadcastPlayerHit, MP_ENABLED, setOutgoingTroops, useNet } from '@/net/multiplayer';
 import type { BasePiece } from '@/game/types/playerbase';
 
 /** O render apenas agenda; seleção, cooldown e dano pertencem ao sistema/store. */
@@ -35,6 +35,13 @@ export function TowerRuntime({ paused }: { paused: boolean }) {
     const now = Date.now();
     // Tropas nas ondas (etapa 1): mesmo relógio das torres (20×/s).
     state.tickTroops(now, 0.05);
+    // Online: tropas em campo vão de carona na pose (os outros veem — 23/10).
+    if (MP_ENABLED && useNet.getState().connected) {
+      setOutgoingTroops(useGameStore.getState().fieldTroops.map((f) => ({
+        i: f.id, u: f.unitId, x: Math.round(f.x * 10) / 10, z: Math.round(f.z * 10) / 10,
+        r: Math.round(f.yaw * 100) / 100, a: f.action, h: Math.round(f.hp), m: f.maxHp,
+      })));
+    }
     if (!current.towers.length) return;
     state.tickTowers(current.towers, now);
     if (MP_ENABLED) towersHitEnemyPlayers(current.towers, now);
