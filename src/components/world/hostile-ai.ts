@@ -424,7 +424,7 @@ export function useHostileAI(opts: HostileOptions) {
             if (hp <= 0) {
               return {
                 player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 },
-                ui: { ...s.ui, message: `${creature.name} te matou!` },
+                ui: { ...s.ui, message: `${creature.name} te matou!`, deathBy: { name: creature.name, pvp: false } },
               };
             }
             return {

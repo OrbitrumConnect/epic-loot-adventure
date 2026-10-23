@@ -513,7 +513,7 @@ function Character({
         const sp = core ? cellCenter(core.cell) : { x: SAFE_ZONE.x, z: SAFE_ZONE.z };
         useGameStore.setState(s => ({
           player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: sp.x, z: sp.z } },
-          ui: { ...s.ui, message: core ? 'Você reviveu na sua base.' : 'Você reviveu na zona segura.' },
+          ui: { ...s.ui, message: core ? 'Você reviveu na sua base.' : 'Você reviveu na zona segura.', deathBy: null },
         }));
         body.current.position.set(sp.x, terrainHeight(sp.x, sp.z), sp.z);
         velocity.current.set(0, 0);

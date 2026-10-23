@@ -242,7 +242,8 @@ type GameActions = {
   reportDamage: (targetId: string, amount: number, position: Position, onPlayer: boolean) => void;
   /** Aplica dano ao jogador LOCAL (usado pelo PvP: golpe de um inimigo remoto). Reduz HP,
    *  mata em 0 (respawn) e marca agressão. `sourceName` = quem bateu (pra mensagem). */
-  takePlayerDamage: (amount: number, sourceName: string) => void;
+  /** `pvp` = veio de outro jogador (ou torre dele) → a tela de morte mostra quem te matou. */
+  takePlayerDamage: (amount: number, sourceName: string, pvp?: boolean) => void;
   pruneFeedback: () => void;
   buildAutoSnapshot: () => AutoSnapshot;
 };
@@ -999,7 +1000,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       deathBags: updatedBags,
       attackTick: state.attackTick + 1,
       feedback: pushEvents(state.feedback, drafts, stamp),
-      ui: { ...state.ui, message: msg },
+      ui: { ...state.ui, message: msg, ...(updatedPlayer.dead && !state.player.dead ? { deathBy: { name: creature.name, pvp: false } } : {}) },
     });
   },
 
@@ -2108,7 +2109,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }));
   },
 
-  takePlayerDamage: (amount, sourceName) => {
+  takePlayerDamage: (amount, sourceName, pvp = false) => {
     if (amount <= 0) return;
     const now = Date.now();
     set(s => {
@@ -2120,7 +2121,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         return {
           player: { ...s.player, hp: 0, dead: true, respawnAt: now + 15_000, lastDamagedAt: now },
           feedback,
-          ui: { ...s.ui, message: `${sourceName} te derrotou!` },
+          ui: { ...s.ui, message: `${sourceName} te derrotou!`, deathBy: { name: sourceName, pvp } },
         };
       }
       return {
