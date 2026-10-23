@@ -278,6 +278,15 @@ function payWithBaseStorage<T extends { inventory: InventoryState }>(
   return { result, inventory: paid.inventory, resources: paid.resources, base };
 }
 
+/** Sacos de loot no chão: NENHUMA tela os mostra ainda (auditoria 23/10) → com bolsa cheia a lista
+ *  crescia 1 saco por bicho, sem fim. Limite: 30 mais recentes, no máximo 15 min. */
+const BAG_CAP = 30;
+const BAG_TTL_MS = 15 * 60 * 1000;
+export function pushBag(bags: DeathBag[], bag: DeathBag): DeathBag[] {
+  const now = Date.now();
+  return [...bags.filter(b => now - b.createdAt < BAG_TTL_MS), bag].slice(-BAG_CAP);
+}
+
 /** Caminho comum de morte para armas, especiais e defesa da base. */
 function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
   const respawnAt = c.speciesId === 'raider_warlord'
@@ -304,12 +313,12 @@ function rewardCreatureDeath(c: CreatureState, player: PlayerState, bags: DeathB
     const overflow: typeof loot = [];
     for (const drop of loot) {
       if (!drop.itemId) continue;
-      drafts.push(lootEvent(drop.itemId, drop.quantity, c.position));
-      if (canAddItem(inv, drop.itemId, drop.quantity)) inv = addItem(inv, drop.itemId, drop.quantity);
+      // "+item" só pro que ENTROU na bolsa (antes mostrava até o que não cabia).
+      if (canAddItem(inv, drop.itemId, drop.quantity)) { inv = addItem(inv, drop.itemId, drop.quantity); drafts.push(lootEvent(drop.itemId, drop.quantity, c.position)); }
       else overflow.push(drop);
     }
     player = { ...player, inventory: inv };
-    if (overflow.length) bags = [...bags, createDeathBag(c.id, c.name, c.position, overflow)];
+    if (overflow.length) bags = pushBag(bags, createDeathBag(c.id, c.name, c.position, overflow));
   }
   const xpGain = creatureXp(def ?? c);
   const granted = grantXp({ ...player, gold: player.gold + 15 }, xpGain);
@@ -939,15 +948,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         const overflow: typeof loot = [];
         for (const drop of loot) {
           if (!drop.itemId) continue;
-          drafts.push(lootEvent(drop.itemId, drop.quantity, creature.position));
-          if (canAddItem(inv, drop.itemId, drop.quantity)) inv = addItem(inv, drop.itemId, drop.quantity);
+          if (canAddItem(inv, drop.itemId, drop.quantity)) { inv = addItem(inv, drop.itemId, drop.quantity); drafts.push(lootEvent(drop.itemId, drop.quantity, creature.position)); }
           else overflow.push(drop);
         }
         updatedPlayer = { ...updatedPlayer, inventory: inv };
         if (overflow.length > 0) {
-          updatedBags = [...state.deathBags, createDeathBag(creature.id, creature.name, creature.position, overflow)];
+          updatedBags = pushBag(state.deathBags, createDeathBag(creature.id, creature.name, creature.position, overflow));
         }
-        if (loot.length > 0) msg += bonus ? ` ✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} dropou!` : ` Loot coletado!`;
+        if (loot.length > 0) {
+          msg += bonus ? ` ✦ ${ITEMS[bonus.itemId]?.name ?? 'Raro'} dropou!` : overflow.length === loot.filter(d => d.itemId).length ? '' : ` Loot coletado!`;
+          if (overflow.length > 0) msg += ' Bolsa cheia: parte do loot ficou pra trás.';
+        }
       }
       updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
       const xpGain = creatureXp(def ?? creature);
@@ -979,7 +990,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           .filter(() => Math.random() < 0.1);
         if (droppable.length > 0) {
           const bag = createDeathBag(updatedPlayer.id, updatedPlayer.name, updatedPlayer.position, droppable);
-          updatedBags = [...updatedBags, bag];
+          updatedBags = pushBag(updatedBags, bag);
         }
         updatedPlayer = {
           ...updatedPlayer,

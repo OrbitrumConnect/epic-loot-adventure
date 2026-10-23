@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useGameStore, arrowRainCooldownFor } from '@/game/state/game-store';
 import { heroPowerCooldown, HERO_POWER_UNLOCK, type HeroPowerId } from '@/game/systems/heroPowersSystem';
 import { startLocalPersistence } from '@/game/state/local-persistence';
+import { getEra, getHallLevel } from '@/game/systems/baseSystem';
 import { startAccountPersistence } from '@/game/state/account-persistence';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
@@ -164,7 +165,7 @@ const navigation = [
   { id: 'city', name: 'Cidade', icon: Castle },
   { id: 'map', name: 'Mapa', icon: Map },
   { id: 'raid', name: 'Raids', icon: Swords },
-  { id: 'loot', name: 'Loot', icon: Package },
+  // 'Loot' saiu do menu (auditoria 23/10): abria o mesmo Inventário.
   { id: 'inventory', name: 'Inventário', icon: Backpack },
   { id: 'ranks', name: 'Ranking', icon: Trophy },
   { id: 'rooms', name: 'Salas', icon: Users },
@@ -326,7 +327,12 @@ function Index() {
   const essenceCount = useGameStore(s => s.getItemCount)('arcane_essence');
   const potionCount = useGameStore(s => s.getItemCount)('health_potion');
   const hasCraftedSword = player.inventory.slots.some(s => s.itemId === 'iron_sword');
-  const totalResources = woodCount + stoneCount + essenceCount;
+  // Armazém REAL (cidade, compartilhado com a base — 23/10). Antes a aba Home mostrava a BOLSA aqui.
+  const storage = useGameStore(s => s.base.resources);
+  const totalResources = Math.floor(storage.wood + storage.stone + storage.essence);
+  const hallLevel = useGameStore(s => getHallLevel(s.base));
+  const eraName = getEra(hallLevel).name;
+  const wallTier = useGameStore(s => (s.baseMetal ? 'metal' : s.baseEvolved ? 'pedra' : 'madeira'));
   const position = [player.position.x, player.position.z];
 
   const hitNearest = useCallback(() => {
@@ -378,6 +384,9 @@ function Index() {
   const resetCharacter = useCallback(() => {
     if (!window.confirm('Zerar o personagem e começar de novo? Isso apaga o progresso atual.')) return;
     try { localStorage.removeItem(SAVE_KEY); } catch { /* storage bloqueado */ }
+    // Zera o estado ANTES de recarregar (auditoria 23/10): o salvamento de saída (pagehide) gravava o
+    // personagem antigo de volta no aparelho/conta. Agora o que for salvo na saída já é o personagem novo.
+    useGameStore.setState(useGameStore.getInitialState(), true);
     if (AUTH_ENABLED && authUser && supabase) {
       void supabase.from('player_saves').delete().eq('user_id', authUser.id).then(() => location.reload());
     } else {
@@ -404,7 +413,9 @@ function Index() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
-      if (e.code === 'F8') {
+      // Editor ADM: só rodando LOCAL (`npm run dev` / localhost) — Pedro, 23/10. No site o F8 não abre.
+      // Os objetos já fixados no código (baked-layout: favelas etc.) seguem no jogo pra todos.
+      if (e.code === 'F8' && import.meta.env.DEV) {
         e.preventDefault();
         setEditorActive(!editorActive);
         setCameraMode(editorActive ? 'iso' : 'free');
@@ -555,7 +566,7 @@ function Index() {
           </Button>
         </nav>
         <div className="sidebar-bottom">
-          <div className="tribe-emblem"><Shield strokeWidth={1.2} /><div><strong>Os Guardiões</strong><small>Era do Ferro · Nível 1</small></div></div>
+          <div className="tribe-emblem"><Shield strokeWidth={1.2} /><div><strong>Os Guardiões</strong><small>{eraName} · Nível {hallLevel}</small></div></div>
           <div className="server-status"><i className="status-dot" /> Protótipo local <span className="ml-auto">v0.2</span></div>
         </div>
       </aside>
@@ -575,7 +586,7 @@ function Index() {
                 {player.name} <span className="text-primary">· {String(player.level).padStart(2, '0')}</span>
                 {levelUpFlash && <span className="levelup-chip" role="status">NÍVEL {player.level}!</span>}
               </div>
-              <div className="player-class">Guerreiro · Era do Ferro</div>
+              <div className="player-class">Guerreiro · {eraName}</div>
               <div className="xp-bar" data-levelup={levelUpFlash} title={`Experiência: ${player.xp} de ${player.xpToNext} (total ${player.totalXp})`}>
                 <progress value={player.xp} max={Math.max(1, player.xpToNext)} aria-label="Experiência" />
                 <span>XP {player.xp} / {player.xpToNext} <em>{xpPct}%</em></span>
@@ -939,7 +950,7 @@ function Index() {
                     <div className="panel-stats">
                       <span>Peso: {weight.toFixed(1)} / {player.inventory.maxWeight} kg</span>
                       <span>{usedSlots} / {player.inventory.maxSlots} slots</span>
-                      <span>Era do Ferro</span>
+                      <span>{eraName}</span>
                     </div>
                     <div className="attr-panel" aria-label="Atributos">
                       <div className="attr-head">
@@ -1046,23 +1057,23 @@ function Index() {
 
                 {panel === 'raid' && (
                   <>
-                    <div className="raid-row"><Castle /><div><h3>Fortaleza Esquecida</h3><p>Uma fortaleza abandonada no norte do vale.<br />Recursos arcanos e suprimentos sob proteção de criaturas.</p></div></div>
-                    <div className="raid-info"><div><span>Risco</span><br />Moderado</div><div><span>Duração</span><br />5 — 20 min</div><div><span>Mini-FOB</span><br />Floresta</div></div>
-                    <div className="panel-actions"><Button onClick={startRaid}><Swords />Iniciar operação<ChevronRight /></Button></div>
+                    {/* Auditoria 23/10: o "Iniciar operação" só trocava o título (protótipo). Sem botão falso. */}
+                    <div className="raid-row"><Castle /><div><h3>Raid entre jogadores</h3><p>Em construção: tropas tankando, saque de 35% do armazém inimigo.<br />Hoje o PvP e o ataque a bases (muro, porta, torre) acontecem nas Salas online.</p></div></div>
+                    <div className="panel-actions"><Button onClick={() => open('rooms')}><Users />Abrir Salas<ChevronRight /></Button></div>
                   </>
                 )}
 
                 {panel === 'home' && (
                   <>
                     <div className="home-grid">
-                      <div className="home-building"><Castle /><div><strong>Casa da tribo</strong><small>Nível 1 · Era do Ferro</small></div></div>
-                      <div className="home-building"><Shield /><div><strong>Defesas</strong><small>Muralha de madeira</small></div></div>
+                      <div className="home-building"><Castle /><div><strong>Casa da tribo</strong><small>Nível {hallLevel} · {eraName}</small></div></div>
+                      <div className="home-building"><Shield /><div><strong>Defesas</strong><small>Muralha de {wallTier}</small></div></div>
                     </div>
                     <div className="home-building">
                       <Package /><div><strong>Armazém</strong><small className="item-inline">
-                        <span title="Madeira"><ItemSprite itemId="wood" size={16} />{woodCount} madeira</span>
-                        <span title="Pedra"><ItemSprite itemId="stone" size={16} />{stoneCount} pedra</span>
-                        <span title="Essência Arcana"><ItemSprite itemId="arcane_essence" size={16} />{essenceCount} essências</span>
+                        <span title="Madeira"><ItemSprite itemId="wood" size={16} />{Math.floor(storage.wood)} madeira</span>
+                        <span title="Pedra"><ItemSprite itemId="stone" size={16} />{Math.floor(storage.stone)} pedra</span>
+                        <span title="Essência Arcana"><ItemSprite itemId="arcane_essence" size={16} />{Math.floor(storage.essence)} essências</span>
                       </small></div>
                       <Button variant="outline" size="sm" onClick={rest}>Descansar</Button>
                     </div>
@@ -1083,9 +1094,9 @@ function Index() {
 
                 {panel === 'tribe' && (
                   <>
-                    <div className="raid-row"><Shield /><div><h3>Os Guardiões</h3><p>Era do Ferro · Base no Vale dos Ancestrais</p></div></div>
+                    <div className="raid-row"><Shield /><div><h3>Os Guardiões</h3><p>{eraName} · Base no Vale dos Ancestrais</p></div></div>
                     <div className="home-building"><ShieldCheck /><div><strong>{player.name}</strong><small>Guerreiro · Fundador</small></div><span className="ml-auto text-health text-xs">No vale</span></div>
-                    <div className="panel-stats"><span>1 membro · Sessão local</span><span>Armazém: {totalResources} recursos</span></div>
+                    <div className="panel-stats"><span>1 membro</span><span>Armazém: {totalResources} recursos</span></div>
                   </>
                 )}
 
@@ -1121,8 +1132,8 @@ function Index() {
 
                 {panel === 'settings' && (
                   <>
-                    <div className="home-building"><Wind /><div><strong>Áudio ambiente</strong><small>Desativado nesta versão</small></div></div>
-                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Espaço pular · Clique esquerdo atacar · Clique no inimigo seleciona · Shift+clique enfileira · V câmera · E coletar · I inventário · B cidade · G piloto automático (idle/manual) · Botão direito MIRA (3ª pessoa) · rodinha mirando = zoom</small></div></div>
+                    <div className="home-building"><Wind /><div><strong>Áudio</strong><small>Música no botão do topo (♪) · sons de combate, passos e poderes ligados</small></div></div>
+                    <div className="home-building"><Compass /><div><strong>Controles</strong><small>WASD andar · Shift correr · Espaço pular · Clique esquerdo atacar · Clique no inimigo seleciona e ataca · Shift+clique enfileira · Q salto · R giro · F chuva de flechas · Z bumerangue · X tornado · C raio · E coletar · I inventário · M mapa · B cidade · V câmera · G piloto automático · Botão direito MIRA (3ª pessoa) · rodinha mirando = zoom</small></div></div>
                     <InstallAppRow />
                     {AUTH_ENABLED && authUser && (
                       <div className="home-building">
