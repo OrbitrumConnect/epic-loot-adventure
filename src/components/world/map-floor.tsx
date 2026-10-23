@@ -1,6 +1,8 @@
 import { useGLTF } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { extendKTX2, preloadKTX2GLTF, primeKTX2 } from './ktx2-gltf';
 import { registerTerrain } from './terrain-collision';
 
 /**
@@ -43,7 +45,11 @@ function matte(root: THREE.Object3D) {
 }
 
 export function MapFloor() {
-  const { scene } = useGLTF(URL);
+  // KTX2/Basis (piloto): o renderer (gl) tem que ser informado ao KTX2Loader ANTES do
+  // useGLTF carregar o GLB basisu — por isso prime no corpo, antes da linha do useGLTF.
+  const gl = useThree((s) => s.gl);
+  primeKTX2(gl);
+  const { scene } = useGLTF(URL, true, true, extendKTX2);
   const ref = useRef<THREE.Group>(null);
   const { model, pivot } = useMemo(() => {
     const clone = scene.clone(true);
@@ -76,4 +82,4 @@ export function MapFloor() {
   );
 }
 
-useGLTF.preload(URL);
+preloadKTX2GLTF(URL);
