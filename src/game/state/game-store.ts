@@ -16,7 +16,9 @@ import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES, harvestRangeFor } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
-import { resolveAttack, getDistance } from '../systems/combatSystem';
+import { resolveAttack, getDistance, calculateDamage } from '../systems/combatSystem';
+import { deployTroops, stepTroops, type FieldTroop } from '../systems/troopSystem';
+import { UNITS } from '../data/units';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
 import { rollBonusLoot } from '../systems/lootEconomySystem';
 import { canCraft, craft } from '../systems/craftSystem';
@@ -99,6 +101,11 @@ type GameState = {
   selectedBaseType: BaseType;
   /** Milissegundos por torre; separado das peças para não reconstruir malhas por tiro. */
   towerLastShotAt: Record<string, number>;
+  /** Tropas em CAMPO na horda (não vão pro save; a contagem fica em `base.troops`). */
+  fieldTroops: FieldTroop[];
+  troopSeq: number;
+  /** Tropas nas ondas: sai/luta/volta (ver `troopSystem`). `dt` em segundos. */
+  tickTroops: (now: number, dt: number) => void;
   /** Último tick dos powers orbitais (throttle do dano). */
   powerLastTickAt: number;
   /** Ciclo de HORDAS (Fase 5): paz ↔ combate, ondas cada vez mais difíceis. */
@@ -629,6 +636,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   playerBase: null,
   selectedBaseType: DEFAULT_BASE_TYPE,
   towerLastShotAt: {},
+  fieldTroops: [],
+  troopSeq: 0,
   powerLastTickAt: 0,
   wave: INITIAL_WAVE,
   baseLevel: 1,
@@ -715,6 +724,70 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         feedback: pushEvents(state.feedback, drafts, now),
       });
     }
+  },
+
+  tickTroops: (now, dt) => {
+    const st = get();
+    const core = st.playerBase?.pieces.find((p) => p.kind === 'core');
+    // Fora da horda (ou sem base): as vivas voltam pra base — seguem na contagem.
+    if (!core || st.wave.phase !== 'combat') {
+      if (st.fieldTroops.length) set({ fieldTroops: [] });
+      return;
+    }
+    const center = baseCellCenter(core.cell);
+    const warCamp = st.base.buildings.find((b) => b.defId === 'war_camp')?.level ?? 1;
+    const dep = deployTroops(st.base.troops, st.fieldTroops, center, warCamp, st.troopSeq);
+    if (dep.field.length === 0) return;
+    const foes = st.creatures
+      .filter((c) => c.behavior !== 'dead' && c.hp > 0 && CREATURES[c.speciesId]?.peaceful === false)
+      .map((c) => ({ id: c.id, position: c.position, hp: c.hp, attackPower: c.attackPower, attackCooldown: c.attackCooldown }));
+    const r = stepTroops(dep.field, foes, center, warCamp, dt, now);
+    // Golpe da tropa = mesmo caminho da TORRE (armadura, loot/XP pro jogador, convidado pede ao host).
+    let creatures = st.creatures;
+    let player = st.player;
+    let deathBags = st.deathBags;
+    const drafts: FeedbackDraft[] = [];
+    if (r.hits.length) {
+      if (!canSimulateSharedWorld()) {
+        for (const h of r.hits) broadcastCreatureHit({ targetId: h.creatureId, source: center, damage: h.damage });
+      } else {
+        creatures = creatures.slice();
+        for (const h of r.hits) {
+          const i = creatures.findIndex((c) => c.id === h.creatureId);
+          const c = creatures[i];
+          if (!c || c.hp <= 0 || c.behavior === 'dead') continue;
+          const dmg = calculateDamage(h.damage, c.armor, Math.random);
+          const hp = Math.max(0, c.hp - dmg);
+          drafts.push(damageEvent(c.id, dmg, c.position));
+          if (hp === 0) {
+            const reward = rewardCreatureDeath(c, player, deathBags, drafts, Math.random);
+            player = reward.player;
+            deathBags = reward.bags;
+            creatures[i] = deadCreature(c, now, Math.random);
+          } else {
+            creatures[i] = { ...c, hp, behavior: 'chase' };
+          }
+        }
+      }
+    }
+    // Tropa que caiu SAI da contagem (treina outra no Campo de Guerra).
+    let base = st.base;
+    let message: string | null = null;
+    if (r.dead.length) {
+      const troops = { ...base.troops };
+      for (const d of r.dead) troops[d.unitId] = Math.max(0, (troops[d.unitId] ?? 0) - 1);
+      base = { ...base, troops };
+      const names = r.dead.map((d) => UNITS[d.unitId]?.name ?? d.unitId);
+      message = `⚔️ ${names.join(', ')} caiu defendendo a base.`;
+    }
+    set({
+      fieldTroops: r.field,
+      troopSeq: dep.seq,
+      ...(creatures !== st.creatures ? { creatures, player, deathBags } : {}),
+      ...(base !== st.base ? { base } : {}),
+      ...(drafts.length ? { feedback: pushEvents(st.feedback, drafts, now) } : {}),
+      ...(message ? { ui: { ...st.ui, message } } : {}),
+    });
   },
 
   tickPowers: (now) => {

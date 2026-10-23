@@ -31,6 +31,7 @@ import { TowerRuntime } from './tower-runtime';
 import { PowerOrbit } from './power-orbit';
 import { useNet, broadcastBase, MP_ENABLED } from '@/net/multiplayer';
 import { strikeRemotePiece } from './remote-base-strike';
+import { AllyTroops } from './ally-troops';
 import { useShallow } from 'zustand/react/shallow';
 
 /** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
@@ -841,6 +842,7 @@ export function PlayerBase({
       <GlbBaseWalls />
       <GlbTrainingCamps />
       <TowerRuntime paused={paused} />
+      <AllyTroops />
       <PowerOrbit paused={paused} />
       <BaseHouse />
       <BuildLayer c={c} playerRef={playerRef} paused={paused} />

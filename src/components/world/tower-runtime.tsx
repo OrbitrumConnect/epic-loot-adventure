@@ -32,8 +32,10 @@ export function TowerRuntime({ paused }: { paused: boolean }) {
         current.towers.push({ id: p.id, tier: p.tier, level: p.level, hp: p.hp, x: c.x, z: c.z, baseType: state.playerBase?.baseType });
       }
     }
-    if (!current.towers.length) return;
     const now = Date.now();
+    // Tropas nas ondas (etapa 1): mesmo relógio das torres (20×/s).
+    state.tickTroops(now, 0.05);
+    if (!current.towers.length) return;
     state.tickTowers(current.towers, now);
     if (MP_ENABLED) towersHitEnemyPlayers(current.towers, now);
   });
