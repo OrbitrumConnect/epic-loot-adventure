@@ -63,6 +63,11 @@ export type AutoSnapshot = {
   resources: { id: string; position: Position; depleted: boolean; kind?: string; range?: number; canCollect?: boolean }[];
   objectives: ObjectiveQueueState;
   homePosition: Position;
+  /** Onde o jogador LIGOU o automático (Pedro, 23/10): caça "somando" de bicho em bicho e, quando
+   *  acaba tudo em volta, volta pra cá e espera renascer. Ausente = comportamento antigo (fica). */
+  autoAnchor?: Position;
+  /** Centro da base do jogador (núcleo). Na HORDA o piloto volta pra cá e defende aqui. */
+  baseCenter?: Position;
   /** Zona segura do spawn: nenhum hostil entra nela (`pushOutSafeZone`). Dentro
    *  dela fugir é inútil — o inimigo não alcança — e travava o piloto pra sempre. */
   safeZone?: { x: number; z: number; radius: number };

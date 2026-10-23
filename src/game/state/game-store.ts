@@ -132,6 +132,8 @@ type GameState = {
   pilotWeaponStyle: PilotWeaponStyle;
   /** Última intenção do piloto, realimentada pelo executor pra dar histerese. */
   pilotLastIntent: AutoIntent | null;
+  /** Onde o automático foi LIGADO (volta pra cá quando acaba tudo em volta). Só sessão. */
+  pilotAnchor: Position | null;
   /** Eventos efêmeros (dano, XP, loot) para o mundo 3D e o HUD. Somem pelo `ttl`. */
   feedback: FeedbackEvent[];
 };
@@ -619,6 +621,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   autoHuntRadius: 45,
   pilotWeaponStyle: 'auto',
   pilotLastIntent: null,
+  pilotAnchor: null,
   feedback: [],
   ui: {
     mode: 'world',
@@ -2028,6 +2031,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Ligar/desligar o automático ZERA a memória do piloto (alvo "grudado"). Antes: liga no ponto
       // A, anda no manual até B, liga de novo → voltava pro bicho de A (vivo a até 63 m). Pedro, 23/10.
       pilotLastIntent: null,
+      // Ligou = marca o ponto de partida; desligou = esquece.
+      pilotAnchor: mode === 'idle' ? { ...s.player.position } : null,
       ui: {
         ...s.ui,
         message: mode === 'idle' ? 'Piloto automático ligado.' : 'Controle manual retomado.',
@@ -2456,6 +2461,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       ],
       objectives: state.objectives,
       homePosition: HOME_POSITION,
+      ...(state.pilotAnchor ? { autoAnchor: state.pilotAnchor } : {}),
+      ...(() => {
+        const core = state.playerBase?.pieces.find(p => p.kind === 'core');
+        return core ? { baseCenter: baseCellCenter(core.cell) } : {};
+      })(),
       safeZone: SAFE_ZONE,
       baseUnderSiege: state.wave.phase === 'combat',
     };

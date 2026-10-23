@@ -29,6 +29,10 @@ export const AUTO_ENGAGE_RADIUS = 10;
 /** DURANTE A ONDA: o piloto defende a base atacando o hostil mais próximo até
  *  este raio (pedido do Pedro: ~35m, foca o mais perto e NÃO persegue além). */
 export const BASE_DEFENSE_RADIUS = 35;
+/** Na horda, mais longe que isso do núcleo da base = volta pra base. */
+export const SIEGE_HOLD_RADIUS = 12;
+/** Chegou no ponto de partida do automático (folga pra não ficar "dançando" em cima do ponto). */
+export const ANCHOR_ARRIVAL = 4;
 
 /** Caça ociosa: sem objetivo e sem recurso válido, persegue o hostil de MENOR
  *  nível dentro deste raio (bem maior que AUTO_ENGAGE_RADIUS pra não travar
@@ -375,6 +379,19 @@ function nearestThreat(snapshot: AutoSnapshot): AutoSnapshot['creatures'][number
 }
 
 /** Inimigo (hostil) vivo mais próximo dentro de `radius` — pra DEFESA (ignora pacífico). */
+/** Hostil vivo a até `radius` de um PONTO (ex.: a base), o mais perto do jogador. */
+function hostileNear(snapshot: AutoSnapshot, at: Position, radius: number): AutoSnapshot['creatures'][number] | null {
+  let best: AutoSnapshot['creatures'][number] | null = null;
+  let bestDist = Infinity;
+  for (const creature of snapshot.creatures) {
+    if (!isCreatureAlive(creature) || creature.hostile === false) continue;
+    if (getDistance(at, creature.position) > radius) continue;
+    const d = getDistance(snapshot.playerPosition, creature.position);
+    if (d < bestDist) { bestDist = d; best = creature; }
+  }
+  return best;
+}
+
 function nearestHostileWithin(snapshot: AutoSnapshot, radius: number): AutoSnapshot['creatures'][number] | null {
   let best: AutoSnapshot['creatures'][number] | null = null;
   let bestDist = Infinity;
@@ -523,6 +540,17 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   if (snapshot.baseUnderSiege) {
     const foe = nearestHostileWithin(snapshot, BASE_DEFENSE_RADIUS);
     if (foe) return engage(snapshot, foe, 'Defendendo a base');
+    // Na HORDA a base vem primeiro (Pedro, 23/10): longe dela, o piloto VOLTA e guarda a região
+    // da base — não sai caçando longe enquanto a onda bate nas peças.
+    const base = snapshot.baseCenter;
+    if (base) {
+      const atBase = hostileNear(snapshot, base, BASE_DEFENSE_RADIUS);
+      if (atBase) return engage(snapshot, atBase, 'Defendendo a base');
+      if (getDistance(snapshot.playerPosition, base) > SIEGE_HOLD_RADIUS) {
+        return { kind: 'move', to: { ...base }, reason: 'Horda! Voltando pra defender a base' };
+      }
+      return { kind: 'idle', reason: 'Guardando a base (horda)' };
+    }
   }
 
   // 4c. SOB ATAQUE — se o jogador levou dano há menos de RECENT_DAMAGE_WINDOW_MS
@@ -583,6 +611,14 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     if (huntBase > 0) {
       const quarry = weakestTargetWithin(snapshot, Math.max(huntBase, snapshot.attackRange ?? 0), false);
       if (quarry) return engage(snapshot, quarry, 'Caçando por perto');
+    }
+
+    // 4d. Acabou tudo em volta → VOLTA pro ponto onde ligou o automático (Pedro, 23/10). Ele vai
+    // "somando" de bicho em bicho; quando não sobra nada no raio, retorna e espera renascer — e no
+    // caminho, se aparecer bicho no raio, os passos acima pegam primeiro (re-decide a cada tique).
+    const anchor = snapshot.autoAnchor;
+    if (anchor && getDistance(snapshot.playerPosition, anchor) > ANCHOR_ARRIVAL) {
+      return { kind: 'move', to: { ...anchor }, reason: 'Voltando pro ponto de partida' };
     }
 
     // 5. Bolsa cheia e nada a fazer → FICA onde está (Pedro, 22/10). Antes recuava pro
