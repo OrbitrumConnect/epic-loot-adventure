@@ -81,7 +81,7 @@ describe('tropas nas ondas — na store', () => {
   const lobo = (hp: number) => ({ id: 'wave1_lobo', speciesId: 'raider_brute', name: 'Brutamonte', hp, maxHp: hp, armor: 0, attackPower: 22,
     attackCooldown: 2.4, lastAttackAt: 0, position: { x: 13, z: 11 }, behavior: 'chase', lootTable: [], respawnAt: null } as never);
 
-  it('horda: sai, bate no bicho (mesmo caminho da torre); acabou a onda: volta (contagem intacta)', () => {
+  it('sai, bate no bicho (mesmo caminho da torre); acabou a onda: FICA nos postos (Pedro, 23/10)', () => {
     useGameStore.setState(s => ({
       playerBase: base, wave: { ...s.wave, phase: 'combat' },
       base: { ...s.base, troops: { warrior: 2 } }, creatures: [lobo(100)],
@@ -93,8 +93,20 @@ describe('tropas nas ondas — na store', () => {
     expect(st.creatures.find(c => c.id === 'wave1_lobo')!.hp).toBeLessThan(100);
     useGameStore.setState(s => ({ wave: { ...s.wave, phase: 'peace' } }));
     useGameStore.getState().tickTroops(t + 50, 0.05);
-    expect(useGameStore.getState().fieldTroops).toHaveLength(0);
+    expect(useGameStore.getState().fieldTroops.length).toBeGreaterThan(0); // não some entre ondas
     expect(useGameStore.getState().base.troops['warrior']).toBe(2);
+  });
+
+  it('postos FORA da cerca; base caiu/sumiu → ninguém em campo', () => {
+    useGameStore.setState(s => ({ playerBase: base, base: { ...s.base, troops: { spearman: 3, archer: 2 } }, creatures: [] }));
+    useGameStore.getState().tickTroops(1000, 0.05);
+    const half = (11 * 2) / 2; // terreno 11 células × 2 m
+    for (const tr of useGameStore.getState().fieldTroops) {
+      expect(Math.max(Math.abs(tr.postX - half), Math.abs(tr.postZ - half))).toBeGreaterThan(half); // fora do quadrado
+    }
+    useGameStore.setState({ playerBase: null });
+    useGameStore.getState().tickTroops(1050, 0.05);
+    expect(useGameStore.getState().fieldTroops).toHaveLength(0);
   });
 
   it('tropa que morre SAI da contagem', () => {

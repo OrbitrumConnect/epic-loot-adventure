@@ -63,6 +63,8 @@ export function deployTroops(
   center: Position,
   warCampLevel: number,
   seq: number,
+  /** Meia-largura do terreno da base (m). Os postos ficam FORA da cerca (Pedro, 23/10). */
+  fenceHalf = 11,
 ): { field: FieldTroop[]; seq: number } {
   const out = field.slice();
   const scale = troopScale(warCampLevel);
@@ -71,12 +73,15 @@ export function deployTroops(
     const have = counts[unitId] ?? 0;
     let inField = out.filter((t) => t.unitId === unitId).length;
     while (inField < have && out.length < TROOP_FIELD_CAP) {
-      // Postos em anel em volta do núcleo (tanques mais perto do portão/borda virá do alvo).
+      // Postos em anel FORA da cerca: corpo a corpo mais pra fora, arqueiro logo depois do muro.
       const k = out.length;
       const ang = (k / TROOP_FIELD_CAP) * Math.PI * 2;
-      const r = unitId === 'archer' ? 3 : 5;
-      const postX = center.x + Math.cos(ang) * r;
-      const postZ = center.z + Math.sin(ang) * r;
+      const r = fenceHalf + (unitId === 'archer' ? 1.5 : 4);
+      // A cerca é QUADRADA: posto no contorno de um quadrado (num círculo, a quina ficaria dentro).
+      const cos = Math.cos(ang), sin = Math.sin(ang);
+      const edge = Math.max(Math.abs(cos), Math.abs(sin));
+      const postX = center.x + (cos / edge) * r;
+      const postZ = center.z + (sin / edge) * r;
       const hp = Math.round(TROOP_STATS[unitId].hp * scale);
       out.push({ id: `troop_${n++}`, unitId, hp, maxHp: hp, x: postX, z: postZ, postX, postZ, lastAttackAt: 0, action: 'idle', yaw: 0 });
       inField++;

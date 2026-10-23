@@ -29,6 +29,7 @@ import {
 } from '../systems/baseSystem';
 import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
 import type { BaseType, BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
+import { BASE_GRID } from '../types/playerbase';
 import { BASE_TYPES, DEFAULT_BASE_TYPE } from '../data/base-types';
 import { basePieceCost } from '../systems/baseTypeSystem';
 import { CLAIM_SIZE } from '../data/base-pieces';
@@ -728,15 +729,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   tickTroops: (now, dt) => {
     const st = get();
-    const core = st.playerBase?.pieces.find((p) => p.kind === 'core');
-    // Fora da horda (ou sem base): as vivas voltam pra base — seguem na contagem.
-    if (!core || st.wave.phase !== 'combat') {
+    const pb = st.playerBase;
+    // Sem base (caiu/nunca teve): ninguém em campo. Com base, as tropas FICAM nos postos fora da cerca
+    // (inclusive entre ondas) até morrer — não somem/reaparecem a cada onda (Pedro, 23/10).
+    if (!pb || !pb.pieces.some((p) => p.kind === 'core')) {
       if (st.fieldTroops.length) set({ fieldTroops: [] });
       return;
     }
-    const center = baseCellCenter(core.cell);
+    const half = (pb.size * BASE_GRID) / 2;
+    const center = { x: pb.origin.gx * BASE_GRID + half, z: pb.origin.gz * BASE_GRID + half };
     const warCamp = st.base.buildings.find((b) => b.defId === 'war_camp')?.level ?? 1;
-    const dep = deployTroops(st.base.troops, st.fieldTroops, center, warCamp, st.troopSeq);
+    const dep = deployTroops(st.base.troops, st.fieldTroops, center, warCamp, st.troopSeq, half);
     if (dep.field.length === 0) return;
     const foes = st.creatures
       .filter((c) => c.behavior !== 'dead' && c.hp > 0 && CREATURES[c.speciesId]?.peaceful === false)
