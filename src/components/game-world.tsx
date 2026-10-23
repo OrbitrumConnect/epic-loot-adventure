@@ -51,9 +51,9 @@ import { RiverBanks } from './world/river-banks';
 import { pbrMaps } from './world/pbr-materials';
 import { DistantLandscape } from './world/distant-landscape';
 import { CEL } from './world/cel-style';
-import { housePlayerInside } from './world/house-collider';
+import { housePlayerFeetY, housePlayerInside } from './world/house-collider';
 import { factoryClip } from './world/factory-collider';
-import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls, factoryRoofCutY } from './world/base-collision';
+import { houseFloorSurfaceY, houseWalkFloorY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls, factoryRoofCutY } from './world/base-collision';
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
@@ -612,7 +612,8 @@ function Character({
       [nx, nz] = pushOut(nx, nz, node.position.x, node.position.z, r);
     }
     // Paredes da casa da base: sólidas (entra só pela porta).
-    [nx, nz] = pushOutHouseWalls(nx, nz, PLAYER_RADIUS);
+    // Casa de 2 andares: a parede que vale é a do andar em que os pés estão (escada não bloqueia).
+    [nx, nz] = pushOutHouseWalls(nx, nz, PLAYER_RADIUS, body.current.position.y);
     // Cerca da base (muro + torre): sólida; entra pelo portão.
     [nx, nz] = pushOutBasePieces(nx, nz, PLAYER_RADIUS);
     // Paredes das fábricas: sólidas (entra pela abertura).
@@ -679,7 +680,10 @@ function Character({
     // igual aos props (mesmo glbSurfaceY = terrainMeshTopY, raycast de bem alto pega o
     // topo da malha → acompanha o relevo pra baixo SEM cair pro fundo/undermap). Fora do
     // GLB cai no chão procedural / ponte / casa.
-    const groundY = glbSurfaceY(bx, bz, Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor));
+    // Casa de PEDRA/METAL: piso por altura (degrau, rampa/escada, 2º andar). Madeira: igual antes.
+    const houseWalk = houseWalkFloorY(bx, bz, body.current.position.y);
+    housePlayerFeetY.current = houseWalk;
+    const groundY = Math.max(glbSurfaceY(bx, bz, Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor)), houseWalk);
 
     if (!isGrounded.current) {
       jumpVelocity.current -= 15 * dt;

@@ -10,6 +10,7 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { BASE_GRID } from '@/game/types/playerbase';
 import { BASE_TRAINING_WIDTH } from '@/game/data/base-pieces';
 import { houseCollider, HOUSE_WALLS_SOLID } from './house-collider';
+import { floorBelow, levelSegs } from './house-levels';
 import { factoryColliders, FACTORY_WALLS_SOLID, FACTORY_ROOF_CUT } from './factory-collider';
 import { trainingColliders } from './training-collider';
 
@@ -34,13 +35,30 @@ export function houseFloorSurfaceY(px: number, pz: number): number {
 }
 
 /**
+ * Casa de 2 andares (pedra/metal): piso caminhável sob os pés do jogador — degrau, rampa e 2º
+ * andar. `-Infinity` = fora da casa, casa de madeira (usa o piso antigo) ou nada embaixo.
+ */
+export function houseWalkFloorY(px: number, pz: number, feetY: number): number {
+  const h = houseCollider.current;
+  if (!h?.floorMesh || h.baseY === undefined) return -Infinity;
+  if (Math.abs(px - h.cx) > h.halfX || Math.abs(pz - h.cz) > h.halfZ) return -Infinity;
+  const y = floorBelow(h.floorMesh, px - h.cx, pz - h.cz, feetY - h.baseY);
+  return y === null ? -Infinity : h.baseY + y;
+}
+
+/**
  * Paredes da casa sólidas usando os segmentos REAIS do modelo (altura do peito).
  * Onde não há segmento (vão da porta) passa. `self` = raio do corpo.
+ * `feetY` (só o jogador): na casa de 2 andares usa a fatia no JOELHO acima do piso em que ele
+ * está (escada não vira parede; no 2º andar valem as paredes de cima). Sem `feetY` (criaturas) ou
+ * casa de madeira: a fatia única de sempre.
  */
-export function pushOutHouseWalls(x: number, z: number, self: number): [number, number] {
+export function pushOutHouseWalls(x: number, z: number, self: number, feetY?: number): [number, number] {
   const h = houseCollider.current;
   if (!h || !HOUSE_WALLS_SOLID) return [x, z];
-  const segs = h.wallSegs;
+  const segs = h.levels && h.baseY !== undefined && feetY !== undefined && Number.isFinite(feetY)
+    ? levelSegs(h.levels, feetY - h.baseY, h.wallSegs)
+    : h.wallSegs;
   const R = self + 0.12; // raio do corpo + meia-espessura da parede
   let rx = x, rz = z;
   for (let i = 0; i < segs.length; i += 4) {
