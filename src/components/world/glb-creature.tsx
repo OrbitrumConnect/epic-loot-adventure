@@ -9,6 +9,32 @@ import { useGameStore } from '@/game/state/game-store';
  *  (com ~70 bichos, é o maior ganho de FPS — longe ninguém nota). */
 const CREATURE_ACTIVE_D2 = 34 * 34;
 const tmpCreatureV = new THREE.Vector3();
+const tmpSkinV = new THREE.Vector3();
+
+/** Ponto mais BAIXO (Y de mundo) do corpo ANIMADO — vértices já posicionados pelos ossos (amostra). */
+export function skinnedMinY(root: THREE.Object3D, maxSamples = 1500): number {
+  let min = Infinity;
+  root.traverse((o) => {
+    const sm = o as THREE.SkinnedMesh;
+    const pos = sm.geometry?.attributes?.['position'] as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    const step = Math.max(1, Math.floor(pos.count / maxSamples));
+    for (let i = 0; i < pos.count; i += step) {
+      tmpSkinV.fromBufferAttribute(pos, i);
+      if (sm.isSkinnedMesh) sm.applyBoneTransform(i, tmpSkinV);
+      tmpSkinV.applyMatrix4(sm.matrixWorld);
+      if (tmpSkinV.y < min) min = tmpSkinV.y;
+    }
+  });
+  return min;
+}
+
+/** Próximo deslocamento vertical pra o pé (minY) encostar no chão (groundY), suavizado. */
+export function nextGroundOffset(current: number, minY: number, groundY: number, k = 0.35): number {
+  if (!Number.isFinite(minY)) return current;
+  const target = current - (minY - groundY);
+  return current + (target - current) * k;
+}
 
 /** Bounding box a partir das GEOMETRIAS (independe de pose/skin/timing). */
 function measureGeo(root: THREE.Object3D): THREE.Box3 {
@@ -39,7 +65,11 @@ export function GlbCreature({
   tint,
   groundBias = 0,
   fixedScale,
+  autoGround = false,
 }: {
+  /** Assenta pelo corpo ANIMADO (mede o pé mais baixo a cada ~0,3 s, perto do jogador) — pra modelos
+   *  cujo bind-pose ≠ animação (o ajuste fixo "oscila"). groundBias vira só o ponto de partida. */
+  autoGround?: boolean;
   url: string;
   movingRef: React.MutableRefObject<boolean>;
   height?: number | undefined;
@@ -61,6 +91,7 @@ export function GlbCreature({
   const meshes = useRef<THREE.Mesh[]>([]);
   /** Estado de proximidade atual (evita reescrever castShadow/timeScale todo quadro). */
   const active = useRef(true);
+  const groundAcc = useRef(0);
 
   // Modelos "demo" trazem textura EMBUTIDA mas não a ligam no material (ficam
   // brancos/amarelos). Liga a baseColor via parser do glTF (material i → textura i).
@@ -166,6 +197,15 @@ export function GlbCreature({
       if (mixer) mixer.timeScale = near ? 1 : 0;
     }
     if (!near) return; // longe: nem recalcula o clipe
+
+    if (autoGround && g.parent) {
+      groundAcc.current += 1;
+      if (groundAcc.current % 18 === 0) { // ~0,3 s a 60 fps
+        g.parent.getWorldPosition(tmpCreatureV); // a raiz do bicho fica no chão (Beast/AI)
+        g.updateWorldMatrix(true, true);
+        g.position.y = nextGroundOffset(g.position.y, skinnedMinY(g), tmpCreatureV.y);
+      }
+    }
 
     const want = movingRef.current ? clips.walk : clips.idle;
     if (want && want !== current.current) {

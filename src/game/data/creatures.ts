@@ -6,7 +6,8 @@ import type { CreatureDefinition } from '../types';
  * só mudam o que a criatura instanciada tem no mundo.
  */
 /** Vida dos inimigos +15% (lutas um pouco mais longas). */
-export const ENEMY_HP_MULT = 1.15;
+// 1,15 → 1,32 (+15% em cima, Pedro 23/10: nv 71 matava rápido demais).
+export const ENEMY_HP_MULT = 1.32;
 /** Reaparecem 20% mais rápido (mundo mais vivo). */
 export const ENEMY_RESPAWN_MULT = 0.8;
 /** Bichos SOLTOS do mapa (`wild_*`) voltam mais rápido (Pedro, 22/10 — nv 37 limpava o mapa e o
