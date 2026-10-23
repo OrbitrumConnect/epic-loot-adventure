@@ -53,13 +53,17 @@ export function houseWalkFloorY(px: number, pz: number, feetY: number): number {
  * está (escada não vira parede; no 2º andar valem as paredes de cima). Sem `feetY` (criaturas) ou
  * casa de madeira: a fatia única de sempre.
  */
+/** Raio do corpo do jogador contra as paredes da casa de 2 andares (escada estreita). */
+export const HOUSE_BODY = 0.38;
+
 export function pushOutHouseWalls(x: number, z: number, self: number, feetY?: number): [number, number] {
   const h = houseCollider.current;
   if (!h || !HOUSE_WALLS_SOLID) return [x, z];
-  const segs = h.levels && h.baseY !== undefined && feetY !== undefined && Number.isFinite(feetY)
-    ? levelSegs(h.levels, feetY - h.baseY, h.wallSegs)
-    : h.wallSegs;
-  const R = self + 0.12; // raio do corpo + meia-espessura da parede
+  const byFloor = !!h.levels && h.baseY !== undefined && feetY !== undefined && Number.isFinite(feetY);
+  const segs = byFloor ? levelSegs(h.levels!, feetY! - h.baseY!, h.wallSegs) : h.wallSegs;
+  // Casa de 2 andares: corpo efetivo 0,5 m (0,38 + 0,12). Com 0,62 a escada de PEDRA (estreita) travava
+  // — Pedro subia pulando (medido na malha real, `casa-dois-andares.test`). Madeira/criaturas: igual.
+  const R = (byFloor ? Math.min(self, HOUSE_BODY) : self) + 0.12; // raio do corpo + meia-espessura da parede
   let rx = x, rz = z;
   for (let i = 0; i < segs.length; i += 4) {
     const ax = h.cx + segs[i]!, az = h.cz + segs[i + 1]!;

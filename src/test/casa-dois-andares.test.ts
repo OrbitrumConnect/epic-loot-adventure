@@ -6,13 +6,15 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   HOUSE_STEP_UP, buildFloorMesh, floorBelow, levelSegs, sliceLevels, type HouseLevels,
 } from '@/components/world/house-levels';
+import { HOUSE_BODY } from '@/components/world/base-collision';
 
 /* Pedro, 22/10: escada/2º andar das casas de PEDRA e METAL não funcionavam (colisão de 1 andar só).
    Prova nas malhas REAIS, com a MESMA escala do jogo (base-house: altura 8,3 × 1,05, centrada):
    andando pela planta (grade de 25 cm, degrau ≤ 45 cm, parede na altura do joelho, corpo 0,3 m),
    partindo do térreo, o herói tem que chegar no 2º andar — e as paredes externas seguem fechando. */
 const TARGET_H = 8.3, VSTRETCH = 1.05;
-const BODY = 0.3;
+// Corpo efetivo do jogador contra a casa de 2 andares = HOUSE_BODY 0,38 + 0,12 (o mesmo do jogo).
+const BODY = HOUSE_BODY + 0.12;
 
 async function houseTris(file: string): Promise<{ tris: Float32Array; halfX: number; halfZ: number }> {
   await MeshoptDecoder.ready;
