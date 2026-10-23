@@ -66,5 +66,22 @@ export function GroundCover({ placements, c, tint }: { placements: ForestPlaceme
   }, [c, tintKey]);
   useFrame(({ clock }) => { assets.time.value = clock.elapsedTime; });
   useEffect(() => () => { assets.geometry.dispose(); assets.material.dispose(); }, [assets]);
-  return <ForestBatch geometry={assets.geometry} material={assets.material} placements={placements} spheres={spheres} />;
+  // Fatiamento espacial: um InstancedMesh ÚNICO de 62k tufos tem culling tudo-ou-nada —
+  // a câmera vendo ~1/4 do mapa renderiza os 62k mesmo assim. Partiçiona em tiles de ~16 m;
+  // cada tile vira um ForestBatch com sua própria boundingSphere (frustumCulled já ligado no
+  // InstancedMesh), então o three descarta os tiles fora do frustum. Geometria/material são os
+  // MESMOS objetos em todos os tiles (construídos uma vez acima) — só o agrupamento muda.
+  const tiles = useMemo(() => {
+    const TILE = 16;
+    const groups = new Map<string, ForestPlacement[]>();
+    for (const p of placements) {
+      const key = `${Math.floor(p.x / TILE)},${Math.floor(p.z / TILE)}`;
+      const list = groups.get(key);
+      if (list) list.push(p); else groups.set(key, [p]);
+    }
+    return [...groups].map(([key, list]) => ({ key, list }));
+  }, [placements]);
+  return <>{tiles.map(({ key, list }) => (
+    <ForestBatch key={key} geometry={assets.geometry} material={assets.material} placements={list} spheres={spheres} castShadow={false} />
+  ))}</>;
 }
