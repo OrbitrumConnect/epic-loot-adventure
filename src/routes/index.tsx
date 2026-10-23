@@ -96,12 +96,14 @@ function InstallAppRow() {
 }
 
 /** Mira no centro do MUNDO (não da janela): só aparece mirando; mostra o zoom (rodinha). */
-function AimCrosshair() {
+/** Pontinho da mira. Na câmera de OMBRO aparece SEMPRE (o clique esquerdo já atira no centro — sem ele
+ *  o jogador atirava às cegas; Pedro, 23/10), discreto; segurando o botão direito fica o de mira + zoom. */
+function AimCrosshair({ shoulder }: { shoulder: boolean }) {
   const active = useAim(s => s.active);
   const zoom = useAim(s => s.zoom);
-  if (!active) return null;
+  if (!active && !shoulder) return null;
   return (
-    <div className="aim-crosshair" aria-hidden="true">
+    <div className="aim-crosshair" data-soft={!active || undefined} aria-hidden="true">
       <span className="aim-crosshair__dot" />
       {zoom > 1 && <small className="aim-crosshair__zoom">{zoom.toFixed(1).replace('.0', '')}×</small>}
     </div>
@@ -630,7 +632,7 @@ function Index() {
               <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel) || editorActive} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
-          {worldOn && !inCity && <AimCrosshair />}
+          {worldOn && !inCity && <AimCrosshair shoulder={cameraMode === 'third'} />}
           {worldOn && ui.mode === 'world' && <BossSpawner />}
           {player.dead && !inCity && (
             <div style={{
