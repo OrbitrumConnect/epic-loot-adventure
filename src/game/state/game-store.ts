@@ -143,6 +143,10 @@ type GameActions = {
   /** Aplica o dano dos powers orbitais (bumerangues) na horda. Throttled. */
   tickPowers: (now: number) => void;
   attack: (targetId: string) => void;
+  /** Tiro NO VAZIO (mira em 3ª pessoa, pontinho sem alvo — igual CS): arma de longe gasta
+   *  munição/cadência, toca o som e o projétil sai rumo a `toward`. Não acerta ninguém.
+   *  Retorna false se a arma na mão não é de longe (aí o chamador usa o ataque de sempre). */
+  fireMiss: (toward: Position) => boolean;
   specialAttack: (kind: 'jump' | 'spin') => void;
   /** Chuva de Flechas: poder de longe, flechas caem do céu e dão dano em ÁREA (raio escala
    *  com o nível, 5 m → 18 m; cooldown 15 s → 5 s). Precisa de arma de longe equipada.
@@ -740,6 +744,29 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       creatures: next, player, deathBags, powerLastTickAt: now,
       feedback: pushEvents(state.feedback, drafts, now),
     });
+  },
+
+  fireMiss: (toward: Position) => {
+    const state = get();
+    if (state.player.dead) return false;
+    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+    const heldItemId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    const prof = weaponFor(heldItemId);
+    if (!prof.ranged || !prof.projectile) return false;
+    const now = Date.now() / 1000;
+    if (now - state.player.lastAttackAt < prof.cooldown) return true; // cadência: clique engolido
+    const ammoItem = prof.projectile === 'bullet' ? 'ammo' : 'arrow';
+    if (getItemCount(state.player.inventory, ammoItem) <= 0) {
+      set(s => ({ ui: { ...s.ui, message: ammoItem === 'ammo' ? 'Sem munição!' : 'Sem flechas!' } }));
+      return true;
+    }
+    if (heldItemId === 'bow') audioManager.playShot(); else audioManager.playGunShot();
+    set({
+      player: { ...state.player, lastAttackAt: now, inventory: removeItem(state.player.inventory, ammoItem, 1) },
+      attackTick: state.attackTick + 1,
+      feedback: pushEvent(state.feedback, shotEvent(state.player.position, toward, prof.projectile), Date.now()),
+    });
+    return true;
   },
 
   attack: (targetId: string) => {

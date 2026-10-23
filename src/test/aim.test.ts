@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
-import { pickAimTarget, setAiming, aimZoomStep, useAim, AIM_ZOOM_MAX } from '@/components/world/aim';
+import { pickAimTarget, setAiming, aimZoomStep, useAim, AIM_ZOOM_MAX, aimFire, setAimCamera } from '@/components/world/aim';
+import { houseCollider } from '@/components/world/house-collider';
+import { useGameStore } from '@/game/state/game-store';
+import { vi } from 'vitest';
 import { creatureAnchors } from '@/components/world/hostile-ai';
 import { useNet } from '@/net/multiplayer';
 
@@ -13,7 +16,8 @@ function camLookingZ(): THREE.PerspectiveCamera {
 }
 const anchor = (x: number, z: number, alive = true) => ({ x, y: 1, z, top: 0, alive });
 
-afterEach(() => { creatureAnchors.clear(); useNet.setState({ players: {}, selfSide: 'ally' }); setAiming(false); });
+const storeInicial = useGameStore.getState();
+afterEach(() => { houseCollider.current = null; setAimCamera(null); useGameStore.setState(storeInicial, true); creatureAnchors.clear(); useNet.setState({ players: {}, selfSide: 'ally' }); setAiming(false); });
 
 describe('mira em 3ª pessoa', () => {
   it('acerta o que está NO CENTRO, não o mais perto de lado', () => {
@@ -41,5 +45,32 @@ describe('mira em 3ª pessoa', () => {
     expect(useAim.getState().zoom).toBe(AIM_ZOOM_MAX);
     setAiming(false);
     expect(useAim.getState().zoom).toBe(1);
+  });
+
+  it('igual CS: ímã quase nada — pontinho 2 m ao lado do corpo a 20 m NÃO acerta', () => {
+    creatureAnchors.set('bicho', anchor(1.2, 20)); // corpo ~0,56 m de raio → borda a ~0,64 m do centro
+    expect(pickAimTarget(camLookingZ())).toBeNull();
+    creatureAnchors.set('bicho', anchor(0.4, 20)); // pontinho dentro do corpo
+    expect(pickAimTarget(camLookingZ())).toEqual({ kind: 'creature', id: 'bicho' });
+  });
+  it('parede GRANDE (casa) entre mim e o alvo bloqueia; muro/torre da base não entram aqui', () => {
+    useGameStore.setState({ player: { ...storeInicial.player, position: { x: 0, z: 0 } } });
+    creatureAnchors.set('atras', anchor(0, 20));
+    houseCollider.current = { cx: 0, cz: 10, halfX: 4, halfZ: 4, floorY: 0, wallSegs: [-3, 0, 3, 0] };
+    expect(pickAimTarget(camLookingZ())).toBeNull();
+    houseCollider.current = { cx: 0, cz: 10, halfX: 4, halfZ: 4, floorY: 0, wallSegs: [1, 0, 3, 0] }; // vão da porta na linha
+    expect(pickAimTarget(camLookingZ())).toEqual({ kind: 'creature', id: 'atras' });
+  });
+  it('pontinho VAZIO: arma de longe atira no vazio (não cai no mais perto); espada usa o ataque de sempre', () => {
+    creatureAnchors.set('lado', anchor(6, 6));
+    setAimCamera(camLookingZ());
+    const attack = vi.fn();
+    const fireMiss = vi.fn(() => true);
+    useGameStore.setState({ attack, fireMiss });
+    expect(aimFire()).toBe(true);
+    expect(fireMiss).toHaveBeenCalledTimes(1);
+    expect(attack).not.toHaveBeenCalled();
+    useGameStore.setState({ fireMiss: vi.fn(() => false) });
+    expect(aimFire()).toBe(false); // corpo a corpo → chamador faz o hitNearest
   });
 });

@@ -92,6 +92,34 @@ export function factoryRoofCutY(px: number, pz: number): number | null {
   return null;
 }
 
+/** O segmento AB (chão, XZ) cruza algum segmento de parede (relativo a cx,cz)? */
+function crossesSegs(ax: number, az: number, bx: number, bz: number, cx: number, cz: number, segs: number[]): boolean {
+  const rx = bx - ax, rz = bz - az;
+  for (let i = 0; i < segs.length; i += 4) {
+    const px = cx + segs[i]!, pz = cz + segs[i + 1]!;
+    const sx = segs[i + 2]! - segs[i]!, sz = segs[i + 3]! - segs[i + 1]!;
+    const den = rx * sz - rz * sx;
+    if (Math.abs(den) < 1e-9) continue; // paralelos
+    const t = ((px - ax) * sz - (pz - az) * sx) / den;
+    const u = ((px - ax) * rz - (pz - az) * rx) / den;
+    if (t > 0 && t < 1 && u >= 0 && u <= 1) return true;
+  }
+  return false;
+}
+
+/**
+ * Linha de tiro: parede GRANDE no caminho? Casa (pedra/metal) e fábricas bloqueiam; muro/torre
+ * da base (finos) deixam passar — decisão do Pedro (22/10). Pela porta/abertura passa.
+ */
+export function bigWallBetween(ax: number, az: number, bx: number, bz: number): boolean {
+  const h = houseCollider.current;
+  if (h && HOUSE_WALLS_SOLID && crossesSegs(ax, az, bx, bz, h.cx, h.cz, h.wallSegs)) return true;
+  if (FACTORY_WALLS_SOLID) {
+    for (const f of factoryColliders) if (crossesSegs(ax, az, bx, bz, f.cx, f.cz, f.wallSegs)) return true;
+  }
+  return false;
+}
+
 /** Muro, torre e centro bloqueiam; portão/core/telhado passam. */
 export function pushOutBasePieces(x: number, z: number, self: number): [number, number] {
   const base = useGameStore.getState().playerBase;
