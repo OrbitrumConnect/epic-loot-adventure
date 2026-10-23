@@ -60,7 +60,7 @@ import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem'
 import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
-import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
+import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, type WaveState } from '../systems/waveSystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
 import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, tornadoPositions, tornadoCount, tornadoDamage, TORNADO_HIT_RADIUS, TORNADO_PUSH, TORNADO_BASE_WAVES, TORNADO_EXTEND_WAVES, dist2, type Vec2 } from '../systems/powerSystem';
 import { SAVE_KEY } from '../systems/persistenceSystem';
@@ -315,7 +315,7 @@ function rewardCreatureDeath(c: CreatureState, player: PlayerState, bags: DeathB
   const def = CREATURES[c.speciesId];
   if (def) {
     const luck = equipmentStats(player).luck;
-    const loot = rollCreatureLoot(def, rng, luck);
+    const loot = scaleHordeAmmo(rollCreatureLoot(def, rng, luck), c.id);
     const newHunt = (player.huntValue ?? 0) + creatureXp(def);
     const seen = player.huntSeen?.[c.speciesId] ?? 0;
     const bonus = rollBonusLoot(def, newHunt, seen, rng, luck);
@@ -1039,7 +1039,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const def = CREATURES[creature.speciesId];
       if (def) {
         const luck = equipmentStats(updatedPlayer).luck;
-        const loot = rollCreatureLoot(def, Math.random, luck);
+        const loot = scaleHordeAmmo(rollCreatureLoot(def, Math.random, luck), creature.id);
         // Economia de loot: acumula valor de caça e rola um bônus de raridade
         // por marco (aditivo à lootTable; diminishing por espécie).
         const newHunt = (updatedPlayer.huntValue ?? 0) + creatureXp(def);

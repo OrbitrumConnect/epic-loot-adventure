@@ -61,6 +61,24 @@ export function waveHpScale(wave: number): number {
   return 1 + Math.max(0, wave - 1) * 0.12; // +12% por onda
 }
 
+/**
+ * BALA da HORDA cresce com a onda (Pedro, 23/10 — "meio a meio, dure até a onda 18–20; depois o pack").
+ * Medido: a partir da onda 10 a horda para em 45 inimigos e a vida segue +12%/onda → as torres (1 bala por
+ * tiro, do pool do jogador) precisavam de mais tiros do que caía (onda 20: 1221 tiros × 718 balas). Com
+ * +3,5%/onda no drop, só com torres o empate cai ~onda 19 (jogador/tropas matando ajudam a ir além); depois
+ * falta → espaço pro pack de bala (monetização futura). Só BALA e só bicho de horda (id `wave{n}_`).
+ */
+export const HORDE_AMMO_GROWTH = 0.035;
+export function hordeAmmoScale(creatureId: string): number {
+  const m = /^wave(\d+)_/.exec(creatureId);
+  return m ? 1 + HORDE_AMMO_GROWTH * Math.max(0, Number(m[1]) - 1) : 1;
+}
+export function scaleHordeAmmo<T extends { itemId: string | null; quantity: number }>(loot: T[], creatureId: string): T[] {
+  const k = hordeAmmoScale(creatureId);
+  if (k === 1) return loot;
+  return loot.map((d) => (d.itemId === 'ammo' ? { ...d, quantity: Math.round(d.quantity * k) } : d));
+}
+
 export type WaveTick = {
   state: WaveState;
   startedWave: number | null; // nº da onda que ACABOU de começar (pra spawnar)
