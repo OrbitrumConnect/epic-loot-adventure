@@ -11,7 +11,15 @@ import { broadcastPlayerHit, useNet } from '@/net/multiplayer';
 import { creatureAnchors } from './hostile-ai';
 import { markPvpHit, pvpStrike } from './pvp-attack';
 import { bigWallBetween } from './base-collision';
-import { worldBlocksShot } from './terrain-collision';
+import { worldBlocksShot, worldShotHitDistance } from './terrain-collision';
+import { weaponRangeFor } from '@/game/data/weapons';
+
+/** Item na mão (igual `held-weapon.selectedItemId` — sem importar modelos 3D: este módulo carrega
+ *  ANTES do login e não pode puxar GLB). */
+function heldId(st: ReturnType<typeof useGameStore.getState>): string | null {
+  const slot = st.player.inventory.hotbar.slots[st.ui.selectedHotbar];
+  return slot != null ? st.player.inventory.slots[slot]?.itemId ?? null : null;
+}
 
 export const AIM_ZOOM_MAX = 4;
 export const useAim = create<{ active: boolean; zoom: number }>(() => ({ active: false, zoom: 1 }));
@@ -91,12 +99,20 @@ export function pickAimTarget(camera: THREE.Camera): AimTarget | null {
   return null;
 }
 
-/** Ponto no chão pra onde o tiro no vazio voa (direção da câmera, ~25 m). */
-function missPoint(camera: THREE.Camera): { x: number; z: number } {
+/**
+ * Ponto 3D pra onde o tiro no vazio voa: segue a LINHA DO PONTINHO (mirou pra cima, sobe; pra
+ * baixo, desce — Pedro, 22/10) até o alcance da arma, ou para no morro/parede se bater antes.
+ */
+export function missPoint(camera: THREE.Camera): { x: number; z: number; y: number } {
   const o = camera.getWorldPosition(new THREE.Vector3());
   const d = camera.getWorldDirection(new THREE.Vector3());
-  const flat = Math.hypot(d.x, d.z) || 1;
-  return { x: o.x + (d.x / flat) * 25, z: o.z + (d.z / flat) * 25 };
+  const st = useGameStore.getState();
+  const me = st.player.position;
+  const skip = Math.hypot(o.x - me.x, o.z - me.z) + 0.3; // trecho câmera→ombro
+  const far = skip + weaponRangeFor(heldId(st), st.player.level);
+  const dist = worldShotHitDistance(o, d, far, skip) ?? far;
+  const p = o.addScaledVector(d, dist);
+  return { x: p.x, z: p.z, y: p.y };
 }
 
 /**
@@ -108,7 +124,7 @@ function missPoint(camera: THREE.Camera): { x: number; z: number } {
 export function aimFire(): boolean {
   if (!aimCamera) return false;
   const t = pickAimTarget(aimCamera);
-  if (!t) return useGameStore.getState().fireMiss(missPoint(aimCamera));
+  if (!t) { const p = missPoint(aimCamera); return useGameStore.getState().fireMiss({ x: p.x, z: p.z }, p.y); }
   if (t.kind === 'creature') {
     useGameStore.getState().attack(t.id);
     return true;

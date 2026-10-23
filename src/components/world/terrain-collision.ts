@@ -282,6 +282,22 @@ export function worldBlocksShot(from: THREE.Vector3, to: THREE.Vector3, skipNear
   return false;
 }
 
+/** Distância até a 1ª coisa GRANDE (mapa/morro/labirinto) no raio `from`+`dir` (dir unitário),
+ *  ignorando os primeiros `skipNear` m; null = nada até `far`. Tiro no vazio para ali. */
+export function worldShotHitDistance(from: THREE.Vector3, dir: THREE.Vector3, far: number, skipNear = 0): number | null {
+  shotRay.set(from, dir);
+  shotRay.near = skipNear;
+  shotRay.far = far;
+  let best: number | null = null;
+  for (const set of [terrains, walls]) {
+    for (const root of set) {
+      const h = shotRay.intersectObject(root, true)[0];
+      if (h && (best === null || h.distance < best)) best = h.distance;
+    }
+  }
+  return best;
+}
+
 /* ---- PAREDES (labirinto): colisão horizontal simples ---- */
 const walls = new Set<THREE.Object3D>();
 

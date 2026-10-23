@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
-import { pickAimTarget, setAiming, aimZoomStep, useAim, AIM_ZOOM_MAX, aimFire, setAimCamera } from '@/components/world/aim';
+import { pickAimTarget, setAiming, aimZoomStep, useAim, AIM_ZOOM_MAX, aimFire, setAimCamera, missPoint } from '@/components/world/aim';
 import { houseCollider } from '@/components/world/house-collider';
 import { useGameStore } from '@/game/state/game-store';
 import { vi } from 'vitest';
@@ -72,5 +72,18 @@ describe('mira em 3ª pessoa', () => {
     expect(attack).not.toHaveBeenCalled();
     useGameStore.setState({ fireMiss: vi.fn(() => false) });
     expect(aimFire()).toBe(false); // corpo a corpo → chamador faz o hitNearest
+  });
+
+  it('tiro no vazio segue o PONTINHO: mirou pra cima sobe, pra baixo desce (Pedro, 22/10)', () => {
+    useGameStore.setState({ player: { ...storeInicial.player, position: { x: 0, z: 0 } } });
+    const cam = (lookY: number) => { const c = new THREE.PerspectiveCamera(50, 1, 0.1, 500); c.position.set(0, 1.8, -1.7); c.lookAt(0, lookY, 10); c.updateMatrixWorld(true); return c; };
+    expect(missPoint(cam(6)).y).toBeGreaterThan(3);    // pra cima
+    expect(missPoint(cam(1.8)).y).toBeCloseTo(1.8, 1);  // reto
+    expect(missPoint(cam(-1)).y).toBeLessThan(1);      // pra baixo
+    const fireMiss = vi.fn(() => true);
+    useGameStore.setState({ fireMiss });
+    setAimCamera(cam(6));
+    aimFire();
+    expect((fireMiss.mock.calls[0] as unknown as [unknown, number])[1]).toBeGreaterThan(3); // a altura chega no tiro
   });
 });
