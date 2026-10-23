@@ -53,7 +53,7 @@ import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
-import { createHarvestNodes, harvestFits, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
+import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, type WaveState } from '../systems/waveSystem';
@@ -2297,7 +2297,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         playerPosition: player.position,
         creatures: ticked.creatures,
         camps: ticked.camps,
-        resources: [...state.resources, ...state.harvestNodes.map(n => ({ ...n, canCollect: harvestFits(n, player.inventory) }))],
+        resources: [...state.resources, ...(() => { const fits = harvestFitsChecker(player.inventory); return state.harvestNodes.map(n => ({ ...n, canCollect: fits(n) })); })()],
       },
       now,
     );
@@ -2440,15 +2440,15 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // Todos os tipos de HARVEST_NODES (madeira/pedra/ferro/ouro/cristal) são
       // elegíveis; o `range` sai da definição do nó pra casar com a coleta real.
       resources: [
-        ...state.harvestNodes.map(n => ({
+        ...(() => { const fitsNode = harvestFitsChecker(state.player.inventory); return state.harvestNodes.map(n => ({
           id: n.id,
           position: n.position,
           depleted: n.depleted,
           kind: n.kind,
           range: HARVEST_NODES[n.kind] ? harvestRangeFor(HARVEST_NODES[n.kind]!.range, state.player.level) : undefined,
           // Bolsa cheia PRA ESTE recurso (ou sem ferramenta) → o piloto não vai ficar parado nele.
-          canCollect: harvestFits(n, state.player.inventory),
-        })),
+          canCollect: fitsNode(n),
+        })); })(),
         ...state.resources.map(r => ({ id: r.id, position: r.position, depleted: r.depleted })),
       ],
       objectives: state.objectives,
