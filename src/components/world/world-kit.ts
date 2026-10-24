@@ -165,12 +165,16 @@ const FACTORY_PAD_CORE = 0.42;          // miolo plano (~9,2 m, cobre o prédio)
 /** Em áreas naturalmente PLANAS (centro do spawn + perto das beiradas, onde o
  *  relevo já é baixo) → o pad quase não mexe = sem platô/degrau. Longe de água.
  *  Uma no lugar da ruína do meio. Cada uma achata no SEU nível; o rio é preservado. */
-const FACTORY_POS: { x: number; z: number; rot: number }[] = [
-  { x: 42, z: -76, rot: -0.8 },  // deslocada para o lado, longe do acampamento
+const FACTORY_POS: { x: number; z: number; rot: number; hidden?: boolean }[] = [
+  // Pedro, 24/10: a do canto norte (atrás do acampamento crackedbone, lado oposto da praia) SAIU.
+  // Fica na lista só pro chão seguir igual (pad/árvores); prédio, paredes e entulho não aparecem.
+  { x: 42, z: -76, rot: -0.8, hidden: true },
   { x: 78, z: 24, rot: 1.9 },    // extremo oposto do mapa
 ];
 /** padY = altura natural no centro; o footprint inteiro é achatado nela. */
 export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));
+/** Fábricas que APARECEM (prédio + paredes + entulho). O relevo usa `FACTORY_SITES` (todas). */
+export const FACTORY_SHOWN = FACTORY_SITES.filter((p) => !p.hidden);
 
 /**
  * Montanha antiga ZERADA (Pedro 16/10): o relevo procedural do canto NO foi

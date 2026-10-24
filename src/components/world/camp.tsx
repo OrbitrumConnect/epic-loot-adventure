@@ -349,6 +349,9 @@ const CAMP_URL = '/models/props/raider-camp.glb';
 const CAMP_YAW_EXTRA: Record<string, number> = {
   blackclaw_camp: (160 * Math.PI) / 180,
 };
+/** Camps SEM o cenário (GLB + fogueira) — só os inimigos e o anel no chão (clique p/ limpar).
+ *  Pedro, 24/10: o 1º acampamento, colado no nascedouro, sai; os inimigos ficam. */
+export const CAMP_NO_SCENERY = new Set(['raider_outpost']);
 function GlbCampModelInner({ radius, y, yaw }: { radius: number; y: number; yaw: number }) {
   const { scene } = useGLTF(CAMP_URL);
   const model = useMemo(() => {
@@ -382,11 +385,13 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
 
   const radius = useMemo(() => campRadius(camp), [camp.defId, camp.tier]);
 
+  const scenery = !CAMP_NO_SCENERY.has(camp.id);
   const structures = useMemo(() => {
+    if (!scenery) return [];
     const def = campDefinition(camp.defId);
     if (def && def.structures.length > 0) return def.structures;
     return proceduralStructures(camp, radius);
-  }, [camp.defId, camp.id, camp.tier, radius]);
+  }, [camp.defId, camp.id, camp.tier, radius, scenery]);
 
   const queueClear = useCallback((e: ThreeEvent<PointerEvent>) => {
     if (e.button !== 0) return;
@@ -428,7 +433,7 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
       </mesh>
 
       {/* Skin novo: GLB do acampamento (escalado pro raio). */}
-      <GlbCampModel radius={radius} y={markerY} yaw={(hashId(camp.id) % 360) * (Math.PI / 180) + (CAMP_YAW_EXTRA[camp.id] ?? 0)} />
+      {scenery && <GlbCampModel radius={radius} y={markerY} yaw={(hashId(camp.id) % 360) * (Math.PI / 180) + (CAMP_YAW_EXTRA[camp.id] ?? 0)} />}
 
       {/* Do procedural fica SÓ a fogueira (fogo + luz); o resto é o GLB. */}
       {structures.filter((s) => s.kind === 'bonfire').map((s, i) => {

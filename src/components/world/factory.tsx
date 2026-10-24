@@ -2,7 +2,7 @@ import { useGLTF } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { FACTORY_SITES, terrainHeight } from './world-kit';
+import { FACTORY_SHOWN, terrainHeight } from './world-kit';
 import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { factoryColliders, factoryClip } from './factory-collider';
 
@@ -104,7 +104,7 @@ export function Factory() {
 
   // Base Y = chão MAIS BAIXO sob o contorno (grade 5x5, já girada). Antes pegava só o centro e,
   // em terreno inclinado (até 1,5 m de desnível), o muro do lado baixo ficava no ar (Pedro).
-  const baseYs = useMemo(() => FACTORY_SITES.map((f) => {
+  const baseYs = useMemo(() => FACTORY_SHOWN.map((f) => {
     const cos = Math.cos(f.rot), sin = Math.sin(f.rot);
     let min = Infinity;
     for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
@@ -118,7 +118,7 @@ export function Factory() {
   // Registra os colisores (paredes rotacionadas por site + footprint + base Y).
   useEffect(() => {
     factoryColliders.length = 0;
-    FACTORY_SITES.forEach((f, idx) => {
+    FACTORY_SHOWN.forEach((f, idx) => {
       const cos = Math.cos(f.rot), sin = Math.sin(f.rot);
       const segs: number[] = [];
       for (let i = 0; i < proto.wallSegs.length; i += 2) {
@@ -138,7 +138,7 @@ export function Factory() {
 
   return (
     <>
-      {FACTORY_SITES.map((f, i) => (
+      {FACTORY_SHOWN.map((f, i) => (
         <primitive
           key={i}
           object={proto.wrap.clone()}

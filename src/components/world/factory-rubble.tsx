@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { FACTORY_SITES, mixColor, rand, terrainHeight, type Palette } from './world-kit';
+import { FACTORY_SHOWN, mixColor, rand, terrainHeight, type Palette } from './world-kit';
 
 /**
  * Entulho/pedras na BEIRADA de cada fábrica: cobre a emenda entre o pad plano e
@@ -10,7 +10,7 @@ import { FACTORY_SITES, mixColor, rand, terrainHeight, type Palette } from './wo
 const ROCKS_PER = 16;
 
 export function FactoryRubble({ c }: { c: Palette }) {
-  const total = FACTORY_SITES.length * ROCKS_PER;
+  const total = FACTORY_SHOWN.length * ROCKS_PER;
   const geo = useMemo(() => new THREE.DodecahedronGeometry(0.5, 0), []);
   const mat = useMemo(
     () => new THREE.MeshStandardMaterial({ color: mixColor(c.rock, c.ground, 0.45), roughness: 1, flatShading: true }),
@@ -23,8 +23,8 @@ export function FactoryRubble({ c }: { c: Palette }) {
     if (!mesh) return;
     const d = new THREE.Object3D();
     let i = 0;
-    for (let s = 0; s < FACTORY_SITES.length; s++) {
-      const f = FACTORY_SITES[s]!;
+    for (let s = 0; s < FACTORY_SHOWN.length; s++) {
+      const f = FACTORY_SHOWN[s]!;
       for (let k = 0; k < ROCKS_PER; k++) {
         const seed = s * 97 + k * 7 + 3;
         const a = rand(seed) * Math.PI * 2;
