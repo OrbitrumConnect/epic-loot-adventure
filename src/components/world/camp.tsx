@@ -348,6 +348,7 @@ const CAMP_URL = '/models/props/raider-camp.glb';
  *  do labirinto/estradinha estava virado errado → gira pra ficar de frente pra estrada. */
 const CAMP_YAW_EXTRA: Record<string, number> = {
   blackclaw_camp: (160 * Math.PI) / 180,
+  crackedbone_warband: (130 * Math.PI) / 180, // Pedro, 24/10: girar ~130°
 };
 /** Camps SEM o cenário (GLB + fogueira) — só os inimigos e o anel no chão (clique p/ limpar).
  *  Pedro, 24/10: o 1º acampamento, colado no nascedouro, sai; os inimigos ficam. */

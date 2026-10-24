@@ -264,7 +264,7 @@ export const CAMP_IDS = Object.keys(CAMPS);
 export const CAMP_PLACEMENTS: CampPlacement[] = [
   { id: 'raider_outpost', defId: 'raider_outpost', position: { x: 28, z: -21 } }, // movido de (23,7): caía dentro do lago do GLB (Y=-2.6); (28,-21) é seco (Y~0.3)
   { id: 'blackclaw_camp', defId: 'blackclaw_camp', position: { x: -54, z: 42 } },
-  { id: 'crackedbone_warband', defId: 'crackedbone_warband', position: { x: 55, z: -50 } },
+  { id: 'crackedbone_warband', defId: 'crackedbone_warband', position: { x: 49, z: -61 } }, // Pedro 24/10: era (55,-50); 12,5 m rumo ao lugar da fábrica que saiu (42,-76)
   { id: 'stonefist_stronghold', defId: 'stonefist_stronghold', position: { x: -42, z: -49 } }, // movido de (-60,-58) rumo ao centro: fugir da montanha pontuda do GLB; (-42,-49) é plano (Y~1.5), ~12m da montanha
 ];
 

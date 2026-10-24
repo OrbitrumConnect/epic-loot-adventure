@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAMPS, CAMP_PLACEMENTS } from '@/game/data/camps';
+import { CAMPS, CAMP_PLACEMENTS, findPlacementIssues } from '@/game/data/camps';
 import { FACTORY_SHOWN, FACTORY_SITES } from '@/components/world/world-kit';
 import { CAMP_NO_SCENERY } from '@/components/world/camp';
 
@@ -16,5 +16,14 @@ describe('cenário 24/10', () => {
   it('fábrica do canto norte (42,−76) não aparece; a outra fica; o relevo segue com as duas', () => {
     expect(FACTORY_SHOWN.map((f) => [f.x, f.z])).toEqual([[78, 24]]);
     expect(FACTORY_SITES.map((f) => [f.x, f.z])).toEqual([[42, -76], [78, 24]]);
+  });
+
+  it('acampamento maior (crackedbone) 12,5 m mais perto de onde era a fábrica, sem conflito no mapa', () => {
+    const p = CAMP_PLACEMENTS.find((c) => c.id === 'crackedbone_warband')!;
+    expect(p.position).toEqual({ x: 49, z: -61 });
+    const moved = Math.hypot(p.position.x - 55, p.position.z + 50);
+    expect(moved).toBeGreaterThan(10); expect(moved).toBeLessThan(15);
+    expect(Math.hypot(p.position.x - 42, p.position.z + 76)).toBeLessThan(Math.hypot(55 - 42, -50 + 76));
+    expect(findPlacementIssues()).toEqual([]);
   });
 });
