@@ -13,7 +13,8 @@ describe('modelos que devem ser foscos', () => {
       const json = JSON.parse(b.subarray(20, 20 + b.readUInt32LE(12)).toString());
       for (const m of json.materials) {
         expect(m.pbrMetallicRoughness.metallicFactor).toBe(0);
-        expect(m.pbrMetallicRoughness.roughnessFactor).toBe(1);
+        // omitido = 1 (padrão do glTF); o gltf-transform não escreve o valor padrão (árvores, 24/10)
+        expect(m.pbrMetallicRoughness.roughnessFactor ?? 1).toBe(1);
         expect(m.pbrMetallicRoughness.metallicRoughnessTexture).toBeUndefined();
       }
     });
