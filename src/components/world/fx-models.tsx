@@ -29,16 +29,16 @@ function useNormalized(url: string, size: number, center: 'middle' | 'base' = 'm
   }, [scene, size, center]);
 }
 
-/** Bumerangue Mad Max: deitado (gira no plano do chão), ~0,9 m de ponta a ponta. */
-export function BoomerangModel() {
-  const model = useNormalized(FX_BOOMERANG_URL, 0.9);
+/** Bumerangue Mad Max: deitado (gira no plano do chão), ~0,9 m de ponta a ponta (herói; a base usa maior). */
+export function BoomerangModel({ size = 0.9 }: { size?: number }) {
+  const model = useNormalized(FX_BOOMERANG_URL, size);
   // O modelo é chato no eixo Z → deita (Z vira vertical) pra girar como hélice no chão.
   return <primitive object={model} rotation={[-Math.PI / 2, 0, 0]} />;
 }
 
-/** Furacão: em pé, ~3,6 m, SEMI-TRANSPARENTE (Pedro) — material próprio, sem escrever profundidade. */
-export function HurricaneModel({ opacity = 0.5 }: { opacity?: number }) {
-  const model = useNormalized(FX_HURRICANE_URL, 3.6, 'base');
+/** Furacão: em pé, ~3,6 m (herói; a base usa maior), SEMI-TRANSPARENTE (Pedro) — material próprio, sem escrever profundidade. */
+export function HurricaneModel({ opacity = 0.5, size = 3.6 }: { opacity?: number; size?: number }) {
+  const model = useNormalized(FX_HURRICANE_URL, size, 'base');
   const mats = useMemo(() => {
     const out: THREE.Material[] = [];
     model.traverse((m) => {
