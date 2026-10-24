@@ -297,7 +297,7 @@ export function restoreLocalSave(save: LocalSave, initial: PersistState, now: nu
     if (piece.kind === 'tower' && stamp !== undefined) towerLastShotAt[piece.id] = Math.min(stamp, now);
   }
   return {
-    base: tickBase(city, now),
+    base: tickBase(city, now, !!claim), // tempo fora: só produz se a base estava no chão
     ...(initial.ui ? { ui: { ...initial.ui, selectedHotbar: hotbarIndex < 0 ? 0 : hotbarIndex } } : {}),
     playerBase: claim, towerLastShotAt,
     player: { ...initial.player, ...save.player, inventory: padSlots(grantTransitionBoxes(save.player.inventory)),

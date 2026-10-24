@@ -553,8 +553,14 @@ function applyEvent(state: BaseState, event: BaseEvent): BaseState {
  * cronológica e acumula a produção entre eles, então saltos grandes de tempo
  * (jogador offline) resolvem vários itens corretamente em uma única chamada.
  */
-export function tickBase(state: BaseState, now: number): BaseState {
+/**
+ * Avança a cidade até `now`. `produce = false` (Pedro, 24/10: SEM BASE NO CHÃO a cidade não produz):
+ * o relógio anda e obras/treinos/expedições terminam, mas os prédios não geram recurso nesse trecho —
+ * nada acumula pra quando a base voltar.
+ */
+export function tickBase(state: BaseState, now: number, produce = true): BaseState {
   if (now <= state.lastTickAt) return state;
+  const accrue = produce ? accrueProduction : (s: BaseState) => s;
 
   let current = state;
   let cursor = state.lastTickAt;
@@ -562,11 +568,11 @@ export function tickBase(state: BaseState, now: number): BaseState {
     const event = findNextEvent(current);
     if (!event || event.at > now) break;
     const at = Math.max(cursor, event.at);
-    current = accrueProduction(current, cursor, at);
+    current = accrue(current, cursor, at);
     current = applyEvent(current, { ...event, at });
     cursor = at;
   }
-  current = accrueProduction(current, cursor, now);
+  current = accrue(current, cursor, now);
   return { ...current, lastTickAt: now };
 }
 

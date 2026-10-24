@@ -277,11 +277,16 @@ function syncCarry(player: PlayerState): PlayerState {
  * cobrança de sempre numa bolsa virtual (bolsa + armazém) e devolve a bolsa e o armazém já
  * descontados (armazém primeiro). `base` = cidade já com a produção até agora.
  */
+/** Cidade avançada até `now`: só PRODUZ com base no chão (Pedro, 24/10 — sem base, armazém parado). */
+export function tickCity(s: { base: BaseState; playerBase: PlayerBaseState | null }, now: number): BaseState {
+  return resolveBase(s.base, now, s.playerBase !== null);
+}
+
 function payWithBaseStorage<T extends { inventory: InventoryState }>(
-  s: { base: BaseState; player: PlayerState },
+  s: { base: BaseState; player: PlayerState; playerBase: PlayerBaseState | null },
   run: (combined: InventoryState, base: BaseState) => T,
 ): { result: T; inventory: InventoryState; resources: BaseState['resources']; base: BaseState } {
-  const base = resolveBase(s.base, Date.now());
+  const base = tickCity(s, Date.now());
   const combined = combineStorage(s.player.inventory, base.resources);
   const result = run(combined, base);
   const paid = splitSpend(s.player.inventory, base.resources, combined, result.inventory);
@@ -1769,7 +1774,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   tickBase: () => {
     const state = get();
-    const ticked = resolveBase(state.base, Date.now());
+    const ticked = tickCity(state, Date.now());
     const delivery = collectTools(ticked, state.player.inventory);
     if (delivery.moved.length === 0) {
       set({ base: delivery.state });
@@ -1897,7 +1902,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // 2 passos: o prédio Campo de Guerra (cidade) já cobra do armazém por conta própria; a peça física
     // paga com o que SOBROU no armazém + bolsa (sem contar a mesma madeira 2×).
     const now = Date.now();
-    const city0 = resolveBase(s.base, now);
+    const city0 = tickCity(s, now);
     const dry = buildTrainingCamp(city0, s.playerBase, combineStorage(s.player.inventory, city0.resources), now);
     if (!dry.ok) { set({ ui: { ...s.ui, message: dry.message } }); return; }
     const combined = combineStorage(s.player.inventory, dry.base.resources);
@@ -1934,7 +1939,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const have = new Set(pb.pieces.map(p => baseCellKey(p.cell)));
     let base = pb;
     // Armazém compartilhado: entrega com armazém + bolsa (armazém primeiro).
-    const city = resolveBase(s.base, Date.now());
+    const city = tickCity(s, Date.now());
     const combined = combineStorage(s.player.inventory, city.resources);
     let inv = combined;
     let placed = 0;
@@ -2139,7 +2144,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   depositToBase: () => {
     const state = get();
-    const ticked = resolveBase(state.base, Date.now());
+    const ticked = tickCity(state, Date.now());
     const result = depositFromInventory(ticked, state.player.inventory);
     const total = result.moved.wood + result.moved.stone + result.moved.essence;
     const message = total > 0
