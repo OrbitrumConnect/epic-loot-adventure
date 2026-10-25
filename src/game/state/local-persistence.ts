@@ -1,5 +1,6 @@
 import { useGameStore } from './game-store';
 import { createLocalSave, parseLocalSave, persistedStateChanged, restoreLocalSave, SAVE_KEY, type PersistState } from '../systems/persistenceSystem';
+import { markRestored } from './restore-marker';
 
 type PersistenceStore = {
   getState: () => PersistState;
@@ -13,7 +14,7 @@ export function connectLocalPersistence(store: PersistenceStore, storage: SaveSt
   try {
     const raw = storage.getItem(SAVE_KEY);
     const save = parseLocalSave(raw);
-    if (save) store.setState(restoreLocalSave(save, store.getState(), now()));
+    if (save) { markRestored(); store.setState(restoreLocalSave(save, store.getState(), now())); }
     else if (raw !== null) {
       // Save que não validou: guarda uma CÓPIA antes de tirar do caminho (dá pra recuperar).
       try { storage.setItem(`${SAVE_KEY}.rejeitado`, raw); } catch { /* quota */ }

@@ -15,6 +15,7 @@ import { useGameStore } from './game-store';
 import { supabase } from '@/net/multiplayer';
 import { createLocalSave, parseLocalSave, persistedStateChanged } from '../systems/persistenceSystem';
 import { restoreLocalSave, SAVE_KEY } from '../systems/persistenceSystem';
+import { markRestored } from './restore-marker';
 
 const TABLE = 'player_saves';
 /** De QUAL conta é o personagem que está neste aparelho (memória + save local). */
@@ -119,6 +120,7 @@ export function startAccountPersistence(userId: string): () => void {
           localStorage.setItem(`${SAVE_KEY}.antes-da-conta`, JSON.stringify(createLocalSave(store.getState())));
         } catch { /* quota */ }
       }
+      markRestored(); // cartas não confundem o save chegando com conquista nova
       store.setState(restoreLocalSave(parsed, store.getState(), Date.now()));
     } else if (action === 'fresh') {
       // Personagem de OUTRA conta na memória: guarda cópia local e nasce um novo pra esta conta.

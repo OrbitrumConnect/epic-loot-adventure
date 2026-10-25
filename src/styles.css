@@ -861,3 +861,24 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 /* Painel de desempenho (tecla P / ?perf=1): canto de cima, não pega clique. */
 .perf-hud { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: none; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 32px); padding: 4px 10px; border-radius: 8px; background: rgba(8,10,14,.72); color: #e8edf3; font: 600 11px/1.4 ui-monospace, Menlo, Consolas, monospace; }
 .perf-hud b { font-weight: 800; }
+
+/* Cartas de um toque (Pedro 25/10): uma por vez, acima da barra de itens; botões grandes pro celular. */
+.game-card { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); z-index: 26; width: min(360px, calc(100% - 32px)); padding: 12px 14px; border-radius: 14px; background: rgba(14,16,22,.94); border: 1px solid rgba(255,206,102,.55); box-shadow: 0 10px 30px rgba(0,0,0,.45); color: #f3f1ea; animation: game-card-pop .22s ease-out; }
+@keyframes game-card-pop { from { transform: translateX(-50%) translateY(14px) scale(.96); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
+.game-card__head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.game-card__icon { font-size: 20px; }
+.game-card__count { margin-left: auto; color: #ffce66; font-weight: 700; }
+.game-card__body { margin: 6px 0 0; font-size: 13px; opacity: .85; }
+.game-card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.game-card__actions--col { flex-direction: column; }
+.game-card__row { display: flex; gap: 8px; }
+.game-card__btn { flex: 1; min-height: 44px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255,206,102,.6); background: rgba(255,206,102,.14); color: #fff3cf; font-weight: 700; font-size: 14px; text-align: left; cursor: pointer; display: flex; flex-direction: column; justify-content: center; }
+.game-card__btn small { font-weight: 500; font-size: 11px; opacity: .8; }
+.game-card__btn:hover { background: rgba(255,206,102,.26); }
+.game-card__btn--ghost { border-color: rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: #ddd; text-align: center; }
+.card-badge { position: absolute; right: 16px; bottom: 150px; z-index: 26; min-width: 46px; min-height: 40px; padding: 6px 10px; border-radius: 12px; border: 1px solid rgba(255,206,102,.6); background: rgba(14,16,22,.9); color: #ffce66; font-weight: 800; font-size: 15px; cursor: pointer; }
+/* Lateral UPAR: prédios da cidade que dá pra subir agora. */
+.upgrade-side { position: absolute; right: 10px; top: 38%; z-index: 20; display: flex; flex-direction: column; gap: 6px; max-width: min(230px, 46vw); }
+.upgrade-side__btn { position: relative; text-align: left; padding: 6px 54px 6px 10px; border-radius: 10px; border: 1px solid rgba(124,252,154,.45); background: rgba(10,18,14,.82); color: #e8fff0; cursor: pointer; display: flex; flex-direction: column; font-size: 12px; }
+.upgrade-side__btn small { opacity: .8; font-size: 11px; }
+.upgrade-side__go { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-weight: 800; font-size: 11px; color: #7cfc9a; }

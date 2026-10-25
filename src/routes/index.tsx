@@ -58,6 +58,8 @@ import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useAim } from '@/components/world/aim';
 import { PerfHud } from '@/components/world/perf-hud';
+import { CardHost, UpgradeSide } from '@/components/hud/card-host';
+import { useCardWatchers } from '@/components/hud/card-watchers';
 import { toggleTerrainDetail } from '@/components/world/terrain-detail';
 import { promptInstall, usePwa } from '@/net/pwa-install';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -397,6 +399,7 @@ function Index() {
   const worldUnlocked = useRef(false);
   if (!AUTH_ENABLED || authUser) worldUnlocked.current = true;
   const worldOn = ready && worldUnlocked.current;
+  useCardWatchers(worldOn);
 
   // Novo personagem (zerar): apaga o save LOCAL e, se logado, o da CONTA (senão recarrega
   // o antigo), depois recarrega a página pro estado inicial.
@@ -654,6 +657,9 @@ function Index() {
           )}
           {worldOn && !inCity && <AimCrosshair shoulder={cameraMode === 'third'} />}
           {worldOn && perfOn && <PerfHud />}
+          {/* Cartas de um toque + lateral UPAR (Pedro 25/10: sem precisar ir à cidade). */}
+          {worldOn && !inCity && !player.dead && <CardHost />}
+          {worldOn && !inCity && !player.dead && <UpgradeSide />}
           {worldOn && ui.mode === 'world' && <BossSpawner />}
           {player.dead && !inCity && (
             <div style={{
