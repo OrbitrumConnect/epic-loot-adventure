@@ -80,7 +80,7 @@ describe('assenta ao NASCER, em qualquer distância', () => {
     expect(r).toMatch(/scrap_brute\.glb', standFixX: Math\.PI \/ 2, height: 2\.3, bindFix: true, autoGround: true/);
     expect(r).toMatch(/rope_archer\.glb', standFixX: Math\.PI \/ 2, height: 1\.85, forceBow: true, twistFix: true, autoGround: true/);
     expect(r).toMatch(/swamp\.glb', standFixX: Math\.PI \/ 2, height: 1\.9, bindFix: true, autoGround: true/);
-    expect(r).toMatch(/export const CAMP_SCALE = 0\.7;/);
+    expect(r).toMatch(/export const CAMP_SCALE = 0\.49;/); // −30% e mais −30% (Pedro 25/10)
     expect(r).toMatch(/const sizeK = isCampSpawn\(creatureId\) \? CAMP_SCALE : 1;/);
     expect(r).toMatch(/autoHeight=\{mx\.height \* sizeK\}/);
   });

@@ -50,8 +50,8 @@ const USE_GLB_BOSS = true;
 const IMP_URL = '/models/Imp.glb';
 const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
-/** Escala dos inimigos que nascem em ACAMPAMENTO (Pedro 25/10: −30%). */
-export const CAMP_SCALE = 0.7;
+/** Escala dos inimigos que nascem em ACAMPAMENTO (Pedro 25/10: −30% e depois mais −30% → 0,7 × 0,7). */
+export const CAMP_SCALE = 0.49;
 const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
 /** Modelo GLB por espécie. Male_Ranger é EXCLUSIVO do player — raiders usam outros.
  *  (todos rig Universal → animam com a UAL, igual o Kael). */
@@ -448,7 +448,8 @@ export function Raider({
   const d = spec.bodyDepth;
   // Boss GLB próprio (estático ou criatura) dimensiona rótulo/anel pela altura real.
   const sbDef = STATIC_BOSS[speciesId] ?? CREATURE_BOSS[speciesId];
-  const labelScale = sbDef ? (sbDef.height ?? 4) / 2 : s;
+  // Acampamento menor (CAMP_SCALE): nome/vida e anel descem junto (fora do acampamento sizeK = 1, igual antes).
+  const labelScale = (sbDef ? (sbDef.height ?? 4) / 2 : s) * sizeK;
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
