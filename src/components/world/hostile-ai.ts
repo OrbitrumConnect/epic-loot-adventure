@@ -26,6 +26,14 @@ import { isBuildActive } from './build-mode';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece, nearestPieceIn } from './base-targets';
 import { WANDER_MIN_STRENGTH, wanderStep } from './wander';
+import { applyWorldLevel, ELITE_SPEED, RESCALE_STEP, scalesWithWorld, worldLevel } from '@/game/systems/difficultySystem';
+import { CREATURES } from '@/game/data/creatures';
+
+/** Nível do mundo AGORA: o maior entre o meu e o dos jogadores da sala (difficultySystem). */
+function currentWorldLevel(): number {
+  const others = Object.values(useNet.getState().players).map((p) => p.level);
+  return worldLevel(useGameStore.getState().player.level, others);
+}
 import { queueKnockback } from '@/game/systems/knockbackSystem';
 
 /** Golpe que EMPURRA o herói (m) — Pedro 25/10: a Couraça (grandona, 3,9 m) acerta e joga 3–4 m pra trás. */
@@ -267,6 +275,8 @@ export type HostileAnim = {
   /** >0 nos instantes logo após desferir um golpe. */
   swing: number;
   chasing: boolean;
+  /** Enfurecido (fumaça vermelha nos componentes). */
+  elite: boolean;
 };
 
 export type HostileOptions = {
@@ -298,13 +308,14 @@ export function useHostileAI(opts: HostileOptions) {
   const currentRotY = useRef(0);
   const homePos = useRef<{ x: number; z: number } | null>(null);
   const chaseTimer = useRef(0);
+  const levelCheck = useRef(Math.random()); // espalha as checagens entre as criaturas
   const fleeing = useRef(false);
   const swing = useRef(0);
   const anchor = useRef<CreatureAnchor | null>(null);
   const hlMesh = useRef<THREE.Object3D | null>(null);
   const barTint = useRef<'none' | 'hostile' | 'peaceful'>('none');
   const anim = useRef<HostileAnim>({
-    moving: false, walkCycle: 0, distToPlayer: Infinity, swing: 0, chasing: false,
+    moving: false, walkCycle: 0, distToPlayer: Infinity, swing: 0, chasing: false, elite: false,
   });
   // Hit reaction: quando o HP cai, o bicho dá um "squash" rápido (recuo visual).
   const prevHp = useRef<number | null>(null);
@@ -345,11 +356,13 @@ export function useHostileAI(opts: HostileOptions) {
       if (creature.respawnAt && Date.now() >= creature.respawnAt) {
         const home = homePos.current ?? creature.position;
         useGameStore.setState(s => ({
-          creatures: s.creatures.map(cr =>
-            cr.id === creatureId
-              ? { ...cr, hp: cr.maxHp, behavior: 'patrol' as const, respawnAt: null, position: { ...home } }
-              : cr,
-          ),
+          creatures: s.creatures.map(cr => {
+            if (cr.id !== creatureId) return cr;
+            const back = { ...cr, hp: cr.maxHp, behavior: 'patrol' as const, respawnAt: null, position: { ...home } };
+            // Renasce no nível do mundo ATUAL e sorteia de novo se vem Enfurecido (só hostil do mapa/acampamento).
+            const def = CREATURES[cr.speciesId];
+            return def && scalesWithWorld(cr, def) ? applyWorldLevel(back, def, currentWorldLevel(), Math.random, true) : back;
+          }),
         }));
         g.position.set(home.x, glbSurfaceY(home.x, home.z, terrainHeight(home.x, home.z)), home.z);
         g.scale.copy(baseScale.current);
@@ -376,6 +389,22 @@ export function useHostileAI(opts: HostileOptions) {
 
     if (!homePos.current) homePos.current = { ...creature.position };
 
+    // Nível do mundo (difficultySystem): 1ª vez e quando o nível muda 5+, só parado e de vida cheia (nunca no meio
+    // de uma luta). Checa ~1×/s por criatura; só o host/solo decide (o convidado espelha).
+    if (canSimulateSharedWorld() && (levelCheck.current += dt) >= 1) {
+      levelCheck.current = 0;
+      const def = CREATURES[creature.speciesId];
+      if (def && scalesWithWorld(creature, def) && creature.hp >= creature.maxHp && creature.behavior !== 'chase' && creature.behavior !== 'attack') {
+        const lv = currentWorldLevel();
+        if (creature.scaledLevel === undefined || Math.abs(lv - creature.scaledLevel) >= RESCALE_STEP) {
+          useGameStore.setState(s => ({
+            creatures: s.creatures.map(cr => (cr.id === creatureId ? applyWorldLevel(cr, def, lv, Math.random, cr.scaledLevel === undefined) : cr)),
+          }));
+        }
+      }
+    }
+    anim.current.elite = !!creature.elite;
+
     const player = playerRef.current;
     if (!player) return;
 
@@ -383,6 +412,8 @@ export function useHostileAI(opts: HostileOptions) {
     const wz = g.position.z;
     // Convidado em sala: o bicho NÃO pensa aqui — espelha o host (uma cena só pra todos).
     const mirror = !canSimulateSharedWorld();
+    // Enfurecido corre +35% (Pedro: "mais rápido, doidão").
+    const chaseSpeed = tuning.speed * CREATURE_SPEED_SCALE * (creature.elite ? ELITE_SPEED : 1);
     // Alvo: eu (solo) — ou, sendo HOST, o jogador MAIS PERTO entre mim e os convidados.
     let px = player.position.x;
     let pz = player.position.z;
@@ -444,8 +475,8 @@ export function useHostileAI(opts: HostileOptions) {
       if (Math.abs(wx) > edge) ax -= Math.sign(wx) * 1.2;
       if (Math.abs(wz) > edge) az -= Math.sign(wz) * 1.2;
       const l2 = Math.sqrt(ax * ax + az * az) || 1;
-      targetX = wx + (ax / l2) * tuning.speed * CREATURE_SPEED_SCALE * dt;
-      targetZ = wz + (az / l2) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+      targetX = wx + (ax / l2) * chaseSpeed * dt;
+      targetZ = wz + (az / l2) * chaseSpeed * dt;
       moving = true;
     } else if (!tuning.peaceful && distToPlayer < aggroRange && distToHome < tuning.leashRange && chaseTimer.current < tuning.chaseTimeout) {
       chasing = true;
@@ -455,8 +486,8 @@ export function useHostileAI(opts: HostileOptions) {
       // Para na BORDA do alcance (era 0,6): cada um chega pelo seu lado e a separação os espalha num CERCO, em vez
       // de todos se amontoarem no mesmo ponto (Pedro 25/10).
       if (distToPlayer > tuning.attackRange * CHASE_STOP) {
-        targetX = wx + Math.sin(angle) * tuning.speed * CREATURE_SPEED_SCALE * dt;
-        targetZ = wz + Math.cos(angle) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+        targetX = wx + Math.sin(angle) * chaseSpeed * dt;
+        targetZ = wz + Math.cos(angle) * chaseSpeed * dt;
         moving = true;
       }
       if (distToPlayer <= tuning.attackRange) {
@@ -526,8 +557,8 @@ export function useHostileAI(opts: HostileOptions) {
           const distToBase = Math.sqrt((ctr.x - wx) ** 2 + (ctr.z - wz) ** 2);
           if (distToBase > 3) {
             const ang = Math.atan2(ctr.x - wx, ctr.z - wz);
-            targetX = wx + Math.sin(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
-            targetZ = wz + Math.cos(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+            targetX = wx + Math.sin(ang) * chaseSpeed * dt;
+            targetZ = wz + Math.cos(ang) * chaseSpeed * dt;
             moving = true;
           }
           const hit = nearestPieceIn(remoteBase.pieces, wx, wz);
@@ -551,8 +582,8 @@ export function useHostileAI(opts: HostileOptions) {
         const distToBase = Math.sqrt((ctr.x - wx) ** 2 + (ctr.z - wz) ** 2);
         if (distToBase > 3) {
           const ang = Math.atan2(ctr.x - wx, ctr.z - wz);
-          targetX = wx + Math.sin(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
-          targetZ = wz + Math.cos(ang) * tuning.speed * CREATURE_SPEED_SCALE * dt;
+          targetX = wx + Math.sin(ang) * chaseSpeed * dt;
+          targetZ = wz + Math.cos(ang) * chaseSpeed * dt;
           moving = true;
         }
         // Mira: muro/torre mais próximo (nearestBasePiece exclui o núcleo). Só

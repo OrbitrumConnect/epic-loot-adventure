@@ -17,6 +17,10 @@ export type CreatureState = {
   behavior: CreatureBehavior;
   lootTable: InventorySlot[];
   respawnAt: number | null;
+  /** ENFURECIDO (Elite): mais vida/dano/velocidade, fumaça vermelha, loot ×2 (difficultySystem, 25/10). */
+  elite?: boolean;
+  /** Nível do mundo usado na última escala de vida/dano (só bichos hostis do mapa/acampamento). */
+  scaledLevel?: number;
 };
 
 export type CreatureDefinition = {

@@ -7,7 +7,8 @@
  * `BEASTS` (silhueta, escala, cor e tuning); geometrias e materiais são
  * cacheados por dimensão/cor e compartilhados entre TODOS os animais.
  */
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { EliteAura } from './elite-aura';
 import * as THREE from 'three';
 import { CREATURES } from '@/game/data/creatures';
 import type { Position } from '@/game/types';
@@ -254,6 +255,8 @@ export function Beast({
   const hpFill = useRef<THREE.Mesh>(null);
   const ring = useRef<THREE.Object3D>(null);
   const movingRef = useRef(false);
+  const [elite, setElite] = useState(false); // Enfurecido → fumaça vermelha
+  const eliteNow = useRef(false);
   const glb = GLB_CREATURE[speciesId];
   const flyer = FLYERS[speciesId];
   const flyRef = useRef<THREE.Group>(null);
@@ -270,6 +273,7 @@ export function Beast({
     hpGroup,
     ring,
     onAnimate: anim => {
+      if (anim.elite !== eliteNow.current) { eliteNow.current = anim.elite; setElite(anim.elite); }
       movingRef.current = anim.moving; // dirige a animação do GLB (anda/para)
       if (flyer && flyRef.current) {
         const want = flyLift(flyer, anim, performance.now() / 1000);
@@ -307,6 +311,7 @@ export function Beast({
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
+      {elite && <EliteAura height={spec.labelHeight * 0.8} />}
       <SelectionRing ring={ring} radius={spec.ringRadius} c={c} />
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
       {glb && <group ref={flyRef}>

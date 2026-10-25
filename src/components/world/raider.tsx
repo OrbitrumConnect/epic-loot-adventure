@@ -6,7 +6,8 @@
  * Geometrias e materiais são compartilhados entre TODOS os saqueadores
  * (um acampamento tem até ~10 e o mapa 4+ acampamentos).
  */
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { EliteAura } from './elite-aura';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Position } from '@/game/types';
@@ -361,6 +362,8 @@ export function Raider({
   const hpFill = useRef<THREE.Mesh>(null);
   const ring = useRef<THREE.Object3D>(null);
   const onClick = useEnemyClick(creatureId, name);
+  const [elite, setElite] = useState(false); // Enfurecido → fumaça vermelha
+  const eliteNow = useRef(false);
   // Raio do corpo p/ a separação (25/10): grandões Mixamo pela altura; o resto pela largura × escala.
   const mxBody = MIXAMO_RAIDER[speciesId];
   const bodyRadius = mxBody ? mxBody.height * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
@@ -376,6 +379,7 @@ export function Raider({
     hpGroup,
     ring,
     onAnimate: (anim, dt) => {
+      if (anim.elite !== eliteNow.current) { eliteNow.current = anim.elite; setElite(anim.elite); }
       bossAction.current = (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? 'walk' : 'idle';
       bossMoving.current = anim.moving;
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.6 : 0;
@@ -438,6 +442,7 @@ export function Raider({
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
+      {elite && <EliteAura height={mxBody ? mxBody.height : 1.9} />}
       <SelectionRing ring={ring} radius={0.55 * labelScale} c={c} />
       <EnemyLabel name={name} height={2.15 * labelScale} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
 

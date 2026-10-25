@@ -2,7 +2,8 @@
  * Lobo do Vale: anatomia facetada, pelagem em camadas e presas.
  * IA e parâmetros originais preservados em `useHostileAI` / `WOLF_TUNING`.
  */
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { EliteAura } from './elite-aura';
 import * as THREE from 'three';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
@@ -45,6 +46,8 @@ export function Wolf({
   const ring = useRef<THREE.Object3D>(null);
   const movingRef = useRef(false);
   const onClick = useEnemyClick(creatureId, name);
+  const [elite, setElite] = useState(false); // Enfurecido → fumaça vermelha
+  const eliteNow = useRef(false);
 
   useHostileAI({
     creatureId,
@@ -57,6 +60,7 @@ export function Wolf({
     hpGroup,
     ring,
     onAnimate: anim => {
+      if (anim.elite !== eliteNow.current) { eliteNow.current = anim.elite; setElite(anim.elite); }
       movingRef.current = anim.moving; // dirige a anim do GLB
       if (USE_GLB_WOLF) return;        // GLB anima sozinho; pula pernas procedurais
       const swingAmount = anim.moving ? Math.sin(anim.walkCycle) * 0.5 : 0;
@@ -75,6 +79,7 @@ export function Wolf({
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
+      {elite && <EliteAura height={1.1} />}
       <SelectionRing ring={ring} radius={0.6} c={c} />
       <EnemyLabel name={name} height={1.5} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
       {USE_GLB_WOLF && <GlbCreature url="/models/animals/fox.glb" movingRef={movingRef} height={1.2} yaw={0} tint="#3f434b" />}
