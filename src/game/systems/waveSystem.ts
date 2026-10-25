@@ -78,6 +78,14 @@ export const HORDE_SPEED_PER_WAVE = 0.03;
 export const HORDE_SPEED_MAX = 1.6;
 export const HORDE_RUN_FROM = 1.2;
 export const HORDE_RUNNERS = new Set(['raider_scout', 'raider_brute', 'raider_shaman', 'raider_warrior', 'raider_samurai', 'raider_mushroom']);
+/**
+ * ACAMPAMENTO: quem PERSEGUE corre (Pedro 25/10: "perseguem andando; correr fica mais realista"). +25% só enquanto
+ * persegue e anima corrida; parado no alcance ataca/atira; desistiu e volta pra casa = anda. Só raiders Mixamo.
+ */
+export const CAMP_CHASE_RUN = 1.25;
+export function campChaseScale(isCamp: boolean, speciesId: string): number {
+  return isCamp && HORDE_RUNNERS.has(speciesId) ? CAMP_CHASE_RUN : 1;
+}
 export function hordeSpeedScale(creatureId: string, speciesId: string): number {
   if (!HORDE_RUNNERS.has(speciesId)) return 1;
   const m = /^wave(\d+)_/.exec(creatureId);

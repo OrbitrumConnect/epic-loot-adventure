@@ -26,8 +26,8 @@ import { isBuildActive } from './build-mode';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece, nearestPieceIn } from './base-targets';
 import { WANDER_MIN_STRENGTH, wanderStep } from './wander';
-import { applyWorldLevel, ELITE_SPEED, scalesWithWorld, zoneLevel } from '@/game/systems/difficultySystem';
-import { hordeSpeedScale } from '@/game/systems/waveSystem';
+import { applyWorldLevel, ELITE_SPEED, isCampSpawn, scalesWithWorld, zoneLevel } from '@/game/systems/difficultySystem';
+import { campChaseScale, hordeSpeedScale } from '@/game/systems/waveSystem';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { CREATURES } from '@/game/data/creatures';
 
@@ -487,8 +487,10 @@ export function useHostileAI(opts: HostileOptions) {
       // Para na BORDA do alcance (era 0,6): cada um chega pelo seu lado e a separação os espalha num CERCO, em vez
       // de todos se amontoarem no mesmo ponto (Pedro 25/10).
       if (distToPlayer > tuning.attackRange * CHASE_STOP) {
-        targetX = wx + Math.sin(angle) * chaseSpeed * dt;
-        targetZ = wz + Math.cos(angle) * chaseSpeed * dt;
+        // Acampamento persegue CORRENDO (+25%, waveSystem.campChaseScale).
+        const runSpeed = chaseSpeed * campChaseScale(isCampSpawn(creatureId), creature.speciesId);
+        targetX = wx + Math.sin(angle) * runSpeed * dt;
+        targetZ = wz + Math.cos(angle) * runSpeed * dt;
         moving = true;
       }
       if (distToPlayer <= tuning.attackRange) {

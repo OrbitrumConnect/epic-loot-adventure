@@ -51,9 +51,16 @@ export function eliteChance(level: number, night = false): number {
   return Math.min(ELITE_MAX_CHANCE, 0.35 * Math.pow(level / 125, 0.8) + (night ? NIGHT_ELITE_BONUS : 0));
 }
 
-/** Nasce num ACAMPAMENTO (id `<acampamento>_e<n>`). */
+/** Nasce num ACAMPAMENTO (id `<acampamento>_e<n>`). Memorizado: a IA pergunta por quadro. */
+const campSpawnCache = new Map<string, boolean>();
 export function isCampSpawn(id: string): boolean {
-  return CAMP_PLACEMENTS.some((p) => id.startsWith(`${p.id}_e`));
+  let v = campSpawnCache.get(id);
+  if (v === undefined) {
+    v = CAMP_PLACEMENTS.some((p) => id.startsWith(`${p.id}_e`));
+    if (campSpawnCache.size > 2000) campSpawnCache.clear();
+    campSpawnCache.set(id, v);
+  }
+  return v;
 }
 
 /** Bicho do MAPA ou de ACAMPAMENTO (não horda, não chefe do timer). */

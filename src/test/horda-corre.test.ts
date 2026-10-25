@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { HORDE_RUN_FROM, HORDE_RUNNERS, hordeSpeedScale } from '@/game/systems/waveSystem';
+import { CAMP_CHASE_RUN, campChaseScale, HORDE_RUN_FROM, HORDE_RUNNERS, hordeSpeedScale } from '@/game/systems/waveSystem';
+import { isCampSpawn } from '@/game/systems/difficultySystem';
+import { CAMP_PLACEMENTS } from '@/game/data/camps';
 
 /* Pedro, 25/10: "os bichos que têm Mixamo nas hordas podem começar a correr mais quando aumenta a horda; com o
    tempo a velocidade deles aumenta também". +3%/onda (teto +60%); a partir de +20% (onda 8) anima CORRENDO. */
@@ -26,8 +28,26 @@ describe('horda Mixamo acelera com a onda', () => {
     const block = /const MIXAMO_RAIDER[\s\S]*?\n\};/.exec(r)![0];
     const mixamo = [...block.matchAll(/^\s*(raider_\w+):/gm)].map((m) => m[1]).sort();
     expect([...HORDE_RUNNERS].sort()).toEqual(mixamo);
-    expect(r).toMatch(/anim\.moving \? \(hordeRuns \? 'run' : 'walk'\) : 'idle'/);
+    expect(r).toMatch(/anim\.moving \? \(hordeRuns \|\| \(campRuns && anim\.chasing\) \? 'run' : 'walk'\) : 'idle'/);
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
     expect(ai).toMatch(/\* hordeSpeedScale\(creatureId, creature\.speciesId\);/);
+  });
+});
+
+/* Pedro, 25/10: inimigos de acampamento perseguem CORRENDO ("mais realista"). */
+describe('acampamento persegue correndo', () => {
+  it('+25% só pra raider Mixamo de acampamento; horda/mapa sem esse bônus', () => {
+    const camp = CAMP_PLACEMENTS[0]!.id + '_e1';
+    expect(isCampSpawn(camp)).toBe(true);
+    expect(isCampSpawn(camp)).toBe(true); // memorizado, mesma resposta
+    expect(isCampSpawn('wave3_raider_brute_1')).toBe(false);
+    expect(campChaseScale(true, 'raider_scout')).toBe(CAMP_CHASE_RUN);
+    expect(campChaseScale(false, 'raider_scout')).toBe(1);
+    expect(campChaseScale(true, 'wolf_alpha')).toBe(1);
+  });
+  it('só no ramo de PERSEGUIR (voltar pra casa segue andando)', () => {
+    const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
+    expect(ai).toMatch(/const runSpeed = chaseSpeed \* campChaseScale\(isCampSpawn\(creatureId\), creature\.speciesId\);\s*targetX = wx \+ Math\.sin\(angle\) \* runSpeed \* dt;/);
+    expect(ai.match(/runSpeed/g)!.length).toBe(3);
   });
 });

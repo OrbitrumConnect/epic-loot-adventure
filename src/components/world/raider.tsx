@@ -18,7 +18,7 @@ import { GlbHeroMixamo } from './glb-hero-mixamo';
 import { GlbStaticBoss } from './glb-static-boss';
 import { GlbCreature } from './glb-creature';
 import { isCampSpawn } from '@/game/systems/difficultySystem';
-import { HORDE_RUN_FROM, hordeSpeedScale } from '@/game/systems/waveSystem';
+import { campChaseScale, HORDE_RUN_FROM, hordeSpeedScale } from '@/game/systems/waveSystem';
 
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
@@ -375,6 +375,7 @@ export function Raider({
   // Inimigos de ACAMPAMENTO −30% (Pedro 25/10: "diminuir os do acampamento uns 30%"); a horda segue no tamanho original.
   const sizeK = isCampSpawn(creatureId) ? CAMP_SCALE : 1;
   const hordeRuns = hordeSpeedScale(creatureId, speciesId) >= HORDE_RUN_FROM;
+  const campRuns = campChaseScale(isCampSpawn(creatureId), speciesId) > 1;
   const bodyRadius = mxBody ? mxBody.height * sizeK * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
 
   useHostileAI({
@@ -390,7 +391,7 @@ export function Raider({
     onAnimate: (anim, dt) => {
       if (anim.elite !== eliteNow.current) { eliteNow.current = anim.elite; setElite(anim.elite); }
       // Horda Mixamo rápida (onda 8+): anda CORRENDO (Pedro 25/10).
-      bossAction.current = (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? (hordeRuns ? 'run' : 'walk') : 'idle';
+      bossAction.current = (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? (hordeRuns || (campRuns && anim.chasing) ? 'run' : 'walk') : 'idle';
       bossMoving.current = anim.moving;
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.6 : 0;
       if (leftLeg.current) leftLeg.current.rotation.x = swing;
