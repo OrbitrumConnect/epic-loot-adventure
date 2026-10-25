@@ -1,17 +1,35 @@
 /**
- * DIFICULDADE PELO NÍVEL DO MUNDO (Pedro 25/10, nv 125: "andando no mapa ainda acho fácil" — medido: a partir do
- * ~nv 40 todo bicho do mapa morria com 1 golpe e não ameaçava). Só bichos HOSTIS do mapa e dos acampamentos;
- * pacíficos (comida/farm), horda (já escala por onda) e chefes ficam como estão.
- *
- *  - Escala leve: vida +2%/nível, dano +1,5%/nível (metade do crescimento do herói → ele segue se sentindo forte).
- *  - ENFURECIDO (Elite): chance ~0% (nv ≤5) → ~11% (30) → ~20% (60) → 35% (125), teto 40%. 3× vida, 2× dano,
- *    +35% velocidade, fumaça vermelha, loot ×2, XP +50%.
- *  - XP NÃO acompanha a vida extra (sai do bicho-base): subir já é rápido (75 níveis em 37 h, medido 24/10).
- *  - Nível do mundo = o MAIOR nível na sala (online: quem anda com veterano enfrenta bicho forte e ganha o loot).
+ * PERIGO PELA GEOGRAFIA (Pedro 25/10). Regra selada em `tribos-nivel-nao-e-porta` (07/10): "a dificuldade pertence à
+ * REGIÃO, não ao jogador; sem level-scaling dos inimigos do overworld". A 1ª versão de hoje escalava pelo nível do
+ * jogador (fora da regra) → agora a ZONA do bicho (distância do nascedouro) define o perigo:
+ *   zona 1 (< 30 m do nascedouro) = como sempre · 2 (< 55) · 3 (< 80) · 4 (< 105) · 5 (resto, os cantos do mapa).
+ * Só bichos HOSTIS do mapa e dos acampamentos; pacíficos (comida/farm), horda (já escala por onda) e chefes: iguais.
+ *  - Escala leve pela zona: vida +2%/"nível da zona", dano +1,5% (zona 5 ≈ vida ×3,6, dano ×2,9).
+ *  - ENFURECIDO: chance 0% (zona 1) → ~11% (2) → ~20% (3) → ~28% (4) → ~36% (5); de NOITE +10% (teto 40%).
+ *    3× vida, 2× dano, +35% velocidade, fumaça vermelha (o mundo AVISA o perigo), loot ×2, XP +50%.
+ *  - XP NÃO acompanha a vida extra (sai do bicho-base).
+ *  - Dois jogadores no mesmo lugar encontram a MESMA ameaça (online e solo), qualquer que seja o nível deles.
  */
-import type { CreatureDefinition, CreatureState } from '../types';
+import type { CreatureDefinition, CreatureState, Position } from '../types';
 import { scaleEnemyHp } from '../data/creatures';
-import { CAMP_PLACEMENTS } from '../data/camps';
+import { CAMP_PLACEMENTS, PLAYER_SPAWN } from '../data/camps';
+
+/** Raios (m, a partir do nascedouro) que separam as zonas 1→2→3→4→5. */
+export const ZONE_RADII = [30, 55, 80, 105] as const;
+/** "Nível de perigo" de cada zona (entra nas fórmulas de vida/dano/Enfurecido). */
+export const ZONE_LEVEL = [1, 30, 60, 95, 130] as const;
+/** De noite: chance extra de Enfurecido (todas as zonas acima da 1). */
+export const NIGHT_ELITE_BONUS = 0.1;
+
+export function zoneAt(p: Pick<Position, 'x' | 'z'>): number {
+  const d = Math.hypot(p.x - PLAYER_SPAWN.x, p.z - PLAYER_SPAWN.z);
+  let z = 1;
+  for (const r of ZONE_RADII) if (d >= r) z++;
+  return z;
+}
+export function zoneLevel(p: Pick<Position, 'x' | 'z'>): number {
+  return ZONE_LEVEL[zoneAt(p) - 1]!;
+}
 
 export const HP_PER_LEVEL = 0.02;
 export const ATK_PER_LEVEL = 0.015;
@@ -21,18 +39,16 @@ export const ELITE_SPEED = 1.35;
 export const ELITE_XP = 1.5;
 export const ELITE_LOOT = 2;
 export const ELITE_MAX_CHANCE = 0.4;
-/** Só reescala bicho parado e de vida cheia quando o nível do mundo mudar pelo menos isso. */
-export const RESCALE_STEP = 5;
 
 export function hostileScale(level: number): { hp: number; atk: number } {
   const l = Math.max(1, Math.floor(level)) - 1;
   return { hp: 1 + HP_PER_LEVEL * l, atk: 1 + ATK_PER_LEVEL * l };
 }
 
-/** Chance de nascer Enfurecido no nível do mundo `level`. */
-export function eliteChance(level: number): number {
+/** Chance de nascer Enfurecido no "nível de perigo" `level` (o da zona); de noite +10% fora da zona 1. */
+export function eliteChance(level: number, night = false): number {
   if (level <= 5) return 0;
-  return Math.min(ELITE_MAX_CHANCE, 0.35 * Math.pow(level / 125, 0.8));
+  return Math.min(ELITE_MAX_CHANCE, 0.35 * Math.pow(level / 125, 0.8) + (night ? NIGHT_ELITE_BONUS : 0));
 }
 
 /** Bicho do MAPA ou de ACAMPAMENTO (não horda, não chefe do timer). */
@@ -61,9 +77,9 @@ const ELITE_SUFFIX = ' Enfurecido';
  * (renascimento / 1ª vez); senão mantém o que era. Devolve o mesmo objeto se nada muda.
  */
 export function applyWorldLevel(
-  c: CreatureState, def: CreatureDefinition, level: number, rng: () => number, rollElite: boolean,
+  c: CreatureState, def: CreatureDefinition, level: number, rng: () => number, rollElite: boolean, night = false,
 ): CreatureState {
-  const elite = rollElite ? rng() < eliteChance(level) : !!c.elite;
+  const elite = rollElite ? rng() < eliteChance(level, night) : !!c.elite;
   const st = difficultyStats(def, level, elite);
   const name = elite ? `${def.name}${ELITE_SUFFIX}` : def.name;
   if (c.maxHp === st.maxHp && c.attackPower === st.attackPower && !!c.elite === elite && c.name === name && c.scaledLevel === level) return c;
@@ -80,7 +96,3 @@ export function eliteXp(xp: number, c: Pick<CreatureState, 'elite'>): number {
   return c.elite ? Math.round(xp * ELITE_XP) : xp;
 }
 
-/** Nível do mundo: o maior entre o meu e o dos outros jogadores da sala. */
-export function worldLevel(myLevel: number, others: number[]): number {
-  return Math.max(myLevel, ...others.filter((n) => Number.isFinite(n)));
-}

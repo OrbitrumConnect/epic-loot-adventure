@@ -26,14 +26,12 @@ import { isBuildActive } from './build-mode';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece, nearestPieceIn } from './base-targets';
 import { WANDER_MIN_STRENGTH, wanderStep } from './wander';
-import { applyWorldLevel, ELITE_SPEED, RESCALE_STEP, scalesWithWorld, worldLevel } from '@/game/systems/difficultySystem';
+import { applyWorldLevel, ELITE_SPEED, scalesWithWorld, zoneLevel } from '@/game/systems/difficultySystem';
+import { nightFactor } from '@/game/systems/dayNightSystem';
 import { CREATURES } from '@/game/data/creatures';
 
-/** Nível do mundo AGORA: o maior entre o meu e o dos jogadores da sala (difficultySystem). */
-function currentWorldLevel(): number {
-  const others = Object.values(useNet.getState().players).map((p) => p.level);
-  return worldLevel(useGameStore.getState().player.level, others);
-}
+/** É noite agora? (Enfurecidos +10% fora da zona 1.) */
+const isNight = () => nightFactor() >= 0.5;
 import { queueKnockback } from '@/game/systems/knockbackSystem';
 
 /** Golpe que EMPURRA o herói (m) — Pedro 25/10: a Couraça (grandona, 3,9 m) acerta e joga 3–4 m pra trás. */
@@ -362,7 +360,8 @@ export function useHostileAI(opts: HostileOptions) {
             const back = { ...cr, hp: cr.maxHp, behavior: 'patrol' as const, respawnAt: null, position: { ...home } };
             // Renasce no nível do mundo ATUAL e sorteia de novo se vem Enfurecido (só hostil do mapa/acampamento).
             const def = CREATURES[cr.speciesId];
-            return def && scalesWithWorld(cr, def) ? applyWorldLevel(back, def, currentWorldLevel(), Math.random, true) : back;
+            // Renasce no perigo da ZONA de casa (geografia) e sorteia de novo o Enfurecido (noite: mais chance).
+            return def && scalesWithWorld(cr, def) ? applyWorldLevel(back, def, zoneLevel(home), Math.random, true, isNight()) : back;
           }),
         }));
         g.position.set(home.x, glbSurfaceY(home.x, home.z, terrainHeight(home.x, home.z)), home.z);
@@ -390,18 +389,17 @@ export function useHostileAI(opts: HostileOptions) {
 
     if (!homePos.current) homePos.current = { ...creature.position };
 
-    // Nível do mundo (difficultySystem): 1ª vez e quando o nível muda 5+, só parado e de vida cheia (nunca no meio
-    // de uma luta). Checa ~1×/s por criatura; só o host/solo decide (o convidado espelha).
-    if (canSimulateSharedWorld() && (levelCheck.current += dt) >= 1) {
+    // Perigo pela GEOGRAFIA (difficultySystem): a zona da CASA do bicho define vida/dano/Enfurecido — 1ª vez só
+    // (depois só no renascer). O nível do jogador NÃO entra (regra selada "nível não é porta"). Só parado e de vida
+    // cheia (nunca no meio de uma luta); só o host/solo decide (o convidado espelha).
+    if (canSimulateSharedWorld() && creature.scaledLevel === undefined && (levelCheck.current += dt) >= 1) {
       levelCheck.current = 0;
       const def = CREATURES[creature.speciesId];
       if (def && scalesWithWorld(creature, def) && creature.hp >= creature.maxHp && creature.behavior !== 'chase' && creature.behavior !== 'attack') {
-        const lv = currentWorldLevel();
-        if (creature.scaledLevel === undefined || Math.abs(lv - creature.scaledLevel) >= RESCALE_STEP) {
-          useGameStore.setState(s => ({
-            creatures: s.creatures.map(cr => (cr.id === creatureId ? applyWorldLevel(cr, def, lv, Math.random, cr.scaledLevel === undefined) : cr)),
-          }));
-        }
+        const lv = zoneLevel(homePos.current);
+        useGameStore.setState(s => ({
+          creatures: s.creatures.map(cr => (cr.id === creatureId ? applyWorldLevel(cr, def, lv, Math.random, true, isNight()) : cr)),
+        }));
       }
     }
     anim.current.elite = !!creature.elite;
