@@ -30,6 +30,11 @@ describe('árvores de farm: +1 m e alturas variadas', () => {
   it('altura própria 1,02–1,42× (4,9 m → ~5–7 m), largura 0,95–1,15', () => {
     const src = fs.readFileSync('src/components/world/harvest-nodes.tsx', 'utf8');
     expect(src).toMatch(/const w = \(0\.95 \+ r \* 0\.2\) \* fillK;/);
-    expect(src).toMatch(/dummy\.scale\.set\(w, \(1\.02 \+ rand\(n\.seed \+ 29\) \* 0\.4\) \* fillK, w\)/);
+    // 25/10 (2ª): +32% só na altura (TREE_HEIGHT_K) → ~6,6–9,2 m; largura igual.
+    expect(src).toMatch(/dummy\.scale\.set\(w, \(1\.02 \+ rand\(n\.seed \+ 29\) \* 0\.4\) \* fillK \* TREE_HEIGHT_K, w\)/);
+    const kit = fs.readFileSync('src/components/world/world-kit.ts', 'utf8');
+    expect(kit).toMatch(/export const TREE_HEIGHT_K = 1\.32;/);
+    const bb = fs.readFileSync('src/components/world/billboards.tsx', 'utf8');
+    expect(bb).toMatch(/h: v === 'bush' \? h : h \* TREE_HEIGHT_K/);
   });
 });

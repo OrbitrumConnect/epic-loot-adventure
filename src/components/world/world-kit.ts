@@ -79,6 +79,8 @@ function riverFlatten(x: number, z: number): number {
 }
 
 export const MAP_HALF = 90;
+/** Árvores mais ALTAS (Pedro 25/10: "+30–35% de altura"): só a altura — a copa mantém a largura. Farm + cenário. */
+export const TREE_HEIGHT_K = 1.32;
 
 /**
  * Altura do herói em unidades de mundo — FONTE ÚNICA.

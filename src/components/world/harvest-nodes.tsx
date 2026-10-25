@@ -25,7 +25,7 @@ import { addObjective } from './objective-bridge';
 import { harvestTreeGeometry } from './harvest-tree-geometry';
 import { makeInstanceFadeMaterial, registerInstancedFade, type FadeSphere } from './occlusion';
 import {
-  labelTexture, markPointerConsumed, mixColor, rand, terrainHeight, type Palette,
+  labelTexture, markPointerConsumed, mixColor, rand, terrainHeight, TREE_HEIGHT_K, type Palette,
 } from './world-kit';
 import { GlbCrystals } from './glb-crystals';
 import { GlbRocks } from './glb-rocks';
@@ -293,7 +293,8 @@ function KindInstances({
           // Altura 4,9 m × 1,02–1,42 → ~5–7 m; largura varia pouco (0,95–1,15) → floresta natural, sem exagero.
           const fillK = 0.8 + 0.2 * Math.max(0, Math.min(1, fill));
           const w = (0.95 + r * 0.2) * fillK;
-          dummy.scale.set(w, (1.02 + rand(n.seed + 29) * 0.4) * fillK, w);
+          // +32% de altura (Pedro 25/10, TREE_HEIGHT_K): ~6,6–9,2 m.
+          dummy.scale.set(w, (1.02 + rand(n.seed + 29) * 0.4) * fillK * TREE_HEIGHT_K, w);
         } else dummy.scale.set(s, s, s);
         dummy.updateMatrix();
         live.setMatrixAt(li, dummy.matrix);

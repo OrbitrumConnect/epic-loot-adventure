@@ -30,7 +30,7 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import * as THREE from 'three';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { registerInstancedFade, type FadeSphere } from './occlusion';
-import { LAKE_CENTERS, MAP_HALF, rand, terrainHeight, riverDistance, RIVER_HALF_WIDTH, type Palette } from './world-kit';
+import { LAKE_CENTERS, MAP_HALF, rand, TREE_HEIGHT_K, terrainHeight, riverDistance, RIVER_HALF_WIDTH, type Palette } from './world-kit';
 import { glbSurfaceY, collectGreenSurfaceSpots, surfaceColorAt, useTerrainVersion } from './terrain-collision';
 import { ForestRocks } from './forest-models';
 import { LivingTrees } from './living-trees';
@@ -376,7 +376,8 @@ export function Billboards({ trees, c }: { trees: TreePlacement[]; c: Palette })
       const v = floraVariant(t.seed);
       const base = FLORA_BASE[v];
       const h = base.h * t.size;
-      buckets[v].push({ x: t.x, z: t.z, w: h * base.wf, h, yaw: 0 });
+      // Árvore +32% de altura (arbusto não); largura igual.
+      buckets[v].push({ x: t.x, z: t.z, w: h * base.wf, h: v === 'bush' ? h : h * TREE_HEIGHT_K, yaw: 0 });
     }
     return buckets;
   }, [trees]);
