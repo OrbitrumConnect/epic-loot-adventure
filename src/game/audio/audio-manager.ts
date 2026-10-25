@@ -29,6 +29,8 @@ export const WORLD_SFX: Record<WorldSfx, { url: string; vol: number; rate: numbe
   growl: { url: '/audio/death-growl.wav', vol: 0.2, rate: 1 },
 };
 export const TOWER_SFX_GAP_MS = 80;
+/** Cópias do som de tiro do herói tocando juntas (rajada de 0,1 s: cada bala soa). */
+export const HERO_SHOT_POOL = 4;
 /** Volume pela distância: cheio até 6 m, some em 45 m. */
 export const SFX_FULL_M = 6;
 export const SFX_MAX_M = 45;
@@ -144,8 +146,24 @@ class AudioManager {
 
   /** Sinaliza um ataque/combate: segura a trilha de combate por alguns segundos. */
   pulseCombat(now = Date.now()) { this.combatUntil = now + COMBAT_HOLD_MS; }
-  playShot() { this.ensure(); if (!this.shot) return; this.shot.volume = Math.min(0.22, this.master * 0.3); this.shot.currentTime = 0; void this.shot.play().catch(() => {}); }
-  playGunShot() { this.ensure(); if (!this.gun) return; this.gun.volume = Math.min(0.26, this.master * 0.36); this.gun.currentTime = 0; void this.gun.play().catch(() => {}); }
+  /** Tiro do herói em RODÍZIO de 4 cópias (Pedro 25/10: "na rajada sai só 1 som — devia sair o de cada bala"):
+   *  com 1 elemento só, reiniciar a cada 0,1 s cortava o anterior e o navegador engolia os seguintes. */
+  private heroPool: Record<'bow' | 'gun', HTMLAudioElement[]> = { bow: [], gun: [] };
+  private heroNext: Record<'bow' | 'gun', number> = { bow: 0, gun: 0 };
+  private playHero(kind: 'bow' | 'gun', vol: number) {
+    this.ensure();
+    const src = kind === 'gun' ? this.gun : this.shot;
+    if (!src) return;
+    const pool = this.heroPool[kind];
+    if (pool.length === 0) pool.push(src);
+    else if (pool.length < HERO_SHOT_POOL) pool.push(src.cloneNode(true) as HTMLAudioElement);
+    const a = pool[this.heroNext[kind]++ % pool.length]!;
+    a.volume = vol;
+    a.currentTime = 0;
+    void a.play().catch(() => {});
+  }
+  playShot() { this.playHero('bow', Math.min(0.22, this.master * 0.3)); }
+  playGunShot() { this.playHero('gun', Math.min(0.26, this.master * 0.36)); }
   playHarvest() { this.ensure(); if (!this.harvest) return; this.harvest.volume = Math.min(0.16, this.master * 0.158); this.harvest.currentTime = 0; void this.harvest.play().catch(() => {}); }
   playMelee() { this.ensure(); if (!this.melee) return; this.melee.volume = Math.min(0.16, this.master * 0.158); this.melee.currentTime = 0; void this.melee.play().catch(() => {}); }
   /** Ataque de OUTRO jogador (online): cópias próprias (não corta o som local) e volume pela

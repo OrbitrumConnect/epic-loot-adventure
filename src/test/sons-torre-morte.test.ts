@@ -35,3 +35,15 @@ describe('sons de torre e de morte', () => {
     expect(fb).toMatch(/if \(ev\.kind === 'death'\) \{ markImpact\(1\.6\); playDeathSfx\(ev\); \}/);
   });
 });
+
+/* Pedro, 25/10: "quando disparo em sequência sai apenas 1 som — devia sair o barulho de cada bala". */
+describe('rajada: cada bala soa', () => {
+  it('tiro do herói gira entre 4 cópias (não reinicia o mesmo som a cada 0,1 s)', async () => {
+    const { audioManager, HERO_SHOT_POOL } = await import('@/game/audio/audio-manager');
+    const used = new Set<HTMLMediaElement>();
+    const spy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) { used.add(this); return Promise.resolve(); });
+    for (let i = 0; i < 8; i++) audioManager.playGunShot();
+    expect(used.size).toBe(HERO_SHOT_POOL);
+    spy.mockRestore();
+  });
+});
