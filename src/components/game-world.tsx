@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
+import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
+import { creatureById } from './world/hostile-ai';
 import { BackgroundSim } from './world/background-sim';
 import { virtualMove } from './world/virtual-input';
 import { isTypingTarget } from './world/typing-target';
@@ -1644,6 +1646,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       if (!pointerLocked.current) return;
       const sensitivity = 0.0025 * aimSensitivityScale();
       cameraYaw.current -= e.movementX * sensitivity;
+      if (e.movementX !== 0 || e.movementY !== 0) noteManualLook();
       cameraPitch.current = THREE.MathUtils.clamp(
         cameraPitch.current - e.movementY * sensitivity, -1.0, 0.65,
       );
@@ -1741,6 +1744,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       if (cameraMode === 'third') {
         const sensitivity = 0.005 * aimSensitivityScale();
         cameraYaw.current -= (t.clientX - lastTX) * sensitivity;
+        noteManualLook();
         cameraPitch.current = THREE.MathUtils.clamp(cameraPitch.current - (t.clientY - lastTY) * sensitivity, -1.0, 0.65);
         e.preventDefault(); // enquanto gira: evita scroll/zoom da página
       } else if (cameraMode === 'iso' && moved) {
@@ -1947,11 +1951,15 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       }
       const rk = Math.exp(-Math.min(delta, 0.1) * 14);
       recoil.current.x *= rk; recoil.current.y *= rk;
-      const yaw = cameraYaw.current + recoil.current.y;
-      const pitch = cameraPitch.current + recoil.current.x;
       // MIRA: câmera no ombro (perto e mais baixa, estilo GTA) + campo de visão fechando com o zoom.
       const aimNow = useAim.getState();
       const aiming = aimNow.active;
+      // Piloto automático lutando: a câmera gira suave pro alvo (mexer o mouse/dedo devolve o controle por 1,5 s).
+      const aimId = aiming ? null : pilotAimId();
+      const aimC = aimId ? creatureById(aimId) : undefined;
+      if (aimC && aimC.behavior !== 'dead') cameraYaw.current = followYaw(cameraYaw.current, Math.atan2(aimC.position.x - px, aimC.position.z - pz), delta);
+      const yaw = cameraYaw.current + recoil.current.y;
+      const pitch = cameraPitch.current + recoil.current.x;
       camDist.current = THREE.MathUtils.lerp(camDist.current, aiming ? 1.7 : camDistTarget.current, aiming ? 0.2 : 0.1);
       const dist = camDist.current;
       const shoulderOffset = aiming ? 0.75 : 0.7;

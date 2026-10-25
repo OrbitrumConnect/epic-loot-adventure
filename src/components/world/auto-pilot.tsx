@@ -24,6 +24,7 @@ import {
   approachStandoff, createIntentRecorder, decidePilotAttack, firingReach, kiteRetreatPoint,
 } from './pilot-combat';
 import { buildAutoSnapshot, decideIntent, getObjectives, setAutoMode, tickWorld } from './objective-bridge';
+import { setPilotAim } from './pilot-aim';
 import { setPilotStatus } from './pilot-status';
 import { MAP_HALF } from './world-kit';
 
@@ -138,6 +139,7 @@ export function AutoPilot({
     tickWorld();
 
     if (getObjectives().mode !== 'idle') {
+      setPilotAim(null);
       // Saiu do idle (tecla G, botão do HUD, fim da fila): larga o destino do
       // piloto para o jogador não continuar andando sozinho.
       if (wasIdle.current) { hold(); wasIdle.current = false; }
@@ -164,6 +166,8 @@ export function AutoPilot({
 
     // Saiu do combate → zera a banda morta e a medição de kiting (recomeça do
     // zero no próximo alvo: volta a tentar recuar antes de concluir "é rápido").
+    // Câmera de 3ª pessoa vira pro alvo enquanto o piloto luta (pilot-aim.ts).
+    setPilotAim(intent.kind === 'attack' ? intent.creatureId : null, now);
     if (intent.kind !== 'attack') {
       engaged.current = false;
       kiting.current = false;
