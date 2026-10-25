@@ -288,7 +288,13 @@ function KindInstances({
         // Encolhe um pouco conforme o estoque cai: dá leitura de "quase no fim".
         const fill = n.maxQuantity > 0 ? n.quantity / n.maxQuantity : 1;
         const s = (0.85 + r * 0.4) * (0.8 + 0.2 * Math.max(0, Math.min(1, fill))) * (kind === 'pebble' ? 1.5 : 1);
-        dummy.scale.set(s, s, s);
+        if (kind === 'tree') {
+          // Árvore de farm (Pedro 25/10): +~1 m e cada uma com altura PRÓPRIA (pareciam todas iguais).
+          // Altura 4,9 m × 1,02–1,42 → ~5–7 m; largura varia pouco (0,95–1,15) → floresta natural, sem exagero.
+          const fillK = 0.8 + 0.2 * Math.max(0, Math.min(1, fill));
+          const w = (0.95 + r * 0.2) * fillK;
+          dummy.scale.set(w, (1.02 + rand(n.seed + 29) * 0.4) * fillK, w);
+        } else dummy.scale.set(s, s, s);
         dummy.updateMatrix();
         live.setMatrixAt(li, dummy.matrix);
         list[li] = n.id;

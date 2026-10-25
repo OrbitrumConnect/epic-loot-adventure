@@ -26,6 +26,10 @@ import { isBuildActive } from './build-mode';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece, nearestPieceIn } from './base-targets';
 import { WANDER_MIN_STRENGTH, wanderStep } from './wander';
+import { queueKnockback } from '@/game/systems/knockbackSystem';
+
+/** Golpe que EMPURRA o herói (m) — Pedro 25/10: a Couraça (grandona, 3,9 m) acerta e joga 3–4 m pra trás. */
+export const PLAYER_SHOVE: Record<string, number> = { raider_samurai: 3.5 };
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTargets, useNet, waveOwner } from '@/net/multiplayer';
 import { takeKnockback } from '@/game/systems/knockbackSystem';
@@ -418,7 +422,11 @@ export function useHostileAI(opts: HostileOptions) {
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
           const dmg = mitigateDamage(Math.max(1, creature.attackPower), useGameStore.getState().player);
-          if (!useGameStore.getState().player.dead) reportDamageToStore("player", dmg, { x: px, z: pz }, true);
+          if (!useGameStore.getState().player.dead) {
+            reportDamageToStore("player", dmg, { x: px, z: pz }, true);
+            const shove = PLAYER_SHOVE[creature.speciesId];
+            if (shove && distToPlayer > 1e-3) queueKnockback("player", ((px - wx) / distToPlayer) * shove, ((pz - wz) / distToPlayer) * shove);
+          }
           useGameStore.setState(s => {
             if (s.player.dead) return {};
             const hp = Math.max(0, s.player.hp - dmg);

@@ -15,6 +15,7 @@ import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
 import { aimFire, aimSensitivityScale, aimZoomStep, setAimCamera, setAiming, useAim } from './world/aim';
 import { createLookTracker } from './world/touch-look';
+import { takeKnockback } from '@/game/systems/knockbackSystem';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
@@ -603,6 +604,9 @@ function Character({
 
     let nx = body.current.position.x + velocity.current.x * dt;
     let nz = body.current.position.z + velocity.current.y * dt;
+    // Empurrão de golpe (ex.: Couraça joga ~3,5 m): consumido suave e passa pelas colisões abaixo.
+    const shove = takeKnockback("player", dt);
+    if (shove) { nx += shove.x; nz += shove.z; }
 
     // Colisão seletiva: empurra pra fora de estruturas e nós sólidos (deslize).
     for (const col of STATIC_COLLIDERS) [nx, nz] = pushOut(nx, nz, col.x, col.z, col.r);
