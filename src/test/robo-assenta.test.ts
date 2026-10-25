@@ -44,6 +44,7 @@ describe('Couraça assenta pelo corpo animado', () => {
     const fs = await import('node:fs');
     const raider = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
     expect(raider).toMatch(/raider_samurai: \{[^}]*autoGround: true/);
+    expect(raider).toMatch(/raider_mushroom: \{[^}]*autoGround: true/); // Fúngico (Pedro: "perfeito", 25/10)
     expect(raider).toMatch(/autoGround=\{mx\.autoGround \?\? false\}/);
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
     expect(hero).toMatch(/if \(autoGround && g\.parent[\s\S]{0,300}nextGroundOffset\(g\.position\.y, skinnedMinY\(g\), tmpHeroV\.y\)/);

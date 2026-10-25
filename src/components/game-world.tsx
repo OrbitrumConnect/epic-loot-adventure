@@ -14,6 +14,7 @@ import { CombatFeedback } from './world/combat-feedback';
 import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
 import { aimFire, aimZoomStep, setAimCamera, setAiming, useAim } from './world/aim';
+import { createLookTracker } from './world/touch-look';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
@@ -1710,15 +1711,18 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     // — quem move é o JOYSTICK (Pedro: "tirar o andar-clicando pra não confundir MOBA e 3ª
     // pessoa"). Tocar num inimigo ainda seleciona/ataca (evento do próprio mesh).
 
+    // O dedo que GIRA é o que começou na tela de jogo (`touch-look.ts`) — joystick + girar juntos.
+    const look = createLookTracker();
     let startX = 0, startY = 0, lastTX = 0, lastTY = 0, moved = false;
     const onTouchStart = (e: TouchEvent) => {
-      if (props.paused || e.touches.length !== 1 || isBuildActive()) return;
-      const t = e.touches[0]!;
+      if (props.paused || isBuildActive()) return;
+      const t = look.start(e.changedTouches);
+      if (!t) return;
       startX = lastTX = t.clientX; startY = lastTY = t.clientY; moved = false;
     };
     const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      const t = e.touches[0]!;
+      const t = look.move(e.changedTouches);
+      if (!t) return;
       if (Math.abs(t.clientX - startX) + Math.abs(t.clientY - startY) > 10) moved = true;
       if (cameraMode === 'third') {
         const sensitivity = 0.005;
@@ -1733,8 +1737,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       lastTX = t.clientX; lastTY = t.clientY;
     };
     const onTouchEnd = (e: TouchEvent) => {
-      const t = e.changedTouches[0];
-      if (!moved && t && !props.paused && !isBuildActive()) {
+      if (!look.end(e.changedTouches)) return; // soltou outro dedo (ex.: joystick): o giro continua
+      if (!moved && !props.paused && !isBuildActive()) {
         // Tap no chão não faz nada (joystick move); só suprime o mousedown sintetizado
         // pra o toque não virar ataque/giro fantasma.
         e.preventDefault();
