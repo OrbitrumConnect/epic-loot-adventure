@@ -90,7 +90,7 @@ function measure(clip: THREE.AnimationClip, applied: THREE.AnimationClip, srcRoo
 
 describe('inimigos Mixamo (standFix 90°): nunca pior que hoje (GLB reais)', () => {
   // Só os ligados em raider.tsx (twistFix). spiked/pirate/swamp pioravam ~3° em algum quadro → desligados.
-  // alien_brute (Fúngico) saiu daqui em 24/10 → bindFix (ver abaixo).
+  // alien_brute (Fúngico) saiu em 24/10 e scrap_brute (Brutamontes) em 25/10 → bindFix (ver abaixo). rope_archer segue aqui.
   for (const m of ['scrap_brute', 'rope_archer']) {
     for (const name of ['idle', 'walk', 'attack']) {
       it(`${m} · ${name}: menos giro, mesma direção, braços iguais, em pé`, () => {
@@ -173,7 +173,8 @@ function skinMeasure(clip: THREE.AnimationClip, srcRoot: THREE.Object3D, applied
 }
 
 describe('Couraça e Fúngico: pele sem torcer (pose de ligação + retarget pelo mundo, GLB reais)', () => {
-  for (const [m, today] of [['spiked', 'cópia direta'], ['alien_brute', 'twist']] as const) {
+  // 25/10: + pirata, pântano e Brutamontes (mesma causa, mesma correção).
+  for (const [m, today] of [['spiked', 'cópia direta'], ['alien_brute', 'twist'], ['pirate', 'cópia direta'], ['swamp', 'cópia direta'], ['scrap_brute', 'twist']] as const) {
     for (const name of ['idle', 'walk', 'attack']) {
       it(`${m} · ${name}: pele bem menos torcida, membros apontam certo, em pé, pé no mesmo lugar`, () => {
         const cg = glb(`public/models/red/${name}.glb`), tg = glb(`public/models/raiders/${m}.glb`), clip = clipOf(cg);
@@ -183,7 +184,7 @@ describe('Couraça e Fúngico: pele sem torcer (pose de ligação + retarget pel
         const after = skinMeasure(clip, skeleton(cg), fixed, bindSkeleton(tg), bindSkeleton(tg));
         // Medido: Couraça 126–128° → 41–45° (direção 28° → 0,6°); Fúngico 46° → 25–29° (direção 15° → 4,5°).
         // O que sobra é a dobra normal de levar o braço/perna da pose "A" da malha à pose da animação.
-        expect(now.skin).toBeGreaterThan(40);                  // o defeito existe hoje
+        expect(now.skin).toBeGreaterThan(30);                  // o defeito existe hoje
         expect(after.skin).toBeLessThan(now.skin - 15);        // bem menos torcido
         expect(after.skin).toBeLessThanOrEqual(50);
         expect(after.dir).toBeLessThanOrEqual(8);              // membros apontam como na animação
