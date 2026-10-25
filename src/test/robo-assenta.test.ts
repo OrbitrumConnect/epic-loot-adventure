@@ -48,7 +48,8 @@ describe('Couraça assenta pelo corpo animado', () => {
     expect(raider).toMatch(/autoGround=\{mx\.autoGround \?\? false\}/);
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
     // 25/10: mesmo cálculo, versão barata (só os pés) e 1ª medição encaixa na hora.
-    expect(hero).toMatch(/if \(near && autoGround && g\.parent[\s\S]{0,400}nextGroundOffset\(g\.position\.y, footMinY\(g, footCache\.current\), tmpHeroV\.y, groundInit\.current \? 0\.35 : 1\)/);
+    // 25/10: 1ª medição ao NASCER em qualquer distância (antes só perto → nascia enterrado e subia ao chegar).
+    expect(hero).toMatch(/if \(autoGround && g\.parent && groundDue\(groundInit\.current, \+\+groundAcc\.current, near\)\)[\s\S]{0,400}nextGroundOffset\(g\.position\.y, footMinY\(g, footCache\.current\), tmpHeroV\.y, groundInit\.current \? 0\.35 : 1\)/);
   });
 
   it('corpo 0,6 m enterrado (Couraça de 3,9 m) sobe até pisar no chão em ~2 s', () => {
@@ -58,5 +59,26 @@ describe('Couraça assenta pelo corpo animado', () => {
     for (let i = 0; i < 7; i++) { g.updateMatrixWorld(true); g.position.y = nextGroundOffset(g.position.y, skinnedMinY(g), 0); }
     g.updateMatrixWorld(true);
     expect(Math.abs(skinnedMinY(g))).toBeLessThan(0.03);
+  });
+});
+
+/* Pedro, 25/10: "inimigos do acampamento nascem abaixo do solo, só o peito visível; Couraça nasce abaixo e sobe
+   quando anda". O ajuste pelo corpo só rodava PERTO (40 m) e não estava ligado nos inimigos de acampamento. */
+describe('assenta ao NASCER, em qualquer distância', () => {
+  it('1ª medição 3 quadros depois de nascer (longe ou perto); depois a cada ~0,3 s só perto', async () => {
+    const { groundDue } = await import('@/components/world/glb-creature');
+    expect(groundDue(false, 2, false)).toBe(false);
+    expect(groundDue(false, 3, false)).toBe(true);  // longe: mede mesmo assim (antes: nunca)
+    expect(groundDue(true, 18, false)).toBe(false); // depois: longe não gasta
+    expect(groundDue(true, 18, true)).toBe(true);
+    expect(groundDue(true, 19, true)).toBe(false);
+  });
+  it('inimigos de acampamento: autoGround ligado e −10% de tamanho', async () => {
+    const fs = await import('node:fs');
+    const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
+    expect(r).toMatch(/pirate\.glb', standFixX: Math\.PI \/ 2, height: 1\.62, bindFix: true, autoGround: true/);
+    expect(r).toMatch(/scrap_brute\.glb', standFixX: Math\.PI \/ 2, height: 2\.07, bindFix: true, autoGround: true/);
+    expect(r).toMatch(/rope_archer\.glb', standFixX: Math\.PI \/ 2, height: 1\.67, forceBow: true, twistFix: true, autoGround: true/);
+    expect(r).toMatch(/swamp\.glb', standFixX: Math\.PI \/ 2, height: 1\.71, bindFix: true, autoGround: true/);
   });
 });

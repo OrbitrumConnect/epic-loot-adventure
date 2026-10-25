@@ -69,10 +69,11 @@ const RAIDER_GLB: Record<string, string> = {
 // 25/10: pirata, pântano e Brutamontes também (medido: pele +130–159° → +17–30°, direção 27–31° → 2–3°; pé igual).
 const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean; strideSync?: boolean }> = {
   raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.32, bindFix: true, autoGround: true, strideSync: true }, // 3,9→3,32 m (−15%, Pedro 25/10: muitos na base embolavam) // autoGround: andava meio enterrado (Pedro 25/10)     // spiked, 2x (Pedro)
-  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8, bindFix: true },       // pirata
-  raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, bindFix: true },  // brutamontes (maior)
-  raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true, twistFix: true },// arqueiro: só ataque de longe
-  raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9, bindFix: true },      // swamp winged hybrid
+  // 25/10 (Pedro): inimigos de acampamento −10% ("ficaram um pouco grandes") + autoGround (nasciam enterrados até o peito).
+  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.62, bindFix: true, autoGround: true },       // pirata
+  raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.07, bindFix: true, autoGround: true },  // brutamontes (maior)
+  raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.67, forceBow: true, twistFix: true, autoGround: true },// arqueiro: só ataque de longe
+  raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.71, bindFix: true, autoGround: true },      // swamp winged hybrid
   raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 3.83, bindFix: true, autoGround: true, strideSync: true }, // 4,5→3,83 m (−15%) // alien giant brute (boss) — grandão 4.5m
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';

@@ -7,7 +7,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
 import { poseToBind, retargetBind, retargetTwist } from './mixamo-retarget';
-import { createFootCache, footMinY, nextGroundOffset } from './glb-creature';
+import { createFootCache, footMinY, groundDue, nextGroundOffset } from './glb-creature';
 import { hitStopScale } from './hit-stop';
 
 /** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
@@ -339,7 +339,7 @@ export function GlbHeroMixamo({
   const lastHitAt = useRef(-Infinity);
   const lastCastSeen = useRef<number | null>(null);
   const clock = useRef(0);
-  const groundAcc = useRef(0);
+  const groundAcc = useRef(-Math.floor(Math.random() * 30)); // espalha a 1ª medição (horda nascendo junta não trava)
 
   useFrame((_, rawDt) => {
     // PERF: longe do player → tira a SOMBRA. A animação segue (pausar congelava a pose e o raider deslizava
@@ -354,7 +354,7 @@ export function GlbHeroMixamo({
         for (const m of meshes.current) m.castShadow = near;
       }
       if (mixer) mixer.timeScale = hitStopScale(); // hit stop (crítico/abate)
-      if (near && autoGround && g.parent && groundAcc.current++ % 18 === 0) { // ~0,3 s a 60 fps
+      if (autoGround && g.parent && groundDue(groundInit.current, ++groundAcc.current, near)) { // 1ª ao nascer (qualquer distância), depois ~0,3 s perto
         g.parent.getWorldPosition(tmpHeroV); // a raiz do raider fica no chão (IA)
         g.updateWorldMatrix(true, true);
         // 1ª medição ENCAIXA na hora (antes subia suave ~1,5 s e parecia "brotar do chão" — Pedro 25/10).

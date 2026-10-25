@@ -77,6 +77,15 @@ export function footMinY(root: THREE.Object3D, cache: FootCache, maxSamples = 15
   return all[0]!.y;
 }
 
+/**
+ * Hora de medir o chão pelo corpo animado? 1ª vez: 3 quadros depois de nascer (a animação já posou), em QUALQUER
+ * distância — antes só media perto (40 m) e de longe o bicho/raider ficava enterrado até chegar perto ("nasce abaixo e
+ * sobe ao andar", Pedro 25/10). Depois: a cada ~0,3 s e só perto (custo).
+ */
+export function groundDue(init: boolean, frame: number, near: boolean): boolean {
+  return init ? near && frame % 18 === 0 : frame >= 3;
+}
+
 /** Próximo deslocamento vertical pra o pé (minY) encostar no chão (groundY), suavizado. */
 export function nextGroundOffset(current: number, minY: number, groundY: number, k = 0.35): number {
   if (!Number.isFinite(minY)) return current;
@@ -139,7 +148,7 @@ export function GlbCreature({
   const meshes = useRef<THREE.Mesh[]>([]);
   /** Estado de proximidade atual (evita reescrever castShadow/timeScale todo quadro). */
   const active = useRef(true);
-  const groundAcc = useRef(0);
+  const groundAcc = useRef(-Math.floor(Math.random() * 30)); // espalha a 1ª medição (horda nascendo junta não trava)
   const groundInit = useRef(false);
   const footCache = useRef(createFootCache());
 
@@ -249,9 +258,9 @@ export function GlbCreature({
     }
     if (mixer) mixer.timeScale = hitStopScale(); // hit stop (crítico/abate)
 
-    if (near && autoGround && g.parent) { // medir a malha animada custa: só perto
+    if (autoGround && g.parent) {
       groundAcc.current += 1;
-      if (groundAcc.current % 18 === 0) { // ~0,3 s a 60 fps
+      if (groundDue(groundInit.current, groundAcc.current, near)) {
         g.parent.getWorldPosition(tmpCreatureV); // a raiz do bicho fica no chão (Beast/AI)
         g.updateWorldMatrix(true, true);
         g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpCreatureV.y, groundInit.current ? 0.35 : 1); // 1ª: encaixa

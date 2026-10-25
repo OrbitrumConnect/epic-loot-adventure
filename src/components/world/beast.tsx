@@ -29,7 +29,8 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   deer: { url: '/models/animals/deer.glb', height: 3.54, yaw: 0, tint: '#a8743c', groundBias: -0.63, autoGround: true },
   // Jacaré em tamanho real (Pedro 25/10: 'tá miúdo'): era 0,8 m de comprimento → ~3 m × 0,42 m de altura.
   // groundBias = pé medido na pose salva (1,37 m acima da base da caixa); perto, assenta pelo corpo animado.
-  boar: { url: '/models/animals/alligator.glb', height: 2.63, yaw: 0, tint: '#5a6b4a', groundBias: -1.37, autoGround: true },
+  // 25/10 (Pedro: "jacaré menor que búfalo não faz sentido"): 3 → ~4,5 m de comprimento (búfalo 3,4 m).
+  boar: { url: '/models/animals/alligator.glb', height: 3.95, yaw: 0, tint: '#5a6b4a', groundBias: -2.06, autoGround: true },
   bear: { url: '/models/animals/buffalo.glb', height: 3.39, yaw: 0, tint: '#4b3a2a', groundBias: -0.59, autoGround: true },
   wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.85, yaw: 0, tint: '#c49a5e', groundBias: -0.43, autoGround: true },
   // Aves (texturas próprias → sem tint). OBS: a geometria vem com ASAS ABERTAS, então
@@ -114,7 +115,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     head: [0.4, 0.38, 0.44], headColor: '#4a3322', headPos: [0, 0.02, 0.66],
     snout: { size: [0.24, 0.2, 0.2], color: '#8a6a58', pos: [0, -0.04, 0.93] },
     ears: 'cone', earColor: '#3d2a1b', tail: 'stub', tailColor: '#3d2a1b', eyes: '#d84a28',
-    extras: ['tusks', 'mane'], extraColor: '#e8e0c8', labelHeight: 1.2, ringRadius: 1.5,
+    extras: ['tusks', 'mane'], extraColor: '#e8e0c8', labelHeight: 1.4, ringRadius: 2.2,
     tuning: { ...hostileBase, speed: 4.1, aggroRange: 7, attackRange: 2.4, leashRange: 16, hitVerb: 'investiu' },
   },
   bear: {
