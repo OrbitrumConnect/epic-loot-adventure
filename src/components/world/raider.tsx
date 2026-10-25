@@ -53,6 +53,9 @@ const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
 /** Escala dos inimigos que nascem em ACAMPAMENTO (Pedro 25/10: −30% e depois mais −30% → 0,7 × 0,7). */
 export const CAMP_SCALE = 0.49;
+/** Exceção (Pedro 25/10: "a Couraça estava ok grande; só ela pode aumentar 1 a 1,5 m"): no acampamento ela fica
+ *  0,87 (3,32 → ~2,9 m, +1,25 m sobre os 1,63 do −51%). Horda/mapa seguem no tamanho original (3,32 m). */
+export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 0.87 };
 /**
  * ATIRADORES de acampamento (Pedro 25/10: "quais inimigos podemos pôr arma pra atirar nos acampamentos"): o pirata
  * (guarda da frente) atira de pistola de 12 m — mesmo dano/cadência dele, persegue correndo, para no alcance e atira.
@@ -385,7 +388,7 @@ export function Raider({
   // Raio do corpo p/ a separação (25/10): grandões Mixamo pela altura; o resto pela largura × escala.
   const mxBody = MIXAMO_RAIDER[speciesId];
   // Inimigos de ACAMPAMENTO −30% (Pedro 25/10: "diminuir os do acampamento uns 30%"); a horda segue no tamanho original.
-  const sizeK = isCampSpawn(creatureId) ? CAMP_SCALE : 1;
+  const sizeK = isCampSpawn(creatureId) ? (CAMP_SCALE_BY[speciesId] ?? CAMP_SCALE) : 1;
   const hordeRuns = hordeSpeedScale(creatureId, speciesId) >= HORDE_RUN_FROM;
   const campRuns = campChaseScale(isCampSpawn(creatureId), speciesId) > 1;
   // Pirata de ACAMPAMENTO atira de pistola (Pedro 25/10); na horda/mapa segue na faca.
