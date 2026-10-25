@@ -51,6 +51,11 @@ export function eliteChance(level: number, night = false): number {
   return Math.min(ELITE_MAX_CHANCE, 0.35 * Math.pow(level / 125, 0.8) + (night ? NIGHT_ELITE_BONUS : 0));
 }
 
+/** Nasce num ACAMPAMENTO (id `<acampamento>_e<n>`). */
+export function isCampSpawn(id: string): boolean {
+  return CAMP_PLACEMENTS.some((p) => id.startsWith(`${p.id}_e`));
+}
+
 /** Bicho do MAPA ou de ACAMPAMENTO (não horda, não chefe do timer). */
 export function isWorldSpawn(id: string): boolean {
   return id.startsWith('wild_') || CAMP_PLACEMENTS.some((p) => id.startsWith(`${p.id}_e`));

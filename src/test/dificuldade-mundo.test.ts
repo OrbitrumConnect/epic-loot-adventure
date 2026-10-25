@@ -62,7 +62,7 @@ describe('ligado no jogo (sem nível do jogador)', () => {
     expect(ai).toMatch(/applyWorldLevel\(back, def, zoneLevel\(home\), Math\.random, true, isNight\(\)\)/);
     expect(ai).toMatch(/const lv = zoneLevel\(homePos\.current\);/);
     expect(ai).not.toMatch(/player\.level/);
-    expect(ai).toMatch(/const chaseSpeed = tuning\.speed \* CREATURE_SPEED_SCALE \* \(creature\.elite \? ELITE_SPEED : 1\);/);
+    expect(ai).toMatch(/const chaseSpeed = tuning\.speed \* CREATURE_SPEED_SCALE \* \(creature\.elite \? ELITE_SPEED : 1\)( \* hordeSpeedScale\(creatureId, creature\.speciesId\))?;/);
     for (const f of ['beast', 'raider', 'wolf']) expect(fs.readFileSync(`src/components/world/${f}.tsx`, 'utf8')).toMatch(/\{elite && <EliteAura height=/);
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
     expect(store.match(/eliteLoot\(scaleHordeAmmo/g)).toHaveLength(2);

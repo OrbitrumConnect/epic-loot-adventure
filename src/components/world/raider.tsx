@@ -17,6 +17,8 @@ import { GlbHero, type HeroAction } from './glb-hero';
 import { GlbHeroMixamo } from './glb-hero-mixamo';
 import { GlbStaticBoss } from './glb-static-boss';
 import { GlbCreature } from './glb-creature';
+import { isCampSpawn } from '@/game/systems/difficultySystem';
+import { HORDE_RUN_FROM, hordeSpeedScale } from '@/game/systems/waveSystem';
 
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
@@ -48,6 +50,8 @@ const USE_GLB_BOSS = true;
 const IMP_URL = '/models/Imp.glb';
 const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
+/** Escala dos inimigos que nascem em ACAMPAMENTO (Pedro 25/10: −30%). */
+export const CAMP_SCALE = 0.7;
 const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
 /** Modelo GLB por espécie. Male_Ranger é EXCLUSIVO do player — raiders usam outros.
  *  (todos rig Universal → animam com a UAL, igual o Kael). */
@@ -69,11 +73,11 @@ const RAIDER_GLB: Record<string, string> = {
 // 25/10: pirata, pântano e Brutamontes também (medido: pele +130–159° → +17–30°, direção 27–31° → 2–3°; pé igual).
 const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean; strideSync?: boolean }> = {
   raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.32, bindFix: true, autoGround: true, strideSync: true }, // 3,9→3,32 m (−15%, Pedro 25/10: muitos na base embolavam) // autoGround: andava meio enterrado (Pedro 25/10)     // spiked, 2x (Pedro)
-  // 25/10 (Pedro): inimigos de acampamento −10% ("ficaram um pouco grandes") + autoGround (nasciam enterrados até o peito).
-  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.62, bindFix: true, autoGround: true },       // pirata
-  raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.07, bindFix: true, autoGround: true },  // brutamontes (maior)
-  raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.67, forceBow: true, twistFix: true, autoGround: true },// arqueiro: só ataque de longe
-  raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.71, bindFix: true, autoGround: true },      // swamp winged hybrid
+  // 25/10 (Pedro): autoGround (nasciam enterrados até o peito). Tamanho de ACAMPAMENTO = CAMP_SCALE (só quem nasce lá).
+  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8, bindFix: true, autoGround: true },       // pirata
+  raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, bindFix: true, autoGround: true },  // brutamontes (maior)
+  raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true, twistFix: true, autoGround: true },// arqueiro: só ataque de longe
+  raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9, bindFix: true, autoGround: true },      // swamp winged hybrid
   raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 3.83, bindFix: true, autoGround: true, strideSync: true }, // 4,5→3,83 m (−15%) // alien giant brute (boss) — grandão 4.5m
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
@@ -194,7 +198,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     scale: 3.3, bodyWidth: 0.9, bodyDepth: 0.5, weapon: 'club',
     hood: false, shoulders: true, charm: false, boss: true, bossScale: 1.7,
     tuning: {
-      ...base, speed: 4.7, aggroRange: 32, attackRange: 5, leashRange: 400, // +15% (Pedro 25/10)
+      ...base, speed: 6.1, aggroRange: 32, attackRange: 5, leashRange: 400, // +15% e +30% (Pedro 25/10)
       chaseTimeout: 600, provokeRange: 48, walkSpeedChase: 14, walkSpeedIdle: 6,
       hitVerb: 'retalhou',
     },
@@ -368,7 +372,10 @@ export function Raider({
   const eliteNow = useRef(false);
   // Raio do corpo p/ a separação (25/10): grandões Mixamo pela altura; o resto pela largura × escala.
   const mxBody = MIXAMO_RAIDER[speciesId];
-  const bodyRadius = mxBody ? mxBody.height * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
+  // Inimigos de ACAMPAMENTO −30% (Pedro 25/10: "diminuir os do acampamento uns 30%"); a horda segue no tamanho original.
+  const sizeK = isCampSpawn(creatureId) ? CAMP_SCALE : 1;
+  const hordeRuns = hordeSpeedScale(creatureId, speciesId) >= HORDE_RUN_FROM;
+  const bodyRadius = mxBody ? mxBody.height * sizeK * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
 
   useHostileAI({
     creatureId,
@@ -382,7 +389,8 @@ export function Raider({
     ring,
     onAnimate: (anim, dt) => {
       if (anim.elite !== eliteNow.current) { eliteNow.current = anim.elite; setElite(anim.elite); }
-      bossAction.current = (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? 'walk' : 'idle';
+      // Horda Mixamo rápida (onda 8+): anda CORRENDO (Pedro 25/10).
+      bossAction.current = (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? (hordeRuns ? 'run' : 'walk') : 'idle';
       bossMoving.current = anim.moving;
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.6 : 0;
       if (leftLeg.current) leftLeg.current.rotation.x = swing;
@@ -444,7 +452,7 @@ export function Raider({
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
-      {elite && <EliteAura height={mxBody ? mxBody.height : 1.9} />}
+      {elite && <EliteAura height={mxBody ? mxBody.height * sizeK : 1.9} />}
       <SelectionRing ring={ring} radius={0.55 * labelScale} c={c} />
       <EnemyLabel name={name} height={2.15 * labelScale} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
 
@@ -466,7 +474,7 @@ export function Raider({
             <GlbHeroMixamo
               charUrl={mx.url}
               actionRef={bossAction}
-              autoHeight={mx.height}
+              autoHeight={mx.height * sizeK}
               standFixX={mx.standFixX}
               forceBow={mx.forceBow ?? false}
               twistFix={mx.twistFix ?? false}

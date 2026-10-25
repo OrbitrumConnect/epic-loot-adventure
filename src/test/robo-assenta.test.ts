@@ -73,12 +73,15 @@ describe('assenta ao NASCER, em qualquer distância', () => {
     expect(groundDue(true, 18, true)).toBe(true);
     expect(groundDue(true, 19, true)).toBe(false);
   });
-  it('inimigos de acampamento: autoGround ligado e −10% de tamanho', async () => {
+  it('inimigos de acampamento: autoGround ligado e −30% SÓ no acampamento (horda no tamanho original)', async () => {
     const fs = await import('node:fs');
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
-    expect(r).toMatch(/pirate\.glb', standFixX: Math\.PI \/ 2, height: 1\.62, bindFix: true, autoGround: true/);
-    expect(r).toMatch(/scrap_brute\.glb', standFixX: Math\.PI \/ 2, height: 2\.07, bindFix: true, autoGround: true/);
-    expect(r).toMatch(/rope_archer\.glb', standFixX: Math\.PI \/ 2, height: 1\.67, forceBow: true, twistFix: true, autoGround: true/);
-    expect(r).toMatch(/swamp\.glb', standFixX: Math\.PI \/ 2, height: 1\.71, bindFix: true, autoGround: true/);
+    expect(r).toMatch(/pirate\.glb', standFixX: Math\.PI \/ 2, height: 1\.8, bindFix: true, autoGround: true/);
+    expect(r).toMatch(/scrap_brute\.glb', standFixX: Math\.PI \/ 2, height: 2\.3, bindFix: true, autoGround: true/);
+    expect(r).toMatch(/rope_archer\.glb', standFixX: Math\.PI \/ 2, height: 1\.85, forceBow: true, twistFix: true, autoGround: true/);
+    expect(r).toMatch(/swamp\.glb', standFixX: Math\.PI \/ 2, height: 1\.9, bindFix: true, autoGround: true/);
+    expect(r).toMatch(/export const CAMP_SCALE = 0\.7;/);
+    expect(r).toMatch(/const sizeK = isCampSpawn\(creatureId\) \? CAMP_SCALE : 1;/);
+    expect(r).toMatch(/autoHeight=\{mx\.height \* sizeK\}/);
   });
 });

@@ -45,7 +45,8 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   eel: { url: '/models/animals/eel.glb', fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m + DUPLA-FACE no arquivo (sumia ao virar/single-sided); fixedScale MEDIDO (~4m alto)
   // Aberração: minha versão (albedo + fixedScale MEDIDO) — a do Caio (height 1,3x)
   // ficou ENORME. real 296m -> ~2.5m.
-  monster: { url: '/models/animals/monster.glb', fixedScale: 0.0085, yaw: 0, groundBias: 0 },
+  // Pedro 25/10: "a Aberração dá pra aumentar um pouco" — ~2,5 → ~3,1 m (+25%); assenta pelo corpo animado.
+  monster: { url: '/models/animals/monster.glb', fixedScale: 0.0106, yaw: 0, groundBias: 0, autoGround: true },
   collector: { url: '/models/animals/collector.glb', height: 2.2, yaw: 0, groundBias: 0 },        // fora do spawn (quantize)
   civilian: { url: '/models/animals/civilian.glb', fixedScale: 0.01, yaw: 0, groundBias: 0.4, tint: '#8a7a5a' }, // spawn 0 (removido): demo azul + T-pose
   zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4, tint: '#7a8a66' },     // tint esverdeado
@@ -162,7 +163,9 @@ export function flyLift(f: { cruise: number; near: number; dive: number }, a: { 
   return approach - (approach - f.dive) * Math.sin(u * Math.PI);
 }
 
+/** Barra de vida/anel por espécie sem perfil próprio (aves grandes, Aberração maior). */
 const BIG_BIRD: Record<string, { labelHeight: number; ringRadius: number }> = {
+  monster: { labelHeight: 3.6, ringRadius: 1.4 },
   goose: { labelHeight: 1.9, ringRadius: 0.9 },
   pheasant: { labelHeight: 1.95, ringRadius: 0.9 },
 };

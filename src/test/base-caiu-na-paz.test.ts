@@ -29,10 +29,10 @@ describe('horda morta NÃO renasce', () => {
 });
 
 describe('ajustes 25/10 (Pedro)', () => {
-  it('Couraça 4,7 e Fúngico 3,9 de velocidade (+15%); poste de luz 5,2 m (+1 m)', () => {
+  it('Couraça 6,1 (+15% e +30%) e Fúngico 3,9 (+15%) de velocidade; poste de luz 5,2 m (+1 m)', () => {
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
     expect(r).toMatch(/speed: 3\.9, aggroRange: 34, attackRange: 6/);
-    expect(r).toMatch(/speed: 4\.7, aggroRange: 32, attackRange: 5/);
+    expect(r).toMatch(/speed: 6\.1, aggroRange: 32, attackRange: 5/);
     expect(fs.readFileSync('src/components/game-world.tsx', 'utf8')).toMatch(/const LIGHT_POST_H = 5\.2;/);
   });
 });

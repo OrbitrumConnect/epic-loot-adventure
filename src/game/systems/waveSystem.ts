@@ -69,6 +69,21 @@ export function waveHpScale(wave: number): number {
  * falta → espaço pro pack de bala (monetização futura). Só BALA e só bicho de horda (id `wave{n}_`).
  */
 export const HORDE_AMMO_GROWTH = 0.035;
+/**
+ * HORDA MAIS RÁPIDA a cada onda (Pedro 25/10: "os bichos Mixamo da horda podem correr mais conforme a onda
+ * aumenta"): +3% de velocidade por onda (teto +60%) e, a partir de +20% (onda 8), a animação vira CORRIDA.
+ * Só nos raiders com rig Mixamo (têm clip de corrida; os outros patinariam).
+ */
+export const HORDE_SPEED_PER_WAVE = 0.03;
+export const HORDE_SPEED_MAX = 1.6;
+export const HORDE_RUN_FROM = 1.2;
+export const HORDE_RUNNERS = new Set(['raider_scout', 'raider_brute', 'raider_shaman', 'raider_warrior', 'raider_samurai', 'raider_mushroom']);
+export function hordeSpeedScale(creatureId: string, speciesId: string): number {
+  if (!HORDE_RUNNERS.has(speciesId)) return 1;
+  const m = /^wave(\d+)_/.exec(creatureId);
+  return m ? Math.min(HORDE_SPEED_MAX, 1 + HORDE_SPEED_PER_WAVE * Math.max(0, Number(m[1]) - 1)) : 1;
+}
+
 export function hordeAmmoScale(creatureId: string): number {
   const m = /^wave(\d+)_/.exec(creatureId);
   return m ? 1 + HORDE_AMMO_GROWTH * Math.max(0, Number(m[1]) - 1) : 1;

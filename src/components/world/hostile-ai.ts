@@ -27,6 +27,7 @@ import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece, nearestPieceIn } from './base-targets';
 import { WANDER_MIN_STRENGTH, wanderStep } from './wander';
 import { applyWorldLevel, ELITE_SPEED, scalesWithWorld, zoneLevel } from '@/game/systems/difficultySystem';
+import { hordeSpeedScale } from '@/game/systems/waveSystem';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { CREATURES } from '@/game/data/creatures';
 
@@ -412,7 +413,8 @@ export function useHostileAI(opts: HostileOptions) {
     // Convidado em sala: o bicho NÃO pensa aqui — espelha o host (uma cena só pra todos).
     const mirror = !canSimulateSharedWorld();
     // Enfurecido corre +35% (Pedro: "mais rápido, doidão").
-    const chaseSpeed = tuning.speed * CREATURE_SPEED_SCALE * (creature.elite ? ELITE_SPEED : 1);
+    // + horda Mixamo mais rápida a cada onda (waveSystem.hordeSpeedScale).
+    const chaseSpeed = tuning.speed * CREATURE_SPEED_SCALE * (creature.elite ? ELITE_SPEED : 1) * hordeSpeedScale(creatureId, creature.speciesId);
     // Alvo: eu (solo) — ou, sendo HOST, o jogador MAIS PERTO entre mim e os convidados.
     let px = player.position.x;
     let pz = player.position.z;
