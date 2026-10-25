@@ -361,9 +361,13 @@ export function Raider({
   const hpFill = useRef<THREE.Mesh>(null);
   const ring = useRef<THREE.Object3D>(null);
   const onClick = useEnemyClick(creatureId, name);
+  // Raio do corpo p/ a separação (25/10): grandões Mixamo pela altura; o resto pela largura × escala.
+  const mxBody = MIXAMO_RAIDER[speciesId];
+  const bodyRadius = mxBody ? mxBody.height * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
 
   useHostileAI({
     creatureId,
+    bodyRadius,
     tuning: spec.tuning,
     group: ref,
     playerRef,

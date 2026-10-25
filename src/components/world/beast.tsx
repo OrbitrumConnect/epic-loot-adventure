@@ -261,6 +261,7 @@ export function Beast({
 
   useHostileAI({
     creatureId,
+    bodyRadius: spec.ringRadius * 0.75, // separação pelo tamanho (búfalo ~1,3 m, coelho ~0,26 m)
     tuning: spec.tuning,
     group: ref,
     playerRef,

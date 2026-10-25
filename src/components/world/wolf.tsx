@@ -48,6 +48,7 @@ export function Wolf({
 
   useHostileAI({
     creatureId,
+    bodyRadius: 0.6,
     tuning: WOLF_TUNING,
     group: ref,
     playerRef,

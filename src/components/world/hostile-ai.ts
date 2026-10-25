@@ -61,7 +61,8 @@ export function useEnemyClick(creatureId: string, name: string) {
 /* ------------------------------------------------------------------ *
  * Âncoras vivas (lidas por marcador/rota de alvo, sem passar pela store)
  * ------------------------------------------------------------------ */
-export type CreatureAnchor = { x: number; y: number; z: number; top: number; alive: boolean };
+/** `r` = raio do corpo (m) p/ a separação entre criaturas (25/10: grandões não se sobrepõem). */
+export type CreatureAnchor = { x: number; y: number; z: number; top: number; alive: boolean; r?: number };
 /** Posição de mundo atual de cada criatura, atualizada a cada quadro. */
 export const creatureAnchors = new Map<string, CreatureAnchor>();
 
@@ -110,10 +111,53 @@ export function labelScaleFor(camera: THREE.Camera, viewportHeight: number, dist
 const LABEL_RANGE = 12;
 /** Raio do corpo da criatura para a colisão com a base (aprox., igual ao player). */
 const CREATURE_RADIUS = 0.5;
-/** Separação entre criaturas (anti-empilhamento): empurra quando 2 ficam a menos
- *  disto; força do empurrão. Evita "10 bichos dentro de 1" cercando o jogador. */
+/** Separação entre criaturas (anti-empilhamento): 2 corpos se empurram quando a distância < soma dos raios
+ *  (`r` de cada um; sem `r` = SEP_RADIUS/2). Evita "10 bichos dentro de 1" cercando o jogador. */
 const SEP_RADIUS = 1.1;
 const SEP_STRENGTH = 3.2;
+/** Fração do alcance de ataque em que o perseguidor PARA (borda do alcance → cerco). */
+export const CHASE_STOP = 0.85;
+/** Grade de vizinhança da separação (25/10, desempenho): antes cada criatura comparava com TODAS (~200 → ~40 mil
+ *  contas/quadro); agora só com as das 9 células em volta. Célula ≥ maior soma de raios (2 grandões ≈ 2,6 m). */
+const SEP_CELL = 3;
+const sepGrid = new Map<number, { id: string; a: CreatureAnchor }[]>();
+let sepGridKey = -1;
+const sepKey = (ix: number, iz: number) => (ix + 4096) * 8192 + (iz + 4096);
+/** Monta a grade 1× por quadro (`key` = tempo do quadro; todas as criaturas do quadro reaproveitam). */
+export function buildSepGrid(key: number): void {
+  if (key === sepGridKey) return;
+  sepGridKey = key;
+  for (const list of sepGrid.values()) list.length = 0;
+  for (const [id, a] of creatureAnchors) {
+    if (!a.alive) continue;
+    const k = sepKey(Math.floor(a.x / SEP_CELL), Math.floor(a.z / SEP_CELL));
+    let list = sepGrid.get(k);
+    if (!list) { list = []; sepGrid.set(k, list); }
+    list.push({ id, a });
+  }
+}
+/** Empurrão de separação pra (x,z) de quem tem raio `r` (soma das sobreposições, mais forte quanto mais perto). */
+export function separationPush(selfId: string, x: number, z: number, r: number): { x: number; z: number } {
+  let sx = 0, sz = 0;
+  const cx = Math.floor(x / SEP_CELL), cz = Math.floor(z / SEP_CELL);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const list = sepGrid.get(sepKey(cx + i, cz + j));
+    if (!list) continue;
+    for (const { id, a } of list) {
+      if (id === selfId) continue;
+      const min = r + (a.r ?? SEP_RADIUS / 2);
+      const dx = x - a.x, dz = z - a.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < min * min && d2 > 1e-4) {
+        const d = Math.sqrt(d2);
+        const push = (min - d) / min;
+        sx += (dx / d) * push;
+        sz += (dz / d) * push;
+      }
+    }
+  }
+  return { x: sx, z: sz };
+}
 /** Largura-alvo da barra em pixels, para ser legível nas duas câmeras. */
 const BAR_PIXELS = 84;
 
@@ -239,6 +283,8 @@ export type HostileOptions = {
   /** Anel de seleção no chão. */
   ring: React.RefObject<THREE.Object3D | null>;
   onAnimate: (anim: HostileAnim, dt: number) => void;
+  /** Raio do corpo (m) — separação entre criaturas proporcional ao tamanho. Padrão 0,55. */
+  bodyRadius?: number;
 };
 
 const tmpQuat = new THREE.Quaternion();
@@ -274,7 +320,7 @@ export function useHostileAI(opts: HostileOptions) {
     const dt = Math.min(delta, 0.05);
 
     if (!anchor.current) {
-      anchor.current = { x: 0, y: 0, z: 0, top: 1.5, alive: false };
+      anchor.current = { x: 0, y: 0, z: 0, top: 1.5, alive: false, r: opts.bodyRadius ?? SEP_RADIUS / 2 };
       creatureAnchors.set(creatureId, anchor.current);
     }
     const anc = anchor.current;
@@ -406,7 +452,9 @@ export function useHostileAI(opts: HostileOptions) {
       chaseTimer.current += dt;
       if (distToPlayer <= tuning.attackRange) chaseTimer.current = 0;
       const angle = Math.atan2(px - wx, pz - wz);
-      if (distToPlayer > tuning.attackRange * 0.6) {
+      // Para na BORDA do alcance (era 0,6): cada um chega pelo seu lado e a separação os espalha num CERCO, em vez
+      // de todos se amontoarem no mesmo ponto (Pedro 25/10).
+      if (distToPlayer > tuning.attackRange * CHASE_STOP) {
         targetX = wx + Math.sin(angle) * tuning.speed * CREATURE_SPEED_SCALE * dt;
         targetZ = wz + Math.cos(angle) * tuning.speed * CREATURE_SPEED_SCALE * dt;
         moving = true;
@@ -551,21 +599,11 @@ export function useHostileAI(opts: HostileOptions) {
     // está colado, usando as posições vivas dos `creatureAnchors`. Assim a horda
     // não vira "10 bichos dentro de 1" te cercando bugado — eles se espalham.
     if (!mirror) {
-      let sx = 0, sz = 0;
-      for (const [oid, oa] of creatureAnchors) {
-        if (oid === creatureId || !oa.alive) continue;
-        const dx = targetX - oa.x, dz = targetZ - oa.z;
-        const d2 = dx * dx + dz * dz;
-        if (d2 < SEP_RADIUS * SEP_RADIUS && d2 > 1e-4) {
-          const d = Math.sqrt(d2);
-          const push = (SEP_RADIUS - d) / SEP_RADIUS; // mais forte quanto mais perto
-          sx += (dx / d) * push;
-          sz += (dz / d) * push;
-        }
-      }
-      if (sx !== 0 || sz !== 0) {
-        targetX += sx * SEP_STRENGTH * dt;
-        targetZ += sz * SEP_STRENGTH * dt;
+      buildSepGrid(state.clock.elapsedTime);
+      const sep = separationPush(creatureId, targetX, targetZ, anc.r ?? SEP_RADIUS / 2);
+      if (sep.x !== 0 || sep.z !== 0) {
+        targetX += sep.x * SEP_STRENGTH * dt;
+        targetZ += sep.z * SEP_STRENGTH * dt;
       }
     }
 
