@@ -58,6 +58,7 @@ import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useAim } from '@/components/world/aim';
 import { PerfHud } from '@/components/world/perf-hud';
+import { toggleTerrainDetail } from '@/components/world/terrain-detail';
 import { promptInstall, usePwa } from '@/net/pwa-install';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
@@ -467,6 +468,8 @@ function Index() {
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'Backquote' && !inCity) toggleFreeCam();
       if (e.code === 'KeyP') togglePerf();
+      // Detalhe do chão (ideia do mod Better Terrain) — começa desligado; compare e decida (Pedro 25/10).
+      if (e.code === 'KeyL') useGameStore.getState().setMessage(toggleTerrainDetail() ? 'Detalhe do chão: LIGADO (L)' : 'Detalhe do chão: desligado (L)');
       if (e.code === 'KeyV' && !inCity) toggleCamera();
       if (e.code === 'KeyG' && !inCity) toggleAutoMode();
       if (e.code === 'KeyB') {
