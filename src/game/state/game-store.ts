@@ -54,7 +54,7 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
-import { creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
+import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
 import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
@@ -2009,7 +2009,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const message = result.wiped
       ? 'Sua base foi destruída.'
       : result.reopened
-        ? 'Brecha no muro! A base está aberta.'
+        ? `Brecha no muro! A base está aberta — se o núcleo cair: −${baseFallLevelLoss(state.player.level)} níveis, o farm e 25% do armazém.`
         : state.ui.message;
     if (result.wiped) {
       // Base CAIU na horda → GAME OVER. Para as ondas, limpa os inimigos de onda.
@@ -2037,7 +2037,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const keptIds = new Set(slots.map(s => s.itemId));
       const eq = state.player.inventory.equipment;
       const keepEq = (id: string | null) => (id && keptIds.has(id) ? id : null);
-      const lostLevel = Math.max(1, state.player.level - 5);
+      // 25/10: 10% do nível (mín. 5, máx. 15) — antes −5 fixo.
+      const levelLoss = baseFallLevelLoss(state.player.level);
+      const lostLevel = Math.max(1, state.player.level - levelLoss);
       const penalized = syncCarry({
         ...state.player,
         level: lostLevel,
@@ -2052,7 +2054,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         },
       });
       const penaltyMsg = lostLevel < state.player.level
-        ? `${message} Você perdeu 5 níveis (${state.player.level}→${lostLevel}), o farm e 25% do armazém; armas/armaduras/raros ficaram. Reconstrua a base.`
+        ? `${message} Você perdeu ${state.player.level - lostLevel} níveis (${state.player.level}→${lostLevel}), o farm e 25% do armazém; armas/armaduras/raros ficaram. Reconstrua a base.`
         : `${message} Você perdeu o farm e 25% do armazém; armas/armaduras/raros ficaram. Reconstrua a base.`;
       // Armazém compartilhado (Pedro, 23/10): base caída na HORDA perde 25% do armazém (raid de jogador = 35%, futuro).
       const cityAfterFall = resolveBase(state.base, Date.now());
@@ -2071,7 +2073,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         tornadoExpiresWave: 0,
         // Só a MINHA horda some (online a sala tem a horda de cada jogador).
         creatures: state.creatures.filter((c) => !(c.id.startsWith('wave') && isMyWave(c.id))),
-        ui: { ...state.ui, message: penaltyMsg, baseFell: true },
+        ui: { ...state.ui, message: penaltyMsg, baseFell: true, baseFellLoss: state.player.level - lostLevel },
       });
       return;
     }

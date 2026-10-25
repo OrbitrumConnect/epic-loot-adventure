@@ -169,7 +169,8 @@ const FACTORY_POS: { x: number; z: number; rot: number; hidden?: boolean }[] = [
   // Pedro, 24/10: a do canto norte (atrás do acampamento crackedbone, lado oposto da praia) SAIU.
   // Fica na lista só pro chão seguir igual (pad/árvores); prédio, paredes e entulho não aparecem.
   { x: 42, z: -76, rot: -0.8, hidden: true },
-  { x: 78, z: 24, rot: 1.9 },    // extremo oposto do mapa
+  // Pedro 25/10 ("go all"): a do leste também SAIU — só cenário e o maior arquivo do jogo (17 MB, 21 texturas).
+  { x: 78, z: 24, rot: 1.9, hidden: true },
 ];
 /** padY = altura natural no centro; o footprint inteiro é achatado nela. */
 export const FACTORY_SITES = FACTORY_POS.map((p) => ({ ...p, padY: terrainHeightRaw(p.x, p.z) }));

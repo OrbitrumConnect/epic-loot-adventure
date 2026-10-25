@@ -13,8 +13,8 @@ describe('cenário 24/10', () => {
     expect(CAMPS['raider_outpost']!.spawns.length).toBeGreaterThan(0);
   });
 
-  it('fábrica do canto norte (42,−76) não aparece; a outra fica; o relevo segue com as duas', () => {
-    expect(FACTORY_SHOWN.map((f) => [f.x, f.z])).toEqual([[78, 24]]);
+  it('fábricas: a do norte saiu (24/10) e a do leste também (25/10, "go all"); o relevo segue com as duas', () => {
+    expect(FACTORY_SHOWN).toEqual([]);
     expect(FACTORY_SITES.map((f) => [f.x, f.z])).toEqual([[42, -76], [78, 24]]);
   });
 
@@ -25,5 +25,14 @@ describe('cenário 24/10', () => {
     expect(moved).toBeGreaterThan(10); expect(moved).toBeLessThan(15);
     expect(Math.hypot(p.position.x - 42, p.position.z + 76)).toBeLessThan(Math.hypot(55 - 42, -50 + 76));
     expect(findPlacementIssues()).toEqual([]);
+  });
+});
+
+describe('fábricas fora (25/10)', () => {
+  it('sem nenhuma fábrica, o componente nem monta → o GLB de 17 MB não é baixado', async () => {
+    const fs = await import('node:fs');
+    const gw = fs.readFileSync('src/components/game-world.tsx', 'utf8');
+    expect(gw).toMatch(/\{FACTORY_SHOWN\.length > 0 && <Factory \/>\}/);
+    expect(gw).toMatch(/\{FACTORY_SHOWN\.length > 0 && <FactoryRubble c=\{c\} \/>\}/);
   });
 });

@@ -71,6 +71,14 @@ export const SKILL_POINTS_PER_LEVEL = 1;
 
 /** Ataque base do jogador (sem arma) naquele nível. Nível 1 = 10, como era. */
 export const BASE_ATTACK_AT_LEVEL_1 = 10;
+/**
+ * Níveis perdidos quando a BASE CAI (Pedro 25/10, "pro elite escalável"): 10% do nível, mínimo 5, máximo 15.
+ * Antes: −5 fixo — no nv 125 voltava em ~2 h. nv 20→5 · 50→5 · 80→8 · 125→13 · 200+→15.
+ */
+export function baseFallLevelLoss(level: number): number {
+  return Math.min(15, Math.max(5, Math.round(Math.max(1, level) * 0.1)));
+}
+
 export function playerBaseAttack(level: number): number {
   return BASE_ATTACK_AT_LEVEL_1 + LEVEL_GAINS.attackPower * (Math.max(1, level) - 1);
 }

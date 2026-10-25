@@ -60,7 +60,7 @@ import { houseFloorSurfaceY, houseWalkFloorY, pushOutHouseWalls, pushOutBasePiec
 import {
   MAP_HALF, LAKE_CENTERS, LAKE_WATER_Y, RIVER_POINTS, RIVER_HALF_WIDTH, impactShake, lakeWaterY,
   markPointerConsumed, palette, rand, riverDistance, terrainHeight, wasPointerConsumed,
-  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_PAD_R, SAFE_ZONE, HERO_HEIGHT,
+  SNOW_MOUNTAIN, snowMountainBump, FACTORY_SITES, FACTORY_SHOWN, FACTORY_PAD_R, SAFE_ZONE, HERO_HEIGHT,
   type Palette,
 } from './world/world-kit';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
@@ -2236,8 +2236,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <Billboards trees={trees} c={c} />
       {showAshlandPilot && <AshlandPilot />}
 
-      <Factory />
-      <FactoryRubble c={c} />
+      {/* Fábricas: só monta se alguma aparece — sem nenhuma, o GLB de 17 MB nem é baixado (Pedro 25/10). */}
+      {FACTORY_SHOWN.length > 0 && <Factory />}
+      {FACTORY_SHOWN.length > 0 && <FactoryRubble c={c} />}
       {/* Árvores-marco gigantes (gnarled): uma perto do nascedouro + ~5 espalhadas (não muito longe). */}
       {[
         { x: 11, z: -22, scale: 6 },      // perto do centro do nascedouro

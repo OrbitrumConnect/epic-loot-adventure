@@ -526,7 +526,9 @@ export function useHostileAI(opts: HostileOptions) {
         // Base do jogador: o jogador está fora de alcance, mas há uma peça
         // encostada (muro, porta, torre, telhado) — a criatura descarrega nela.
         // Quando o jogador também está ao alcance, ele continua sendo o alvo.
-        const hit = nearestBasePiece(wx, wz);
+        // Só a HORDA (Pedro 25/10): bicho do mapa/acampamento te perseguindo perto da base não quebra muro
+        // (com os Enfurecidos de dano 2× o muro sofria só por puxar bicho pra perto de casa).
+        const hit = creatureId.startsWith('wave') ? nearestBasePiece(wx, wz) : null;
         if (hit) {
           attackCooldown.current -= dt;
           if (attackCooldown.current <= 0) {
