@@ -160,6 +160,9 @@ type GameActions = {
    *  munição/cadência, toca o som e o projétil sai rumo a `toward`. Não acerta ninguém.
    *  Retorna false se a arma na mão não é de longe (aí o chamador usa o ataque de sempre). */
   fireMiss: (toward: Position, towardY?: number) => boolean;
+  /** Arma de corpo a corpo: golpe no AR (animação + som, cadência da arma, sem dano). Câmera de ombro sem
+   *  ninguém no alcance — antes o clique não fazia nada (Pedro 25/10). false = arma de longe/cadência. */
+  swingAir: () => boolean;
   /** Torre da base atira num JOGADOR inimigo (online): gasta 1 bala do pool, marca a recarga da
    *  torre e mostra o projétil. O dano vai pela rede (quem decide é o alvo). false = sem bala. */
   towerFireAtPlayer: (tower: TowerSource, to: Position, toY: number | undefined, now: number) => boolean;
@@ -917,6 +920,20 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       attackTick: state.attackTick + 1,
       feedback: pushEvent(state.feedback, shotEvent(state.player.position, toward, prof.projectile, undefined, towardY), Date.now()),
     });
+    return true;
+  },
+
+  swingAir: () => {
+    const state = get();
+    if (state.player.dead) return false;
+    const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
+    const heldItemId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    const prof = weaponFor(heldItemId);
+    if (prof.ranged) return false;
+    const now = Date.now() / 1000;
+    if (now - state.player.lastAttackAt < prof.cooldown) return false;
+    audioManager.playMelee();
+    set({ player: { ...state.player, lastAttackAt: now }, attackTick: state.attackTick + 1 });
     return true;
   },
 

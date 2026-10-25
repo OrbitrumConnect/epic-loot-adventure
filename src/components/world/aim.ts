@@ -14,13 +14,23 @@ import { bigWallBetween } from './base-collision';
 import { glbSurfaceY, worldBlocksShot, worldShotHitDistance } from './terrain-collision';
 import { isHostileBaseOwner, STRIKABLE_REMOTE, strikeRemotePiece, strikeRemoteTroop } from './remote-base-strike';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
-import { weaponRangeFor } from '@/game/data/weapons';
+import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 
 /** Item na mão (igual `held-weapon.selectedItemId` — sem importar modelos 3D: este módulo carrega
  *  ANTES do login e não pode puxar GLB). */
 function heldId(st: ReturnType<typeof useGameStore.getState>): string | null {
   const slot = st.player.inventory.hotbar.slots[st.ui.selectedHotbar];
   return slot != null ? st.player.inventory.slots[slot]?.itemId ?? null : null;
+}
+
+/** Corpo a corpo e o bicho do centro está além do alcance da arma? (arma de longe → false) */
+function meleeOutOfReach(creatureId: string): boolean {
+  const st = useGameStore.getState();
+  const held = heldId(st);
+  if (weaponFor(held).ranged) return false;
+  const c = st.creatures.find((x) => x.id === creatureId);
+  if (!c) return false;
+  return Math.hypot(c.position.x - st.player.position.x, c.position.z - st.player.position.z) > weaponRangeFor(held, st.player.level);
 }
 
 export const AIM_ZOOM_MAX = 4;
@@ -158,6 +168,9 @@ export function aimFire(): boolean {
   const t = pickAimTarget(aimCamera);
   if (!t) { const p = missPoint(aimCamera); return useGameStore.getState().fireMiss({ x: p.x, z: p.z }, p.y); }
   if (t.kind === 'creature') {
+    // Espada/corpo a corpo: o do centro só se estiver NO ALCANCE; senão cai no ataque normal (o mais perto
+    // no alcance) e, sem ninguém, golpe no ar. Antes: 'longe demais' e nem balançava (Pedro 25/10).
+    if (meleeOutOfReach(t.id)) return false;
     useGameStore.getState().attack(t.id);
     return true;
   }

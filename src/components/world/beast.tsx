@@ -24,15 +24,18 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   // Tamanho REAL (Pedro 25/10: 'sou maior que búfalo e leoa'). `height` mede a malha DEITADA do arquivo: o
   // exibido era ~60–70% dele (medido com a pele). Agora: cervo ~1,75 m c/ galhada, búfalo ~1,65 m × 2,8 m,
   // leoa ~1,05 m × 1,7 m. groundBias escala junto (é medido na escala do modelo).
-  deer: { url: '/models/animals/deer.glb', height: 2.25, yaw: 0, tint: '#a8743c', groundBias: -0.4, autoGround: true },
-  boar: { url: '/models/animals/alligator.glb', height: 0.7, yaw: 0, tint: '#5a6b4a', groundBias: -1.15, autoGround: true }, // jacaré: -1,15 fixo enterrava (corpo 0,7 m) — 'não aparecia' (Pedro 23/10); assenta pelo corpo ANIMADO
-  bear: { url: '/models/animals/buffalo.glb', height: 2.8, yaw: 0, tint: '#4b3a2a', groundBias: -0.49, autoGround: true },
+  // Pedro 25/10 (2ª rodada): cervo +1 m (~2,7 m c/ galhada), búfalo ~2,0 m de altura, ganso/faisão +1 m (~1,4 m).
+  deer: { url: '/models/animals/deer.glb', height: 3.54, yaw: 0, tint: '#a8743c', groundBias: -0.63, autoGround: true },
+  // Jacaré em tamanho real (Pedro 25/10: 'tá miúdo'): era 0,8 m de comprimento → ~3 m × 0,42 m de altura.
+  // groundBias = pé medido na pose salva (1,37 m acima da base da caixa); perto, assenta pelo corpo animado.
+  boar: { url: '/models/animals/alligator.glb', height: 2.63, yaw: 0, tint: '#5a6b4a', groundBias: -1.37, autoGround: true },
+  bear: { url: '/models/animals/buffalo.glb', height: 3.39, yaw: 0, tint: '#4b3a2a', groundBias: -0.59, autoGround: true },
   wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.85, yaw: 0, tint: '#c49a5e', groundBias: -0.43, autoGround: true },
   // Aves (texturas próprias → sem tint). OBS: a geometria vem com ASAS ABERTAS, então
   // a envergadura (X/Z) é bem maior que a altura (Y) — por isso a altura aqui é BAIXA
-  // (normalizamos por Y): assim a maior dimensão fica ~0.8-1.0 m (tamanho de ave real).
-  goose: { url: '/models/animals/goose.glb', height: 0.61, yaw: 0, groundBias: -0.05 },
-  pheasant: { url: '/models/animals/pheasant.glb', height: 0.74, yaw: 0, groundBias: -0.05 },
+  // (normalizamos por Y). 25/10: o exibido (pele aplicada) era ~0,4 m de altura; Pedro pediu +1 m → ~1,4 m.
+  goose: { url: '/models/animals/goose.glb', height: 2.17, yaw: 0, groundBias: -0.18, autoGround: true },
+  pheasant: { url: '/models/animals/pheasant.glb', height: 2.31, yaw: 0, groundBias: -0.16, autoGround: true },
   pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
   // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
@@ -101,7 +104,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     head: [0.22, 0.24, 0.34], headColor: '#b98349', headPos: [0, 0.55, 0.62],
     snout: { size: [0.12, 0.12, 0.14], color: '#2c2118', pos: [0, 0.5, 0.82] },
     ears: 'cone', earColor: '#8f6030', tail: 'stub', tailColor: '#f0e6d2', eyes: '#14100c',
-    extras: ['antlers', 'belly'], extraColor: '#d8c9a0', labelHeight: 2.3, ringRadius: 0.9,
+    extras: ['antlers', 'belly'], extraColor: '#d8c9a0', labelHeight: 3.3, ringRadius: 1.2,
     tuning: { ...peacefulBase, speed: 3.9, aggroRange: 11, provokeRange: 16 },
   },
   boar: {
@@ -109,7 +112,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     head: [0.4, 0.38, 0.44], headColor: '#4a3322', headPos: [0, 0.02, 0.66],
     snout: { size: [0.24, 0.2, 0.2], color: '#8a6a58', pos: [0, -0.04, 0.93] },
     ears: 'cone', earColor: '#3d2a1b', tail: 'stub', tailColor: '#3d2a1b', eyes: '#d84a28',
-    extras: ['tusks', 'mane'], extraColor: '#e8e0c8', labelHeight: 1.2, ringRadius: 0.7,
+    extras: ['tusks', 'mane'], extraColor: '#e8e0c8', labelHeight: 1.2, ringRadius: 1.5,
     tuning: { ...hostileBase, speed: 4.1, aggroRange: 7, attackRange: 2.4, leashRange: 16, hitVerb: 'investiu' },
   },
   bear: {
@@ -117,7 +120,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     head: [0.5, 0.45, 0.5], headColor: '#5a412e', headPos: [0, 0.18, 0.9],
     snout: { size: [0.26, 0.2, 0.24], color: '#8a7058', pos: [0, 0.1, 1.2] },
     ears: 'round', earColor: '#3a281a', tail: 'stub', tailColor: '#3a281a', eyes: '#1a0f08',
-    extras: ['hump'], extraColor: '#4b3424', labelHeight: 2.25, ringRadius: 1.4,
+    extras: ['hump'], extraColor: '#4b3424', labelHeight: 2.6, ringRadius: 1.7,
     tuning: { ...hostileBase, speed: 3.3, aggroRange: 8, attackRange: 3.0, leashRange: 16, chaseTimeout: 14, walkSpeedChase: 11, walkSpeedIdle: 6, hitVerb: 'rasgou' },
   },
   wolf_alpha: {
@@ -140,6 +143,11 @@ export const BEASTS: Record<string, BeastSpec> = {
 };
 
 /** Espécie sem entrada na tabela: quadrúpede cinza genérico, hostil ou pacífico pela definição. */
+const BIG_BIRD: Record<string, { labelHeight: number; ringRadius: number }> = {
+  goose: { labelHeight: 1.9, ringRadius: 0.9 },
+  pheasant: { labelHeight: 1.95, ringRadius: 0.9 },
+};
+
 function fallbackSpec(peaceful: boolean): BeastSpec {
   return {
     scale: 1, body: [0.42, 0.42, 0.85], bodyColor: '#6b6458', legLen: 0.3, legThick: 0.1, legColor: '#4e483f',
@@ -213,7 +221,10 @@ export function Beast({
   playerRef: React.RefObject<THREE.Group | null>;
 }) {
   const peaceful = CREATURES[speciesId]?.peaceful === true;
-  const spec = BEASTS[speciesId] ?? fallbackSpec(peaceful);
+  const baseSpec = BEASTS[speciesId] ?? fallbackSpec(peaceful);
+  // Aves grandes (Pedro 25/10: ~1,4 m): barra de vida acima da cabeça (a mira usa a altura dela) e anel maior.
+  const bird = BIG_BIRD[speciesId];
+  const spec = bird ? { ...baseSpec, ...bird } : baseSpec;
   const ref = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
   const leg0 = useRef<THREE.Mesh>(null);

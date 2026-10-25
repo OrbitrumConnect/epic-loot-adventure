@@ -367,8 +367,9 @@ function Index() {
       if (d < bestDist) { bestDist = d; nearest = c.id; }
     }
     if (nearest && bestDist <= range) attack(nearest);
-    else useGameStore.getState().setMessage('Nenhum inimigo próximo.');
-  }, [attack]);
+    // Câmera de ombro com espada: ninguém no alcance → golpe no AR (animação/som), como jogo de ação.
+    else if (!(cameraMode === 'third' && useGameStore.getState().swingAir())) useGameStore.getState().setMessage('Nenhum inimigo próximo.');
+  }, [attack, cameraMode]);
 
   const inCity = ui.mode === 'city';
   const isMobile = useIsMobile();
