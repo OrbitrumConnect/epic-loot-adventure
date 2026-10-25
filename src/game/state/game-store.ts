@@ -9,7 +9,7 @@ import { ITEMS } from '../data/items';
 import { slotForItem, ringSlotForEquipment, type EquipmentKey } from '../systems/equipmentSlots';
 import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
-import { audioManager } from '../audio/audio-manager';
+import { audioManager, distanceGain } from '../audio/audio-manager';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
@@ -321,6 +321,11 @@ let waveStartedMs = 0;
 /** Caminho comum de morte para armas, especiais e defesa da base. HORDA nunca renasce (Pedro 25/10: a base caiu
  *  na PAZ da onda 9 — os mortos da horda renasciam 2,4–4 min depois, no anel em volta da base, e marchavam até o
  *  núcleo pelo perímetro furado). */
+/** Som do disparo da torre pela distância até o jogador (Pedro 25/10: torres atiravam mudas). */
+function towerSfx(tower: { x: number; z: number }, me: { x: number; z: number }): void {
+  audioManager.playWorld('tower', distanceGain(Math.hypot(tower.x - me.x, tower.z - me.z)));
+}
+
 export function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
   const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave')
     ? null
@@ -730,6 +735,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         // Convidado: o bicho vive no host — a torre pede o dano (armadura já entrou no towerDamage,
         // então devolve a do bicho pro host não descontar 2×). A vida volta no snapshot.
         broadcastCreatureHit({ targetId: c.id, source: { x: tower.x, z: tower.z }, damage: Math.round(damage + c.armor) });
+        towerSfx(tower, state.player.position);
         set({
           player: { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) },
           towerLastShotAt: { ...state.towerLastShotAt, [tower.id]: now },
@@ -737,6 +743,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         });
         continue;
       }
+      towerSfx(tower, state.player.position);
       let player = { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) };
       let deathBags = state.deathBags;
       if (hp === 0) {
@@ -951,6 +958,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   towerFireAtPlayer: (tower, to, toY, now) => {
     const state = get();
     if (getItemCount(state.player.inventory, 'ammo') <= 0) return false;
+    towerSfx(tower, state.player.position);
     set({
       player: { ...state.player, inventory: removeItem(state.player.inventory, 'ammo', 1) },
       towerLastShotAt: { ...state.towerLastShotAt, [tower.id]: now },

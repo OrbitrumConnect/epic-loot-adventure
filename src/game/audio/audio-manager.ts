@@ -19,6 +19,24 @@ export const TRACKS: { id: TrackId; name: string; url: string }[] = [
 const COMBAT_TRACK: TrackId = 'cautionary-pacing';
 const COMBAT_HOLD_MS = 5000; // quanto a trilha de combate segura após o último ataque
 
+/** Sons do mundo (torre, morte). Morte = splat (carne) + gemido (humanoide) ou rosnado (bicho). */
+export type WorldSfx = 'tower' | 'splat' | 'groan' | 'growl';
+export const WORLD_SFX: Record<WorldSfx, { url: string; vol: number; rate: number }> = {
+  tower: { url: '/audio/arrow-hit.wav', vol: 0.2, rate: 0.85 }, // flecha de balestra (mais grave que o arco)
+  splat: { url: '/audio/gore-splat.wav', vol: 0.24, rate: 1 },
+  groan: { url: '/audio/death-groan.wav', vol: 0.2, rate: 1 },
+  growl: { url: '/audio/death-growl.wav', vol: 0.2, rate: 1 },
+};
+export const TOWER_SFX_GAP_MS = 80;
+/** Volume pela distância: cheio até 6 m, some em 45 m. */
+export const SFX_FULL_M = 6;
+export const SFX_MAX_M = 45;
+export function distanceGain(d: number): number {
+  if (d <= SFX_FULL_M) return 1;
+  const t = 1 - (d - SFX_FULL_M) / (SFX_MAX_M - SFX_FULL_M);
+  return t <= 0 ? 0 : t * t;
+}
+
 type Listener = () => void;
 const urlOf = (id: TrackId) => TRACKS.find((t) => t.id === id)!.url;
 
@@ -143,6 +161,31 @@ class AudioManager {
     this.remoteNext[kind]++;
     const base = kind === 'gun' ? 0.26 : kind === 'bow' ? 0.22 : 0.16;
     a.volume = Math.min(base, this.master * base * 1.2) * Math.min(1, gain);
+    a.currentTime = 0;
+    void a.play().catch(() => {});
+  }
+  /**
+   * SONS DO MUNDO pela distância (Pedro 25/10: "torres não fazem barulho ao atirar; falta som de bicho morrendo").
+   * Pool de 4 cópias por som em rodízio (muita coisa junta corta o mais velho — nunca empilha), tom variando
+   * um pouco pra não soar repetido. Torre: limite de 1 som a cada 80 ms (várias torres a 20×/s).
+   */
+  private worldSrc: Partial<Record<WorldSfx, HTMLAudioElement>> = {};
+  private worldPool: Partial<Record<WorldSfx, HTMLAudioElement[]>> = {};
+  private worldNext: Partial<Record<WorldSfx, number>> = {};
+  private towerAt = 0;
+  playWorld(kind: WorldSfx, gain: number, now = performance.now()) {
+    if (typeof Audio === 'undefined' || gain <= 0.03) return;
+    if (kind === 'tower') { if (now - this.towerAt < TOWER_SFX_GAP_MS) return; this.towerAt = now; }
+    const spec = WORLD_SFX[kind];
+    const src = (this.worldSrc[kind] ??= new Audio(spec.url));
+    const pool = (this.worldPool[kind] ??= []);
+    if (pool.length < 4) pool.push(src.cloneNode(true) as HTMLAudioElement);
+    const i = (this.worldNext[kind] ?? 0) % pool.length;
+    this.worldNext[kind] = i + 1;
+    const a = pool[i]!;
+    a.volume = Math.min(spec.vol, this.master * spec.vol * 1.2) * Math.min(1, gain);
+    (a as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = false;
+    a.playbackRate = spec.rate * (0.9 + Math.random() * 0.2);
     a.currentTime = 0;
     void a.play().catch(() => {});
   }

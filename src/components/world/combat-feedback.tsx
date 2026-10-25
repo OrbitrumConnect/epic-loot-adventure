@@ -24,6 +24,8 @@ import type { FeedbackEvent } from '@/game/types/feedback';
 import { markImpact, pixelsPerUnit, terrainHeight } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
 import { triggerHitStop } from './hit-stop';
+import { audioManager, distanceGain } from '@/game/audio/audio-manager';
+import { creatureById } from './hostile-ai';
 
 const NUMBER_POOL = 18;
 const PARTICLE_POOL = 120;
@@ -85,6 +87,22 @@ const BLOOD = ['#b3261e', '#8f1a14', '#d9412f', '#a31d17'].map(c => new THREE.Co
 const FIRE = ['#ff8a1e', '#ff5a00', '#ffc233', '#ff3b00'].map(c => new THREE.Color(c));
 const SPARK = new THREE.Color('#ffd34a');
 const dummy = new THREE.Object3D();
+
+/**
+ * Som de MORTE (Pedro 25/10: "falta som de bicho morrendo — urgh, carne que explode"): splat de carne + gemido
+ * (humanoide/raider) ou rosnado (bicho), pela distância até o jogador. Só criatura (não o jogador).
+ */
+export function deathVoice(speciesId: string): 'groan' | 'growl' {
+  return speciesId.startsWith('raider_') ? 'groan' : 'growl';
+}
+function playDeathSfx(ev: FeedbackEvent): void {
+  const c = creatureById(ev.targetId);
+  if (!c) return;
+  const me = useGameStore.getState().player.position;
+  const g = distanceGain(Math.hypot(ev.position.x - me.x, ev.position.z - me.z));
+  audioManager.playWorld('splat', g);
+  audioManager.playWorld(deathVoice(c.speciesId), g);
+}
 
 export function CombatFeedback() {
   const slots = useMemo(() => Array.from({ length: NUMBER_POOL }, makeNumberSlot), []);
@@ -234,7 +252,7 @@ export function CombatFeedback() {
         // Soco de impacto → a câmera tremula (peso do golpe).
         // Hit stop: crítico ou abate (nunca no golpe que EU tomo — não trava quem está apanhando).
         if (ev.kind === 'death' || (ev.kind === 'damage' && ev.critical && !ev.onPlayer)) triggerHitStop();
-        if (ev.kind === 'death') markImpact(1.6);
+        if (ev.kind === 'death') { markImpact(1.6); playDeathSfx(ev); }
         else if (ev.kind === 'damage') markImpact(ev.onPlayer ? 0.7 : ev.critical ? 1.4 : 1.0);
       }
       if (seenIds.size > 400) {
