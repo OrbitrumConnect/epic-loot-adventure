@@ -14,9 +14,9 @@ describe('sangue no golpe', () => {
   it('jato pra longe de quem bateu', () => {
     expect(src).toMatch(/arr\[o \+ 3\] = Math\.cos\(a\) \* sp \* 0\.55 \+ dx \* sp \* 0\.9;/);
   });
-  it('manchas no chão: 1 objeto reaproveitado (40), somem em 8 s; fogo não sangra', () => {
+  it('manchas no chão: 1 objeto reaproveitado (40), somem em 3 s; fogo não sangra', () => {
     expect(src).toMatch(/const DECAL_POOL = 40;/);
-    expect(src).toMatch(/const DECAL_LIFE = 8;/);
+    expect(src).toMatch(/const DECAL_LIFE = 3;/);
     expect(src).toMatch(/if \(!ev\.fire\) \{/);
     expect(src).toMatch(/<instancedMesh ref=\{decalMesh\} args=\{\[decalGeo, decalMat, DECAL_POOL\]\}/);
   });

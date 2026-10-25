@@ -7,7 +7,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
 import { poseToBind, retargetBind, retargetTwist } from './mixamo-retarget';
-import { nextGroundOffset, skinnedMinY } from './glb-creature';
+import { createFootCache, footMinY, nextGroundOffset } from './glb-creature';
 
 /** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
 const bindClipCache = new Map<string, THREE.AnimationClip>();
@@ -47,6 +47,9 @@ const CLIP_URL: Record<string, string> = {
  *  esqueleto, não distorce o skinning). Y afina a planta dos pés no chão. */
 const STAND_FIX_X = 0;
 const STAND_FIX_Y = 0;
+/** Caminhada Mixamo (`red/walk.glb`, medido 25/10): 1,787 m em 1 s com corpo cabeça→dedão de 1,512 m →
+ *  cobre 1,182 "corpos" por segundo no ritmo normal. timeScale = velocidade real ÷ (isso × corpo). */
+export const WALK_BODYLEN_PER_S = 1.182;
 /** Velocidade do clip de ataque (combo Mixamo é longo → acelera p/ fechar a janela). */
 const ATTACK_SPEED = 1.5;
 /** Distância² (m²) além da qual o raider PARA de animar e de lançar sombra
@@ -136,6 +139,7 @@ export function GlbHeroMixamo({
   twistFix,
   bindFix = false,
   autoGround = false,
+  strideSync = false,
 }: {
   /** Vida de OUTRO jogador (online) p/ a reação de golpe; sem ela, a vida do jogador local. */
   hpOf?: () => number;
@@ -152,6 +156,8 @@ export function GlbHeroMixamo({
   /** Assenta pela malha ANIMADA (ponto mais baixo no chão), igual aos bichos (`GlbCreature`). Couraça
    *  (Pedro, 25/10): andava com metade do corpo dentro do mapa. */
   autoGround?: boolean;
+  /** A caminhada acompanha a velocidade REAL e o tamanho do corpo (sem patinar). Couraça/Fúngico (Pedro 25/10). */
+  strideSync?: boolean;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -209,6 +215,11 @@ export function GlbHeroMixamo({
       // Marca p/ o useFrame reassentar os pés uma vez, já com a animação rodando.
       c.userData['fooled'] = fooled;
     }
+    // Comprimento cabeça→dedão (m, já na escala) — régua do passo (`strideSync`).
+    c.updateMatrixWorld(true);
+    let head: THREE.Object3D | undefined, toe: THREE.Object3D | undefined;
+    c.traverse((o) => { if (/head$/i.test(o.name) && !head) head = o; if (/lefttoebase$/i.test(o.name) && !toe) toe = o; });
+    c.userData['bodyLen'] = head && toe ? head.getWorldPosition(new THREE.Vector3()).distanceTo(toe.getWorldPosition(new THREE.Vector3())) : 0;
     return c;
   }, [scene, autoHeight, bindFix]);
 
@@ -316,6 +327,11 @@ export function GlbHeroMixamo({
   const combo = useRef(0);
   const lastPos = useRef<THREE.Vector3 | null>(null);
   const vel = useRef({ x: 0, z: 0 });
+  // Velocidade real medida pela posição no mundo (raiders não passam speedRef) — p/ o `strideSync`.
+  const stridePos = useRef<THREE.Vector3 | null>(null);
+  const strideSpeed = useRef(0);
+  const groundInit = useRef(false);
+  const footCache = useRef(createFootCache());
   const sideDir = useRef<{ dir: MoveDir; t: number }>({ dir: 'fwd', t: 0 });
   const overlay = useRef<string | null>(null);
   const lastHp = useRef<number | null>(null);
@@ -339,7 +355,9 @@ export function GlbHeroMixamo({
       if (near && autoGround && g.parent && groundAcc.current++ % 18 === 0) { // ~0,3 s a 60 fps
         g.parent.getWorldPosition(tmpHeroV); // a raiz do raider fica no chão (IA)
         g.updateWorldMatrix(true, true);
-        g.position.y = nextGroundOffset(g.position.y, skinnedMinY(g), tmpHeroV.y);
+        // 1ª medição ENCAIXA na hora (antes subia suave ~1,5 s e parecia "brotar do chão" — Pedro 25/10).
+        g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpHeroV.y, groundInit.current ? 0.35 : 1);
+        groundInit.current = true;
       }
     }
 
@@ -484,6 +502,18 @@ export function GlbHeroMixamo({
       const spd = speedRef ? speedRef.current : Math.hypot(vel.current.x, vel.current.z);
       if (a && directional) a.timeScale = THREE.MathUtils.clamp(spd / (current.current === 'run' ? 4.3 : 1.8), 0.6, 1.5);
       else if (a && speedRef) a.timeScale = THREE.MathUtils.clamp(spd * (current.current === 'run' ? runSync : walkSync), 0.4, 3.0);
+      else if (a && strideSync && current.current === 'walk') {
+        const len = (cloned.userData['bodyLen'] as number) || 0;
+        if (len > 0) a.timeScale = THREE.MathUtils.clamp(strideSpeed.current / (WALK_BODYLEN_PER_S * len), 0.5, 2.0);
+      }
+    }
+    if (strideSync && g && dt > 0) {
+      g.getWorldPosition(tmpHeroV);
+      if (stridePos.current) {
+        const v = Math.hypot(tmpHeroV.x - stridePos.current.x, tmpHeroV.z - stridePos.current.z) / dt;
+        strideSpeed.current += (Math.min(v, 20) - strideSpeed.current) * Math.min(1, dt * 8);
+        stridePos.current.copy(tmpHeroV);
+      } else stridePos.current = tmpHeroV.clone();
     }
   });
 

@@ -29,6 +29,53 @@ export function skinnedMinY(root: THREE.Object3D, maxSamples = 1500): number {
   return min;
 }
 
+/**
+ * Igual ao `skinnedMinY`, mas BARATO (otimização 25/10): uma varredura completa escolhe os FOOT_KEEP pontos
+ * mais baixos (os pés) e as medições seguintes olham só eles (~15× menos vértices pra posicionar pelos ossos);
+ * a varredura completa se repete a cada FOOT_RESCAN chamadas (~4,5 s a 0,3 s por chamada).
+ */
+export type FootCache = { picks: { sm: THREE.Mesh; idx: number[] }[]; calls: number };
+export const createFootCache = (): FootCache => ({ picks: [], calls: 0 });
+export const FOOT_KEEP = 96;
+export const FOOT_RESCAN = 15;
+export function footMinY(root: THREE.Object3D, cache: FootCache, maxSamples = 1500): number {
+  const full = cache.picks.length === 0 || cache.calls % FOOT_RESCAN === 0;
+  cache.calls++;
+  if (!full) {
+    let min = Infinity;
+    for (const p of cache.picks) {
+      const pos = p.sm.geometry.attributes['position'] as THREE.BufferAttribute;
+      const sk = p.sm as THREE.SkinnedMesh;
+      for (const i of p.idx) {
+        tmpSkinV.fromBufferAttribute(pos, i);
+        if (sk.isSkinnedMesh) sk.applyBoneTransform(i, tmpSkinV);
+        tmpSkinV.applyMatrix4(p.sm.matrixWorld);
+        if (tmpSkinV.y < min) min = tmpSkinV.y;
+      }
+    }
+    return min;
+  }
+  const all: { sm: THREE.Mesh; i: number; y: number }[] = [];
+  root.traverse((o) => {
+    const sm = o as THREE.SkinnedMesh;
+    const pos = sm.geometry?.attributes?.['position'] as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    const step = Math.max(1, Math.floor(pos.count / maxSamples));
+    for (let i = 0; i < pos.count; i += step) {
+      tmpSkinV.fromBufferAttribute(pos, i);
+      if (sm.isSkinnedMesh) sm.applyBoneTransform(i, tmpSkinV);
+      tmpSkinV.applyMatrix4(sm.matrixWorld);
+      all.push({ sm, i, y: tmpSkinV.y });
+    }
+  });
+  if (all.length === 0) return Infinity;
+  all.sort((a, b) => a.y - b.y);
+  const by = new Map<THREE.Mesh, number[]>();
+  for (const e of all.slice(0, FOOT_KEEP)) { const l = by.get(e.sm) ?? []; l.push(e.i); by.set(e.sm, l); }
+  cache.picks = [...by].map(([sm, idx]) => ({ sm, idx }));
+  return all[0]!.y;
+}
+
 /** Próximo deslocamento vertical pra o pé (minY) encostar no chão (groundY), suavizado. */
 export function nextGroundOffset(current: number, minY: number, groundY: number, k = 0.35): number {
   if (!Number.isFinite(minY)) return current;
@@ -92,6 +139,8 @@ export function GlbCreature({
   /** Estado de proximidade atual (evita reescrever castShadow/timeScale todo quadro). */
   const active = useRef(true);
   const groundAcc = useRef(0);
+  const groundInit = useRef(false);
+  const footCache = useRef(createFootCache());
 
   // Modelos "demo" trazem textura EMBUTIDA mas não a ligam no material (ficam
   // brancos/amarelos). Liga a baseColor via parser do glTF (material i → textura i).
@@ -203,7 +252,8 @@ export function GlbCreature({
       if (groundAcc.current % 18 === 0) { // ~0,3 s a 60 fps
         g.parent.getWorldPosition(tmpCreatureV); // a raiz do bicho fica no chão (Beast/AI)
         g.updateWorldMatrix(true, true);
-        g.position.y = nextGroundOffset(g.position.y, skinnedMinY(g), tmpCreatureV.y);
+        g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpCreatureV.y, groundInit.current ? 0.35 : 1); // 1ª: encaixa
+        groundInit.current = true;
       }
     }
 

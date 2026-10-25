@@ -57,6 +57,7 @@ import { LoginGate } from '@/components/LoginGate';
 import { PvpGate } from '@/components/PvpGate';
 import { MobileControls } from '@/components/world/mobile-controls';
 import { useAim } from '@/components/world/aim';
+import { PerfHud } from '@/components/world/perf-hud';
 import { promptInstall, usePwa } from '@/net/pwa-install';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
@@ -194,6 +195,11 @@ function Index() {
   // Câmera livre de dev: atalho discreto (crase/backtick) — disponível também na
   // produção (o Pedro testa no Vercel), mas sem botão óbvio pro jogador comum.
   const toggleFreeCam = useCallback(() => setCameraMode(m => (m === 'free' ? 'iso' : 'free')), []);
+  // Painel de desempenho (P ou ?perf=1 — celular). Lembra a escolha neste aparelho.
+  const [perfOn, setPerfOn] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('perf') === '1' || localStorage.getItem('tribos.perf') === '1'; } catch { return false; }
+  });
+  const togglePerf = useCallback(() => setPerfOn(v => { try { localStorage.setItem('tribos.perf', v ? '0' : '1'); } catch { /* sem storage */ } return !v; }), []);
   useEffect(() => {
     const stop = startLocalPersistence();
     // A raiz vive em todas as vistas: produção continua com a cidade fechada.
@@ -460,6 +466,7 @@ function Index() {
       if (e.code === 'KeyC' && !inCity && !freeCam) useGameStore.getState().castHeroPower('lightning');
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'Backquote' && !inCity) toggleFreeCam();
+      if (e.code === 'KeyP') togglePerf();
       if (e.code === 'KeyV' && !inCity) toggleCamera();
       if (e.code === 'KeyG' && !inCity) toggleAutoMode();
       if (e.code === 'KeyB') {
@@ -473,7 +480,7 @@ function Index() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, specialAttack, arrowRain, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, cameraMode, ui.panel, inCity, editorActive, setEditorActive]);
+  }, [collectNearest, specialAttack, arrowRain, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, togglePerf, cameraMode, ui.panel, inCity, editorActive, setEditorActive]);
 
   function open(id: string) {
     setPanelMessage('');
@@ -643,6 +650,7 @@ function Index() {
             </Suspense>
           )}
           {worldOn && !inCity && <AimCrosshair shoulder={cameraMode === 'third'} />}
+          {worldOn && perfOn && <PerfHud />}
           {worldOn && ui.mode === 'world' && <BossSpawner />}
           {player.dead && !inCity && (
             <div style={{

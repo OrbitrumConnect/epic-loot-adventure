@@ -857,3 +857,7 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .editor-panel { max-height: calc(100dvh - 28px); overflow-y: auto; overscroll-behavior: contain; }
 .editor-panel .editor-list { max-height: 150px; overflow-y: auto; display: grid; gap: 6px; padding-right: 2px; }
 .editor-panel footer { position: sticky; bottom: -12px; margin-bottom: -12px; padding: 8px 0 12px; background: color-mix(in oklch, var(--world-dark) 96%, transparent); z-index: 1; }
+
+/* Painel de desempenho (tecla P / ?perf=1): canto de cima, não pega clique. */
+.perf-hud { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: none; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 32px); padding: 4px 10px; border-radius: 8px; background: rgba(8,10,14,.72); color: #e8edf3; font: 600 11px/1.4 ui-monospace, Menlo, Consolas, monospace; }
+.perf-hud b { font-weight: 800; }

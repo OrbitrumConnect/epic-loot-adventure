@@ -27,8 +27,9 @@ import { glbSurfaceY } from './terrain-collision';
 const NUMBER_POOL = 18;
 const PARTICLE_POOL = 120;
 const DECAL_POOL = 40;
-/** Mancha no chão: dura isso (s) e encolhe no último 1,5 s. */
-const DECAL_LIFE = 8;
+/** Mancha no chão: dura isso (s) e encolhe no último DECAL_FADE s (Pedro 25/10: 8 s → 3 s). */
+const DECAL_LIFE = 3;
+const DECAL_FADE = 1;
 const PF = 10; // floats por partícula: x,y,z,vx,vy,vz,born,life,size,chão
 const GRAVITY = 13;
 
@@ -306,8 +307,8 @@ export function CombatFeedback() {
       for (let i = 0; i < DECAL_POOL; i++) {
         if (!dact[i]) continue;
         const o = i * 6, age = t - da[o + 3]!;
-        if (age < DECAL_LIFE - 1.5) continue;
-        const k = Math.max(0, (DECAL_LIFE - age) / 1.5);
+        if (age < DECAL_LIFE - DECAL_FADE) continue;
+        const k = Math.max(0, (DECAL_LIFE - age) / DECAL_FADE);
         if (k <= 0) dact[i] = 0;
         dummy.position.set(da[o]!, k <= 0 ? -50 : da[o + 1]!, da[o + 2]!);
         dummy.rotation.set(0, da[o + 5]!, 0);

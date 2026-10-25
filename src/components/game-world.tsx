@@ -16,6 +16,7 @@ import { HeldItem, selectedItemId } from './world/held-weapon';
 import { aimFire, aimSensitivityScale, aimZoomStep, gunKick, setAimCamera, setAiming, useAim } from './world/aim';
 import { createLookTracker } from './world/touch-look';
 import { takeKnockback } from '@/game/systems/knockbackSystem';
+import { PerfProbe } from './world/perf-probe';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
 import { GlbHeroMixamo } from './world/glb-hero-mixamo';
@@ -84,6 +85,9 @@ export type WorldProps = {
 
 /** `free` = câmera de depuração que voa pela cena com a simulação rodando. */
 export type CameraMode = 'iso' | 'third' | 'free';
+
+/** Pontos da colisão da câmera de ombro com o chão (por quadro). */
+const CAM_COLLIDE_STEPS = 6;
 
 // Ponte caminhável: mesmo centro/rotação/medidas do grupo renderizado lá
 // embaixo. Sobre o tabuado o chão do jogador vira o topo do deck; nas pontas
@@ -1970,10 +1974,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       // marcha da cabeça até a câmera; bateu → aproxima NA HORA; liberou → volta suave.
       const hx = piv.x, hy = piv.y + 1.5, hz = piv.z;
       let free = 1;
-      for (let i = 1; i <= 10; i++) {
-        const t = i / 10;
+      // 6 pontos (~1,3 m entre eles com a câmera a 8 m) — otimização 25/10 (eram 10 consultas de chão/quadro).
+      for (let i = 1; i <= CAM_COLLIDE_STEPS; i++) {
+        const t = i / CAM_COLLIDE_STEPS;
         const sx = hx + (camX - hx) * t, sz = hz + (camZ - hz) * t;
-        if (hy + (camY - hy) * t < glbSurfaceY(sx, sz, terrainHeight(sx, sz)) + 0.3) { free = (i - 1) / 10; break; }
+        if (hy + (camY - hy) * t < glbSurfaceY(sx, sz, terrainHeight(sx, sz)) + 0.3) { free = (i - 1) / CAM_COLLIDE_STEPS; break; }
       }
       camFree.current = modeChanged || free < camFree.current ? free : camFree.current + (free - camFree.current) * 0.1;
       const k = camFree.current;
@@ -2330,6 +2335,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <BackgroundSim paused={Boolean(props.paused)} />
 
       <CelShade />
+      <PerfProbe />
 
 
       <Character c={c} attack={props.attack} movement={target} onPosition={props.onPosition} paused={props.paused} playerRef={playerRef} cameraYawRef={cameraYaw} cameraMode={cameraMode} />

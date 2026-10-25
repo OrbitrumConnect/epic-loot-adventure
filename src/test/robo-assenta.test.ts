@@ -47,7 +47,8 @@ describe('Couraça assenta pelo corpo animado', () => {
     expect(raider).toMatch(/raider_mushroom: \{[^}]*autoGround: true/); // Fúngico (Pedro: "perfeito", 25/10)
     expect(raider).toMatch(/autoGround=\{mx\.autoGround \?\? false\}/);
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
-    expect(hero).toMatch(/if \(near && autoGround && g\.parent[\s\S]{0,300}nextGroundOffset\(g\.position\.y, skinnedMinY\(g\), tmpHeroV\.y\)/);
+    // 25/10: mesmo cálculo, versão barata (só os pés) e 1ª medição encaixa na hora.
+    expect(hero).toMatch(/if \(near && autoGround && g\.parent[\s\S]{0,400}nextGroundOffset\(g\.position\.y, footMinY\(g, footCache\.current\), tmpHeroV\.y, groundInit\.current \? 0\.35 : 1\)/);
   });
 
   it('corpo 0,6 m enterrado (Couraça de 3,9 m) sobe até pisar no chão em ~2 s', () => {
