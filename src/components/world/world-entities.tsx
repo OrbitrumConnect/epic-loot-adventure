@@ -10,7 +10,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { spawnWaveRaiders, useGameStore } from '@/game/state/game-store';
+import { deadCreature, spawnWaveRaiders, useGameStore } from '@/game/state/game-store';
 import { Beast } from './beast';
 import { Camp } from './camp';
 import { flushPositions } from './hostile-ai';
@@ -173,8 +173,9 @@ export function MultiplayerWorldSync() {
       const damage = Math.max(1, Math.round(hit.damage) - creature.armor);
       const hp = Math.max(0, creature.hp - damage);
       useGameStore.setState((current) => ({
+        // Morte pelo golpe do CONVIDADO: mesma regra do resto (horda não renasce; antes renascia em 20 s).
         creatures: current.creatures.map((c) => c.id !== creature.id ? c : hp === 0
-          ? { ...c, hp: 0, behavior: 'dead', respawnAt: Date.now() + 20_000 }
+          ? deadCreature(c, Date.now(), Math.random)
           : { ...c, hp, behavior: 'chase' }),
       }));
     });

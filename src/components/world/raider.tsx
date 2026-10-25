@@ -172,7 +172,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     scale: 3.3, bodyWidth: 0.95, bodyDepth: 0.55, weapon: 'club',
     hood: false, shoulders: true, charm: false, boss: true, bossScale: 3.75,
     tuning: {
-      ...base, speed: 3.4, aggroRange: 34, attackRange: 6, leashRange: 400,
+      ...base, speed: 3.9, aggroRange: 34, attackRange: 6, leashRange: 400, // +15% (Pedro 25/10)
       chaseTimeout: 600, provokeRange: 50, walkSpeedChase: 11, walkSpeedIdle: 4,
       hitVerb: 'esmagou',
     },
@@ -192,7 +192,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     scale: 3.3, bodyWidth: 0.9, bodyDepth: 0.5, weapon: 'club',
     hood: false, shoulders: true, charm: false, boss: true, bossScale: 1.7,
     tuning: {
-      ...base, speed: 4.1, aggroRange: 32, attackRange: 5, leashRange: 400,
+      ...base, speed: 4.7, aggroRange: 32, attackRange: 5, leashRange: 400, // +15% (Pedro 25/10)
       chaseTimeout: 600, provokeRange: 48, walkSpeedChase: 14, walkSpeedIdle: 6,
       hitVerb: 'retalhou',
     },

@@ -353,7 +353,8 @@ export function useHostileAI(opts: HostileOptions) {
       g.visible = progress < 1;
       g.scale.copy(baseScale.current).multiplyScalar(1 - progress);
       g.position.y = death.current.y - 0.5 * progress;
-      if (creature.respawnAt && Date.now() >= creature.respawnAt) {
+      // Bicho da HORDA nunca revive (segunda trava; a primeira é não marcar o renascer).
+      if (creature.respawnAt && Date.now() >= creature.respawnAt && !creatureId.startsWith('wave')) {
         const home = homePos.current ?? creature.position;
         useGameStore.setState(s => ({
           creatures: s.creatures.map(cr => {

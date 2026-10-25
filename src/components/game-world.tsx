@@ -1212,7 +1212,7 @@ const LIGHT_CULL_D2 = 24 * 24;
 let didInitialSpawn = false;
 
 const LIGHT_POST_URL = '/models/props/light-post.glb';
-const LIGHT_POST_H = 4.2; // +30% (Pedro) — poste Mad Max mais alto
+const LIGHT_POST_H = 5.2; // +30% (Pedro) e +1 m (Pedro 25/10) — poste Mad Max mais alto
 
 function RoadLampInner({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
@@ -1242,7 +1242,7 @@ function RoadLampInner({ x, y, z }: { x: number; y: number; z: number }) {
   return (
     <group position={[x, y, z]}>
       <primitive object={model} />
-      <pointLight ref={light} position={[0, LIGHT_POST_H * 0.9, 0]} color="#ffcf87" intensity={0} distance={13} decay={1.6} />
+      <pointLight ref={light} position={[0, LIGHT_POST_H * 0.9, 0]} color="#ffcf87" intensity={0} distance={14} decay={1.6} />
     </group>
   );
 }

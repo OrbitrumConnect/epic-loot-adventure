@@ -311,9 +311,11 @@ const PLAYER_FOE = 'player:';
 const troopPlayerDamage = new Map<string, number>();
 let troopPlayerFlushAt = 0;
 
-/** Caminho comum de morte para armas, especiais e defesa da base. */
-function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
-  const respawnAt = c.speciesId === 'raider_warlord'
+/** Caminho comum de morte para armas, especiais e defesa da base. HORDA nunca renasce (Pedro 25/10: a base caiu
+ *  na PAZ da onda 9 — os mortos da horda renasciam 2,4–4 min depois, no anel em volta da base, e marchavam até o
+ *  núcleo pelo perímetro furado). */
+export function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
+  const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave')
     ? null
     : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
   return { ...c, hp: 0, behavior: 'dead', respawnAt };
@@ -2453,6 +2455,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           if (guestWaveFirstAskAt === 0) guestWaveFirstAskAt = now;
         }
       }
+      // Onda repelida → os mortos da MINHA horda saem da lista (antes acumulavam ~45 por onda, e todo sistema
+      // percorre a lista de bichos).
+      if (wt.repelledWave) waveCreatures = waveCreatures.filter((c) => !(c.id.startsWith('wave') && isMyWave(c.id) && c.behavior === 'dead'));
       // Onda repelida → oferece 3 cartas de evolução da base (draft do Pedro).
       if (wt.repelledWave && !upgradeChoices) {
         upgradeChoices = rollUpgradeChoices(Math.random);
