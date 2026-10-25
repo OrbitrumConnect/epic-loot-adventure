@@ -105,6 +105,8 @@ function InstallAppRow() {
  *  o jogador atirava às cegas; Pedro, 23/10), discreto; segurando o botão direito fica o de mira + zoom. */
 /** Zoom a partir do qual o FUZIL mostra a luneta (ideia do mod Viewpoint ADS & Optics, Pedro 25/10). */
 const SCOPE_ZOOM = 2.5;
+/** Aba "Minha tribo" no menu: só quando a Tribo existir de verdade. */
+const TRIBE_ENABLED = false;
 
 function AimCrosshair({ shoulder }: { shoulder: boolean }) {
   const active = useAim(s => s.active);
@@ -584,9 +586,13 @@ function Index() {
         <div className="sidebar-label">COMUNIDADE</div>
         <nav className="sidebar-nav">
           <MultiplayerPanel placement="sidebar" />
-          <Button variant="ghost" className="nav-item" title="Minha tribo" data-active={panel === 'tribe'} onClick={() => open('tribe')}>
-            <Users strokeWidth={1.5} /><span>Minha tribo</span>
-          </Button>
+          {/* Tribo escondida até existir de verdade (Pedro 25/10: "nada de clicar em vazio"; hoje era texto fixo "1 membro").
+              O painel continua no código pra quando a Tribo/base comum chegar. */}
+          {TRIBE_ENABLED && (
+            <Button variant="ghost" className="nav-item" title="Minha tribo" data-active={panel === 'tribe'} onClick={() => open('tribe')}>
+              <Users strokeWidth={1.5} /><span>Minha tribo</span>
+            </Button>
+          )}
           <Button variant="ghost" className="nav-item" title="Chat" onClick={toggleChat}>
             <MessageSquare strokeWidth={1.5} /><span>Chat</span>
           </Button>

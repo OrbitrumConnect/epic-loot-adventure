@@ -72,3 +72,13 @@ describe('carta de nível na tela', () => {
     expect(screen.getByTitle('Abrir carta')).toBeTruthy();
   });
 });
+
+describe('sem clicar em vazio (checklist item 9)', () => {
+  it('aba "Minha tribo" escondida até a Tribo existir; Raids já diz a verdade e abre as Salas', async () => {
+    const fs = await import('node:fs');
+    const idx = fs.readFileSync('src/routes/index.tsx', 'utf8');
+    expect(idx).toMatch(/const TRIBE_ENABLED = false;/);
+    expect(idx).toMatch(/\{TRIBE_ENABLED && \(/);
+    expect(idx).toMatch(/Raid entre jogadores<\/h3><p>Em construção/);
+  });
+});
