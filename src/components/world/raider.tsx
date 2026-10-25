@@ -64,13 +64,14 @@ const RAIDER_GLB: Record<string, string> = {
 /** `twistFix`: corrige o giro dos ossos (cintura "embrulhada") — SÓ onde o teste nos GLB reais
  *  prova que nunca piora (`mixamo-retarget.test.ts`). spiked/pirate/swamp têm o quadril do rig
  *  girado ~105° e pioram um pouco → ficam como estão até refazer o rig no Mixamo. */
-const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean }> = {
-  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.9 },     // spiked, 2x (Pedro)
+// bindFix (24/10): Couraça e Fúngico vinham com o esqueleto fora da pose da pele (até 96°) → malha torcida.
+const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean }> = {
+  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.9, bindFix: true },     // spiked, 2x (Pedro)
   raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8 },       // pirata
   raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, twistFix: true },  // brutamontes (maior)
   raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true, twistFix: true },// arqueiro: só ataque de longe
   raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9 },      // swamp winged hybrid
-  raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 4.5, twistFix: true }, // alien giant brute (boss) — grandão 4.5m
+  raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 4.5, bindFix: true }, // alien giant brute (boss) — grandão 4.5m
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
@@ -458,6 +459,7 @@ export function Raider({
               standFixX={mx.standFixX}
               forceBow={mx.forceBow ?? false}
               twistFix={mx.twistFix ?? false}
+              bindFix={mx.bindFix ?? false}
               yaw={BOSS_GLB_YAW}
             />
           );

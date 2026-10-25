@@ -6,7 +6,10 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
-import { retargetTwist } from './mixamo-retarget';
+import { poseToBind, retargetBind, retargetTwist } from './mixamo-retarget';
+
+/** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
+const bindClipCache = new Map<string, THREE.AnimationClip>();
 import {
   HERO_EXTRA_CLIPS, HIT_CLIPS, HIT_REACT_GAP_S, SIDE_SUSTAIN_S, SLASH_COMBO, localMoveDir, moveClipFor,
   upperBodyOnly, type HeroExtraClip, type MoveDir,
@@ -130,6 +133,7 @@ export function GlbHeroMixamo({
   heldItemOf,
   hpOf,
   twistFix,
+  bindFix = false,
 }: {
   /** Vida de OUTRO jogador (online) p/ a reação de golpe; sem ela, a vida do jogador local. */
   hpOf?: () => number;
@@ -140,6 +144,9 @@ export function GlbHeroMixamo({
   heldItemOf?: () => string | null;
   /** Corrige o giro dos ossos (ver `mixamo-retarget.ts`). Padrão: só o herói. */
   twistFix?: boolean;
+  /** Raiders cujo esqueleto veio salvo FORA da pose da pele (Couraça, Fúngico): anima a partir da
+   *  pose de ligação + retarget pelo mundo (`retargetBind`). Substitui o `twistFix`. */
+  bindFix?: boolean;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -173,6 +180,7 @@ export function GlbHeroMixamo({
 
   const cloned = useMemo(() => {
     const c = skeletonClone(scene);
+    if (bindFix) poseToBind(c); // antes de medir/escalar: raiz ainda na origem
     if (autoHeight) {
       c.updateMatrixWorld(true);
       // A caixa por geometria (bind) é enganada quando o export "assa" uma escala no
@@ -197,7 +205,7 @@ export function GlbHeroMixamo({
       c.userData['fooled'] = fooled;
     }
     return c;
-  }, [scene, autoHeight]);
+  }, [scene, autoHeight, bindFix]);
 
   // Nomes de osso que EXISTEM no Red (p/ filtrar tracks de dedos que as anims
   // Mixamo trazem mas o mesh não tem → evita warnings e trabalho à toa).
@@ -229,6 +237,12 @@ export function GlbHeroMixamo({
       let a = src.clone();
       a.name = name;
       a.tracks = a.tracks.filter((t) => boneNames.has(t.name.split('.')[0] ?? ''));
+      if (bindFix) {
+        const key = `${charUrl}|${name}|${standFixX}`;
+        let baked = bindClipCache.get(key);
+        if (!baked) { baked = stripRootMotion(retargetBind(a, g.scene, cloned, standFixX, scene), fixHipsY); bindClipCache.set(key, baked); }
+        return baked;
+      }
       if (fixTwist) a = retargetTwist(a, g.scene, cloned, standFixX);
       return stripRootMotion(a, fixHipsY);
     };
@@ -241,7 +255,7 @@ export function GlbHeroMixamo({
         })
       : [];
     return [...base, ...extra].filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix]);
+  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
 
   const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
