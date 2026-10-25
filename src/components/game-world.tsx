@@ -13,7 +13,7 @@ import { queueNearestNode } from './world/objective-bridge';
 import { CombatFeedback } from './world/combat-feedback';
 import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
-import { aimFire, aimSensitivityScale, aimZoomStep, setAimCamera, setAiming, useAim } from './world/aim';
+import { aimFire, aimSensitivityScale, aimZoomStep, gunKick, setAimCamera, setAiming, useAim } from './world/aim';
 import { createLookTracker } from './world/touch-look';
 import { takeKnockback } from '@/game/systems/knockbackSystem';
 import { AdventurerDetails } from './world/adventurer-details';
@@ -1601,6 +1601,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   /** 3ª pessoa: apoio da câmera (segue o herói suave) e quanto da distância está livre (colisão). */
   const camPivot = useRef(new THREE.Vector3());
   const camFree = useRef(1);
+  /** Coice da arma (rad): x = pra cima, y = pro lado. Some sozinho. */
+  const recoil = useRef({ x: 0, y: 0 });
+  const shotTick = useRef(-1);
   const tmpLook = useRef(new THREE.Vector3());
   const metricAccum = useRef({ frames: 0, time: 0, next: 0 });
 
@@ -1927,8 +1930,18 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         free.version++;
       }
     } else {
-      const yaw = cameraYaw.current;
-      const pitch = cameraPitch.current;
+      // COICE (ideia do mod Viewpoint Recoil, Pedro 25/10): tiro de pistola/fuzil dá um tranco pra cima + leve
+      // tremida pro lado que volta em ~0,15 s. Só a câmera: o tiro já saiu no centro (precisão/PvP iguais).
+      const st0 = useGameStore.getState();
+      if (st0.attackTick !== shotTick.current) {
+        shotTick.current = st0.attackTick;
+        const kick = gunKick(selectedItemId(st0));
+        if (kick > 0) { recoil.current.x += kick; recoil.current.y += (Math.random() - 0.5) * kick * 0.5; }
+      }
+      const rk = Math.exp(-Math.min(delta, 0.1) * 14);
+      recoil.current.x *= rk; recoil.current.y *= rk;
+      const yaw = cameraYaw.current + recoil.current.y;
+      const pitch = cameraPitch.current + recoil.current.x;
       // MIRA: câmera no ombro (perto e mais baixa, estilo GTA) + campo de visão fechando com o zoom.
       const aimNow = useAim.getState();
       const aiming = aimNow.active;

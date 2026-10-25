@@ -844,6 +844,12 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .aim-crosshair__dot { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.6); }
 .aim-crosshair[data-soft] .aim-crosshair__dot { transform: scale(0.7); opacity: 0.75; }
 .aim-crosshair__zoom { position: absolute; left: 0; top: 10px; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 3px #000; white-space: nowrap; }
+/* Luneta do fuzil (zoom alto): círculo limpo + borda escura + retículo fino. Só HTML/CSS, custo zero no 3D. */
+.aim-scope { position: absolute; inset: 0; pointer-events: none; z-index: 4; background: radial-gradient(circle at 50% 50%, transparent 0, transparent 36vmin, rgba(0,0,0,.55) 37.5vmin, rgba(0,0,0,.94) 39vmin); }
+.aim-scope__h, .aim-scope__v { position: absolute; left: 50%; top: 50%; background: rgba(0,0,0,.8); }
+.aim-scope__h { width: 72vmin; height: 1.5px; transform: translate(-50%, -50%); }
+.aim-scope__v { width: 1.5px; height: 72vmin; transform: translate(-50%, -50%); }
+.aim-crosshair[data-scoped] .aim-crosshair__dot { width: 4px; height: 4px; left: -2px; top: -2px; background: #ff3a2a; box-shadow: none; }
 .mobile-btn--aim.is-on { background: rgba(239, 68, 68, .55); }
 
 /* Editor ADM: o card não passa do fim da tela (Pedro) — rola por dentro; listas longas

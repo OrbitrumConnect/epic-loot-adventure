@@ -98,15 +98,24 @@ function InstallAppRow() {
 /** Mira no centro do MUNDO (não da janela): só aparece mirando; mostra o zoom (rodinha). */
 /** Pontinho da mira. Na câmera de OMBRO aparece SEMPRE (o clique esquerdo já atira no centro — sem ele
  *  o jogador atirava às cegas; Pedro, 23/10), discreto; segurando o botão direito fica o de mira + zoom. */
+/** Zoom a partir do qual o FUZIL mostra a luneta (ideia do mod Viewpoint ADS & Optics, Pedro 25/10). */
+const SCOPE_ZOOM = 2.5;
+
 function AimCrosshair({ shoulder }: { shoulder: boolean }) {
   const active = useAim(s => s.active);
   const zoom = useAim(s => s.zoom);
+  // Item na mão sem puxar módulo 3D (a mira carrega antes do mundo).
+  const held = useGameStore(s => { const slot = s.player.inventory.hotbar.slots[s.ui.selectedHotbar]; return slot != null ? s.player.inventory.slots[slot]?.itemId ?? null : null; });
   if (!active && !shoulder) return null;
+  const scoped = active && held === 'rifle' && zoom >= SCOPE_ZOOM;
   return (
-    <div className="aim-crosshair" data-soft={!active || undefined} aria-hidden="true">
-      <span className="aim-crosshair__dot" />
-      {zoom > 1 && <small className="aim-crosshair__zoom">{zoom.toFixed(1).replace('.0', '')}×</small>}
-    </div>
+    <>
+      {scoped && <div className="aim-scope" aria-hidden="true"><span className="aim-scope__h" /><span className="aim-scope__v" /></div>}
+      <div className="aim-crosshair" data-soft={!active || undefined} data-scoped={scoped || undefined} aria-hidden="true">
+        <span className="aim-crosshair__dot" />
+        {zoom > 1 && <small className="aim-crosshair__zoom">{zoom.toFixed(1).replace('.0', '')}×</small>}
+      </div>
+    </>
   );
 }
 

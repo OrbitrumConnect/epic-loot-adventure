@@ -33,6 +33,13 @@ function meleeOutOfReach(creatureId: string): boolean {
   return Math.hypot(c.position.x - st.player.position.x, c.position.z - st.player.position.z) > weaponRangeFor(held, st.player.level);
 }
 
+/** Tranco da câmera por tiro (rad): pistola ~1,7°, fuzil ~2,6° (mais forte, atira mais devagar), arco/espada 0. */
+export function gunKick(itemId: string | null): number {
+  const p = weaponFor(itemId);
+  if (!p.ranged || p.projectile !== 'bullet') return 0;
+  return itemId === 'rifle' ? 0.045 : 0.03;
+}
+
 export const AIM_ZOOM_MAX = 4;
 export const useAim = create<{ active: boolean; zoom: number }>(() => ({ active: false, zoom: 1 }));
 /** Sensibilidade do giro mirando: cai na mesma proporção do campo de visão (52°/zoom vs 65° sem mirar) →
