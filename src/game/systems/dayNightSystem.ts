@@ -56,10 +56,32 @@ function lerpColor(a: string, b: string, t: number): string {
   return `#${((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1)}`;
 }
 
+/**
+ * DIA MAIS CURTO, NOITE MAIS LONGA (Pedro 25/10: "o dia passa um pouco mais rápido e as noites mais longas, sem ficar
+ * estranho"). Peso = tempo real de cada hora do jogo: dia pleno (8→17h) 0,75 · amanhecer/entardecer 1 · noite
+ * fechada (21→5h) 1,3. O ciclo inteiro segue ~42 min: dia pleno ~15,7 → ~11,7 min; noite ~14 → ~18 min.
+ */
+export function hourWeight(h: number): number {
+  if (h >= 8 && h < 17) return 0.75;
+  if (h >= 21 || h < 5) return 1.3;
+  return 1;
+}
+// Fração ACUMULADA do ciclo no início de cada hora, contando a partir da hora de abertura (START_HOUR).
+const HOUR_STARTS: number[] = (() => {
+  const w = Array.from({ length: 24 }, (_, i) => hourWeight((START_HOUR + i) % 24));
+  const total = w.reduce((a, b) => a + b, 0);
+  const out: number[] = [0];
+  for (let i = 0; i < 24; i++) out.push(out[i]! + w[i]! / total);
+  return out;
+})();
+
 /** Hora do jogo (0–24, fracionária) no instante real `now`. */
 export function gameHour(now: number = Date.now()): number {
   const phase = (((now - WORLD_EPOCH) % CYCLE_MS) + CYCLE_MS) % CYCLE_MS / CYCLE_MS;
-  return (START_HOUR + phase * 24) % 24;
+  let i = 0;
+  while (i < 23 && phase >= HOUR_STARTS[i + 1]!) i++;
+  const a = HOUR_STARTS[i]!, b = HOUR_STARTS[i + 1]!;
+  return (START_HOUR + i + (phase - a) / (b - a)) % 24;
 }
 
 /**
