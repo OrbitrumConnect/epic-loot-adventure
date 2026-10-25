@@ -886,3 +886,17 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 /* Chamar a horda agora (Pedro 25/10). */
 .horde-call { padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(239,68,68,.6); background: rgba(239,68,68,.16); color: #fecaca; font-weight: 800; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .horde-call:hover { background: rgba(239,68,68,.3); }
+
+/* ARCO do celular (Pedro 25/10): ATACAR grande no canto, os outros em meio círculo em volta (ao alcance do polegar).
+   Posição de cada botão = translate do arcLayout (mobile-controls.tsx). */
+.mobile-arc { position: absolute; right: 16px; bottom: 18px; width: 84px; height: 84px; z-index: 60; }
+.mobile-arc .mobile-btn--attack { position: absolute; inset: 0; width: 84px; height: 84px; }
+.mobile-arc .mobile-btn--attack svg { width: 36px; height: 36px; }
+.mobile-btn--arc { position: absolute; left: 16px; top: 16px; width: 52px; height: 52px; }
+.mobile-btn--arc svg { width: 24px; height: 24px; }
+.mobile-btn--arc:active { filter: brightness(1.3); }
+.mobile-btn--arc.is-on { background: rgba(239, 68, 68, .55); }
+.mobile-btn--arc.is-cd { opacity: .55; }
+.mobile-cd { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #fff; text-shadow: 0 0 4px #000; }
+/* Com os controles de toque montados, os botões de COMBATE saem do rodapé (estão no arco). PC/janela estreita: iguais. */
+[data-touch] .world-actions--footer [data-combat] { display: none; }

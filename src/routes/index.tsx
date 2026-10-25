@@ -55,7 +55,7 @@ import { EditorPanel } from '@/components/editor/editor-panel';
 import { useEditorStore } from '@/components/editor/editor-store';
 import { LoginGate } from '@/components/LoginGate';
 import { PvpGate } from '@/components/PvpGate';
-import { MobileControls } from '@/components/world/mobile-controls';
+import { MobileControls, type ArcButton } from '@/components/world/mobile-controls';
 import { useAim } from '@/components/world/aim';
 import { PerfHud } from '@/components/world/perf-hud';
 import { CardHost, UpgradeSide } from '@/components/hud/card-host';
@@ -516,15 +516,24 @@ function Index() {
   // Triggers do mundo (piloto/pegar/atacar/especiais/câmera/casa). Mesma fonte
   // renderizada em dois lugares: sobre o mundo (desktop) e no rodapé ao lado do
   // AUTO ON (mobile). CSS decide qual aparece — sem duplicar lógica.
+  // Poderes no ARCO do celular (Pedro 25/10): as MESMAS ações e recargas dos botões do rodapé, que no celular saem de lá.
+  const mobilePowers: ArcButton[] = [
+    { id: 'Q', label: 'Especial: salto', icon: <Zap />, onPress: () => specialAttack('jump'), cooldown: specialLeft },
+    { id: 'R', label: 'Especial: giro', icon: <Repeat />, onPress: () => specialAttack('spin'), cooldown: specialLeft },
+    ...(player.level >= 5 ? [{ id: 'F', label: 'Chuva de Flechas', icon: <CloudRain />, onPress: () => arrowRain(), cooldown: arrowRainLeft }] : []),
+    ...([['boomerang', 'Z', 'Bumerangue', <RotateCw key="i" />], ['tornado', 'X', 'Furacão', <Tornado key="i" />], ['lightning', 'C', 'Raio', <CloudLightning key="i" />]] as [HeroPowerId, string, string, React.ReactNode][])
+      .filter(([pid]) => player.level >= HERO_POWER_UNLOCK[pid])
+      .map(([pid, id, label, icon]) => ({ id, label, icon, onPress: () => useGameStore.getState().castHeroPower(pid), cooldown: heroPowerLeft(pid) })),
+  ];
   const actionButtons = (
     <>
       <Button variant="ghost" className="world-action" data-on={idleMode} aria-label="Piloto automático" title={`Piloto: ${idleMode ? 'IDLE (toque p/ assumir)' : 'MANUAL (toque p/ ligar)'} · G`} onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>{idleMode ? <Bot /> : <Hand />}</Button>
       <Button variant="ghost" className="world-action" aria-label="Pegar / colher" title="Pegar / colher · E" onClick={collectNearest}><Package /></Button>
-      <Button variant="ghost" className="world-action" aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
-      <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
-      <Button variant="ghost" className="world-action" data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
+      <Button variant="ghost" className="world-action" data-combat aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
+      <Button variant="ghost" className="world-action" data-combat data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
+      <Button variant="ghost" className="world-action" data-combat data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
       {player.level >= 5 && (
-        <Button variant="ghost" className="world-action" data-cooldown={arrowRainLeft > 0} aria-label="Chuva de Flechas" title="Chuva de Flechas — 3 ondas em área · F" onClick={() => arrowRain()}><CloudRain />{arrowRainLeft > 0 && <span className="cd">{arrowRainLeft}</span>}</Button>
+        <Button variant="ghost" className="world-action" data-combat data-cooldown={arrowRainLeft > 0} aria-label="Chuva de Flechas" title="Chuva de Flechas — 3 ondas em área · F" onClick={() => arrowRain()}><CloudRain />{arrowRainLeft > 0 && <span className="cd">{arrowRainLeft}</span>}</Button>
       )}
       {/* Poderes do herói: cada botão só aparece quando DESBLOQUEIA (igual à Chuva). */}
       {([
@@ -536,7 +545,7 @@ function Index() {
         .map(([pid, label, icon]) => {
           const left = heroPowerLeft(pid);
           return (
-            <Button key={pid} variant="ghost" className="world-action" data-cooldown={left > 0}
+            <Button key={pid} variant="ghost" className="world-action" data-combat data-cooldown={left > 0}
               aria-label={label.split(' — ')[0]} title={label}
               onClick={() => useGameStore.getState().castHeroPower(pid)}>
               {icon}{left > 0 && <span className="cd">{left}</span>}
@@ -559,7 +568,7 @@ function Index() {
   );
 
   return (
-    <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`}>
+    <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`} data-touch={isMobile || undefined}>
       <LoginGate />
       <PvpGate />
       {editorActive && <EditorPanel />}
@@ -873,7 +882,7 @@ function Index() {
             </div>
             <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}
-          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={cameraMode === 'third'} />}
+          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={cameraMode === 'third'} powers={mobilePowers} />}
           </>)}
 
           {!inCity && !panel && <PiecePicker />}

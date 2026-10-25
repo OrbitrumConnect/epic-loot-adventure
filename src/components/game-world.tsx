@@ -1789,7 +1789,10 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       if (pointerLocked.current) document.exitPointerLock();
       setAiming(false); // trocou de câmera/pausou: nunca fica preso mirando
     };
-  }, [gl, cameraMode, props.paused]);
+    // `camera` nas dependências (Pedro 25/10: "zoom na câmera de cima não vai"): ao abrir o jogo a câmera de cima
+    // ainda não existe (é a padrão, de perspectiva) — o escutador da rodinha ficava preso nela e o zoom não fazia
+    // nada até abrir/fechar um painel. Agora ele é refeito quando a câmera troca. `size.width` idem (faixa do zoom).
+  }, [gl, camera, size.width, cameraMode, props.paused]);
 
   useEffect(() => { setAimCamera(camera); return () => setAimCamera(null); }, [camera]);
 
