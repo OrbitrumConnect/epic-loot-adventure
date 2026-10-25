@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useGameStore, arrowRainCooldownFor } from '@/game/state/game-store';
 import { heroPowerCooldown, HERO_POWER_UNLOCK, type HeroPowerId } from '@/game/systems/heroPowersSystem';
+import { BOOST_UNLOCK_LEVEL, boostCooldown } from '@/game/systems/burstSystem';
 import { startLocalPersistence } from '@/game/state/local-persistence';
 import { getEra, getHallLevel } from '@/game/systems/baseSystem';
 import { startAccountPersistence } from '@/game/state/account-persistence';
@@ -259,6 +260,8 @@ function Index() {
   const lastArrowRainAt = useGameStore(s => s.lastArrowRainAt);
   const arrowRainLeft = Math.max(0, Math.ceil(arrowRainCooldownFor(player.level) - (Date.now() / 1000 - lastArrowRainAt)));
   const heroPowerLast = useGameStore(s => s.heroPowers.lastAt);
+  const lastBoostFireAt = useGameStore(s => s.lastBoostFireAt);
+  const boostLeft = Math.max(0, Math.ceil(boostCooldown(player.level) - (Date.now() / 1000 - lastBoostFireAt)));
   const heroPowerLeft = (id: HeroPowerId) =>
     Math.max(0, Math.ceil(heroPowerCooldown(id, player.level) - (Date.now() / 1000 - heroPowerLast[id])));
 
@@ -471,6 +474,7 @@ function Index() {
       if (e.code === 'KeyZ' && !inCity && !freeCam) useGameStore.getState().castHeroPower('boomerang');
       if (e.code === 'KeyX' && !inCity && !freeCam) useGameStore.getState().castHeroPower('tornado');
       if (e.code === 'KeyC' && !inCity && !freeCam) useGameStore.getState().castHeroPower('lightning');
+      if (e.code === 'KeyT' && !inCity && !freeCam) useGameStore.getState().boostFire();
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'Backquote' && !inCity) toggleFreeCam();
       if (e.code === 'KeyP') togglePerf();
@@ -524,6 +528,7 @@ function Index() {
     ...([['boomerang', 'Z', 'Bumerangue', <RotateCw key="i" />], ['tornado', 'X', 'Furacão', <Tornado key="i" />], ['lightning', 'C', 'Raio', <CloudLightning key="i" />]] as [HeroPowerId, string, string, React.ReactNode][])
       .filter(([pid]) => player.level >= HERO_POWER_UNLOCK[pid])
       .map(([pid, id, label, icon]) => ({ id, label, icon, onPress: () => useGameStore.getState().castHeroPower(pid), cooldown: heroPowerLeft(pid) })),
+    ...(player.level >= BOOST_UNLOCK_LEVEL ? [{ id: 'T', label: 'Boost Fire', icon: <Flame />, onPress: () => useGameStore.getState().boostFire(), cooldown: boostLeft }] : []),
   ];
   const actionButtons = (
     <>
@@ -552,6 +557,9 @@ function Index() {
             </Button>
           );
         })}
+      {player.level >= BOOST_UNLOCK_LEVEL && (
+        <Button variant="ghost" className="world-action" data-combat data-cooldown={boostLeft > 0} aria-label="Boost Fire" title="Boost Fire — pistola e rifle 2× mais rápidos por 4 s · T" onClick={() => useGameStore.getState().boostFire()}><Flame />{boostLeft > 0 && <span className="cd">{boostLeft}</span>}</Button>
+      )}
       <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
       {!playerBase && (

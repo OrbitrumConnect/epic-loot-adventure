@@ -10,7 +10,7 @@ import { slotForItem, ringSlotForEquipment, type EquipmentKey } from '../systems
 import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
 import { audioManager, distanceGain } from '../audio/audio-manager';
-import { burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
+import { BOOST_DURATION_MS, BOOST_ITEMS, BOOST_UNLOCK_LEVEL, boostCooldown, boostScale, BURST_GAP, burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
@@ -96,6 +96,9 @@ type GameState = {
   specialKind: 'jump' | 'spin' | null;
   /** Cooldown (s, relógio absoluto) da Chuva de Flechas — poder de longe. Não persiste. */
   lastArrowRainAt: number;
+  /** BOOST FIRE (burstSystem): ativo até (ms) e último uso (s). Não persiste (igual aos poderes). */
+  boostFireUntil: number;
+  lastBoostFireAt: number;
   /** Poderes do herói (bumerangue/furacão/raio): cooldowns (s), janelas ativas (ms) e clarões. */
   heroPowers: HeroPowersState;
   base: BaseState;
@@ -177,6 +180,8 @@ type GameActions = {
    *  com o nível, 5 m → 18 m; cooldown 15 s → 5 s). Precisa de arma de longe equipada.
    *  `auto` (piloto idle): silencioso — não escreve mensagem quando ainda não pode disparar. */
   arrowRain: (auto?: boolean) => void;
+  /** BOOST FIRE: 4 s de cadência 2× pra pistola/rifle (tecla T). auto = piloto (silencioso, só com alvo no alcance). */
+  boostFire: (auto?: boolean) => void;
   /** Poder do herói por id (mesmo esquema da Chuva: só cooldown, desbloqueio por nível). */
   castHeroPower: (id: HeroPowerId, auto?: boolean) => void;
   /** Aplica o dano/empurrão contínuo do bumerangue/furacão ativos (throttled). */
@@ -663,6 +668,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   specialTick: 0,
   specialKind: null,
   lastArrowRainAt: 0,
+  boostFireUntil: 0,
+  lastBoostFireAt: 0,
   heroPowers: INITIAL_HERO_POWERS,
   base: createInitialBase(Date.now()),
   playerBase: null,
@@ -929,7 +936,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const now = Date.now() / 1000;
     const burstN = burstSize(heldItemId, state.player.level);
     if (fromBurst && burstN <= 1) return false; // trocou de arma no meio da rajada
-    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst)) return true; // cadência: clique engolido
+    const boostK = boostScale(heldItemId, Date.now(), state.boostFireUntil);
+    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst, boostK)) return true; // cadência: clique engolido
     const ammoItem = prof.projectile === 'bullet' ? 'ammo' : 'arrow';
     if (getItemCount(state.player.inventory, ammoItem) <= 0) {
       set(s => ({ ui: { ...s.ui, message: ammoItem === 'ammo' ? 'Sem munição!' : 'Sem flechas!' } }));
@@ -937,7 +945,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
     // Tiro no vazio com rifle também sai em rajada (mesmo ponto).
     if (!fromBurst && burstN > 1) {
-      startBurst(burstN, () => { const b = get().player.lastAttackAt; get().fireMiss(toward, towardY, true); return get().player.lastAttackAt !== b; });
+      startBurst(burstN, () => { const b = get().player.lastAttackAt; get().fireMiss(toward, towardY, true); return get().player.lastAttackAt !== b; }, Date.now(), BURST_GAP * boostK);
     }
     if (heldItemId === 'bow') audioManager.playShot(); else audioManager.playGunShot();
     set({
@@ -992,7 +1000,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // RAJADA do rifle (burstSystem): tiro da rajada usa o intervalo curto; gatilho novo espera a pausa.
     const burstN = burstSize(heldItemId, state.player.level);
     if (fromBurst && burstN <= 1) return; // trocou de arma no meio da rajada
-    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst)) return;
+    const boostK = boostScale(heldItemId, Date.now(), state.boostFireUntil);
+    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst, boostK)) return;
 
     const dist = getDistance(state.player.position, creature.position);
     if (dist > weaponRangeFor(heldItemId, state.player.level)) {
@@ -1012,7 +1021,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
     // Daqui o tiro SAI: gatilho do rifle abre a rajada (os próximos tiros repetem este mesmo ataque).
     if (!fromBurst && burstN > 1) {
-      startBurst(burstN, () => { const b = get().player.lastAttackAt; get().attack(targetId, true); return get().player.lastAttackAt !== b; });
+      startBurst(burstN, () => { const b = get().player.lastAttackAt; get().attack(targetId, true); return get().player.lastAttackAt !== b; }, Date.now(), BURST_GAP * boostK);
     }
 
     // Poder da arma ATIVA = a que está na MÃO (hotbar), não o slot
@@ -1268,6 +1277,34 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       specialKind: kind,
       ui: { ...state.ui, message: hits > 0 ? `Especial! ${hits} atingido(s).` : 'Especial (nada no alcance).' },
     });
+  },
+
+  boostFire: (auto = false) => {
+    const st = get();
+    if (st.player.dead) return;
+    if (st.player.level < BOOST_UNLOCK_LEVEL) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: 'Boost Fire desbloqueia no nível ' + BOOST_UNLOCK_LEVEL + '.' } }));
+      return;
+    }
+    const nowS = Date.now() / 1000;
+    const cd = boostCooldown(st.player.level);
+    const since = nowS - st.lastBoostFireAt;
+    if (since < cd) {
+      if (!auto) set(s => ({ ui: { ...s.ui, message: 'Boost Fire recarregando (' + Math.ceil(cd - since) + 's).' } }));
+      return;
+    }
+    const selSlot = st.player.inventory.hotbar.slots[st.ui.selectedHotbar];
+    const held = selSlot != null ? st.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    if (auto) {
+      // Piloto: só com arma de fogo na mão e hostil no alcance (não gasta o boost à toa).
+      if (!held || !BOOST_ITEMS.has(held)) return;
+      const reach = weaponRangeFor(held, st.player.level);
+      if (!st.creatures.some(c => isPowerTarget(c) && getDistance(st.player.position, c.position) <= reach)) return;
+    }
+    set(s => ({
+      boostFireUntil: Date.now() + BOOST_DURATION_MS, lastBoostFireAt: nowS,
+      ui: auto ? s.ui : { ...s.ui, message: '🔥 Boost Fire! Pistola e rifle atiram 2× mais rápido por 4 s.' },
+    }));
   },
 
   arrowRain: (auto = false) => {

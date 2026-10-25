@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  BOOST_DURATION_MS, boostCooldown, boostScale,
   BURST_GAP, burstActive, burstPause, burstSize, cancelBurst, shotCooldown, startBurst, tickBurst,
 } from '@/game/systems/burstSystem';
 import { useGameStore } from '@/game/state/game-store';
@@ -61,6 +62,32 @@ describe('rajada do rifle', () => {
     // Clique de novo no meio da rajada = engolido (não abre outra nem gasta).
     useGameStore.getState().fireMiss({ x: 10, z: 10 });
     expect(ammo()).toBe(before - 1);
+  });
+  it('BOOST FIRE: nv 25, 4 s de cadência 2× só pra pistola/rifle; recarga 30 s → 15 s; piloto só com alvo', () => {
+    expect(boostCooldown(1)).toBe(30);
+    expect(boostCooldown(200)).toBe(15);
+    expect(boostScale('pistol', 1000, 5000)).toBe(0.5);
+    expect(boostScale('rifle', 1000, 5000)).toBe(0.5);
+    expect(boostScale('bow', 1000, 5000)).toBe(1);
+    expect(boostScale('rifle', 6000, 5000)).toBe(1); // acabou
+    expect(shotCooldown(0.5, 'pistol', 100, false, 0.5)).toBe(0.25);
+    const st = useGameStore.getState();
+    useGameStore.setState({ player: { ...st.player, level: 10 }, lastBoostFireAt: 0, boostFireUntil: 0 });
+    useGameStore.getState().boostFire();
+    expect(useGameStore.getState().boostFireUntil).toBe(0); // trancado < nv 25
+    useGameStore.setState({ player: { ...useGameStore.getState().player, level: 137 }, creatures: [] });
+    useGameStore.getState().boostFire(true); // piloto sem hostil perto: não gasta
+    expect(useGameStore.getState().boostFireUntil).toBe(0);
+    const t0 = Date.now();
+    useGameStore.getState().boostFire();
+    expect(useGameStore.getState().boostFireUntil).toBeGreaterThanOrEqual(t0 + BOOST_DURATION_MS);
+    const until = useGameStore.getState().boostFireUntil;
+    useGameStore.getState().boostFire(); // recarregando
+    expect(useGameStore.getState().boostFireUntil).toBe(until);
+    const idx = fs.readFileSync('src/routes/index.tsx', 'utf8');
+    expect(idx).toMatch(/e\.code === 'KeyT' && !inCity && !freeCam\) useGameStore\.getState\(\)\.boostFire\(\)/);
+    expect(idx).toMatch(/\{ id: 'T', label: 'Boost Fire'/);
+    expect(fs.readFileSync('src/components/world/auto-pilot.tsx', 'utf8')).toMatch(/gsPow\.boostFire\(true\)/);
   });
   it('ligado: ataque e tiro no vazio abrem a rajada; ticker no mundo (pausa corta)', () => {
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');

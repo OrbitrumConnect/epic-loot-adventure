@@ -157,6 +157,7 @@ export function AutoPilot({
     gsPow.castHeroPower('boomerang', true);
     gsPow.castHeroPower('tornado', true);
     gsPow.castHeroPower('lightning', true);
+    gsPow.boostFire(true); // só com pistola/rifle na mão e hostil no alcance
 
     const now = Date.now();
     const snapshot = buildAutoSnapshot();
