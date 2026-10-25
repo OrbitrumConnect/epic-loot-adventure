@@ -882,3 +882,7 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .upgrade-side__btn { position: relative; text-align: left; padding: 6px 54px 6px 10px; border-radius: 10px; border: 1px solid rgba(124,252,154,.45); background: rgba(10,18,14,.82); color: #e8fff0; cursor: pointer; display: flex; flex-direction: column; font-size: 12px; }
 .upgrade-side__btn small { opacity: .8; font-size: 11px; }
 .upgrade-side__go { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-weight: 800; font-size: 11px; color: #7cfc9a; }
+
+/* Chamar a horda agora (Pedro 25/10). */
+.horde-call { padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(239,68,68,.6); background: rgba(239,68,68,.16); color: #fecaca; font-weight: 800; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.horde-call:hover { background: rgba(239,68,68,.3); }

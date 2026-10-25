@@ -35,6 +35,8 @@ export type UIState = {
   baseFell?: boolean;
   /** Níveis perdidos na última queda da base (tela de "Sua base caiu"). */
   baseFellLoss?: number;
+  /** Resumo da última onda repelida (tela de evolução da base). */
+  waveSummary?: { wave: number; kills: number; seconds: number };
   /** Quem te matou (tela de morte). `pvp` = outro jogador ou torre dele. Não vai pro save. */
   deathBy?: { name: string; pvp: boolean } | null;
 };

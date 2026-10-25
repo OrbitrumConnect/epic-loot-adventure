@@ -60,6 +60,7 @@ import { useAim } from '@/components/world/aim';
 import { PerfHud } from '@/components/world/perf-hud';
 import { CardHost, UpgradeSide } from '@/components/hud/card-host';
 import { useCardWatchers } from '@/components/hud/card-watchers';
+import { hordeCallBonus } from '@/game/systems/waveSystem';
 import { toggleTerrainDetail } from '@/components/world/terrain-detail';
 import { promptInstall, usePwa } from '@/net/pwa-install';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -638,6 +639,12 @@ function Index() {
               color: wave.phase === 'combat' ? '#fca5a5' : '#fcd34d', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap',
             }}>{waveLabel}</div>
           )}
+          {wave.phase === 'peace' && playerBase?.enclosed && !inCity && (
+            <button type="button" className="horde-call" onClick={() => useGameStore.getState().callHordeNow()}
+              title="Pula a paz e traz a próxima onda já — +10% de loot por minuto pulado (máx. +50%)">
+              ⚔ Chamar{hordeCallBonus(wave.phaseEndsAt - Date.now()) > 0 ? ` +${Math.round(hordeCallBonus(wave.phaseEndsAt - Date.now()) * 100)}%` : ''}
+            </button>
+          )}
           <div className="header-currency"><Coins />{player.gold}</div>
           <div className="header-currency" title="Munição (pistola/rifle)" style={{ color: ammo > 0 ? undefined : '#ef4444' }}><CircleDot />{ammo}</div>
           <MusicPlayer />
@@ -731,7 +738,11 @@ function Index() {
               <h2 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#60a5fa', textShadow: '0 0 18px rgba(96,165,250,0.5)' }}>
                 🏛️ Base nível {baseLevel} — escolha uma evolução
               </h2>
-              <p style={{ fontSize: 14, marginTop: 8, marginBottom: 20, opacity: 0.8 }}>Onda repelida! Reforce a base antes da próxima horda.</p>
+              <p style={{ fontSize: 14, marginTop: 8, marginBottom: 20, opacity: 0.85, textAlign: 'center' }}>
+                {ui.waveSummary
+                  ? <>Onda {ui.waveSummary.wave} repelida! ⚔ <b>{ui.waveSummary.kills}</b> abates{ui.waveSummary.seconds > 0 && <> · ⏱ <b>{Math.floor(ui.waveSummary.seconds / 60)}:{String(ui.waveSummary.seconds % 60).padStart(2, '0')}</b></>}. Reforce a base antes da próxima horda.</>
+                  : 'Onda repelida! Reforce a base antes da próxima horda.'}
+              </p>
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 760 }}>
                 {upgradeChoices.map((id) => {
                   const card = UPGRADE_CARDS[id];

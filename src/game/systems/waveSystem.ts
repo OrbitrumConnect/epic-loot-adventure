@@ -79,6 +79,20 @@ export function scaleHordeAmmo<T extends { itemId: string | null; quantity: numb
   return loot.map((d) => (d.itemId === 'ammo' ? { ...d, quantity: Math.round(d.quantity * k) } : d));
 }
 
+/**
+ * CHAMAR A HORDA AGORA (Pedro 25/10: controle do ritmo em vez de esperar): pular a paz dá bônus de loot na onda que
+ * vem — +10% por minuto pulado, teto +50%. Só a horda daquela onda (id `wave{n}_`).
+ */
+export const HORDE_CALL_PER_MIN = 0.1;
+export const HORDE_CALL_MAX = 0.5;
+export function hordeCallBonus(msLeft: number): number {
+  return Math.round(Math.min(HORDE_CALL_MAX, Math.max(0, msLeft / 60_000) * HORDE_CALL_PER_MIN) * 100) / 100;
+}
+export function applyHordeCall<T extends { quantity: number }>(loot: T[], creatureId: string, call: { wave: number; bonus: number } | null): T[] {
+  if (!call || call.bonus <= 0 || !creatureId.startsWith(`wave${call.wave}_`)) return loot;
+  return loot.map((d) => ({ ...d, quantity: Math.max(d.quantity, Math.round(d.quantity * (1 + call.bonus))) }));
+}
+
 export type WaveTick = {
   state: WaveState;
   startedWave: number | null; // nº da onda que ACABOU de começar (pra spawnar)

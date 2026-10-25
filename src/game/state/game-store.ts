@@ -60,7 +60,7 @@ import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem'
 import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createWildCreatures } from '../systems/wildlifeSystem';
-import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, type WaveState } from '../systems/waveSystem';
+import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, applyHordeCall, hordeCallBonus, type WaveState } from '../systems/waveSystem';
 import { eliteLoot, eliteXp } from '../systems/difficultySystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
 import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, tornadoPositions, tornadoCount, tornadoDamage, TORNADO_HIT_RADIUS, TORNADO_PUSH, TORNADO_BASE_WAVES, TORNADO_EXTEND_WAVES, dist2, type Vec2 } from '../systems/powerSystem';
@@ -125,6 +125,10 @@ type GameState = {
   baseUpgrades: Record<UpgradeId, number>;
   /** 3 cartas oferecidas após repelir uma onda; null = sem escolha pendente. */
   upgradeChoices: UpgradeId[] | null;
+  /** "Chamar a horda agora": bônus de loot da onda que vem (não persiste). */
+  hordeCall: { wave: number; bonus: number } | null;
+  /** Pula a paz e traz a próxima onda já, com bônus de loot (+10%/min pulado, teto +50%). */
+  callHordeNow: () => void;
   /** Onda até a qual os bumerangues duram (0 = inativo). Renovar estende. */
   orbitExpiresWave: number;
   /** Onda até a qual os tornados duram (0 = inativo). Renovar estende. */
@@ -311,6 +315,9 @@ const PLAYER_FOE = 'player:';
 const troopPlayerDamage = new Map<string, number>();
 let troopPlayerFlushAt = 0;
 
+/** Início da onda em curso (ms) — p/ o resumo "durou X" da onda repelida. Não persiste. */
+let waveStartedMs = 0;
+
 /** Caminho comum de morte para armas, especiais e defesa da base. HORDA nunca renasce (Pedro 25/10: a base caiu
  *  na PAZ da onda 9 — os mortos da horda renasciam 2,4–4 min depois, no anel em volta da base, e marchavam até o
  *  núcleo pelo perímetro furado). */
@@ -326,7 +333,7 @@ function rewardCreatureDeath(c: CreatureState, player: PlayerState, bags: DeathB
   const def = CREATURES[c.speciesId];
   if (def) {
     const luck = equipmentStats(player).luck;
-    const loot = eliteLoot(scaleHordeAmmo(rollCreatureLoot(def, rng, luck), c.id), c); // Enfurecido: ×2
+    const loot = applyHordeCall(eliteLoot(scaleHordeAmmo(rollCreatureLoot(def, rng, luck), c.id), c), c.id, useGameStore.getState().hordeCall); // Enfurecido ×2; horda chamada +bônus
     const newHunt = (player.huntValue ?? 0) + creatureXp(def);
     const seen = player.huntSeen?.[c.speciesId] ?? 0;
     const bonus = rollBonusLoot(def, newHunt, seen, rng, luck);
@@ -665,6 +672,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   stats: { basesEvolved: 0, basesLost: 0, survivalStart: Date.now() },
   baseUpgrades: { tower_damage: 0, wall_hp: 0, base_repair: 0, core_hp: 0, orbit_boomerang: 0, tornado: 0 },
   upgradeChoices: null,
+  hordeCall: null,
   orbitExpiresWave: 0,
   tornadoExpiresWave: 0,
   camps: INITIAL_CAMP_WORLD.camps,
@@ -1064,7 +1072,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const def = CREATURES[creature.speciesId];
       if (def) {
         const luck = equipmentStats(updatedPlayer).luck;
-        const loot = eliteLoot(scaleHordeAmmo(rollCreatureLoot(def, Math.random, luck), creature.id), creature); // Enfurecido: ×2
+        const loot = applyHordeCall(eliteLoot(scaleHordeAmmo(rollCreatureLoot(def, Math.random, luck), creature.id), creature), creature.id, state.hordeCall); // Enfurecido ×2; horda chamada +bônus
         // Economia de loot: acumula valor de caça e rola um bônus de raridade
         // por marco (aditivo à lootTable; diminishing por espécie).
         const newHunt = (updatedPlayer.huntValue ?? 0) + creatureXp(def);
@@ -2168,9 +2176,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const state = get();
     const ticked = tickCity(state, Date.now());
     const result = depositFromInventory(ticked, state.player.inventory);
-    const total = result.moved.wood + result.moved.stone + result.moved.essence;
+    const total = result.moved.wood + result.moved.stone + result.moved.essence + result.moved.food;
     const message = total > 0
-      ? `Depositado: ${result.moved.wood} madeira, ${result.moved.stone} pedra, ${result.moved.essence} essência.`
+      ? `Depositado: ${result.moved.wood} madeira, ${result.moved.stone} pedra, ${result.moved.essence} essência, ${result.moved.food} comida (carne crua).`
       : 'Nada para depositar ou armazém cheio.';
     set({
       base: result.state,
@@ -2399,6 +2407,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     });
   },
 
+  callHordeNow: () => {
+    const s = get();
+    if (s.wave.phase !== 'peace' || !s.playerBase?.enclosed) return;
+    const now = Date.now();
+    const bonus = hordeCallBonus(s.wave.phaseEndsAt - now);
+    set({
+      wave: { ...s.wave, phaseEndsAt: now },
+      hordeCall: { wave: s.wave.wave + 1, bonus },
+      ui: { ...s.ui, message: bonus > 0 ? `⚔ Horda chamada! +${Math.round(bonus * 100)}% de loot nesta onda.` : '⚔ Horda chamada!' },
+    });
+  },
+
   tickWorld: () => {
     const state = get();
     const now = Date.now();
@@ -2423,6 +2443,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let waveState = state.wave;
     let waveCreatures = ticked.creatures;
     let upgradeChoices = state.upgradeChoices;
+    let waveSummary: { wave: number; kills: number; seconds: number } | null = null;
     {
       const center = baseCenter(state.playerBase);
       // Só conta a horda da MINHA base (online cada jogador tem a sua no mesmo mundo).
@@ -2459,6 +2480,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }
       // Onda repelida → os mortos da MINHA horda saem da lista (antes acumulavam ~45 por onda, e todo sistema
       // percorre a lista de bichos).
+      // Resumo da onda repelida (Pedro 25/10: vitória curta dentro do ao vivo): abates da MINHA horda dessa onda + tempo.
+      if (wt.repelledWave) {
+        const tag = `wave${wt.repelledWave}_`;
+        const kills = waveCreatures.filter((c) => c.id.startsWith(tag) && isMyWave(c.id) && c.behavior === 'dead').length;
+        waveSummary = { wave: wt.repelledWave, kills, seconds: waveStartedMs > 0 ? Math.round((now - waveStartedMs) / 1000) : 0 };
+      }
+      if (wt.startedWave) waveStartedMs = now;
       if (wt.repelledWave) waveCreatures = waveCreatures.filter((c) => !(c.id.startsWith('wave') && isMyWave(c.id) && c.behavior === 'dead'));
       // Onda repelida → oferece 3 cartas de evolução da base (draft do Pedro).
       if (wt.repelledWave && !upgradeChoices) {
@@ -2537,9 +2565,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       harvestNodes,
       feedback: pruneEvents(current.feedback, now),
       objectives: objectiveResult.queue,
-      ui: messages.length > 0
-        ? { ...current.ui, message: messages[messages.length - 1]! }
-        : current.ui,
+      ui: {
+        ...(messages.length > 0 ? { ...current.ui, message: messages[messages.length - 1]! } : current.ui),
+        ...(waveSummary ? { waveSummary } : {}),
+      },
+      // A onda chamada acabou: o bônus de loot dela termina.
+      ...(waveSummary && current.hordeCall?.wave === waveSummary.wave ? { hordeCall: null } : {}),
     }));
   },
 

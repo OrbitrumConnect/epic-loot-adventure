@@ -49,6 +49,8 @@ export const DEPOSIT_ITEMS: { itemId: string; resource: BaseResourceId }[] = [
   { itemId: 'wood', resource: 'wood' },
   { itemId: 'stone', resource: 'stone' },
   { itemId: 'arcane_essence', resource: 'essence' },
+  // Carne crua vira COMIDA do armazém (Pedro 25/10: drop que não tinha uso; cidade/tropas usam comida).
+  { itemId: 'raw_meat', resource: 'food' },
 ];
 
 export const ERAS: EraDefinition[] = [
