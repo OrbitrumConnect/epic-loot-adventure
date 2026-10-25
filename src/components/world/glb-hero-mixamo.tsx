@@ -132,6 +132,7 @@ export function GlbHeroMixamo({
   standFixX = STAND_FIX_X,
   rangedAttack = false,
   forceBow = false,
+  forceGun = false,
   gripScale = 1,
   gripPos = [0.04, 0.04, 0.08],
   gripRot = [0, Math.PI / 2, Math.PI / 2],
@@ -174,6 +175,8 @@ export function GlbHeroMixamo({
   rangedAttack?: boolean;
   /** Força o ataque de arco SEMPRE (raider arqueiro/xamã — só ataca de longe). */
   forceBow?: boolean;
+  /** Atirador (pirata de acampamento): todo ataque usa o clip de TIRO (sem os extras do jogador). */
+  forceGun?: boolean;
   gripScale?: number;
   gripPos?: [number, number, number];
   gripRot?: [number, number, number];
@@ -425,6 +428,8 @@ export function GlbHeroMixamo({
     let atkName = extras ? SLASH_COMBO[combo.current % SLASH_COMBO.length]! : 'attack';
     if (forceBow && actions['attackBow']) {
       atkName = 'attackBow'; // arqueiro/xamã: só ataca de longe
+    } else if (forceGun && actions['attackGun']) {
+      atkName = 'attackGun'; // pirata atirador de acampamento
     } else if (rangedAttack && actions['attackBow']) {
       const kind = heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState()));
       if (kind === 'bow') atkName = 'attackBow';

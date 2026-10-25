@@ -20,8 +20,9 @@ const COMBAT_TRACK: TrackId = 'cautionary-pacing';
 const COMBAT_HOLD_MS = 5000; // quanto a trilha de combate segura após o último ataque
 
 /** Sons do mundo (torre, morte). Morte = splat (carne) + gemido (humanoide) ou rosnado (bicho). */
-export type WorldSfx = 'tower' | 'splat' | 'groan' | 'growl';
+export type WorldSfx = 'tower' | 'gun' | 'splat' | 'groan' | 'growl';
 export const WORLD_SFX: Record<WorldSfx, { url: string; vol: number; rate: number }> = {
+  gun: { url: '/audio/gun-shot.mp3', vol: 0.22, rate: 1.05 }, // tiro de inimigo (pirata)
   tower: { url: '/audio/arrow-hit.wav', vol: 0.2, rate: 0.85 }, // flecha de balestra (mais grave que o arco)
   splat: { url: '/audio/gore-splat.wav', vol: 0.24, rate: 1 },
   groan: { url: '/audio/death-groan.wav', vol: 0.2, rate: 1 },

@@ -40,6 +40,8 @@ export const PLAYER_SHOVE: Record<string, number> = { raider_samurai: 3.5 };
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTargets, useNet, waveOwner } from '@/net/multiplayer';
 import { takeKnockback } from '@/game/systems/knockbackSystem';
+import { pushEvent, shotEvent } from '@/game/systems/feedbackSystem';
+import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 
 /**
  * Clique num inimigo: esquerdo seleciona E JÁ ATACA (no alcance — Pedro, 22/10: antes só
@@ -252,7 +254,17 @@ export type HostileTuning = {
    * Ausente = hostil (lobo e saqueadores não definem, números intactos).
    */
   peaceful?: boolean;
+  /** Atirador (pirata de acampamento, Pedro 25/10): cada golpe sai como TIRO — rastro de bala + som pela distância.
+   *  `height` = altura do cano (m). Ausente = golpe normal (todos os outros, números intactos). */
+  shot?: { height: number };
 };
+
+/** Tiro de inimigo: rastro de bala (mesmos projéteis do jogador) + som de arma pela distância até mim. */
+function enemyShot(from: { x: number; z: number }, to: { x: number; z: number }, height: number, me: { x: number; z: number }): void {
+  const now = Date.now();
+  useGameStore.setState((s) => ({ feedback: pushEvent(s.feedback, shotEvent(from, to, 'bullet', height), now) }));
+  audioManager.playWorld('gun', distanceGain(Math.hypot(from.x - me.x, from.z - me.z)));
+}
 
 export const WOLF_TUNING: HostileTuning = {
   speed: 4.0,
@@ -499,10 +511,12 @@ export function useHostileAI(opts: HostileOptions) {
           // Alvo é um CONVIDADO: o host avisa e ele aplica com a própria armadura.
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
+          if (tuning.shot) enemyShot({ x: wx, z: wz }, { x: px, z: pz }, tuning.shot.height, player.position);
           broadcastMobHit(targetRemoteId, Math.max(1, creature.attackPower), creature.name);
         } else if (attackCooldown.current <= 0) {
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
+          if (tuning.shot) enemyShot({ x: wx, z: wz }, { x: px, z: pz }, tuning.shot.height, player.position);
           const dmg = mitigateDamage(Math.max(1, creature.attackPower), useGameStore.getState().player);
           if (!useGameStore.getState().player.dead) {
             reportDamageToStore("player", dmg, { x: px, z: pz }, true);

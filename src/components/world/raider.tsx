@@ -13,6 +13,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
+import { HeldItem } from './held-weapon';
 import { GlbHero, type HeroAction } from './glb-hero';
 import { GlbHeroMixamo } from './glb-hero-mixamo';
 import { GlbStaticBoss } from './glb-static-boss';
@@ -52,6 +53,15 @@ const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
 /** Escala dos inimigos que nascem em ACAMPAMENTO (Pedro 25/10: −30% e depois mais −30% → 0,7 × 0,7). */
 export const CAMP_SCALE = 0.49;
+/**
+ * ATIRADORES de acampamento (Pedro 25/10: "quais inimigos podemos pôr arma pra atirar nos acampamentos"): o pirata
+ * (guarda da frente) atira de pistola de 12 m — mesmo dano/cadência dele, persegue correndo, para no alcance e atira.
+ */
+export const CAMP_GUNNERS = new Set(['raider_scout']);
+export const CAMP_GUN_RANGE = 12;
+export function campGunnerTuning(t: HostileTuning, sizeK: number): HostileTuning {
+  return { ...t, attackRange: CAMP_GUN_RANGE, aggroRange: Math.max(t.aggroRange, CAMP_GUN_RANGE + 4), hitVerb: 'atirou', shot: { height: 1.3 * sizeK } };
+}
 const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
 /** Modelo GLB por espécie. Male_Ranger é EXCLUSIVO do player — raiders usam outros.
  *  (todos rig Universal → animam com a UAL, igual o Kael). */
@@ -376,12 +386,15 @@ export function Raider({
   const sizeK = isCampSpawn(creatureId) ? CAMP_SCALE : 1;
   const hordeRuns = hordeSpeedScale(creatureId, speciesId) >= HORDE_RUN_FROM;
   const campRuns = campChaseScale(isCampSpawn(creatureId), speciesId) > 1;
+  // Pirata de ACAMPAMENTO atira de pistola (Pedro 25/10); na horda/mapa segue na faca.
+  const gunner = isCampSpawn(creatureId) && CAMP_GUNNERS.has(speciesId);
+  const tuning = useMemo(() => (gunner ? campGunnerTuning(spec.tuning, sizeK) : spec.tuning), [gunner, spec.tuning, sizeK]);
   const bodyRadius = mxBody ? mxBody.height * sizeK * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
 
   useHostileAI({
     creatureId,
     bodyRadius,
-    tuning: spec.tuning,
+    tuning,
     group: ref,
     playerRef,
     label,
@@ -479,6 +492,8 @@ export function Raider({
               autoHeight={mx.height * sizeK}
               standFixX={mx.standFixX}
               forceBow={mx.forceBow ?? false}
+              forceGun={gunner}
+              weapon={gunner ? <HeldItem c={c} itemId="pistol" /> : undefined}
               twistFix={mx.twistFix ?? false}
               bindFix={mx.bindFix ?? false}
               autoGround={mx.autoGround ?? false}
