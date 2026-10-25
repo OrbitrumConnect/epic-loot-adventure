@@ -36,7 +36,8 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   // (normalizamos por Y). 25/10: o exibido (pele aplicada) era ~0,4 m de altura; Pedro pediu +1 m → ~1,4 m.
   goose: { url: '/models/animals/goose.glb', height: 2.17, yaw: 0, groundBias: -0.18, autoGround: true },
   pheasant: { url: '/models/animals/pheasant.glb', height: 2.31, yaw: 0, groundBias: -0.16, autoGround: true },
-  pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: 0, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
+  // yaw −90° (Pedro 25/10: 'voa de lado'): no arquivo a cabeça aponta pro +X; o jogo anda pra frente em +Z.
+  pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: -Math.PI / 2, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
   // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
   eel: { url: '/models/animals/eel.glb', fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m + DUPLA-FACE no arquivo (sumia ao virar/single-sided); fixedScale MEDIDO (~4m alto)
@@ -137,12 +138,28 @@ export const BEASTS: Record<string, BeastSpec> = {
     scale: 1, body: [0.18, 0.16, 0.26], bodyColor: '#8a8f98', legLen: 0.08, legThick: 0.04, legColor: '#c97a4a',
     head: [0.12, 0.12, 0.14], headColor: '#9aa0aa', headPos: [0, 0.08, 0.16],
     ears: 'cone', earColor: '#8a8f98', tail: 'stub', tailColor: '#8a8f98', eyes: '#d84a28',
-    extraColor: '#000000', labelHeight: 0.9, ringRadius: 0.4,
+    extraColor: '#000000', labelHeight: 3.2, ringRadius: 0.4, // barra acima do voo (a mira usa a altura dela)
     tuning: { ...hostileBase, speed: 5.2, aggroRange: 9, attackRange: 1.8, leashRange: 20, chaseTimeout: 10, walkSpeedChase: 18, walkSpeedIdle: 10, hitVerb: 'bicou' },
   },
 };
 
 /** Espécie sem entrada na tabela: quadrúpede cinza genérico, hostil ou pacífico pela definição. */
+/** Aves que VOAM (Pedro 25/10, pombo): altura extra acima do pairar do modelo — passeia alto, vem por cima
+ *  e MERGULHA no golpe (de cima pra baixo), depois sobe. `cruise` = passeando, `near` = colado no alvo,
+ *  `dive` = fundo do mergulho (m acima do pairar). */
+export const FLYERS: Record<string, { cruise: number; near: number; dive: number }> = {
+  pigeon: { cruise: 2.0, near: 1.3, dive: 0.25 },
+};
+/** Altura de voo alvo (m acima do pairar): longe → cruzeiro; chegando → desce; golpe → mergulho em arco. */
+export function flyLift(f: { cruise: number; near: number; dive: number }, a: { chasing: boolean; distToPlayer: number; swing: number }, t: number): number {
+  if (!a.chasing) return f.cruise + Math.sin(t * 1.7) * 0.15;
+  const k = Math.min(1, Math.max(0, (a.distToPlayer - 2.5) / 5.5));
+  const approach = f.near + (f.cruise - f.near) * k;
+  if (a.swing <= 0) return approach;
+  const u = 1 - Math.min(1, a.swing / 0.35); // 0 → 1 durante o golpe
+  return approach - (approach - f.dive) * Math.sin(u * Math.PI);
+}
+
 const BIG_BIRD: Record<string, { labelHeight: number; ringRadius: number }> = {
   goose: { labelHeight: 1.9, ringRadius: 0.9 },
   pheasant: { labelHeight: 1.95, ringRadius: 0.9 },
@@ -238,6 +255,8 @@ export function Beast({
   const ring = useRef<THREE.Object3D>(null);
   const movingRef = useRef(false);
   const glb = GLB_CREATURE[speciesId];
+  const flyer = FLYERS[speciesId];
+  const flyRef = useRef<THREE.Group>(null);
   const onClick = useEnemyClick(creatureId, name);
 
   useHostileAI({
@@ -251,6 +270,11 @@ export function Beast({
     ring,
     onAnimate: anim => {
       movingRef.current = anim.moving; // dirige a animação do GLB (anda/para)
+      if (flyer && flyRef.current) {
+        const want = flyLift(flyer, anim, performance.now() / 1000);
+        const y = flyRef.current.position.y;
+        flyRef.current.position.y = y + (want - y) * (anim.swing > 0 ? 0.35 : 0.08); // mergulho rápido, subida suave
+      }
       if (glb) return;                 // GLB anima sozinho; pula as pernas procedurais
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.5 : 0;
       if (spec.hop) {
@@ -284,7 +308,9 @@ export function Beast({
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
       <SelectionRing ring={ring} radius={spec.ringRadius} c={c} />
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
-      {glb && <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} fixedScale={glb.fixedScale} autoGround={glb.autoGround ?? false} />}
+      {glb && <group ref={flyRef}>
+        <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} fixedScale={glb.fixedScale} autoGround={glb.autoGround ?? false} />
+      </group>}
       <group ref={inner} visible={!glb}>
         {/* Corpo */}
         <mesh position={[0, bodyY, 0]} castShadow geometry={organicGeo(bw, bh, bd)} material={coat} />
