@@ -256,14 +256,19 @@ export type HostileTuning = {
   peaceful?: boolean;
   /** Atirador (pirata de acampamento, Pedro 25/10): cada golpe sai como TIRO — rastro de bala + som pela distância.
    *  `height` = altura do cano (m). Ausente = golpe normal (todos os outros, números intactos). */
-  shot?: { height: number };
+  shot?: { height: number; burst?: number };
 };
 
+/** Intervalo dos tiros da rajada do inimigo (s). A rajada é só visual/som: o dano é o MESMO golpe de antes. */
+export const ENEMY_BURST_GAP_MS = 120;
 /** Tiro de inimigo: rastro de bala (mesmos projéteis do jogador) + som de arma pela distância até mim. */
-function enemyShot(from: { x: number; z: number }, to: { x: number; z: number }, height: number, me: { x: number; z: number }): void {
-  const now = Date.now();
-  useGameStore.setState((s) => ({ feedback: pushEvent(s.feedback, shotEvent(from, to, 'bullet', height), now) }));
-  audioManager.playWorld('gun', distanceGain(Math.hypot(from.x - me.x, from.z - me.z)));
+function enemyShot(from: { x: number; z: number }, to: { x: number; z: number }, shot: { height: number; burst?: number }, me: { x: number; z: number }): void {
+  const fire = () => {
+    useGameStore.setState((s) => ({ feedback: pushEvent(s.feedback, shotEvent(from, to, 'bullet', shot.height), Date.now()) }));
+    audioManager.playWorld('gun', distanceGain(Math.hypot(from.x - me.x, from.z - me.z)));
+  };
+  fire();
+  for (let i = 1; i < (shot.burst ?? 1); i++) setTimeout(fire, i * ENEMY_BURST_GAP_MS);
 }
 
 export const WOLF_TUNING: HostileTuning = {
@@ -511,12 +516,12 @@ export function useHostileAI(opts: HostileOptions) {
           // Alvo é um CONVIDADO: o host avisa e ele aplica com a própria armadura.
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
-          if (tuning.shot) enemyShot({ x: wx, z: wz }, { x: px, z: pz }, tuning.shot.height, player.position);
+          if (tuning.shot) enemyShot({ x: wx, z: wz }, { x: px, z: pz }, tuning.shot, player.position);
           broadcastMobHit(targetRemoteId, Math.max(1, creature.attackPower), creature.name);
         } else if (attackCooldown.current <= 0) {
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
-          if (tuning.shot) enemyShot({ x: wx, z: wz }, { x: px, z: pz }, tuning.shot.height, player.position);
+          if (tuning.shot) enemyShot({ x: wx, z: wz }, { x: px, z: pz }, tuning.shot, player.position);
           const dmg = mitigateDamage(Math.max(1, creature.attackPower), useGameStore.getState().player);
           if (!useGameStore.getState().player.dead) {
             reportDamageToStore("player", dmg, { x: px, z: pz }, true);

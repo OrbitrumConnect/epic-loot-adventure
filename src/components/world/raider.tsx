@@ -59,8 +59,10 @@ export const CAMP_SCALE = 0.49;
  */
 export const CAMP_GUNNERS = new Set(['raider_scout']);
 export const CAMP_GUN_RANGE = 12;
+/** Rajada de 3 (Pedro 25/10: "armados com rajada menor") — só visual/som, o dano é o mesmo golpe. */
+export const CAMP_GUN_BURST = 3;
 export function campGunnerTuning(t: HostileTuning, sizeK: number): HostileTuning {
-  return { ...t, attackRange: CAMP_GUN_RANGE, aggroRange: Math.max(t.aggroRange, CAMP_GUN_RANGE + 4), hitVerb: 'atirou', shot: { height: 1.3 * sizeK } };
+  return { ...t, attackRange: CAMP_GUN_RANGE, aggroRange: Math.max(t.aggroRange, CAMP_GUN_RANGE + 4), hitVerb: 'atirou', shot: { height: 1.3 * sizeK, burst: CAMP_GUN_BURST } };
 }
 const DEFAULT_RAIDER_GLB = '/models/raiders/Male_Peasant.gltf';
 /** Modelo GLB por espécie. Male_Ranger é EXCLUSIVO do player — raiders usam outros.

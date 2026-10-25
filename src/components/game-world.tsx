@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
+import { BurstRuntime } from './world/burst-runtime';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
 import { creatureById } from './world/hostile-ai';
 import { BackgroundSim } from './world/background-sim';
@@ -2342,6 +2343,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <OcclusionFader playerRef={playerRef} paused={props.paused} />
 
       <AutoPilot playerRef={playerRef} movement={target} paused={props.paused} />
+      <BurstRuntime paused={Boolean(props.paused)} />
 
       {/* Mantém a lógica viva (ondas/torres/host) quando a aba está escondida. */}
       <BackgroundSim paused={Boolean(props.paused)} />

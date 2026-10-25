@@ -10,6 +10,7 @@ import { slotForItem, ringSlotForEquipment, type EquipmentKey } from '../systems
 import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
 import { audioManager, distanceGain } from '../audio/audio-manager';
+import { burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
@@ -160,11 +161,11 @@ type GameActions = {
   upgradeTower: (pieceId: string) => void;
   /** Aplica o dano dos powers orbitais (bumerangues) na horda. Throttled. */
   tickPowers: (now: number) => void;
-  attack: (targetId: string) => void;
+  attack: (targetId: string, fromBurst?: boolean) => void;
   /** Tiro NO VAZIO (mira em 3ª pessoa, pontinho sem alvo — igual CS): arma de longe gasta
    *  munição/cadência, toca o som e o projétil sai rumo a `toward`. Não acerta ninguém.
    *  Retorna false se a arma na mão não é de longe (aí o chamador usa o ataque de sempre). */
-  fireMiss: (toward: Position, towardY?: number) => boolean;
+  fireMiss: (toward: Position, towardY?: number, fromBurst?: boolean) => boolean;
   /** Arma de corpo a corpo: golpe no AR (animação + som, cadência da arma, sem dano). Câmera de ombro sem
    *  ninguém no alcance — antes o clique não fazia nada (Pedro 25/10). false = arma de longe/cadência. */
   swingAir: () => boolean;
@@ -918,7 +919,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     });
   },
 
-  fireMiss: (toward: Position, towardY?: number) => {
+  fireMiss: (toward: Position, towardY?: number, fromBurst = false) => {
     const state = get();
     if (state.player.dead) return false;
     const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
@@ -926,11 +927,17 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const prof = weaponFor(heldItemId);
     if (!prof.ranged || !prof.projectile) return false;
     const now = Date.now() / 1000;
-    if (now - state.player.lastAttackAt < prof.cooldown) return true; // cadência: clique engolido
+    const burstN = burstSize(heldItemId, state.player.level);
+    if (fromBurst && burstN <= 1) return false; // trocou de arma no meio da rajada
+    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst)) return true; // cadência: clique engolido
     const ammoItem = prof.projectile === 'bullet' ? 'ammo' : 'arrow';
     if (getItemCount(state.player.inventory, ammoItem) <= 0) {
       set(s => ({ ui: { ...s.ui, message: ammoItem === 'ammo' ? 'Sem munição!' : 'Sem flechas!' } }));
-      return true;
+      return fromBurst ? false : true;
+    }
+    // Tiro no vazio com rifle também sai em rajada (mesmo ponto).
+    if (!fromBurst && burstN > 1) {
+      startBurst(burstN, () => { const b = get().player.lastAttackAt; get().fireMiss(toward, towardY, true); return get().player.lastAttackAt !== b; });
     }
     if (heldItemId === 'bow') audioManager.playShot(); else audioManager.playGunShot();
     set({
@@ -967,7 +974,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     return true;
   },
 
-  attack: (targetId: string) => {
+  attack: (targetId: string, fromBurst = false) => {
     const state = get();
     const creature = state.creatures.find(c => c.id === targetId);
     if (!creature || creature.behavior === 'dead') return;
@@ -982,7 +989,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const usingTorch = heldItemId === 'torch';
 
     const now = Date.now() / 1000;
-    if (now - state.player.lastAttackAt < prof.cooldown) return;
+    // RAJADA do rifle (burstSystem): tiro da rajada usa o intervalo curto; gatilho novo espera a pausa.
+    const burstN = burstSize(heldItemId, state.player.level);
+    if (fromBurst && burstN <= 1) return; // trocou de arma no meio da rajada
+    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst)) return;
 
     const dist = getDistance(state.player.position, creature.position);
     if (dist > weaponRangeFor(heldItemId, state.player.level)) {
@@ -999,6 +1009,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         : 'Sem flechas! Mate bichos ou farme pra repor a aljava.';
       set(s => ({ ui: { ...s.ui, message: msg } }));
       return;
+    }
+    // Daqui o tiro SAI: gatilho do rifle abre a rajada (os próximos tiros repetem este mesmo ataque).
+    if (!fromBurst && burstN > 1) {
+      startBurst(burstN, () => { const b = get().player.lastAttackAt; get().attack(targetId, true); return get().player.lastAttackAt !== b; });
     }
 
     // Poder da arma ATIVA = a que está na MÃO (hotbar), não o slot
