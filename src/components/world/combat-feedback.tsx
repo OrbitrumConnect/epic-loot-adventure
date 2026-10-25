@@ -23,6 +23,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { FeedbackEvent } from '@/game/types/feedback';
 import { markImpact, pixelsPerUnit, terrainHeight } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
+import { triggerHitStop } from './hit-stop';
 
 const NUMBER_POOL = 18;
 const PARTICLE_POOL = 120;
@@ -231,6 +232,8 @@ export function CombatFeedback() {
         if (ev.kind === 'damage' || ev.kind === 'heal') spawnNumber(ev);
         if (ev.kind === 'damage' || ev.kind === 'death') spawnBurst(ev);
         // Soco de impacto → a câmera tremula (peso do golpe).
+        // Hit stop: crítico ou abate (nunca no golpe que EU tomo — não trava quem está apanhando).
+        if (ev.kind === 'death' || (ev.kind === 'damage' && ev.critical && !ev.onPlayer)) triggerHitStop();
         if (ev.kind === 'death') markImpact(1.6);
         else if (ev.kind === 'damage') markImpact(ev.onPlayer ? 0.7 : ev.critical ? 1.4 : 1.0);
       }

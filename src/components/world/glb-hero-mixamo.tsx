@@ -8,6 +8,7 @@ import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
 import { poseToBind, retargetBind, retargetTwist } from './mixamo-retarget';
 import { createFootCache, footMinY, nextGroundOffset } from './glb-creature';
+import { hitStopScale } from './hit-stop';
 
 /** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
 const bindClipCache = new Map<string, THREE.AnimationClip>();
@@ -352,6 +353,7 @@ export function GlbHeroMixamo({
         active.current = near;
         for (const m of meshes.current) m.castShadow = near;
       }
+      if (mixer) mixer.timeScale = hitStopScale(); // hit stop (crítico/abate)
       if (near && autoGround && g.parent && groundAcc.current++ % 18 === 0) { // ~0,3 s a 60 fps
         g.parent.getWorldPosition(tmpHeroV); // a raiz do raider fica no chão (IA)
         g.updateWorldMatrix(true, true);

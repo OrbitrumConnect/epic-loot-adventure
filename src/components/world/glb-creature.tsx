@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { useGameStore } from '@/game/state/game-store';
+import { hitStopScale } from './hit-stop';
 
 /** Distância² (m²) além da qual a criatura para de lançar sombra e de animar
  *  (com ~70 bichos, é o maior ganho de FPS — longe ninguém nota). */
@@ -246,6 +247,7 @@ export function GlbCreature({
       active.current = near;
       for (const m of meshes.current) m.castShadow = near;
     }
+    if (mixer) mixer.timeScale = hitStopScale(); // hit stop (crítico/abate)
 
     if (near && autoGround && g.parent) { // medir a malha animada custa: só perto
       groundAcc.current += 1;
