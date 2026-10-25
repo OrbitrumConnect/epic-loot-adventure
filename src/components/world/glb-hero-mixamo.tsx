@@ -7,6 +7,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
 import { poseToBind, retargetBind, retargetTwist } from './mixamo-retarget';
+import { nextGroundOffset, skinnedMinY } from './glb-creature';
 
 /** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
 const bindClipCache = new Map<string, THREE.AnimationClip>();
@@ -134,6 +135,7 @@ export function GlbHeroMixamo({
   hpOf,
   twistFix,
   bindFix = false,
+  autoGround = false,
 }: {
   /** Vida de OUTRO jogador (online) p/ a reação de golpe; sem ela, a vida do jogador local. */
   hpOf?: () => number;
@@ -147,6 +149,9 @@ export function GlbHeroMixamo({
   /** Raiders cujo esqueleto veio salvo FORA da pose da pele (Couraça, Fúngico): anima a partir da
    *  pose de ligação + retarget pelo mundo (`retargetBind`). Substitui o `twistFix`. */
   bindFix?: boolean;
+  /** Assenta pela malha ANIMADA (ponto mais baixo no chão), igual aos bichos (`GlbCreature`). Couraça
+   *  (Pedro, 25/10): andava com metade do corpo dentro do mapa. */
+  autoGround?: boolean;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -317,6 +322,7 @@ export function GlbHeroMixamo({
   const lastHitAt = useRef(-Infinity);
   const lastCastSeen = useRef<number | null>(null);
   const clock = useRef(0);
+  const groundAcc = useRef(0);
 
   useFrame((_, rawDt) => {
     // PERF: longe do player → pausa o mixer + tira sombra e nem processa o estado.
@@ -331,6 +337,11 @@ export function GlbHeroMixamo({
         if (mixer) mixer.timeScale = near ? 1 : 0;
       }
       if (!near) return;
+      if (autoGround && g.parent && groundAcc.current++ % 18 === 0) { // ~0,3 s a 60 fps
+        g.parent.getWorldPosition(tmpHeroV); // a raiz do raider fica no chão (IA)
+        g.updateWorldMatrix(true, true);
+        g.position.y = nextGroundOffset(g.position.y, skinnedMinY(g), tmpHeroV.y);
+      }
     }
 
     const want = actionRef.current;

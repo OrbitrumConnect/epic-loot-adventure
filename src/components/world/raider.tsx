@@ -65,8 +65,8 @@ const RAIDER_GLB: Record<string, string> = {
  *  prova que nunca piora (`mixamo-retarget.test.ts`). spiked/pirate/swamp têm o quadril do rig
  *  girado ~105° e pioram um pouco → ficam como estão até refazer o rig no Mixamo. */
 // bindFix (24/10): Couraça e Fúngico vinham com o esqueleto fora da pose da pele (até 96°) → malha torcida.
-const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean }> = {
-  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.9, bindFix: true },     // spiked, 2x (Pedro)
+const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean }> = {
+  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.9, bindFix: true, autoGround: true }, // autoGround: andava meio enterrado (Pedro 25/10)     // spiked, 2x (Pedro)
   raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8 },       // pirata
   raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, twistFix: true },  // brutamontes (maior)
   raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true, twistFix: true },// arqueiro: só ataque de longe
@@ -460,6 +460,7 @@ export function Raider({
               forceBow={mx.forceBow ?? false}
               twistFix={mx.twistFix ?? false}
               bindFix={mx.bindFix ?? false}
+              autoGround={mx.autoGround ?? false}
               yaw={BOSS_GLB_YAW}
             />
           );
