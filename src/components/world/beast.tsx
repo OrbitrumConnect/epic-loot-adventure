@@ -21,10 +21,13 @@ import { GlbCreature } from './glb-creature';
 const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number; tint?: string; groundBias?: number; fixedScale?: number; autoGround?: boolean }> = {
   // groundBias negativo = desce (os "demo" skinned flutuam ~30cm: bind-pose ≠ anim).
   rabbit: { url: '/models/animals/rabbit.glb', height: 0.42, yaw: 0, tint: '#b7a58a', groundBias: -0.12 },
-  deer: { url: '/models/animals/deer.glb', height: 1.7, yaw: 0, tint: '#a8743c', groundBias: -0.3 },
+  // Tamanho REAL (Pedro 25/10: 'sou maior que búfalo e leoa'). `height` mede a malha DEITADA do arquivo: o
+  // exibido era ~60–70% dele (medido com a pele). Agora: cervo ~1,75 m c/ galhada, búfalo ~1,65 m × 2,8 m,
+  // leoa ~1,05 m × 1,7 m. groundBias escala junto (é medido na escala do modelo).
+  deer: { url: '/models/animals/deer.glb', height: 2.25, yaw: 0, tint: '#a8743c', groundBias: -0.4, autoGround: true },
   boar: { url: '/models/animals/alligator.glb', height: 0.7, yaw: 0, tint: '#5a6b4a', groundBias: -1.15, autoGround: true }, // jacaré: -1,15 fixo enterrava (corpo 0,7 m) — 'não aparecia' (Pedro 23/10); assenta pelo corpo ANIMADO
-  bear: { url: '/models/animals/buffalo.glb', height: 2.0, yaw: 0, tint: '#4b3a2a', groundBias: -0.35 },
-  wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.3, yaw: 0, tint: '#c49a5e', groundBias: -0.3 },
+  bear: { url: '/models/animals/buffalo.glb', height: 2.8, yaw: 0, tint: '#4b3a2a', groundBias: -0.49, autoGround: true },
+  wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.85, yaw: 0, tint: '#c49a5e', groundBias: -0.43, autoGround: true },
   // Aves (texturas próprias → sem tint). OBS: a geometria vem com ASAS ABERTAS, então
   // a envergadura (X/Z) é bem maior que a altura (Y) — por isso a altura aqui é BAIXA
   // (normalizamos por Y): assim a maior dimensão fica ~0.8-1.0 m (tamanho de ave real).
@@ -98,7 +101,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     head: [0.22, 0.24, 0.34], headColor: '#b98349', headPos: [0, 0.55, 0.62],
     snout: { size: [0.12, 0.12, 0.14], color: '#2c2118', pos: [0, 0.5, 0.82] },
     ears: 'cone', earColor: '#8f6030', tail: 'stub', tailColor: '#f0e6d2', eyes: '#14100c',
-    extras: ['antlers', 'belly'], extraColor: '#d8c9a0', labelHeight: 1.75, ringRadius: 0.7,
+    extras: ['antlers', 'belly'], extraColor: '#d8c9a0', labelHeight: 2.3, ringRadius: 0.9,
     tuning: { ...peacefulBase, speed: 3.9, aggroRange: 11, provokeRange: 16 },
   },
   boar: {
@@ -114,7 +117,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     head: [0.5, 0.45, 0.5], headColor: '#5a412e', headPos: [0, 0.18, 0.9],
     snout: { size: [0.26, 0.2, 0.24], color: '#8a7058', pos: [0, 0.1, 1.2] },
     ears: 'round', earColor: '#3a281a', tail: 'stub', tailColor: '#3a281a', eyes: '#1a0f08',
-    extras: ['hump'], extraColor: '#4b3424', labelHeight: 1.9, ringRadius: 1.0,
+    extras: ['hump'], extraColor: '#4b3424', labelHeight: 2.25, ringRadius: 1.4,
     tuning: { ...hostileBase, speed: 3.3, aggroRange: 8, attackRange: 3.0, leashRange: 16, chaseTimeout: 14, walkSpeedChase: 11, walkSpeedIdle: 6, hitVerb: 'rasgou' },
   },
   wolf_alpha: {
@@ -122,7 +125,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     head: [0.46, 0.46, 0.58], headColor: '#575b64', headPos: [0, 0.2, 0.84],
     snout: { size: [0.26, 0.2, 0.28], color: '#7a7e88', pos: [0, 0.12, 1.2] },
     ears: 'cone', earColor: '#2a2c32', tail: 'long', tailColor: '#2a2c32', eyes: '#ff5a1f',
-    extras: ['mane'], extraColor: '#8a8f9a', labelHeight: 1.9, ringRadius: 0.85,
+    extras: ['mane'], extraColor: '#8a8f9a', labelHeight: 1.9, ringRadius: 1.0,
     tuning: { ...WOLF_TUNING, speed: 4.4, aggroRange: 11, attackRange: 2.8, leashRange: 28, hitVerb: 'dilacerou' },
   },
   // Pombo Bravo: ave HOSTIL que mergulha no jogador (usa o clip de voo do GLB).

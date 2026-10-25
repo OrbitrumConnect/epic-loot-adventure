@@ -187,18 +187,18 @@ export function GlbCreature({
   useFrame(() => {
     const g = inner.current;
     if (!g) return;
-    // Longe do jogador: sai do passe de sombra e pausa o mixer (anim). Perto: liga.
+    // Longe do jogador: sai do passe de SOMBRA (economia real de GPU). A animação NÃO pausa mais (Pedro
+    // 25/10: de longe deslizavam congelados/"bugados"): no three o mixer com timeScale 0 é avaliado do
+    // mesmo jeito todo quadro — pausar só congelava a pose, sem economizar.
     g.getWorldPosition(tmpCreatureV);
     const p = useGameStore.getState().player.position;
     const near = (p.x - tmpCreatureV.x) * (p.x - tmpCreatureV.x) + (p.z - tmpCreatureV.z) * (p.z - tmpCreatureV.z) < CREATURE_ACTIVE_D2;
     if (near !== active.current) {
       active.current = near;
       for (const m of meshes.current) m.castShadow = near;
-      if (mixer) mixer.timeScale = near ? 1 : 0;
     }
-    if (!near) return; // longe: nem recalcula o clipe
 
-    if (autoGround && g.parent) {
+    if (near && autoGround && g.parent) { // medir a malha animada custa: só perto
       groundAcc.current += 1;
       if (groundAcc.current % 18 === 0) { // ~0,3 s a 60 fps
         g.parent.getWorldPosition(tmpCreatureV); // a raiz do bicho fica no chão (Beast/AI)

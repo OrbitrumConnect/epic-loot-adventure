@@ -325,7 +325,8 @@ export function GlbHeroMixamo({
   const groundAcc = useRef(0);
 
   useFrame((_, rawDt) => {
-    // PERF: longe do player → pausa o mixer + tira sombra e nem processa o estado.
+    // PERF: longe do player → tira a SOMBRA. A animação segue (pausar congelava a pose e o raider deslizava
+    // "bugado" de longe — Pedro 25/10; no three o mixer pausado é avaliado igual, não economizava).
     const g = inner.current;
     if (g) {
       g.getWorldPosition(tmpHeroV);
@@ -334,10 +335,8 @@ export function GlbHeroMixamo({
       if (near !== active.current) {
         active.current = near;
         for (const m of meshes.current) m.castShadow = near;
-        if (mixer) mixer.timeScale = near ? 1 : 0;
       }
-      if (!near) return;
-      if (autoGround && g.parent && groundAcc.current++ % 18 === 0) { // ~0,3 s a 60 fps
+      if (near && autoGround && g.parent && groundAcc.current++ % 18 === 0) { // ~0,3 s a 60 fps
         g.parent.getWorldPosition(tmpHeroV); // a raiz do raider fica no chão (IA)
         g.updateWorldMatrix(true, true);
         g.position.y = nextGroundOffset(g.position.y, skinnedMinY(g), tmpHeroV.y);

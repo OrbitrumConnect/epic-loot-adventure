@@ -13,7 +13,7 @@ import { queueNearestNode } from './world/objective-bridge';
 import { CombatFeedback } from './world/combat-feedback';
 import { Projectiles } from './world/projectiles';
 import { HeldItem, selectedItemId } from './world/held-weapon';
-import { aimFire, aimZoomStep, setAimCamera, setAiming, useAim } from './world/aim';
+import { aimFire, aimSensitivityScale, aimZoomStep, setAimCamera, setAiming, useAim } from './world/aim';
 import { createLookTracker } from './world/touch-look';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
@@ -1594,6 +1594,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   // Vetores reutilizados no useFrame da câmera (evita `new THREE.Vector3` por quadro).
   // Os ramos editor/terceira-pessoa são mutuamente exclusivos por quadro → podem compartilhar.
   const tmpWant = useRef(new THREE.Vector3());
+  /** 3ª pessoa: apoio da câmera (segue o herói suave) e quanto da distância está livre (colisão). */
+  const camPivot = useRef(new THREE.Vector3());
+  const camFree = useRef(1);
   const tmpLook = useRef(new THREE.Vector3());
   const metricAccum = useRef({ frames: 0, time: 0, next: 0 });
 
@@ -1628,7 +1631,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         return;
       }
       if (!pointerLocked.current) return;
-      const sensitivity = 0.0025;
+      const sensitivity = 0.0025 * aimSensitivityScale();
       cameraYaw.current -= e.movementX * sensitivity;
       cameraPitch.current = THREE.MathUtils.clamp(
         cameraPitch.current - e.movementY * sensitivity, -1.0, 0.65,
@@ -1725,7 +1728,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       if (!t) return;
       if (Math.abs(t.clientX - startX) + Math.abs(t.clientY - startY) > 10) moved = true;
       if (cameraMode === 'third') {
-        const sensitivity = 0.005;
+        const sensitivity = 0.005 * aimSensitivityScale();
         cameraYaw.current -= (t.clientX - lastTX) * sensitivity;
         cameraPitch.current = THREE.MathUtils.clamp(cameraPitch.current - (t.clientY - lastTY) * sensitivity, -1.0, 0.65);
         e.preventDefault(); // enquanto gira: evita scroll/zoom da página
@@ -1936,55 +1939,41 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
         }
       }
 
-      const camX = px - Math.sin(yaw) * Math.cos(pitch) * dist + Math.cos(yaw) * shoulderOffset;
-      const camY = py + (aiming ? 1.95 : 2.8) - Math.sin(pitch) * dist;
-      const camZ = pz - Math.cos(yaw) * Math.cos(pitch) * dist - Math.sin(yaw) * shoulderOffset;
-      const wantPos = tmpWant.current.set(camX, camY, camZ);
+      // Pedro 25/10 ("câmera de ombro meio duvidosa"): antes posição E direção seguiam o mouse/dedo com
+      // suavização (12% por quadro) → o pontinho chegava atrasado. Agora só o APOIO (seguir o herói) é
+      // suave; o GIRO é instantâneo — o centro da tela vai exatamente onde você apontou.
+      const piv = camPivot.current;
+      if (modeChanged) piv.set(px, py, pz);
+      else piv.lerp(tmpLook.current.set(px, py, pz), aiming ? 0.35 : 0.18);
+      const camX = piv.x - Math.sin(yaw) * Math.cos(pitch) * dist + Math.cos(yaw) * shoulderOffset;
+      const camY = piv.y + (aiming ? 1.95 : 2.8) - Math.sin(pitch) * dist;
+      const camZ = piv.z - Math.cos(yaw) * Math.cos(pitch) * dist - Math.sin(yaw) * shoulderOffset;
 
-      // Colisão de câmera: marcha da cabeça até a posição desejada; se um morro
-      // bloqueia a linha, para no último ponto livre (aproxima). Libera → volta suave.
-      {
-        const hx = px, hy = py + 1.5, hz = pz;
-        const steps = 10;
-        for (let i = 1; i <= steps; i++) {
-          const t = i / steps;
-          const sx = hx + (camX - hx) * t;
-          const sy = hy + (camY - hy) * t;
-          const sz = hz + (camZ - hz) * t;
-          if (sy < terrainHeight(sx, sz) + 0.3) {
-            const safeT = (i - 1) / steps;
-            // Reusa o mesmo vetor: `wantPos` só é lido depois do laço (lerp abaixo).
-            wantPos.set(hx + (camX - hx) * safeT, hy + (camY - hy) * safeT, hz + (camZ - hz) * safeT);
-            break;
-          }
-        }
+      // Colisão de câmera com o CHÃO REAL do mapa (antes: relevo procedural antigo → entrava em morro):
+      // marcha da cabeça até a câmera; bateu → aproxima NA HORA; liberou → volta suave.
+      const hx = piv.x, hy = piv.y + 1.5, hz = piv.z;
+      let free = 1;
+      for (let i = 1; i <= 10; i++) {
+        const t = i / 10;
+        const sx = hx + (camX - hx) * t, sz = hz + (camZ - hz) * t;
+        if (hy + (camY - hy) * t < glbSurfaceY(sx, sz, terrainHeight(sx, sz)) + 0.3) { free = (i - 1) / 10; break; }
       }
-
-      if (modeChanged) {
-        camTarget.current.copy(wantPos);
-        const lookX = px + Math.sin(yaw) * 4;
-        const lookZ = pz + Math.cos(yaw) * 4;
-        camLookAt.current.set(lookX, py + 1.2, lookZ);
-      }
-
-      camTarget.current.lerp(wantPos, aiming ? 0.3 : 0.12);
-      camera.position.copy(camTarget.current);
+      camFree.current = modeChanged || free < camFree.current ? free : camFree.current + (free - camFree.current) * 0.1;
+      const k = camFree.current;
+      camera.position.set(hx + (camX - hx) * k, hy + (camY - hy) * k, hz + (camZ - hz) * k);
+      camTarget.current.copy(camera.position);
 
       if (aiming) {
         // Olha LONGE na direção da câmera: o centro da tela = para onde a mira atira.
         const far = 60;
-        tmpLook.current.set(
+        camLookAt.current.set(
           camera.position.x + Math.sin(yaw) * Math.cos(pitch) * far,
           camera.position.y + Math.sin(pitch) * far,
           camera.position.z + Math.cos(yaw) * Math.cos(pitch) * far,
         );
-        camLookAt.current.lerp(tmpLook.current, 0.35);
       } else {
         const lookAhead = 4;
-        const lookX = px + Math.sin(yaw) * lookAhead;
-        const lookZ = pz + Math.cos(yaw) * lookAhead;
-        const lookY = py + 1.2 + Math.sin(pitch) * 2;
-        camLookAt.current.lerp(tmpLook.current.set(lookX, lookY, lookZ), 0.12);
+        camLookAt.current.set(piv.x + Math.sin(yaw) * lookAhead, piv.y + 1.2 + Math.sin(pitch) * 2, piv.z + Math.cos(yaw) * lookAhead);
       }
       camera.lookAt(camLookAt.current);
     }

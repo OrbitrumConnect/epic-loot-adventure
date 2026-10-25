@@ -25,6 +25,7 @@ import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { isBuildActive } from './build-mode';
 import { BASE_PIECES } from '@/game/data/base-pieces';
 import { nearestBasePiece, nearestPieceIn } from './base-targets';
+import { WANDER_MIN_STRENGTH, wanderStep } from './wander';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTargets, useNet, waveOwner } from '@/net/multiplayer';
 import { takeKnockback } from '@/game/systems/knockbackSystem';
@@ -523,12 +524,12 @@ export function useHostileAI(opts: HostileOptions) {
         wanderAngle.current = Math.random() * Math.PI * 2;
         wanderTimer.current = 2 + Math.random() * 3;
       }
-      const homeAngle = Math.atan2(homePos.current.x - wx, homePos.current.z - wz);
-      const blend = distToHome > 5 ? 0.8 : 0.2;
-      const moveAngle = wanderAngle.current * (1 - blend) + homeAngle * blend;
-      targetX = wx + Math.sin(moveAngle) * tuning.wanderSpeed * dt;
-      targetZ = wz + Math.cos(moveAngle) * tuning.wanderSpeed * dt;
-      moving = true;
+      const step = wanderStep(wanderAngle.current, homePos.current.x - wx, homePos.current.z - wz);
+      if (step.strength >= WANDER_MIN_STRENGTH) {
+        targetX = wx + Math.sin(step.heading) * tuning.wanderSpeed * step.strength * dt;
+        targetZ = wz + Math.cos(step.heading) * tuning.wanderSpeed * step.strength * dt;
+        moving = true;
+      }
     }
 
     // EMPURRÃO (furacão/bumerangue do herói e da base): consome a fila suave; as colisões
