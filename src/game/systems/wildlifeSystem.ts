@@ -158,3 +158,17 @@ export function createNightPigeons(center: Position, rng: () => number = Math.ra
   }
   return out;
 }
+
+/**
+ * RETOMAR SALA salva antes de uma atualização (26/10): a foto do mundo (até 3 dias) pode trazer espécie que saiu do jogo
+ * (raposa/robô: contagem 0) e NÃO ter inimigo novo (acampamentos 7/9/12/15). Regra: a foto manda nos ids que ela tem;
+ * some bicho solto/inicial de espécie que não nasce mais; entra o que é novo (id que existe agora e não está na foto).
+ */
+export function mergeResumedWorld(snapshot: CreatureState[], current: CreatureState[]): CreatureState[] {
+  const gone = (c: CreatureState) =>
+    (c.id.startsWith('wild_') && !c.id.startsWith(NIGHT_FLOCK_PREFIX) && (WILD_SPAWN_COUNTS[c.speciesId] ?? 0) === 0)
+    || (c.speciesId === 'wolf' && /^wolf_\d+$/.test(c.id)); // as 3 raposas fixas do início
+  const kept = snapshot.filter((c) => !gone(c));
+  const have = new Set(kept.map((c) => c.id));
+  return [...kept, ...current.filter((c) => !have.has(c.id) && !gone(c))];
+}

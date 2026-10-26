@@ -26,6 +26,7 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import { effectiveMaxHp } from '@/game/systems/equipmentStatsSystem';
 import { pvpBaseDamage, pvpPlayerDamage } from '@/game/systems/pvpSystem';
+import { mergeResumedWorld } from '@/game/systems/wildlifeSystem';
 
 const SYNC_INTERVAL = 0.2;
 
@@ -103,7 +104,8 @@ export function MultiplayerWorldSync() {
     // RETOMAR: sala vazia/pausada → começo da última foto salva (se houver), não do zero.
     let cancelled = false;
     void fetchResumeSnapshot().then((creatures) => {
-      if (!cancelled && creatures && creatures.length > 0) useGameStore.setState({ creatures });
+      // 26/10: foto antiga (antes de uma atualização) — sem espécie que saiu, com os inimigos novos (wildlifeSystem).
+      if (!cancelled && creatures && creatures.length > 0) useGameStore.setState({ creatures: mergeResumedWorld(creatures, useGameStore.getState().creatures) });
     });
     const send = () => broadcastWorld(useGameStore.getState().creatures);
     send();

@@ -43,3 +43,21 @@ describe('guarda do 3D (contexto WebGL perdido)', () => {
     expect(gw).toMatch(/if \(LOW_GPU\) return 0\.85;/);
   });
 });
+
+/* 26/10 (Pedro: "nada afeta multiplayer?"): a guarda volta pra MESMA sala; sala salva antes da atualização retoma sem
+   raposa/robô e com os inimigos novos dos acampamentos. */
+describe('multiplayer: guarda e retomada de sala', () => {
+  it('guarda recarrega pro endereço com a sala (o painel de Salas reentra sozinho)', () => {
+    const src = fs.readFileSync('src/components/world/gpu-guard.ts', 'utf8');
+    expect(src).toMatch(/if \(room\) window\.location\.href = inviteLink\(room\);/);
+  });
+  it('foto antiga: some raposa/robô soltos e as 3 raposas do início; entram os ids novos; a foto manda nos que tem', async () => {
+    const { mergeResumedWorld } = await import('@/game/systems/wildlifeSystem');
+    const mk = (id: string, speciesId: string, hp = 10) => ({ id, speciesId, hp } as never);
+    const snap = [mk('wild_wolf_3', 'wolf'), mk('wild_pelter_1', 'pelter'), mk('wolf_2', 'wolf'), mk('wild_deer_1', 'deer', 3), mk('raider_outpost_e0', 'raider_scout', 1), mk('wild_pigeon_night_4', 'pigeon')];
+    const now = [mk('wild_deer_1', 'deer', 99), mk('raider_outpost_e0', 'raider_scout', 99), mk('raider_outpost_e6', 'raider_shaman')];
+    const out = mergeResumedWorld(snap, now) as unknown as { id: string; hp: number }[];
+    expect(out.map((c) => c.id)).toEqual(['wild_deer_1', 'raider_outpost_e0', 'wild_pigeon_night_4', 'raider_outpost_e6']);
+    expect(out[0]!.hp).toBe(3); // a foto manda (vida/estado salvos)
+  });
+});

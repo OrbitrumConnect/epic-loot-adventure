@@ -6,6 +6,8 @@
  *     do Pedro). Só liga em aparelho que caiu: PC/celular forte nunca entram nele.
  * Fora do React (eventos do canvas + localStorage protegido por try/catch).
  */
+import { inviteLink, useNet } from '@/net/multiplayer';
+
 const LOST_KEY = 'tribos.gpu.lostAt';
 const LOW_KEY = 'tribos.gpu.low';
 export const RELOAD_DELAY_MS = 1500;
@@ -41,8 +43,15 @@ function showNotice(text: string): void {
   document.body.appendChild(el);
 }
 
+/** Recarrega VOLTANDO pra sala online (endereço com ?room=CÓDIGO → o painel de Salas reentra sozinho). Solo: recarrega. */
+export function reloadKeepingRoom(): void {
+  const room = useNet.getState().room;
+  if (room) window.location.href = inviteLink(room);
+  else window.location.reload();
+}
+
 /** Liga no canvas do jogo. Devolve a função que desliga. */
-export function attachContextGuard(canvas: HTMLCanvasElement, reload: () => void = () => window.location.reload()): () => void {
+export function attachContextGuard(canvas: HTMLCanvasElement, reload: () => void = reloadKeepingRoom): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const onLost = (e: Event) => {
     e.preventDefault();
