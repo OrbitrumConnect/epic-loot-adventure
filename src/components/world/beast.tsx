@@ -39,7 +39,8 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   goose: { url: '/models/animals/goose.glb', height: 2.17, yaw: 0, groundBias: -0.18, autoGround: true },
   pheasant: { url: '/models/animals/pheasant.glb', height: 2.31, yaw: 0, groundBias: -0.16, autoGround: true },
   // yaw −90° (Pedro 25/10: 'voa de lado'): no arquivo a cabeça aponta pro +X; o jogo anda pra frente em +Z.
-  pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.002, height: 0.3, yaw: -Math.PI / 2, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
+  // 26/10 (Pedro): pombo +30% de tamanho (0,002 → 0,0026).
+  pigeon: { url: '/models/animals/pigeon.glb', fixedScale: 0.0026, height: 0.39, yaw: -Math.PI / 2, groundBias: 0.6 }, // escala ABSOLUTA (modelo não normaliza); tamanho ~goose
   // Monstros: fixedScale = tamanho_alvo / tamanho_real_MEDIDO (getBounds) — garante
   // o tamanho (a normalização por height falhava nesses modelos de escala maluca).
   eel: { url: '/models/animals/eel.glb', fixedScale: 0.06, yaw: 0, groundBias: 0 }, // real 200×66m + DUPLA-FACE no arquivo (sumia ao virar/single-sided); fixedScale MEDIDO (~4m alto)

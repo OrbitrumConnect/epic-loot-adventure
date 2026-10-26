@@ -50,6 +50,7 @@ import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/wo
 
 const GameWorld = lazy(() => import('@/components/game-world'));
 import { BossSpawner } from '@/components/world/boss-spawner';
+import { NightFlock } from '@/components/world/night-flock';
 import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
 import { RoomsPanel } from '@/components/hud/rooms-panel';
 import { EditorPanel } from '@/components/editor/editor-panel';
@@ -691,6 +692,7 @@ function Index() {
           {worldOn && !inCity && !player.dead && <CardHost />}
           {worldOn && !inCity && !player.dead && <UpgradeSide />}
           {worldOn && ui.mode === 'world' && <BossSpawner />}
+          {worldOn && ui.mode === 'world' && <NightFlock />}
           {player.dead && !inCity && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 50,

@@ -30,6 +30,6 @@ describe('pombo: voo e mergulho', () => {
   });
   it('de frente: yaw −90° (cabeça do arquivo em +X)', () => {
     const src = fs.readFileSync('src/components/world/beast.tsx', 'utf8');
-    expect(src).toMatch(/pigeon: \{ url: '\/models\/animals\/pigeon\.glb', fixedScale: 0\.002, height: 0\.3, yaw: -Math\.PI \/ 2/);
+    expect(src).toMatch(/pigeon: \{ url: '\/models\/animals\/pigeon\.glb', fixedScale: 0\.0026, height: 0\.39, yaw: -Math\.PI \/ 2/); // 26/10: +30%
   });
 });

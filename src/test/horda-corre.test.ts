@@ -30,7 +30,7 @@ describe('horda Mixamo acelera com a onda', () => {
     expect([...HORDE_RUNNERS].sort()).toEqual(mixamo);
     expect(r).toMatch(/anim\.moving \? \(hordeRuns \|\| \(campRuns && anim\.chasing\) \? 'run' : 'walk'\) : 'idle'/);
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
-    expect(ai).toMatch(/\* hordeSpeedScale\(creatureId, creature\.speciesId\);/);
+    expect(ai).toMatch(/\* hordeSpeedScale\(creatureId, creature\.speciesId\)/);
   });
 });
 

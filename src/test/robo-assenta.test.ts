@@ -49,7 +49,8 @@ describe('Couraça assenta pelo corpo animado', () => {
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
     // 25/10: mesmo cálculo, versão barata (só os pés) e 1ª medição encaixa na hora.
     // 25/10: 1ª medição ao NASCER em qualquer distância (antes só perto → nascia enterrado e subia ao chegar).
-    expect(hero).toMatch(/if \(autoGround && g\.parent && groundDue\(groundInit\.current, \+\+groundAcc\.current, near\)\)[\s\S]{0,400}nextGroundOffset\(g\.position\.y, footMinY\(g, footCache\.current\), tmpHeroV\.y, groundInit\.current \? 0\.35 : 1\)/);
+    // 26/10: 1ª medição PERTO sem esperar o espalhamento + re-medição rápida (50%) após trocar de clip.
+    expect(hero).toMatch(/groundDue\(groundInit\.current, \+\+groundAcc\.current, near\)\)\)[\s\S]{0,400}nextGroundOffset\(g\.position\.y, footMinY\(g, footCache\.current\), tmpHeroV\.y, groundInit\.current \? \(fast \? 0\.5 : 0\.35\) : 1\)/);
   });
 
   it('corpo 0,6 m enterrado (Couraça de 3,9 m) sobe até pisar no chão em ~2 s', () => {

@@ -56,6 +56,8 @@ const ATTACK_SPEED = 1.5;
 /** Distância² (m²) além da qual o raider PARA de animar e de lançar sombra
  *  (perf: numa horda, o maior ganho — longe ninguém nota). */
 const ACTIVE_D2 = 40 * 40;
+/** Quadros de re-medição rápida do chão após trocar de clip (~0,6 s a 60 fps). */
+export const GROUND_FAST_FRAMES = 36;
 const tmpHeroV = new THREE.Vector3();
 const tmpQuat = new THREE.Quaternion();
 const tmpEuler = new THREE.Euler();
@@ -335,6 +337,9 @@ export function GlbHeroMixamo({
   const stridePos = useRef<THREE.Vector3 | null>(null);
   const strideSpeed = useRef(0);
   const groundInit = useRef(false);
+  const groundWant = useRef<HeroAction | null>(null);
+  const groundFast = useRef(0);
+  const groundBorn = useRef(0); // quadros desde que nasceu (a 1ª medição PERTO não espera o espalhamento)
   const footCache = useRef(createFootCache());
   const sideDir = useRef<{ dir: MoveDir; t: number }>({ dir: 'fwd', t: 0 });
   const overlay = useRef<string | null>(null);
@@ -357,11 +362,22 @@ export function GlbHeroMixamo({
         for (const m of meshes.current) m.castShadow = near;
       }
       if (mixer) mixer.timeScale = hitStopScale(); // hit stop (crítico/abate)
-      if (autoGround && g.parent && groundDue(groundInit.current, ++groundAcc.current, near)) { // 1ª ao nascer (qualquer distância), depois ~0,3 s perto
+      // TROCA DE CLIP (parado ↔ andando ↔ correndo): o pé do clip novo fica em outra altura e o ajuste lento (35% a
+      // cada 0,3 s, pontos do pé da pose antiga) levava ~2 s → "Couraça sai do chão no início do move" (Pedro 26/10).
+      // Agora: refaz os pontos do pé e re-mede RÁPIDO por ~0,6 s (a cada 3 quadros, 50%). Ataque não dispara (é curto).
+      const wantNow = actionRef.current;
+      if (autoGround && wantNow !== groundWant.current) {
+        const loco = (a: HeroAction | null) => a === 'idle' || a === 'walk' || a === 'run';
+        if (loco(wantNow) && loco(groundWant.current)) { groundFast.current = GROUND_FAST_FRAMES; footCache.current.picks.length = 0; }
+        groundWant.current = wantNow;
+      }
+      const fast = groundFast.current > 0 && near && groundInit.current;
+      if (groundFast.current > 0) groundFast.current--;
+      if (autoGround && g.parent && (fast ? groundFast.current % 3 === 0 : (!groundInit.current && near && ++groundBorn.current >= 3) || groundDue(groundInit.current, ++groundAcc.current, near))) { // 1ª ao nascer (qualquer distância), depois ~0,3 s perto
         g.parent.getWorldPosition(tmpHeroV); // a raiz do raider fica no chão (IA)
         g.updateWorldMatrix(true, true);
         // 1ª medição ENCAIXA na hora (antes subia suave ~1,5 s e parecia "brotar do chão" — Pedro 25/10).
-        g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpHeroV.y, groundInit.current ? 0.35 : 1);
+        g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpHeroV.y, groundInit.current ? (fast ? 0.5 : 0.35) : 1);
         groundInit.current = true;
       }
     }

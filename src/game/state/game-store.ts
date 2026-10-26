@@ -61,7 +61,7 @@ import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecial
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
 import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
-import { createWildCreatures } from '../systems/wildlifeSystem';
+import { createNightPigeons, createWildCreatures, NIGHT_FLOCK_PREFIX, nightFlockAction } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, applyHordeCall, hordeCallBonus, type WaveState } from '../systems/waveSystem';
 import { eliteLoot, eliteXp } from '../systems/difficultySystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
@@ -191,6 +191,8 @@ type GameActions = {
   collectNearest: () => void;
   /** Faz nascer o mini-boss (um por vez) perto do jogador. Chamado pelo timer. */
   spawnBoss: () => void;
+  /** Bando de pombos da NOITE (wildlifeSystem): chega ao escurecer, vai embora ao clarear. `night` = nightFactor (0–1). */
+  tickNightFlock: (night: number) => void;
   /** Gasta 1 ponto de skill subindo um atributo (0–100%). */
   allocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Devolve 1 ponto, baixando um atributo alocado. */
@@ -1698,6 +1700,15 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   toggleSidebar: () => set(s => ({ ui: { ...s.ui, sidebarCollapsed: !s.ui.sidebarCollapsed } })),
   toggleChat: () => set(s => ({ ui: { ...s.ui, chatOpen: !s.ui.chatOpen } })),
   setMessage: (msg) => set(s => ({ ui: { ...s.ui, message: msg } })),
+
+  tickNightFlock: (night) => {
+    if (!canSimulateSharedWorld()) return; // online: o host decide (o convidado recebe na foto do mundo)
+    const st = get();
+    const has = st.creatures.some((c) => c.id.startsWith(NIGHT_FLOCK_PREFIX));
+    const act = nightFlockAction(night, has);
+    if (act === 'spawn') set((s) => ({ creatures: [...s.creatures, ...createNightPigeons(s.player.position)] }));
+    else if (act === 'leave') set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(NIGHT_FLOCK_PREFIX)) }));
+  },
 
   spawnBoss: () => {
     const state = get();

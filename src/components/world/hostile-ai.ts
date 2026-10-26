@@ -28,6 +28,7 @@ import { nearestBasePiece, nearestPieceIn } from './base-targets';
 import { WANDER_MIN_STRENGTH, wanderStep } from './wander';
 import { applyWorldLevel, ELITE_SPEED, isCampSpawn, scalesWithWorld, zoneLevel } from '@/game/systems/difficultySystem';
 import { campChaseScale, hordeSpeedScale } from '@/game/systems/waveSystem';
+import { NIGHT_SPEED, nightSpeedScale } from '@/game/systems/wildlifeSystem';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { CREATURES } from '@/game/data/creatures';
 
@@ -431,7 +432,9 @@ export function useHostileAI(opts: HostileOptions) {
     const mirror = !canSimulateSharedWorld();
     // Enfurecido corre +35% (Pedro: "mais rápido, doidão").
     // + horda Mixamo mais rápida a cada onda (waveSystem.hordeSpeedScale).
-    const chaseSpeed = tuning.speed * CREATURE_SPEED_SCALE * (creature.elite ? ELITE_SPEED : 1) * hordeSpeedScale(creatureId, creature.speciesId);
+    // + búfalo/pombo mais rápidos à NOITE (até +30%, wildlifeSystem.nightSpeedScale; só eles leem o relógio).
+    const chaseSpeed = tuning.speed * CREATURE_SPEED_SCALE * (creature.elite ? ELITE_SPEED : 1) * hordeSpeedScale(creatureId, creature.speciesId)
+      * (NIGHT_SPEED[creature.speciesId] ? nightSpeedScale(creature.speciesId, nightFactor()) : 1);
     // Alvo: eu (solo) — ou, sendo HOST, o jogador MAIS PERTO entre mim e os convidados.
     let px = player.position.x;
     let pz = player.position.z;

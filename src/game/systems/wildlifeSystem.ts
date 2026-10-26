@@ -109,3 +109,52 @@ export function createWildCreatures(seed: number = DEFAULT_WILD_SEED): CreatureS
   }
   return creatures;
 }
+
+/**
+ * NOITE (Pedro 26/10: "búfalo à noite pode ficar mais rápido, pombo também, e ter mais pombos à noite, uns 20–30"):
+ *  - velocidade: búfalo (`bear`) e pombo até +30% na noite fechada, subindo junto com o escuro (`nightFactor` 0→1);
+ *  - BANDO DA NOITE: +25 pombos a 20–60 m do jogador quando escurece (≥ 0,6) e vão embora ao clarear (≤ 0,2).
+ *    Id `wild_pigeon_night_<n>` (escala de zona igual aos pombos do mapa). Não vão pro save (criaturas não salvam).
+ */
+export const NIGHT_SPEED: Record<string, number> = { bear: 1.3, pigeon: 1.3 };
+export function nightSpeedScale(speciesId: string, night: number): number {
+  const k = NIGHT_SPEED[speciesId];
+  return k ? 1 + (k - 1) * Math.min(1, Math.max(0, night)) : 1;
+}
+export const NIGHT_PIGEONS = 25;
+export const NIGHT_FLOCK_ON = 0.6;
+export const NIGHT_FLOCK_OFF = 0.2;
+export const NIGHT_FLOCK_PREFIX = 'wild_pigeon_night_';
+const FLOCK_MIN_R = 20;
+const FLOCK_MAX_R = 60;
+
+/** O que fazer com o bando agora: 'spawn' | 'leave' | null (nada). Histerese: não pisca no entardecer. */
+export function nightFlockAction(night: number, hasFlock: boolean): 'spawn' | 'leave' | null {
+  if (!hasFlock && night >= NIGHT_FLOCK_ON) return 'spawn';
+  if (hasFlock && night <= NIGHT_FLOCK_OFF) return 'leave';
+  return null;
+}
+
+/** Cria o bando em volta de `center` (lugares livres, espalhados). */
+export function createNightPigeons(center: Position, rng: () => number = Math.random, count = NIGHT_PIGEONS): CreatureState[] {
+  const def = CREATURES['pigeon'];
+  if (!def) return [];
+  const out: CreatureState[] = [];
+  for (let attempts = 0; out.length < count && attempts < count * 60; attempts++) {
+    const ang = rng() * Math.PI * 2;
+    const r = FLOCK_MIN_R + rng() * (FLOCK_MAX_R - FLOCK_MIN_R);
+    const pos: Position = {
+      x: Math.round(Math.max(-(WORLD_HALF - 3), Math.min(WORLD_HALF - 3, center.x + Math.sin(ang) * r)) * 100) / 100,
+      z: Math.round(Math.max(-(WORLD_HALF - 3), Math.min(WORLD_HALF - 3, center.z + Math.cos(ang) * r)) * 100) / 100,
+    };
+    if (!isFreeForWildlife(pos)) continue;
+    if (out.some((c) => dist(c.position, pos) < 4)) continue;
+    const hp = scaleEnemyHp(def.maxHp);
+    out.push({
+      id: `${NIGHT_FLOCK_PREFIX}${out.length}`, speciesId: 'pigeon', name: def.name, hp, maxHp: hp,
+      attackPower: def.attackPower, armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0,
+      position: pos, behavior: 'patrol', lootTable: [], respawnAt: null,
+    });
+  }
+  return out;
+}
