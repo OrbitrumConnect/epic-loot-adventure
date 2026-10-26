@@ -41,3 +41,22 @@ describe('robô e raposa fora, sem perder nada', () => {
     expect(CREATURES['flintmaw']!.lootTable.some((l) => l.itemId === 'ammo')).toBe(false);
   });
 });
+
+/* 26/10: as 18 vagas (raposa + robô) viraram inimigos de ACAMPAMENTO (+3/+4/+5/+6, com piratas atiradores). */
+describe('acampamentos mais cheios', () => {
+  it('7 / 9 / 12 / 15 inimigos; os novos no fim (ids antigos iguais), longe de barraca/torre/paliçada e uns dos outros', async () => {
+    const { CAMPS } = await import('@/game/data/camps');
+    const before: Record<string, number> = { raider_outpost: 4, blackclaw_camp: 5, crackedbone_warband: 7, stonefist_stronghold: 9 };
+    const after: Record<string, number> = { raider_outpost: 7, blackclaw_camp: 9, crackedbone_warband: 12, stonefist_stronghold: 15 };
+    for (const [id, n] of Object.entries(after)) {
+      const def = CAMPS[id]!;
+      expect(def.spawns.length).toBe(n);
+      const fresh = def.spawns.slice(before[id]);
+      for (const s of fresh) {
+        expect(Math.hypot(s.offset.x, s.offset.z)).toBeLessThan(def.radius - 1);
+        for (const st of def.structures) expect(Math.hypot(s.offset.x - st.offset.x, s.offset.z - st.offset.z), `${id} ${s.speciesId} × ${st.kind}`).toBeGreaterThan(1.5);
+        for (const o of def.spawns) if (o !== s) expect(Math.hypot(s.offset.x - o.offset.x, s.offset.z - o.offset.z)).toBeGreaterThan(1.5);
+      }
+    }
+  });
+});

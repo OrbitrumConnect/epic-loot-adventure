@@ -131,6 +131,10 @@ export const CAMPS: Record<string, CampDefinition> = {
       { speciesId: 'raider_scout', offset: { x: 1.8, z: -4.2 }, guard: true },
       { speciesId: 'raider_warrior', offset: { x: 0.4, z: 2.6 }, guard: false },
       { speciesId: 'raider_samurai', offset: { x: 0, z: -0.5 }, guard: false }, // spiked (junto do pirata, p/ ver sem esperar onda)
+      // 26/10 (Pedro: "trocar a raposa/robô por mais inimigos de acampamento"): +3 — ao FIM da lista (ids _eN não mudam).
+      { speciesId: 'raider_scout', offset: { x: -4.0, z: -1.2 }, guard: true },
+      { speciesId: 'raider_scout', offset: { x: 4.0, z: -1.4 }, guard: true },
+      { speciesId: 'raider_shaman', offset: { x: -1.0, z: 4.2 }, guard: false },
     ],
     reward: {
       gold: 80,
@@ -164,6 +168,11 @@ export const CAMPS: Record<string, CampDefinition> = {
       { speciesId: 'raider_warrior', offset: { x: -3.6, z: 1.2 }, guard: false },
       { speciesId: 'raider_warrior', offset: { x: 3.8, z: 1.4 }, guard: false },
       { speciesId: 'raider_shaman', offset: { x: 0.2, z: 5.4 }, guard: false },
+      // 26/10: +4 (pirata atirador nos flancos, guerreiro e arqueiro).
+      { speciesId: 'raider_scout', offset: { x: -4.6, z: -3.6 }, guard: true },
+      { speciesId: 'raider_scout', offset: { x: 2.6, z: -3.4 }, guard: false },
+      { speciesId: 'raider_warrior', offset: { x: -1.8, z: -2.2 }, guard: false },
+      { speciesId: 'raider_shaman', offset: { x: 5.4, z: 0.4 }, guard: false },
     ],
     reward: {
       gold: 190,
@@ -202,6 +211,12 @@ export const CAMPS: Record<string, CampDefinition> = {
       { speciesId: 'raider_warrior', offset: { x: 0.4, z: 3.0 }, guard: false },
       { speciesId: 'raider_brute', offset: { x: -1.2, z: -2.6 }, guard: false },
       { speciesId: 'raider_shaman', offset: { x: 1.6, z: 7.0 }, guard: false },
+      // 26/10: +5.
+      { speciesId: 'raider_scout', offset: { x: -4.6, z: -6.4 }, guard: true },
+      { speciesId: 'raider_scout', offset: { x: 4.6, z: -6.4 }, guard: true },
+      { speciesId: 'raider_warrior', offset: { x: 2.4, z: -3.2 }, guard: false },
+      { speciesId: 'raider_shaman', offset: { x: -3.6, z: 6.8 }, guard: false },
+      { speciesId: 'raider_brute', offset: { x: 6.6, z: 1.8 }, guard: false },
     ],
     reward: {
       gold: 420,
@@ -244,6 +259,13 @@ export const CAMPS: Record<string, CampDefinition> = {
       { speciesId: 'raider_brute', offset: { x: 2.6, z: -2.8 }, guard: false },
       { speciesId: 'raider_shaman', offset: { x: -1.8, z: 7.8 }, guard: false },
       { speciesId: 'raider_shaman', offset: { x: 2.2, z: 8.0 }, guard: false },
+      // 26/10: +6 (3 piratas na frente, guerreiro, 2ª Couraça e arqueiro) — o fortim é o topo.
+      { speciesId: 'raider_scout', offset: { x: -4.6, z: -6.6 }, guard: true },
+      { speciesId: 'raider_scout', offset: { x: 4.8, z: -6.6 }, guard: true },
+      { speciesId: 'raider_scout', offset: { x: 0.6, z: -7.8 }, guard: true },
+      { speciesId: 'raider_warrior', offset: { x: -3.4, z: 0.6 }, guard: false },
+      { speciesId: 'raider_samurai', offset: { x: 6.6, z: 0.8 }, guard: false },
+      { speciesId: 'raider_shaman', offset: { x: -4.6, z: 7.4 }, guard: false },
     ],
     reward: {
       gold: 900,
