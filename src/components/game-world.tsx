@@ -7,6 +7,7 @@ import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
 import { BurstRuntime } from './world/burst-runtime';
 import { attachContextGuard, lowGpuMode } from './world/gpu-guard';
+import { lightAllowed, useLightId } from './world/light-budget';
 import { bridgeLampSpots, safeZoneLampSpots } from './world/lamp-layout';
 import { recentShotPoint } from '@/game/systems/shotFacing';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
@@ -350,13 +351,15 @@ function Campfire({ c, position: rawPos }: { c: Palette; position: [number, numb
   const ref = useRef<THREE.PointLight>(null);
   const pos = useDryGround(rawPos[0], rawPos[2]);
   const y = pos[1];
+  const lightId = useLightId();
   useFrame(({ clock }) => {
     const l = ref.current;
     if (!l) return;
     // Culling por distância: longe do jogador a luz sai do shader (o fogo visual fica).
     const p = useGameStore.getState().player.position;
     audioManager.updateCampfireDistance(Math.hypot(p.x - pos[0], p.z - pos[2]));
-    l.visible = (p.x - pos[0]) * (p.x - pos[0]) + (p.z - pos[2]) * (p.z - pos[2]) < LIGHT_CULL_D2;
+    const d2 = (p.x - pos[0]) * (p.x - pos[0]) + (p.z - pos[2]) * (p.z - pos[2]);
+    l.visible = lightAllowed(lightId, d2 < LIGHT_CULL_D2, d2); // + orçamento de luzes no celular
     // Acende forte à noite, discreta de dia (consistente com as luminárias). +20%.
     if (l.visible) l.intensity = (2.4 + nightFactor() * 6) + Math.sin(clock.elapsedTime * 8) * 0.8;
   });
@@ -1255,6 +1258,7 @@ const LIGHT_POST_H = 5.2; // +30% (Pedro) e +1 m (Pedro 25/10) — poste Mad Max
 
 function RoadLampInner({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
+  const lightId = useLightId();
   const { scene } = useGLTF(LIGHT_POST_URL);
   // Modelo GLB escalado + fincado no chão + centrado (clone por instância; GLB cacheado).
   const model = useMemo(() => {
@@ -1274,8 +1278,8 @@ function RoadLampInner({ x, y, z }: { x: number; y: number; z: number }) {
     if (!l) return;
     // Culling de luz: de dia (nf~0) ou longe do jogador, a luz SAI do shader.
     const p = useGameStore.getState().player.position;
-    const near = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < LIGHT_CULL_D2;
-    l.visible = nf > 0.04 && near;
+    const d2 = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+    l.visible = lightAllowed(lightId, nf > 0.04 && d2 < LIGHT_CULL_D2, d2); // + orçamento de luzes no celular
     if (l.visible) l.intensity = nf * 6.6 * flick;
   });
   return (

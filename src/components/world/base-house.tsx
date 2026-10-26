@@ -10,6 +10,7 @@ import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { houseCollider, housePlayerFeetY, housePlayerInside } from './house-collider';
 import { buildFloorMesh, collectTris, sliceLevels, type HouseLevels } from './house-levels';
 import { AssetBoundary } from './asset-boundary';
+import { lightAllowed, useLightId } from './light-budget';
 import type { BasePiece } from '@/game/types/playerbase';
 
 /**
@@ -173,11 +174,13 @@ function BaseHouseInner({
   // Culling: a luz interna (forte) só fica no shader quando o jogador está perto
   // da casa; longe, sai de cena (point-light pesa mesmo apagada).
   const lightRef = useRef<THREE.PointLight>(null);
+  const lightId = useLightId();
   useFrame(() => {
     const l = lightRef.current;
     if (!l || !ctr) return;
     const p = useGameStore.getState().player.position;
-    l.visible = (p.x - ctr.x) * (p.x - ctr.x) + (p.z - ctr.z) * (p.z - ctr.z) < HOUSE_LIGHT_D2;
+    const d2 = (p.x - ctr.x) * (p.x - ctr.x) + (p.z - ctr.z) * (p.z - ctr.z);
+    l.visible = lightAllowed(lightId, d2 < HOUSE_LIGHT_D2, d2); // + orçamento de luzes no celular
   });
 
   // Publica footprint + piso pro loop de física (chão caminhável + paredes sólidas).

@@ -24,6 +24,7 @@ import { glbSurfaceY, useTerrainVersion } from './terrain-collision';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { WatchtowerModel } from './glb-watchtower';
 import { useGameStore } from '@/game/state/game-store';
+import { lightAllowed, useLightId } from './light-budget';
 
 /** Distância² (m²) além da qual a luz da fogueira do acampamento sai do shader. */
 const CAMP_LIGHT_D2 = 26 * 26;
@@ -205,6 +206,8 @@ function Palisade({ kit }: { kit: CampKit }) {
 function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; flameRef: React.RefObject<THREE.Group | null> }) {
   const fireLight = useRef<THREE.PointLight>(null);
   const emberLight = useRef<THREE.PointLight>(null);
+  const fireId = useLightId();
+  const emberId = useLightId();
   useFrame(({ clock }) => {
     // Culling: a luz da fogueira só fica no shader quando o jogador está perto
     // (point-light custa fragment mesmo apagada). O fogo acende dia e noite —
@@ -213,14 +216,16 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
     const fl = fireLight.current;
     if (fl) {
       fl.getWorldPosition(tmpCampV);
-      const near = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z) < CAMP_LIGHT_D2;
+      const d2 = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z);
+      const near = lightAllowed(fireId, d2 < CAMP_LIGHT_D2, d2); // + orçamento de luzes no celular
       fl.visible = near;
       if (near) fl.intensity = (3.6 + nightFactor() * 8) + Math.sin(clock.elapsedTime * 7) * 0.7; // +luz (Pedro)
     }
     const el = emberLight.current;
     if (el) {
       el.getWorldPosition(tmpCampV);
-      el.visible = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z) < CAMP_LIGHT_D2;
+      const d2e = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z);
+      el.visible = lightAllowed(emberId, d2e < CAMP_LIGHT_D2, d2e);
     }
   });
   return (

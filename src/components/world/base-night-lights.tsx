@@ -12,19 +12,21 @@ import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { terrainHeight } from './world-kit';
+import { lightAllowed, useLightId } from './light-budget';
 
 /** Distância² da base dentro da qual os refletores ligam (base é o lar — raio generoso). */
 const BASE_LIGHT_D2 = 70 * 70;
 
 function TowerLight({ x, y, z }: { x: number; y: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
+  const lightId = useLightId();
   useFrame(() => {
     const l = light.current;
     if (!l) return;
     const nf = nightFactor();
     const p = useGameStore.getState().player.position;
-    const near = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < BASE_LIGHT_D2;
-    l.visible = nf > 0.04 && near;
+    const d2 = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+    l.visible = lightAllowed(lightId, nf > 0.04 && d2 < BASE_LIGHT_D2, d2); // + orçamento de luzes no celular
     if (l.visible) l.intensity = nf * 9; // forte: ilumina a base à noite
   });
   return <pointLight ref={light} position={[x, y + 4.6, z]} color="#ffe9c0" intensity={0} distance={24} decay={1.2} />;
