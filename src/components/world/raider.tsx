@@ -53,7 +53,7 @@ const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
 /** Escala dos inimigos que nascem em ACAMPAMENTO (Pedro 25/10: −30% e depois mais −30% → 0,7 × 0,7). */
 /** Segundos que o corpo fica CAÍDO depois do clip de morte (Pedro 26/10: "cai ali no vermelho e some"). */
-export const DEATH_LIE_S = 0.3; // Pedro 26/10: "ficar 0,3 s no máx e some" (era 2)
+export const DEATH_LIE_S = 0.45; // Pedro 26/10: "ficar 0,3 s no máx" → "até 0,4–0,5" (era 2)
 export const CAMP_SCALE = 0.49;
 /** Exceção (Pedro 25/10: "a Couraça estava ok grande; só ela pode aumentar 1 a 1,5 m"): no acampamento ela fica
  *  0,87 (3,32 → ~2,9 m, +1,25 m sobre os 1,63 do −51%). Horda/mapa seguem no tamanho original (3,32 m). */

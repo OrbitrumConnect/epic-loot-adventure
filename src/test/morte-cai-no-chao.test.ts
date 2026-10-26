@@ -120,7 +120,7 @@ describe('morte: regras do jogo', () => {
     const { deathGroundTime } = await import('@/components/world/glb-hero-mixamo');
     expect(deathGroundTime('back')).toBeCloseTo(0.6, 2);
     expect(deathGroundTime('mutant')).toBeCloseTo(1.15, 2);
-    expect(deathGroundTime('mutant') + 0.3).toBeLessThan(1.5); // antes: 4,58 + 2 = 6,6 s caído
+    expect(deathGroundTime('mutant') + 0.45).toBeLessThan(1.65); // antes: 4,58 + 2 = 6,6 s caído
   }, 20_000);
   it('clip de morte sem a posição do quadril; retarget não "levanta" no último quadro', () => {
     const t = new THREE.VectorKeyframeTrack('mixamorigHips.position', [0, 1], [0, 1, 0, 0, 0.2, 0]);
@@ -133,7 +133,7 @@ describe('morte: regras do jogo', () => {
   it('ligado: raiders Mixamo caem e ficam caídos (clip + 2 s); Couraça/Fúngico/Brutamontes = Mutant; herói cai ao morrer', () => {
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
     expect(r).toMatch(/deathHoldS: mxBody \? deathGroundTime\(mxBody\.death \?\? 'back'\) \+ DEATH_LIE_S : 0,/);
-    expect(r).toMatch(/export const DEATH_LIE_S = 0\.3;/); // Pedro 26/10: "ficar 0,3 s no máx e some"
+    expect(r).toMatch(/export const DEATH_LIE_S = 0\.45;/); // Pedro 26/10: "até 0,4–0,5 s no chão"
     expect(r).toMatch(/onDeath: \(\) => \{ bossAction\.current = 'death'; \},/);
     expect(r.match(/death: 'mutant'/g)!.length).toBe(3);
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
