@@ -116,6 +116,12 @@ describe('morte: regras do jogo', () => {
     expect(takeCorpseSlot(0)).toBe(0); // bicho sem animação de morte: igual antes
     while (corpseCount() > 0) releaseCorpseSlot();
   }, 20_000);
+  it('rapidinho (Pedro 26/10): encosta no chão em 0,6 s (costas) / 1,15 s (Mutant) e some 0,3 s depois', async () => {
+    const { deathGroundTime } = await import('@/components/world/glb-hero-mixamo');
+    expect(deathGroundTime('back')).toBeCloseTo(0.6, 2);
+    expect(deathGroundTime('mutant')).toBeCloseTo(1.15, 2);
+    expect(deathGroundTime('mutant') + 0.3).toBeLessThan(1.5); // antes: 4,58 + 2 = 6,6 s caído
+  }, 20_000);
   it('clip de morte sem a posição do quadril; retarget não "levanta" no último quadro', () => {
     const t = new THREE.VectorKeyframeTrack('mixamorigHips.position', [0, 1], [0, 1, 0, 0, 0.2, 0]);
     const r = new THREE.QuaternionKeyframeTrack('mixamorigHips.quaternion', [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]);
@@ -126,7 +132,8 @@ describe('morte: regras do jogo', () => {
   });
   it('ligado: raiders Mixamo caem e ficam caídos (clip + 2 s); Couraça/Fúngico/Brutamontes = Mutant; herói cai ao morrer', () => {
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
-    expect(r).toMatch(/deathHoldS: mxBody \? DEATH_CLIP_S\[mxBody\.death \?\? 'back'\] \+ DEATH_LIE_S : 0,/);
+    expect(r).toMatch(/deathHoldS: mxBody \? deathGroundTime\(mxBody\.death \?\? 'back'\) \+ DEATH_LIE_S : 0,/);
+    expect(r).toMatch(/export const DEATH_LIE_S = 0\.3;/); // Pedro 26/10: "ficar 0,3 s no máx e some"
     expect(r).toMatch(/onDeath: \(\) => \{ bossAction\.current = 'death'; \},/);
     expect(r.match(/death: 'mutant'/g)!.length).toBe(3);
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');

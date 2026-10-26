@@ -47,8 +47,13 @@ const CLIP_URL: Record<string, string> = {
   deathMutant: '/models/red/death_mutant.glb',
 };
 export type DeathClip = 'back' | 'mutant';
-/** Duração dos clips de morte (s, medida nos arquivos) — o corpo fica caído depois disso (`DEATH_LIE_S`). */
-export const DEATH_CLIP_S: Record<DeathClip, number> = { back: 2.17, mutant: 4.58 };
+/** Quando o corpo ENCOSTA no chão em cada clip (s, medido no esqueleto do Mixamo: costas 0,9 · Mutant 2,3 — este
+ *  cambaleia antes). Pedro 26/10: "cair e ficar 0,3 s no máx, rapidinho, e some" → o clip toca mais rápido
+ *  (`DEATH_SPEED`) e o corpo some 0,3 s depois de encostar (`DEATH_LIE_S` em raider.tsx). */
+export const DEATH_GROUND_S: Record<DeathClip, number> = { back: 0.9, mutant: 2.3 };
+export const DEATH_SPEED: Record<DeathClip, number> = { back: 1.5, mutant: 2 };
+/** Segundos (no jogo) até o corpo encostar no chão: costas 0,6 · Mutant 1,15. */
+export function deathGroundTime(c: DeathClip): number { return DEATH_GROUND_S[c] / DEATH_SPEED[c]; }
 /** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
  *  Mixamo são Y-up → a anim DEITA o herói. Cancela com +90° X num wrapper (fora do
  *  esqueleto, não distorce o skinning). Y afina a planta dos pés no chão. */
@@ -439,7 +444,7 @@ export function GlbHeroMixamo({
         const d = actions['death'];
         for (const k in actions) { const a = actions[k]; if (a && a !== d && a.isRunning()) a.fadeOut(0.15); }
         overlay.current = null;
-        if (d) { d.reset(); d.timeScale = 1; d.setLoop(THREE.LoopOnce, 1); d.clampWhenFinished = true; d.fadeIn(0.12).play(); }
+        if (d) { d.reset(); d.timeScale = DEATH_SPEED[deathClip]; d.setLoop(THREE.LoopOnce, 1); d.clampWhenFinished = true; d.fadeIn(0.12).play(); }
         current.current = 'death';
         playingLoco.current = null;
       }

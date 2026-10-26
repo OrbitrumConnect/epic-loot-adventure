@@ -15,7 +15,7 @@ import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
 import { HeldItem } from './held-weapon';
 import { GlbHero, type HeroAction } from './glb-hero';
-import { DEATH_CLIP_S, GlbHeroMixamo, type DeathClip } from './glb-hero-mixamo';
+import { deathGroundTime, GlbHeroMixamo, type DeathClip } from './glb-hero-mixamo';
 import { GlbStaticBoss } from './glb-static-boss';
 import { GlbCreature } from './glb-creature';
 import { isCampSpawn } from '@/game/systems/difficultySystem';
@@ -53,7 +53,7 @@ const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
 /** Escala dos inimigos que nascem em ACAMPAMENTO (Pedro 25/10: −30% e depois mais −30% → 0,7 × 0,7). */
 /** Segundos que o corpo fica CAÍDO depois do clip de morte (Pedro 26/10: "cai ali no vermelho e some"). */
-export const DEATH_LIE_S = 2;
+export const DEATH_LIE_S = 0.3; // Pedro 26/10: "ficar 0,3 s no máx e some" (era 2)
 export const CAMP_SCALE = 0.49;
 /** Exceção (Pedro 25/10: "a Couraça estava ok grande; só ela pode aumentar 1 a 1,5 m"): no acampamento ela fica
  *  0,87 (3,32 → ~2,9 m, +1,25 m sobre os 1,63 do −51%). Horda/mapa seguem no tamanho original (3,32 m). */
@@ -408,8 +408,9 @@ export function Raider({
     hpFill,
     hpGroup,
     ring,
-    // MORTE com animação (Pedro 26/10): cai (clip Mixamo) e fica caído DEATH_LIE_S antes de sumir. Só raiders Mixamo.
-    deathHoldS: mxBody ? DEATH_CLIP_S[mxBody.death ?? 'back'] + DEATH_LIE_S : 0,
+    // MORTE com animação (Pedro 26/10): cai rápido (clip Mixamo acelerado), encosta no chão e some DEATH_LIE_S depois.
+    // Costas: 0,6 + 0,3 s · Mutant: 1,15 + 0,3 s (+ 0,4 s encolhendo, como antes). Só raiders Mixamo.
+    deathHoldS: mxBody ? deathGroundTime(mxBody.death ?? 'back') + DEATH_LIE_S : 0,
     onDeath: () => { bossAction.current = 'death'; },
     onAnimate: (anim, dt) => {
       if (anim.elite !== eliteNow.current) { eliteNow.current = anim.elite; setElite(anim.elite); }
