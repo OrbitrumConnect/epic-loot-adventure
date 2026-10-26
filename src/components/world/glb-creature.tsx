@@ -83,6 +83,9 @@ export function footMinY(root: THREE.Object3D, cache: FootCache, maxSamples = 15
  * distância — antes só media perto (40 m) e de longe o bicho/raider ficava enterrado até chegar perto ("nasce abaixo e
  * sobe ao andar", Pedro 25/10). Depois: a cada ~0,3 s e só perto (custo).
  */
+/** Brilho próprio dos bichos PINTADOS (sem textura): a própria cor a 18% — equilibra com os texturizados à noite. */
+export const TINT_GLOW = 0.18;
+
 export function groundDue(init: boolean, frame: number, near: boolean): boolean {
   return init ? near && frame % 18 === 0 : frame >= 3;
 }
@@ -237,7 +240,12 @@ export function GlbCreature({
           const mats = Array.isArray(m.material) ? m.material : [m.material];
           for (const mm of mats) {
             const sm = mm as THREE.MeshStandardMaterial;
-            if (sm && sm.color) { sm.color.set(tint); sm.metalness = 0; sm.roughness = 0.9; }
+            if (sm && sm.color) {
+              sm.color.set(tint); sm.metalness = 0; sm.roughness = 0.9;
+              // 26/10 (Pedro: "uns ficam bem mais escuros que o herói/Couraça"): cor ÚNICA fosca some no escuro (os do
+              // Meshy têm a luz pintada na textura). Brilho próprio leve, da própria cor → não vira mancha preta à noite.
+              if (sm.emissive) { sm.emissive.set(tint); sm.emissiveIntensity = TINT_GLOW; }
+            }
           }
         }
       }

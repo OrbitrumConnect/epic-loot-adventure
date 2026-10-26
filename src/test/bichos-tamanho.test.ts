@@ -30,3 +30,13 @@ describe('bichos maiores 26/10: alcance e rótulo acompanham', () => {
     expect(src).toMatch(/labelHeight: 2\.4, ringRadius: 1\.4,[\s\S]{0,120}attackRange: 3\.2,/);  // leão
   });
 });
+
+/* 26/10 (Pedro: "uns ficam bem mais escuros"): bicho PINTADO (sem textura) ganha brilho próprio leve da própria cor. */
+describe('luz dos bichos pintados', () => {
+  it('18% da própria cor como brilho (≈ +60% à noite, ≈ +5% de dia no búfalo); texturizados iguais', async () => {
+    const { TINT_GLOW } = await import('@/components/world/glb-creature');
+    expect(TINT_GLOW).toBe(0.18);
+    const gc = fs.readFileSync('src/components/world/glb-creature.tsx', 'utf8');
+    expect(gc).toMatch(/if \(tint\) \{[\s\S]{0,400}sm\.emissive\.set\(tint\); sm\.emissiveIntensity = TINT_GLOW;/);
+  }, 20_000);
+});
