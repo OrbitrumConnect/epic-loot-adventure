@@ -22,7 +22,7 @@ describe('pirata de acampamento atira', () => {
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
     expect(r).toMatch(/const gunner = isCampSpawn\(creatureId\) && CAMP_GUNNERS\.has\(speciesId\);/);
     expect(r).toMatch(/forceGun=\{gunner\}/);
-    expect(r).toMatch(/weapon=\{gunner \? <HeldItem c=\{c\} itemId="pistol" \/> : undefined\}/);
+    expect(r).toMatch(/weapon=\{gunner \? <HeldItem c=\{c\} itemId="rifle" \/> : undefined\}/); // 26/10: fuzil = o do herói
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
     expect(hero).toMatch(/else if \(forceGun && actions\['attackGun'\]\) \{\s*atkName = 'attackGun';/);
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
