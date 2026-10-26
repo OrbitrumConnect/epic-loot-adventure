@@ -1,3 +1,5 @@
+// 1º import (26/10): o perfil do aparelho liga o teto de textura do celular ANTES de qualquer módulo pré-carregar GLB.
+import './world/device-profile';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrthographicCamera, PerformanceMonitor, PerspectiveCamera, Stats, useGLTF } from '@react-three/drei';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';

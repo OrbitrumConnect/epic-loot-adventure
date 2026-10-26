@@ -31,6 +31,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { CEL, celFilterShader, celShadeMaterial, bloomBlurShader } from './cel-style';
+import { sceneSamples } from './device-profile';
 import { dayNight, nightFactor } from '@/game/systems/dayNightSystem';
 
 /**
@@ -71,7 +72,7 @@ function makeSceneRT(w: number, h: number): THREE.WebGLRenderTarget {
   const rt = new THREE.WebGLRenderTarget(w, h, {
     type: THREE.UnsignedByteType,
     depthBuffer: true,
-    samples: 4,
+    samples: sceneSamples(), // 26/10: PC 4 (igual) · celular 2 · modo leve 0 (device-profile.ts)
   });
   rt.texture.colorSpace = THREE.SRGBColorSpace; // cena já tonemapeada + sRGB
   rt.texture.minFilter = THREE.LinearFilter;
