@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CYCLE_MS, gameDay, gameHour, nightFactor, WORLD_EPOCH } from '@/game/systems/dayNightSystem';
 
@@ -39,5 +40,26 @@ describe('dia mais curto, noite mais longa', () => {
     };
     expect(nightFactor(at(12))).toBe(0);
     expect(nightFactor(at(23))).toBe(1);
+  });
+});
+
+/* 26/10 (Pedro: go): dia/noite IGUAIS na sala — o convidado passa a usar o relógio do anfitrião. */
+describe('dia/noite sincronizado na sala', () => {
+  it('relógio do anfitrião vira o meu (hora igual); diferença pequena (< 2 s) não mexe', async () => {
+    const { setWorldEpoch, worldEpoch } = await import('@/game/systems/dayNightSystem');
+    const mine = worldEpoch();
+    const host = mine - 15 * 60_000; // anfitrião abriu o jogo 15 min antes
+    const now = Date.now();
+    const hourHost = (() => { setWorldEpoch(host); return gameHour(now); })();
+    expect(worldEpoch()).toBe(host);
+    setWorldEpoch(host + 1500); // tremidinha da rede: ignora
+    expect(worldEpoch()).toBe(host);
+    expect(gameHour(now)).toBeCloseTo(hourHost, 9);
+    setWorldEpoch(mine); // volta (não afeta os outros testes)
+  });
+  it('ligado: a foto do mundo leva o relógio e o convidado aplica', () => {
+    const mp = fs.readFileSync('src/net/multiplayer.ts', 'utf8');
+    expect(mp).toMatch(/payload: \{ id: selfId, creatures, epoch: worldEpoch\(\) \}/);
+    expect(mp).toMatch(/if \(typeof p\.epoch === 'number'\) setWorldEpoch\(p\.epoch\);/);
   });
 });

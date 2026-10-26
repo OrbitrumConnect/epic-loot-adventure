@@ -12,6 +12,7 @@ import { createClient, type RealtimeChannel } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import type { PlayerBaseState } from '@/game/types/playerbase';
 import type { CreatureState } from '@/game/types/creature';
+import { setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
 
 const SUPA_URL = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
 const SUPA_ANON = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
@@ -189,10 +190,11 @@ export const useNet = create<NetState>((set, get) => ({
     });
 
     ch.on('broadcast', { event: 'world' }, ({ payload }) => {
-      const p = payload as { id: string; creatures: CreatureState[] };
+      const p = payload as { id: string; creatures: CreatureState[]; epoch?: number };
       // O anfitrião é a autoridade. Ele não deve aceitar um snapshot de convidado.
       if (p.id === selfId || get().isHost || !Array.isArray(p.creatures)) return;
       hadLiveWorld = true;
+      if (typeof p.epoch === 'number') setWorldEpoch(p.epoch); // dia/noite iguais ao do anfitrião (26/10)
       set({ world: p.creatures });
     });
 
@@ -358,7 +360,7 @@ export function broadcastBase(base: PlayerBaseState | null, tier = 0): void {
 export function broadcastWorld(creatures: CreatureState[]): void {
   if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
   const { selfId } = useNet.getState();
-  void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, creatures } });
+  void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, creatures, epoch: worldEpoch() } });
 }
 
 /** Em uma sala, a simulação pertence ao anfitrião. Fora dela, o jogo continua solo. */

@@ -7,6 +7,16 @@
 
 /** Momento em que a sessão começou — fixado quando o módulo carrega. */
 export const WORLD_EPOCH = Date.now();
+/**
+ * Relógio EM USO (26/10, Pedro: dia/noite iguais na sala). Solo = o de sempre (abre às 8h). Em sala, o anfitrião
+ * manda o dele junto com a foto dos bichos e quem entra passa a usar o MESMO → noite do host = noite de todos
+ * (pombos/mortos-vivos da noite batem com o céu). Só troca se diferir > 2 s (sem tremer).
+ */
+let epoch = WORLD_EPOCH;
+export function worldEpoch(): number { return epoch; }
+export function setWorldEpoch(e: number): void {
+  if (Number.isFinite(e) && Math.abs(e - epoch) > 2000) epoch = e;
+}
 /** Duração real de um dia completo do jogo (mais lento: a noite não cai tão rápido). */
 export const CYCLE_MS = 42 * 60 * 1000;
 /** Hora do jogo em que a sessão abre. */
@@ -77,7 +87,7 @@ const HOUR_STARTS: number[] = (() => {
 
 /** Hora do jogo (0–24, fracionária) no instante real `now`. */
 export function gameHour(now: number = Date.now()): number {
-  const phase = (((now - WORLD_EPOCH) % CYCLE_MS) + CYCLE_MS) % CYCLE_MS / CYCLE_MS;
+  const phase = (((now - epoch) % CYCLE_MS) + CYCLE_MS) % CYCLE_MS / CYCLE_MS;
   let i = 0;
   while (i < 23 && phase >= HOUR_STARTS[i + 1]!) i++;
   const a = HOUR_STARTS[i]!, b = HOUR_STARTS[i + 1]!;
@@ -98,7 +108,7 @@ export function nightFactor(now: number = Date.now()): number {
 
 /** Número do dia (começa em 1), avança a cada ciclo completo. */
 export function gameDay(now: number = Date.now()): number {
-  return 1 + Math.floor((now - WORLD_EPOCH) / CYCLE_MS);
+  return 1 + Math.floor((now - epoch) / CYCLE_MS);
 }
 
 /** Relógio pra HUD: "Dia N · HH:MM". */
