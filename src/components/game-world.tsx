@@ -17,6 +17,7 @@ const cursorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const cursorHit = new THREE.Vector3();
 import { recentShotPoint } from '@/game/systems/shotFacing';
 import { isGrabbed } from '@/game/systems/grabSystem';
+import { activeDodge, dodgeSpeed, startDodge, takeDodgeRequest } from '@/game/systems/dodgeSystem';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
 import { creatureById } from './world/hostile-ai';
 import { BackgroundSim } from './world/background-sim';
@@ -631,6 +632,14 @@ function Character({
     // Preso no giro da morte do jacaré (grabSystem): não anda até se soltar/acabar.
     if (attackPhase.current !== 'idle' || isGrabbed()) { targetVx = 0; targetVz = 0; }
 
+    // ESQUIVA (dodgeSystem — tecla Y / botão / piloto): rola pra onde anda; parado, pra onde olha; corta o ataque.
+    const dodgeReq = takeDodgeRequest();
+    if (dodgeReq && !isGrabbed() && !useGameStore.getState().player.dead) {
+      const d = dodgeReq.dir ?? (dx || dz ? { x: targetVx, z: targetVz } : { x: Math.sin(currentRotY.current), z: Math.cos(currentRotY.current) });
+      if (startDodge(d.x, d.z)) attackPhase.current = 'idle';
+    }
+    const dodging = activeDodge();
+
     if (targetVx !== 0 || targetVz !== 0) {
       const len = Math.sqrt(targetVx * targetVx + targetVz * targetVz);
       const nx = targetVx / len;
@@ -645,9 +654,15 @@ function Character({
       if (Math.abs(velocity.current.y) < 0.01) velocity.current.y = 0;
     }
 
+    // Rolando: a esquiva manda na velocidade (perfil seno, ~3,5 m em 1 s) e passa pelas colisões abaixo.
+    if (dodging) {
+      const sp = dodgeSpeed(dodging.t);
+      velocity.current.x = dodging.dirX * sp;
+      velocity.current.y = dodging.dirZ * sp;
+    }
     const moving = velocity.current.length() > 0.1;
-    audioManager.setFootsteps(moving && isGrounded.current, sprinting); // som de passos (restaurado)
-    heroAction.current = attackPhase.current !== 'idle'
+    audioManager.setFootsteps(moving && isGrounded.current && !dodging, sprinting); // som de passos (restaurado)
+    heroAction.current = dodging ? 'dodge' : attackPhase.current !== 'idle'
       ? 'attack'
       : !isGrounded.current
         ? 'jump'
@@ -697,6 +712,9 @@ function Character({
     }
     // Mirando: o herói olha pra onde a câmera aponta (mesmo andando de lado).
     if (useAim.getState().active) targetRotY.current = cameraYawRef.current;
+    // Rolando: olha pra onde rola (o clip rola pra FRENTE), mesmo mirando.
+    const rolling = activeDodge();
+    if (rolling) targetRotY.current = Math.atan2(rolling.dirX, rolling.dirZ);
     let rotDiff = targetRotY.current - currentRotY.current;
     while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
     while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;

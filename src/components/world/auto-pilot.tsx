@@ -26,6 +26,7 @@ import {
 import { buildAutoSnapshot, decideIntent, getObjectives, setAutoMode, tickWorld } from './objective-bridge';
 import { setPilotAim } from './pilot-aim';
 import { useAim } from './aim';
+import { noteHeroDamage, requestDodge, shouldAutoDodge, sidestepFrom } from '@/game/systems/dodgeSystem';
 import { setPilotStatus } from './pilot-status';
 import { MAP_HALF } from './world-kit';
 
@@ -56,6 +57,7 @@ export function AutoPilot({
   const lastRest = useRef(0);
   const lastWeaponSwitch = useRef(0);
   const wasIdle = useRef(false);
+  const lastHp = useRef<number | null>(null);
   // Banda morta do combate: ligado quando o piloto já está parado atirando, pra
   // não voltar a andar por uma oscilação de 0,4 m na borda do alcance.
   const engaged = useRef(false);
@@ -149,6 +151,22 @@ export function AutoPilot({
       return;
     }
     wasIdle.current = true;
+
+    // ESQUIVA AUTOMÁTICA (dodgeSystem; Pedro 26/10: "no idle ele desvia de alguns tiros quando toma bastante dano"):
+    // perdeu ≥ 25% da vida em 3 s e a esquiva está pronta → rola de LADO em relação a quem está atacando.
+    const hpNow = store.player.hp;
+    if (lastHp.current !== null && hpNow < lastHp.current) noteHeroDamage(lastHp.current - hpNow);
+    lastHp.current = hpNow;
+    if (shouldAutoDodge(store.player.maxHp)) {
+      const me = { x: player.position.x, z: player.position.z };
+      let foe: { x: number; z: number } | null = null; let best = Infinity;
+      for (const c of store.creatures) {
+        if (c.behavior !== 'attack' && c.behavior !== 'chase') continue;
+        const d = (c.position.x - me.x) ** 2 + (c.position.z - me.z) ** 2;
+        if (d < best) { best = d; foe = c.position; }
+      }
+      if (foe) requestDodge(sidestepFrom(me, foe, Math.random() < 0.5 ? 1 : -1));
+    }
 
     // Chuva de Flechas AUTOMÁTICA no idle: chamada silenciosa (auto=true) — só dispara quando
     // há arma de longe na mão, alvo no alcance e o cooldown (que escala com o nível) pronto.

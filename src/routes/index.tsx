@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useGameStore, arrowRainCooldownFor } from '@/game/state/game-store';
 import { heroPowerCooldown, HERO_POWER_UNLOCK, type HeroPowerId } from '@/game/systems/heroPowersSystem';
 import { BOOST_UNLOCK_LEVEL, boostCooldown } from '@/game/systems/burstSystem';
+import { dodgeCooldownLeft, requestDodge } from '@/game/systems/dodgeSystem';
 import { startLocalPersistence } from '@/game/state/local-persistence';
 import { getEra, getHallLevel } from '@/game/systems/baseSystem';
 import { startAccountPersistence } from '@/game/state/account-persistence';
@@ -264,6 +265,7 @@ function Index() {
   const heroPowerLast = useGameStore(s => s.heroPowers.lastAt);
   const lastBoostFireAt = useGameStore(s => s.lastBoostFireAt);
   const boostLeft = Math.max(0, Math.ceil(boostCooldown(player.level) - (Date.now() / 1000 - lastBoostFireAt)));
+  const dodgeLeft = dodgeCooldownLeft();
   const heroPowerLeft = (id: HeroPowerId) =>
     Math.max(0, Math.ceil(heroPowerCooldown(id, player.level) - (Date.now() / 1000 - heroPowerLast[id])));
 
@@ -480,6 +482,7 @@ function Index() {
       if (e.code === 'KeyX' && !inCity && !freeCam) useGameStore.getState().castHeroPower('tornado');
       if (e.code === 'KeyC' && !inCity && !freeCam) useGameStore.getState().castHeroPower('lightning');
       if (e.code === 'KeyT' && !inCity && !freeCam) useGameStore.getState().boostFire();
+      if (e.code === 'KeyY' && !inCity && !freeCam) requestDodge(); // ESQUIVA (dodgeSystem)
       if (e.code === 'Space') { e.preventDefault(); /* jump handled in game-world */ }
       if (e.code === 'Backquote' && !inCity) toggleFreeCam();
       if (e.code === 'KeyP') togglePerf();
@@ -529,6 +532,7 @@ function Index() {
   const mobilePowers: ArcButton[] = [
     { id: 'Q', label: 'Especial: salto', icon: <Zap />, onPress: () => specialAttack('jump'), cooldown: specialLeft },
     { id: 'R', label: 'Especial: giro', icon: <Repeat />, onPress: () => specialAttack('spin'), cooldown: specialLeft },
+    { id: 'Y', label: 'Esquiva', icon: <Wind />, onPress: () => requestDodge(), cooldown: dodgeLeft },
     ...(player.level >= 5 ? [{ id: 'F', label: 'Chuva de Flechas', icon: <CloudRain />, onPress: () => arrowRain(), cooldown: arrowRainLeft }] : []),
     ...([['boomerang', 'Z', 'Bumerangue', <RotateCw key="i" />], ['tornado', 'X', 'Furacão', <Tornado key="i" />], ['lightning', 'C', 'Raio', <CloudLightning key="i" />]] as [HeroPowerId, string, string, React.ReactNode][])
       .filter(([pid]) => player.level >= HERO_POWER_UNLOCK[pid])
@@ -541,6 +545,7 @@ function Index() {
       <Button variant="ghost" className="world-action" aria-label="Pegar / colher" title="Pegar / colher · E" onClick={collectNearest}><Package /></Button>
       <Button variant="ghost" className="world-action" data-combat aria-label="Atacar" title="Atacar · Clique esquerdo" data-primary="true" onClick={hitNearest}><Swords /></Button>
       <Button variant="ghost" className="world-action" data-combat data-cooldown={specialLeft > 0} aria-label="Especial: salto" title="Especial: Salto (área) · Q" onClick={() => specialAttack('jump')}><Zap />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
+      <Button variant="ghost" className="world-action" data-combat data-cooldown={dodgeLeft > 0} aria-label="Esquiva" title="Esquiva — rola ~3,5 m e erra os golpes no meio do rolamento · Y" onClick={() => requestDodge()}><Wind />{dodgeLeft > 0 && <span className="cd">{dodgeLeft}</span>}</Button>
       <Button variant="ghost" className="world-action" data-combat data-cooldown={specialLeft > 0} aria-label="Especial: giro" title="Especial: Giro 360° (área) · R" onClick={() => specialAttack('spin')}><Repeat />{specialLeft > 0 && <span className="cd">{specialLeft}</span>}</Button>
       {player.level >= 5 && (
         <Button variant="ghost" className="world-action" data-combat data-cooldown={arrowRainLeft > 0} aria-label="Chuva de Flechas" title="Chuva de Flechas — 3 ondas em área · F" onClick={() => arrowRain()}><CloudRain />{arrowRainLeft > 0 && <span className="cd">{arrowRainLeft}</span>}</Button>

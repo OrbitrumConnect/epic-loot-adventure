@@ -43,6 +43,7 @@ import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTarget
 import { takeKnockback } from '@/game/systems/knockbackSystem';
 import { pushEvent, shotEvent } from '@/game/systems/feedbackSystem';
 import { activeGrab, breakGrab, grabTicksDue, tryStartGrab } from '@/game/systems/grabSystem';
+import { isInvulnerable } from '@/game/systems/dodgeSystem';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 
 /**
@@ -573,14 +574,17 @@ export function useHostileAI(opts: HostileOptions) {
           attackCooldown.current = creature.attackCooldown;
           swing.current = 0.35;
           if (tuning.shot) enemyShot({ x: wx, z: wz }, { x: px, z: pz }, tuning.shot, player.position);
-          const dmg = mitigateDamage(Math.max(1, creature.attackPower), useGameStore.getState().player);
-          if (!useGameStore.getState().player.dead) {
+          // ESQUIVA (dodgeSystem): no meio do rolamento a mordida/tiro ERRA (sem dano, sem agarrar).
+          const dodged = isInvulnerable();
+          const dmg = dodged ? 0 : mitigateDamage(Math.max(1, creature.attackPower), useGameStore.getState().player);
+          if (!useGameStore.getState().player.dead && !dodged) {
             reportDamageToStore("player", dmg, { x: px, z: pz }, true);
             const shove = PLAYER_SHOVE[creature.speciesId];
             if (shove && distToPlayer > 1e-3) queueKnockback("player", ((px - wx) / distToPlayer) * shove, ((pz - wz) / distToPlayer) * shove);
           }
           useGameStore.setState(s => {
             if (s.player.dead) return {};
+            if (dodged) return { ui: { ...s.ui, message: `💨 Esquivou de ${creature.name}!` } };
             const hp = Math.max(0, s.player.hp - dmg);
             if (hp <= 0) {
               return {
@@ -594,7 +598,7 @@ export function useHostileAI(opts: HostileOptions) {
             };
           });
           // GIRO DA MORTE (jacaré, grabSystem): 30% de agarrar na mordida — preso ~1,2 s, 3 pancadas; bater nele solta.
-          if (!useGameStore.getState().player.dead && tryStartGrab(creatureId, creature.speciesId, Math.max(1, creature.attackPower))) {
+          if (!useGameStore.getState().player.dead && !dodged && tryStartGrab(creatureId, creature.speciesId, Math.max(1, creature.attackPower))) {
             useGameStore.getState().setMessage(`🐊 ${creature.name} te AGARROU — giro da morte! Bata nele pra se soltar!`);
           }
         }

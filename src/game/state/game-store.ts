@@ -12,6 +12,7 @@ import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../syste
 import { audioManager, distanceGain } from '../audio/audio-manager';
 import { noteShotAt } from '../systems/shotFacing';
 import { breakGrab } from '../systems/grabSystem';
+import { isInvulnerable } from '../systems/dodgeSystem';
 import { BOOST_DURATION_MS, BOOST_ITEMS, BOOST_UNLOCK_LEVEL, boostCooldown, boostScale, BURST_GAP, burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
@@ -2370,6 +2371,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   takePlayerDamage: (amount, sourceName, pvp = false) => {
     if (amount <= 0) return;
+    // ESQUIVA (dodgeSystem): no meio do rolamento o golpe ERRA — vale pra PvP e pra mordida vinda do host (online).
+    if (isInvulnerable()) { set(s => ({ ui: { ...s.ui, message: `💨 Esquivou de ${sourceName}!` } })); return; }
     const now = Date.now();
     set(s => {
       if (s.player.dead) return {};

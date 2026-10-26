@@ -133,10 +133,10 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
   // Anel de dentro: Pular, Mirar (3ª pessoa) e os especiais Q/R; anel de fora: poderes liberados.
   const inner: ArcButton[] = [
     { id: 'jump', label: 'Pular', icon: <ChevronsUp />, onPress: () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })) },
-    ...powers.filter((p) => p.id === 'Q' || p.id === 'R'),
+    ...powers.filter((p) => p.id === 'Q' || p.id === 'R' || p.id === 'Y'), // Y = Esquiva (26/10) no anel de dentro
     ...(canAim ? [{ id: 'aim', label: 'Mirar', icon: <Crosshair />, onPress: () => setAiming(!useAim.getState().active) }] : []),
   ];
-  const outer = powers.filter((p) => p.id !== 'Q' && p.id !== 'R');
+  const outer = powers.filter((p) => p.id !== 'Q' && p.id !== 'R' && p.id !== 'Y');
   const innerR = arcRadius(inner.length, ARC_INNER);
   const outerR = arcRadius(outer.length, Math.max(ARC_OUTER, innerR + ARC_RING_GAP), ARC_FROM + 4, ARC_TO - 4);
   const innerPos = arcLayout(inner.length, innerR);

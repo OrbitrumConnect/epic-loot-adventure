@@ -8,6 +8,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
 import { poseToBind, retargetBind, retargetTwist, withoutHipsMotion } from './mixamo-retarget';
+import { DODGE_CLIP_FROM, DODGE_CLIP_TO, DODGE_MS } from '@/game/systems/dodgeSystem';
 import { createFootCache, footMinY, groundStep, nextGroundOffset } from './glb-creature';
 import { hitStopScale } from './hit-stop';
 
@@ -46,6 +47,8 @@ const CLIP_URL: Record<string, string> = {
   // MORTE (Pedro 26/10, baixados do Mixamo): cai de costas (herói/acampamento) e "Mutant Dying" (Couraça e grandões).
   deathBack: '/models/red/death_back.glb',
   deathMutant: '/models/red/death_mutant.glb',
+  // ESQUIVA (Pedro 26/10, Mixamo "Falling To Roll"): toca só o rolamento (dodgeSystem: 0,1 → 1,4 s) em ~1 s.
+  dodge: '/models/red/dodge_roll.glb',
 };
 export type DeathClip = 'back' | 'mutant';
 /** Quando o corpo ENCOSTA no chão em cada clip (s, medido no esqueleto do Mixamo: costas 0,9 · Mutant 2,3 — este
@@ -120,6 +123,7 @@ function measureSkinnedBox(root: THREE.Object3D): THREE.Box3 {
  *  `fixHipsY` (só herói Blender): fixa o Y do quadril no valor do bind — os clips
  *  vêm de OUTRO esqueleto e trazem um Y que afunda o corpo neste; fixar no bind
  *  mantém a altura certa com a animação rodando (perde só o leve pulinho). */
+
 function stripRootMotion(clip: THREE.AnimationClip, fixHipsY: number | null = null): THREE.AnimationClip {
   for (const track of clip.tracks) {
     if (/Hips\.position$/i.test(track.name)) {
@@ -131,6 +135,26 @@ function stripRootMotion(clip: THREE.AnimationClip, fixHipsY: number | null = nu
     }
   }
   return clip;
+}
+
+/**
+ * ESQUIVA (26/10): o quadril PRECISA descer no rolamento, então não dá pra travar o Y (como nos clips normais do herói
+ * "fooled"). Escala a descida na proporção do modelo: altura em pé do clip (no fim do rolamento) → standY do modelo.
+ * Sem standY (modelos comuns) fica como veio — igual aos outros clips deles. Trabalha numa CÓPIA (nunca no cache).
+ */
+export function scaleHipsDrop(clip: THREE.AnimationClip, standY: number | null): THREE.AnimationClip {
+  if (standY === null) return clip;
+  const out = clip.clone();
+  const tr = out.tracks.find((t) => /Hips\.position$/i.test(t.name));
+  if (!tr) return out;
+  const times = tr.times, v = tr.values;
+  let k = times.length - 1;
+  for (let i = 0; i < times.length; i++) if (times[i]! >= DODGE_CLIP_TO) { k = i; break; }
+  const clipStand = v[k * 3 + 1]!;
+  if (!Number.isFinite(clipStand) || Math.abs(clipStand) < 1e-6) return out;
+  const s = standY / clipStand;
+  for (let i = 1; i < v.length; i += 3) v[i] = v[i]! * s;
+  return out;
 }
 
 export function GlbHeroMixamo({
@@ -208,6 +232,7 @@ export function GlbHeroMixamo({
   const attackGunG = useGLTF(CLIP_URL['attackGun']!);
   const jumpG = useGLTF(CLIP_URL['jump']!);
   const deathG = useGLTF(CLIP_URL[deathClip === 'mutant' ? 'deathMutant' : 'deathBack']!);
+  const dodgeG = useGLTF(CLIP_URL['dodge']!);
   // Extras do jogador (strafe/costas, golpe, gesto de poder, combo de espada) — ~700 KB, 1 vez.
   const extraG = useGLTF(EXTRA_URLS) as unknown as { animations: THREE.AnimationClip[]; scene: THREE.Object3D }[];
 
@@ -285,7 +310,7 @@ export function GlbHeroMixamo({
       if (fixTwist) a = retargetTwist(a, g.scene, cloned, standFixX);
       return stripRootMotion(a, keepY ? null : fixHipsY);
     };
-    const base = [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump'), (() => { const d = mk(deathG, 'death', true); return d && withoutHipsMotion(d); })()];
+    const base = [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump'), (() => { const d = mk(deathG, 'death', true); return d && withoutHipsMotion(d); })(), (() => { const d = mk(dodgeG, 'dodge', true); return d && scaleHipsDrop(d, fixHipsY); })()];
     // Só JOGADORES (rangedAttack) ganham os extras; raiders ficam exatamente como antes.
     const extra = rangedAttack
       ? EXTRA_KEYS.map((k, i) => {
@@ -294,7 +319,7 @@ export function GlbHeroMixamo({
         })
       : [];
     return [...base, ...extra].filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
+  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, dodgeG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
 
   // 26/10: animação por distância (anim-lod.ts) — herói/perto todo quadro (igual), inimigo longe com menos atualizações.
   const animEveryRef = useRef(1);
@@ -512,6 +537,23 @@ export function GlbHeroMixamo({
     const playDur = playing?.getClip().duration ?? 0;
     const atkFinished = !playing || !playing.isRunning() || playing.time >= playDur - 0.02;
 
+    // ESQUIVA (oneshot, dodgeSystem): CORTA o ataque (vem antes da regra abaixo); só o trecho do rolamento, em ~1 s.
+    const ddg = actions['dodge'];
+    if (want === 'dodge' && ddg) {
+      if (current.current !== 'dodge') {
+        if (curClipName && actions[curClipName]) actions[curClipName]!.fadeOut(0.08);
+        ddg.reset();
+        ddg.setLoop(THREE.LoopOnce, 1);
+        ddg.clampWhenFinished = true;
+        ddg.time = DODGE_CLIP_FROM;
+        ddg.timeScale = (DODGE_CLIP_TO - DODGE_CLIP_FROM) / (DODGE_MS / 1000);
+        ddg.fadeIn(0.06).play();
+        current.current = 'dodge';
+        playingLoco.current = null;
+      }
+      return;
+    }
+
     // ATAQUE NÃO É CORTADO: enquanto o clip toca, não troca (termina 100% mesmo
     // que o bicho morra no meio e o estado volte pra idle/walk).
     if (current.current === 'attack' && !atkFinished) return;
@@ -656,4 +698,5 @@ useGLTF.preload(CLIP_URL['attackGun']!);
 useGLTF.preload(CLIP_URL['jump']!);
 useGLTF.preload(CLIP_URL['deathBack']!);
 useGLTF.preload(CLIP_URL['deathMutant']!);
+useGLTF.preload(CLIP_URL['dodge']!);
 useGLTF.preload(EXTRA_URLS);

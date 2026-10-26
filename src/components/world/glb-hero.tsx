@@ -12,7 +12,7 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 const CHAR_URL = '/models/ranger/Male_Ranger.gltf';
 const ANIM_URL = '/models/ranger/UAL2_Standard.glb';
 
-export type HeroAction = 'idle' | 'walk' | 'run' | 'attack' | 'jump' | 'death';
+export type HeroAction = 'idle' | 'walk' | 'run' | 'attack' | 'jump' | 'death' | 'dodge';
 
 function pickClip(names: string[], kind: HeroAction): string | undefined {
   const find = (sub: string) => names.find((n) => n.toLowerCase().includes(sub));
