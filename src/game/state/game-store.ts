@@ -427,57 +427,16 @@ function createInitialPlayer(): PlayerState {
   };
 }
 
+/** Criaturas fixas do início. Eram 3 RAPOSAS perto do nascedouro — Pedro 26/10: raposa fora do jogo (a definição
+ * fica: testes e saves antigos). O drop dela (couro/presa/tendão + 2 peças de armadura) foi pra leoa/búfalo/jacaré. */
 function createInitialCreatures(): CreatureState[] {
-  return [
-    {
-      id: 'wolf_1',
-      speciesId: 'wolf',
-      name: 'Raposa do Vale',
-      hp: scaleEnemyHp(80),
-      maxHp: scaleEnemyHp(80),
-      attackPower: 8,
-      armor: 2,
-      attackCooldown: 1.5,
-      lastAttackAt: 0,
-      position: { x: -3, z: 5 },
-      behavior: 'patrol',
-      lootTable: [],
-      respawnAt: null,
-    },
-    {
-      id: 'wolf_2',
-      speciesId: 'wolf',
-      name: 'Raposa do Vale',
-      hp: scaleEnemyHp(80),
-      maxHp: scaleEnemyHp(80),
-      attackPower: 8,
-      armor: 2,
-      attackCooldown: 1.5,
-      lastAttackAt: 0,
-      position: { x: 5, z: 1 },
-      behavior: 'patrol',
-      lootTable: [],
-      respawnAt: null,
-    },
-    {
-      id: 'wolf_3',
-      speciesId: 'wolf',
-      name: 'Raposa do Vale',
-      hp: scaleEnemyHp(80),
-      maxHp: scaleEnemyHp(80),
-      attackPower: 8,
-      armor: 2,
-      attackCooldown: 1.5,
-      lastAttackAt: 0,
-      position: { x: -12, z: -8 },
-      behavior: 'patrol',
-      lootTable: [],
-      respawnAt: null,
-    },
-  ];
+  return [];
 }
 
-const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_puglin', 'raider_brute', 'raider_shaman', 'pelter'] as const;
+// 26/10 (Pedro: "tirar o robô"): na vaga do Mecha Pelter entra a FAUCE DE SÍLEX. O robô era o "ralo de bala" da
+// horda (130 de vida, NÃO solta bala); medido na conta da bala (bala-horda.test): sem ninguém na vaga sobrava bala até
+// a onda 21+; Fauce (95 de vida, sem bala) zera entre a 19 e a 20 (robô: ~18) → regra "dura até 18–20" mantida.
+const WAVE_SPECIES = ['raider_scout', 'raider_warrior', 'raider_puglin', 'raider_brute', 'raider_shaman', 'flintmaw'] as const;
 
 /** Nº de bosses na onda — cresce com as ondas (teto 5). */
 function waveBossCount(wave: number): number {

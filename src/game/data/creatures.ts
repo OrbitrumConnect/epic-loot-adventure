@@ -460,6 +460,7 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     lootTable: [
       { itemId: 'raw_meat', quantity: 3, chance: 0.7 },
       { itemId: 'boar_tusk', quantity: 1, chance: 0.5 },
+      { itemId: 'wolf_fang', quantity: 1, chance: 0.6 }, // 26/10: presa (anéis) — dente de jacaré; raposa saiu
       { itemId: 'sinew', quantity: 1, chance: 0.35 },
     ],
     icon: 'PawPrint',
@@ -497,6 +498,9 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     aggroRange: 6,
     lootTable: [
       { itemId: 'bear_pelt', quantity: 1, chance: 0.6 },
+      // 26/10: raposa saiu → couro/tendão das receitas comuns também no búfalo (o total por ciclo fica ≥ antes).
+      { itemId: 'wolf_pelt', quantity: 1, chance: 0.65 },
+      { itemId: 'sinew', quantity: 1, chance: 0.5 },
       { itemId: 'bear_claw', quantity: 1, chance: 0.4 },
       { itemId: 'raw_meat', quantity: 4, chance: 0.8 },
       { itemId: 'bone', quantity: 2, chance: 0.5 },
@@ -510,7 +514,11 @@ export const CREATURES: Record<string, CreatureDefinition> = {
 
 // Drops common/uncommon distribuídos pela fauna; tiers raros ficam nos pools de caça.
 const huntArmorIds = ['head_common', 'leather_armor', 'gloves_common', 'legs_common', 'boots_common', 'amulet_common', 'ring1_common', 'ring2_common', 'head_uncommon', 'chest_uncommon', 'gloves_uncommon', 'legs_uncommon', 'boots_uncommon', 'amulet_uncommon', 'ring1_uncommon', 'ring2_uncommon'];
-const huntableCreatures = Object.values(CREATURES).filter(creature => creature.peaceful || creature.id.startsWith('raider_') || creature.id === 'wolf');
+// LISTA CONGELADA (26/10): antes era calculada (pacíficos + raiders + raposa) → tirar a raposa ou deixar ganso/faisão
+// agressivos MUDAVA o rodízio e as armaduras trocavam de bicho em silêncio. Mesma ordem de antes; a LEOA ocupa o lugar
+// da raposa (fora do jogo) e herda as 2 peças dela (head_common, ring1_uncommon). Todo o resto: idêntico.
+const HUNTABLE_IDS = ['wolf_alpha', 'raider_scout', 'raider_warrior', 'raider_puglin', 'raider_brute', 'raider_shaman', 'raider_warlord', 'raider_mushroom', 'raider_kaiju', 'raider_samurai', 'rabbit', 'deer', 'goose', 'pheasant'];
+const huntableCreatures = HUNTABLE_IDS.map((id) => CREATURES[id]!);
 huntArmorIds.forEach((itemId, index) => {
   huntableCreatures[index % huntableCreatures.length]!.lootTable.push({ itemId, quantity: 1, chance: index < 8 ? 0.08 : 0.04 });
 });

@@ -8,7 +8,7 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   rabbit: 15,
   deer: 20,
   boar: 18,
-  wolf: 11,
+  wolf: 0,    // RAPOSA fora (Pedro 26/10) — drop dela foi pra leoa/búfalo/jacaré; vagas viraram inimigos de acampamento
   wolf_alpha: 7,
   bear: 7,
   goose: 6,
@@ -19,7 +19,7 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   collector: 0, // FORA por ora: quantizado (não medi) → risco de gigante; reprocessar sem quantize depois
   civilian: 0, // REMOVIDO (Pedro): modelo demo vinha azul + T-pose (anim mixamo não roda). Fora do jogo.
   zombie: 6,   // Morto-Vivo (humanoide Mixamo, walk próprio)
-  pelter: 7,   // Mecha Pelter (anim própria) — 5-6 espalhados (Pedro)
+  pelter: 0,   // ROBÔ fora (Pedro 26/10: animação da net, pequeno; um robô com a cara do jogo fica pro "mundo vivo")
   flintmaw: 3, // Fauce de Sílex (meio voador, anim própria)
 };
 
