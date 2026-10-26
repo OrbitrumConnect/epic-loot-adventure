@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CREATURES, scaleEnemyHp } from '@/game/data/creatures';
 import { PLAYER_SPAWN } from '@/game/data/camps';
-import { applyWorldLevel, difficultyStats, eliteChance, eliteLoot, eliteXp, hostileScale, isWorldSpawn, scalesWithWorld, zoneAt, zoneLevel, ZONE_LEVEL } from '@/game/systems/difficultySystem';
+import { applyWorldLevel, difficultyStats, eliteChance, eliteLoot, eliteXp, hostileScale, isWorldSpawn, scalesWithWorld, WORLD_HP_BOOST, zoneAt, zoneLevel, ZONE_LEVEL } from '@/game/systems/difficultySystem';
 import type { CreatureState } from '@/game/types';
 
 /* Pedro, 25/10. 1ª versão escalava pelo nível do JOGADOR — fora da regra selada "nível não é porta" (07/10: a REGIÃO
@@ -36,7 +36,10 @@ describe('perigo pela geografia', () => {
   it('escala pela zona: zona 1 = igual; zona 5 = vida ×3,58 / dano ×2,94', () => {
     expect(hostileScale(ZONE_LEVEL[0])).toEqual({ hp: 1, atk: 1 });
     expect(hostileScale(ZONE_LEVEL[4]).hp).toBeCloseTo(3.58, 2);
-    expect(difficultyStats(bear, ZONE_LEVEL[0], false).maxHp).toBe(scaleEnemyHp(bear.maxHp));
+    // 26/10 (Pedro, nv 30 "matando tudo fácil"): mapa/acampamento +33% de vida em todas as zonas (horda fora).
+    expect(WORLD_HP_BOOST).toBe(1.33);
+    expect(difficultyStats(bear, ZONE_LEVEL[0], false).maxHp).toBe(Math.round(scaleEnemyHp(bear.maxHp) * 1.33));
+    expect(difficultyStats(bear, ZONE_LEVEL[0], false).attackPower).toBe(bear.attackPower); // dano igual
   });
   it('só HOSTIS do mapa/acampamento: horda, chefe e pacíficos ficam de fora', () => {
     expect(isWorldSpawn('wild_bear_3')).toBe(true);

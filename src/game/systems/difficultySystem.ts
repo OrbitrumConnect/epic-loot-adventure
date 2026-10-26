@@ -73,11 +73,18 @@ export function scalesWithWorld(c: Pick<CreatureState, 'id'>, def: Pick<Creature
   return !!def && !def.peaceful && isWorldSpawn(c.id);
 }
 
+/**
+ * Vida dos hostis do MAPA e dos ACAMPAMENTOS +33% (Pedro 26/10, conta nv 30: "matando tudo muito fácil, vida precisa
+ * subir uns 30–35%"). Horda fica de fora: a bala das torres foi calibrada na vida dela (23/10). Chefes do timer e
+ * pacíficos (comida) também iguais.
+ */
+export const WORLD_HP_BOOST = 1.33;
+
 /** Vida/dano pro nível do mundo (e Elite). Base = o bicho da tabela (com o ajuste geral de vida). */
 export function difficultyStats(def: Pick<CreatureDefinition, 'maxHp' | 'attackPower'>, level: number, elite: boolean): { maxHp: number; attackPower: number } {
   const s = hostileScale(level);
   return {
-    maxHp: Math.round(scaleEnemyHp(def.maxHp) * s.hp * (elite ? ELITE_HP : 1)),
+    maxHp: Math.round(scaleEnemyHp(def.maxHp) * WORLD_HP_BOOST * s.hp * (elite ? ELITE_HP : 1)),
     attackPower: Math.max(1, Math.round(def.attackPower * s.atk * (elite ? ELITE_ATK : 1))),
   };
 }
