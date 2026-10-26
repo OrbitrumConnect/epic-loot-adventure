@@ -33,17 +33,16 @@ function BaseHouseInner({
   pieces: remotePieces,
   remote = false,
   tier = 0,
-}: { pieces?: BasePiece[] | null; remote?: boolean; tier?: number } = {}) {
+  tierScene = null,
+}: { pieces?: BasePiece[] | null; remote?: boolean; tier?: number; tierScene?: THREE.Object3D | null } = {}) {
   const localPieces = useGameStore((s) => s.playerBase?.pieces);
   const pieces = remotePieces === undefined ? localPieces : remotePieces;
   const obj = useLoader(OBJLoader, '/models/house/WoodHouse.obj');
   const diffuse = useTexture('/models/house/Diffuse.png');
   const normal = useTexture('/models/house/normal.png');
-  // Casa de PEDRA (evolução nível 10) e de METAL (nível >20): cada uma tem seu GLB
-  // próprio (2 andares com rampa, PBR embutido). Carregam sempre; só renderizam quando
-  // a evolução é paga. A madeira segue o OBJ original com diffuse/normal.
-  const stone = useGLTF('/models/house/stone-house.glb');
-  const metal = useGLTF('/models/house/metal-house.glb');
+  // Casa de PEDRA (nível 10) e de METAL (nível >20): GLB próprio (2 andares + rampa, PBR). 26/10 (celular fraco):
+  // chega PRONTO de quem escolhe o tier (`BaseHouseTier`) — só a versão em uso é baixada/vai pra memória de vídeo
+  // (antes as duas carregavam sempre). A madeira segue o OBJ original com diffuse/normal.
   const localBaseEvolved = useGameStore((s) => s.baseEvolved ?? false);
   const localBaseMetal = useGameStore((s) => s.baseMetal ?? false);
   // A evolução visual da base remota ainda não faz parte do payload de rede.
@@ -65,7 +64,7 @@ function BaseHouseInner({
   const prepared = useMemo(() => {
     // Tier: metal (nível>20) → pedra (nível 10) → madeira (base). Pedra e metal são
     // GLBs próprios (2 andares + rampa) com PBR embutido; madeira é o OBJ.
-    const glb = metalTier ? metal.scene : baseEvolved ? stone.scene : null;
+    const glb = tierScene;
     const o = (glb ?? obj).clone(true);
     const owned: THREE.Material[] = [];
     if (glb) {
@@ -152,7 +151,7 @@ function BaseHouseInner({
       floorMesh = buildFloorMesh(tris);
     }
     return { wrap, halfX, halfZ, wallSegs, owned, levels, floorMesh };
-  }, [obj, stone, metal, baseEvolved, metalTier, diffuse, normal, clipPlane, remote]);
+  }, [obj, tierScene, baseEvolved, metalTier, diffuse, normal, clipPlane, remote]);
 
   // Descarta os materiais clonados ao trocar de tier/desmontar (evita leak de shader).
   useEffect(() => () => {
@@ -212,13 +211,31 @@ function BaseHouseInner({
   );
 }
 
+const STONE_HOUSE_URL = '/models/house/stone-house.glb';
+const METAL_HOUSE_URL = '/models/house/metal-house.glb';
+type HouseProps = { pieces?: BasePiece[] | null; remote?: boolean; tier?: number };
+
+/** Escolhe o tier e carrega SÓ o GLB dele (madeira = nenhum). */
+function BaseHouseTier(props: HouseProps) {
+  const localEvolved = useGameStore((s) => s.baseEvolved ?? false);
+  const localMetal = useGameStore((s) => s.baseMetal ?? false);
+  const evolved = props.remote ? (props.tier ?? 0) >= 1 : localEvolved;
+  const metal = props.remote ? (props.tier ?? 0) >= 2 : localMetal;
+  const url = metal ? METAL_HOUSE_URL : evolved ? STONE_HOUSE_URL : null;
+  return url ? <BaseHouseGlb url={url} {...props} /> : <BaseHouseInner {...props} tierScene={null} />;
+}
+function BaseHouseGlb({ url, ...props }: HouseProps & { url: string }) {
+  const { scene } = useGLTF(url);
+  return <BaseHouseInner {...props} tierScene={scene} />;
+}
+
 /** Casa central da base, blindada: falha de fetch de qualquer asset (OBJ/GLB/textura)
  *  vira fallback `null` em vez de derrubar a cena/aplicação. */
 export function BaseHouse(props: { pieces?: BasePiece[] | null; remote?: boolean; tier?: number } = {}) {
   return (
     <AssetBoundary label="BaseHouse" fallback={null}>
       <Suspense fallback={null}>
-        <BaseHouseInner {...props} />
+        <BaseHouseTier {...props} />
       </Suspense>
     </AssetBoundary>
   );
