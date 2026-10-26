@@ -36,3 +36,19 @@ describe('postes presos ao que existe no mapa', () => {
     expect(gw).not.toMatch(/const lamps = useMemo\(\(\) => \{\s*const curve = new THREE\.CatmullRomCurve3\(ROAD_POINTS/);
   });
 });
+
+/* 26/10 (Pedro: go): poste como peça do EDITOR — ele mesmo posiciona onde quiser. */
+describe('poste no editor', () => {
+  it('no catálogo com 5,2 m (4 m × 1,3), entra assentando no chão e acende à noite com o orçamento de luzes', async () => {
+    const { EDITOR_ASSETS, useEditorStore } = await import('@/components/editor/editor-store');
+    const post = EDITOR_ASSETS.find((a) => a.assetUrl === '/models/props/light-post.glb')!;
+    expect(post.name).toBe('Poste de luz');
+    expect(4 * post.scale).toBeCloseTo(5.2, 5);
+    useEditorStore.getState().add(post);
+    const o = useEditorStore.getState().objects.at(-1)!;
+    expect(o.ground).toBe(true);
+    const ew = fs.readFileSync('src/components/editor/editor-world.tsx', 'utf8');
+    expect(ew).toMatch(/\{isPost && <EditorPostLight /);
+    expect(ew).toMatch(/l\.visible = lightAllowed\(lightId, nf > 0\.04 && d2 < POST_LIGHT_D2, d2\);/);
+  }, 20_000);
+});

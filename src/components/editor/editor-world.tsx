@@ -1,10 +1,13 @@
 import { TransformControls, useGLTF } from '@react-three/drei';
-import type { ThreeEvent } from '@react-three/fiber';
+import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useEditorStore, type EditorObject, type EditorCollide } from './editor-store';
 import { registerTerrain, registerWall, glbSurfaceY, useTerrainVersion } from '../world/terrain-collision';
 import { AssetBoundary } from '../world/asset-boundary';
+import { lightAllowed, useLightId } from '../world/light-budget';
+import { nightFactor } from '@/game/systems/dayNightSystem';
+import { useGameStore } from '@/game/state/game-store';
 
 // Isola cada objeto: um GLB ausente (ex.: asset NÃO commitado → 404 no Vercel) faz
 // `useGLTF` dar throw. Sem boundary o throw sobe e DERRUBA o Canvas inteiro (tela de
@@ -73,7 +76,8 @@ function PlacedObjectInner({ item }: { item: EditorObject }) {
   const tv = useTerrainVersion(); void tv;
   const gx = px + pivot.x * sx, gz = pz + pivot.z * sz;
   const pyEff = item.ground ? glbSurfaceY(gx, gz, py) - sy * minY : py;
-  const group = <group ref={ref} visible={item.visible} position={[gx, pyEff + pivot.y * sy, gz]} rotation={item.transform.rotation} scale={item.transform.scale} onPointerDown={pick}><group position={[-pivot.x, -pivot.y, -pivot.z]}><primitive object={model} /></group></group>;
+  const isPost = item.assetUrl.includes('light-post');
+  const group = <group ref={ref} visible={item.visible} position={[gx, pyEff + pivot.y * sy, gz]} rotation={item.transform.rotation} scale={item.transform.scale} onPointerDown={pick}><group position={[-pivot.x, -pivot.y, -pivot.z]}><primitive object={model} />{isPost && <EditorPostLight x={gx} z={gz} at={[pivot.x, minY + POST_LIGHT_Y, pivot.z]} />}</group></group>;
   if (!active || !selected) return group;
   // Commit SÓ no onMouseUp (mesmo padrão do DesertMountain que já funcionava): durante
   // o arraste o gizmo move o objeto sozinho; commitar a cada onChange causava re-render
@@ -81,6 +85,26 @@ function PlacedObjectInner({ item }: { item: EditorObject }) {
   const sync = () => { const o = ref.current; if (!o) return; update(item.id, { position: [o.position.x - pivot.x * o.scale.x, o.position.y - pivot.y * o.scale.y, o.position.z - pivot.z * o.scale.z], rotation: [o.rotation.x, o.rotation.y, o.rotation.z], scale: [o.scale.x, o.scale.y, o.scale.z] }); };
   return <TransformControls mode={tool} onMouseUp={sync}>{group}</TransformControls>;
 }
+/** Altura da luz no poste (no modelo normalizado de 4 m: perto do topo). */
+const POST_LIGHT_Y = 3.6;
+const POST_LIGHT_D2 = 24 * 24;
+/** Luz do poste do editor: igual aos postes do jogo — acende ao anoitecer, tremeluz, sai de cena longe/de dia e
+ *  respeita o orçamento de luzes do celular (light-budget.ts). */
+function EditorPostLight({ x, z, at }: { x: number; z: number; at: [number, number, number] }) {
+  const light = useRef<THREE.PointLight>(null);
+  const lightId = useLightId();
+  useFrame(() => {
+    const l = light.current;
+    if (!l) return;
+    const nf = nightFactor();
+    const p = useGameStore.getState().player.position;
+    const d2 = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+    l.visible = lightAllowed(lightId, nf > 0.04 && d2 < POST_LIGHT_D2, d2);
+    if (l.visible) l.intensity = nf * 6.6 * (0.9 + Math.sin(performance.now() * 0.006 + x * 1.3) * 0.1);
+  });
+  return <pointLight ref={light} position={at} color="#ffcf87" intensity={0} distance={14} decay={1.6} />;
+}
+
 /** Objeto do editor blindado: fetch falho do GLB vira fallback `null` sem derrubar
  *  os outros objetos nem a cena. */
 function PlacedObject({ item }: { item: EditorObject }) {

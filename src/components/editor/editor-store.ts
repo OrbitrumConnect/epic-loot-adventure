@@ -13,6 +13,9 @@ export const EDITOR_ASSETS = [
   { name: 'Árvore ancestral', assetUrl: '/models/trees/tree-gnarled.glb', scale: 5 },
   { name: 'Torre de vigia', assetUrl: '/models/watchtower/watchtower.glb', scale: 1 },
   { name: 'Labirinto', assetUrl: '/models/props/maze.glb', scale: 14 },
+  // 26/10 (Pedro: postes coerentes — ele mesmo posiciona): 4 m × 1,3 = 5,2 m (mesma altura dos postes do jogo), assenta
+  // sozinho no chão e ACENDE à noite (EditorPostLight, com o orçamento de luzes do celular).
+  { name: 'Poste de luz', assetUrl: '/models/props/light-post.glb', scale: 1.3 },
   { name: 'Montanha oeste', assetUrl: '/models/terrain/mountain.glb', scale: 1 },
   { name: 'Montanha caverna', assetUrl: '/models/terrain/mountain-cave.glb', scale: 1 },
   // Novos assets de mapa (Meshy). De-shine aplicado no PlacedObject p/ assets /models/map/.
@@ -77,7 +80,7 @@ export const useEditorStore = create<State>((set, get) => ({
   active: false, tool: 'translate', selectedId: null, objects: mergeCatalog(copy(saved)), saved: mergeCatalog(copy(saved)), undoStack: [], redoStack: [], saveNotice: '',
   setActive: active => set({ active, selectedId: active ? get().selectedId : null }), setTool: tool => set({ tool }), select: selectedId => set({ selectedId }),
   commit: next => set(s => ({ objects: copy(next), undoStack: [...s.undoStack, copy(s.objects)].slice(-50), redoStack: [] })),
-  add: asset => { const s = get(); const n = s.objects.filter(o => o.source !== 'map').length + 1; const o: EditorObject = { id: id(), name: `${asset.name} ${n}`, assetUrl: asset.assetUrl, source: 'editor', visible: true, collide: 'none', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [asset.scale, asset.scale, asset.scale] } }; s.commit([...s.objects, o]); set({ selectedId: o.id }); },
+  add: asset => { const s = get(); const n = s.objects.filter(o => o.source !== 'map').length + 1; const o: EditorObject = { id: id(), name: `${asset.name} ${n}`, assetUrl: asset.assetUrl, source: 'editor', visible: true, collide: 'none', ...(asset.assetUrl.includes('light-post') ? { ground: true } : {}), transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [asset.scale, asset.scale, asset.scale] } }; s.commit([...s.objects, o]); set({ selectedId: o.id }); },
   update: (id, transform) => { const s = get(); s.commit(s.objects.map(o => o.id === id ? { ...o, transform } : o)); },
   setCollide: (id, collide) => { const s = get(); s.commit(s.objects.map(o => o.id === id ? { ...o, collide } : o)); },
   remove: () => { const s = get(); if (!s.selectedId) return; s.commit(s.objects.filter(o => o.id !== s.selectedId)); set({ selectedId: null }); },
