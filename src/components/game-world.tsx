@@ -6,6 +6,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
 import { BurstRuntime } from './world/burst-runtime';
+import { bridgeLampSpots, safeZoneLampSpots } from './world/lamp-layout';
 import { recentShotPoint } from '@/game/systems/shotFacing';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
 import { creatureById } from './world/hostile-ai';
@@ -2153,26 +2154,14 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 
   // Luminárias ao longo da estrada, espaçadas ~14 m, deslocadas pra beira.
   const lampTv = useTerrainVersion(); // reassenta os postes quando o GLB carrega
-  const lamps = useMemo(() => {
-    const curve = new THREE.CatmullRomCurve3(ROAD_POINTS.map(([x, z]) => new THREE.Vector3(x, 0, z)));
-    const pts = curve.getPoints(120);
-    const out: { x: number; y: number; z: number }[] = [];
-    let acc = 14;
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1]!, b = pts[i]!;
-      acc += b.distanceTo(a);
-      if (acc >= 14) {
-        acc = 0;
-        const d = b.clone().sub(a).normalize();
-        const lx = b.x + -d.z * 1.6;
-        const lz = b.z + d.x * 1.6;
-        if (LAKE_CENTERS.some(l => (lx - l.x) ** 2 + (lz - l.z) ** 2 < (l.r + 2) ** 2)) continue; // poste na água do GLB → pula
-        out.push({ x: lx, y: glbSurfaceY(lx, lz, terrainHeight(lx, lz)), z: lz });
-      }
-    }
-    return out;
+  // 26/10 (Pedro: "os postes seguem uma linha que saiu"): eram ao longo da estrada do MAPA ANTIGO (escondida). Agora
+  // presos ao que existe: nas PONTES (tabuleiro, lados alternados) e nos cantos da ZONA SEGURA (`lamp-layout.ts`).
+  // Altura = chão real (a ponte é chão registrado → o poste fica EM CIMA do tabuleiro).
+  const lamps = useMemo(
+    () => [...bridgeLampSpots(), ...safeZoneLampSpots(SAFE_ZONE)].map(({ x, z }) => ({ x, y: glbSurfaceY(x, z, terrainHeight(x, z)), z })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lampTv]);
+    [lampTv],
+  );
 
   // Rio: fita que segue RIVER_POINTS, ondulando na frente do nascedouro e
   // desembocando no laginho. Cada vértice acompanha a altura do terreno (ou a
