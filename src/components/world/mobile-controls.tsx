@@ -19,13 +19,19 @@ const RADIUS = 54; // px: distância máxima do knob ao centro (satura em magnit
 /** Empurrou até aqui (fração do raio) → corre; voltou abaixo de RUN_OFF → para de correr. */
 export const RUN_ON = 0.95;
 export const RUN_OFF = 0.8;
+/** Tamanhos (px) — 26/10 (Pedro: "mais juntos e um pouco menores; o joystick fica com pouco espaço"): ATACAR 84→72,
+ *  botões do arco 52→44, folga menor e o arco abre mais pra cima/baixo em vez de pra esquerda (~271 → ~201 px). */
+export const ATTACK_BTN = 72;
+export const ARC_BTN = 44;
 /** Raios dos anéis (px, do centro do ATACAR) e faixa de ângulo (graus: 90 = em cima, 180 = à esquerda). */
-export const ARC_INNER = 96;
-export const ARC_OUTER = 166;
-export const ARC_FROM = 95;
-export const ARC_TO = 178;
-/** Distância mínima entre centros de botões vizinhos no arco (botão 52 px + folga). */
-export const ARC_GAP = 58;
+export const ARC_INNER = 74;
+export const ARC_OUTER = 118;
+export const ARC_FROM = 80;
+export const ARC_TO = 190;
+/** Distância mínima entre centros de botões vizinhos no arco (botão 44 px + folga). */
+export const ARC_GAP = 48;
+/** Distância mínima entre os anéis (botão + folga). */
+export const ARC_RING_GAP = 52;
 
 /** Raio que cabe `n` botões na abertura `from→to` sem encostar (nunca menor que `min`). */
 export function arcRadius(n: number, min: number, from = ARC_FROM, to = ARC_TO): number {
@@ -114,7 +120,7 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
   ];
   const outer = powers.filter((p) => p.id !== 'Q' && p.id !== 'R');
   const innerR = arcRadius(inner.length, ARC_INNER);
-  const outerR = arcRadius(outer.length, Math.max(ARC_OUTER, innerR + 66), ARC_FROM + 4, ARC_TO - 4);
+  const outerR = arcRadius(outer.length, Math.max(ARC_OUTER, innerR + ARC_RING_GAP), ARC_FROM + 4, ARC_TO - 4);
   const innerPos = arcLayout(inner.length, innerR);
   const outerPos = arcLayout(outer.length, outerR, ARC_FROM + 4, ARC_TO - 4);
 

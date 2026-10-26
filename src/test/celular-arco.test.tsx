@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ARC_GAP, ARC_INNER, ARC_OUTER, arcLayout, arcRadius, MobileControls } from '@/components/world/mobile-controls';
+import { ARC_BTN, ARC_FROM, ARC_GAP, ARC_INNER, ARC_OUTER, ARC_RING_GAP, ARC_TO, arcLayout, arcRadius, ATTACK_BTN, MobileControls } from '@/components/world/mobile-controls';
 
 /* Pedro, 25/10: "no celular os triggers sobem em linha; o certo é o ATACAR central e os outros em volta, meio
    círculo". Arco em 2 anéis em volta do ATACAR grande; cada botão chama a MESMA ação de antes; correr = joystick
@@ -14,13 +14,27 @@ describe('arco do celular', () => {
       const rIn = arcRadius(n, ARC_INNER);
       const inner = arcLayout(n, rIn);
       for (let i = 1; i < n; i++) expect(dist(inner[i]!, inner[i - 1]!)).toBeGreaterThanOrEqual(ARC_GAP - 1);
-      for (const p of inner) expect(Math.hypot(p.dx, p.dy)).toBeGreaterThanOrEqual(42 + 26); // raio do ATACAR + do botão
-      const rOut = arcRadius(n, Math.max(ARC_OUTER, rIn + 66), 99, 174);
-      expect(rOut - rIn).toBeGreaterThanOrEqual(52); // anéis não se encostam
+      for (const p of inner) expect(Math.hypot(p.dx, p.dy)).toBeGreaterThanOrEqual(ATTACK_BTN / 2 + ARC_BTN / 2); // ATACAR + botão
+      const rOut = arcRadius(n, Math.max(ARC_OUTER, rIn + ARC_RING_GAP), ARC_FROM + 4, ARC_TO - 4);
+      const outer = arcLayout(n, rOut, ARC_FROM + 4, ARC_TO - 4);
+      for (let i = 1; i < n; i++) expect(dist(outer[i]!, outer[i - 1]!)).toBeGreaterThanOrEqual(ARC_GAP - 1);
+      expect(rOut - rIn).toBeGreaterThanOrEqual(ARC_BTN + 6); // anéis não se encostam
     }
   });
-  it('arco fica em cima/à esquerda do ATACAR (ao alcance do polegar)', () => {
-    for (const p of arcLayout(4, 120)) { expect(p.dx).toBeLessThanOrEqual(10); expect(p.dy).toBeLessThanOrEqual(5); }
+  /* 26/10 (Pedro: "mais juntos e um pouco menores; o joystick fica com pouco espaço"): com o arco CHEIO (4 dentro,
+     5 fora) nenhum botão sai da tela (ATACAR a 16 px da direita, 18 px de baixo) e tudo cabe em ~210 px da direita
+     (antes ~271). */
+  it('arco cheio cabe no canto: não sai da tela e deixa espaço pro joystick', () => {
+    const rIn = arcRadius(4, ARC_INNER);
+    const rOut = arcRadius(5, Math.max(ARC_OUTER, rIn + ARC_RING_GAP), ARC_FROM + 4, ARC_TO - 4);
+    const all = [...arcLayout(4, rIn), ...arcLayout(5, rOut, ARC_FROM + 4, ARC_TO - 4)];
+    const half = ATTACK_BTN / 2, b = ARC_BTN / 2;
+    for (const p of all) {
+      expect(p.dx + b).toBeLessThanOrEqual(half + 16 - 4); // borda direita (folga 4 px)
+      expect(p.dy + b).toBeLessThanOrEqual(half + 18 - 4); // borda de baixo
+    }
+    const widest = Math.max(...all.map((p) => -p.dx)) + b + half + 16;
+    expect(widest).toBeLessThanOrEqual(210);
   });
   it('cada botão chama a mesma ação; ATACAR chama o ataque de sempre', () => {
     const onAttack = vi.fn(), q = vi.fn(), f = vi.fn();
