@@ -94,3 +94,28 @@ describe('assenta certo em qualquer lugar (nascer longe)', () => {
     expect(c).toMatch(/const step = groundStep\(groundInit\.current, groundAcc\.current, near\);/);
   });
 });
+
+/* 26/10 (Pedro: go): morto-vivo SÓ À NOITE — de dia nenhum; ao escurecer 6 espalhados pelo mapa; ao clarear somem. */
+describe('morto-vivo só à noite', () => {
+  it('de dia não nasce; a noite traz 6 espalhados (longe uns dos outros, lugar livre)', async () => {
+    const { WILD_SPAWN_COUNTS, createNightZombies, NIGHT_ZOMBIES, NIGHT_ZOMBIE_PREFIX, createWildCreatures } = await import('@/game/systems/wildlifeSystem');
+    expect(WILD_SPAWN_COUNTS['zombie']).toBe(0);
+    expect(createWildCreatures().some((c) => c.speciesId === 'zombie')).toBe(false);
+    let seed = 7;
+    const rng = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+    const z = createNightZombies(rng);
+    expect(z.length).toBe(NIGHT_ZOMBIES);
+    for (const a of z) {
+      expect(a.id.startsWith(NIGHT_ZOMBIE_PREFIX)).toBe(true);
+      expect(isFreeForWildlife(a.position)).toBe(true);
+      for (const b of z) if (a !== b) expect(Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z)).toBeGreaterThan(17);
+    }
+  });
+  it('retomada de sala não apaga os da noite; o relógio da noite cuida dos dois (pombos e mortos-vivos)', async () => {
+    const { mergeResumedWorld } = await import('@/game/systems/wildlifeSystem');
+    const out = mergeResumedWorld([{ id: 'wild_zombie_night_2', speciesId: 'zombie' } as never], []);
+    expect(out.length).toBe(1);
+    const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
+    expect(store).toMatch(/if \(actZ === 'spawn'\) set\(\(s\) => \(\{ creatures: \[\.\.\.s\.creatures, \.\.\.createNightZombies\(\)\] \}\)\);/);
+  });
+});

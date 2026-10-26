@@ -62,7 +62,7 @@ import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecial
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
 import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
-import { createNightPigeons, createWildCreatures, NIGHT_FLOCK_PREFIX, nightFlockAction } from '../systems/wildlifeSystem';
+import { createNightPigeons, createNightZombies, createWildCreatures, NIGHT_FLOCK_PREFIX, NIGHT_ZOMBIE_PREFIX, nightFlockAction } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, applyHordeCall, hordeCallBonus, type WaveState } from '../systems/waveSystem';
 import { eliteLoot, eliteXp } from '../systems/difficultySystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
@@ -1681,6 +1681,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const act = nightFlockAction(night, has);
     if (act === 'spawn') set((s) => ({ creatures: [...s.creatures, ...createNightPigeons(s.player.position)] }));
     else if (act === 'leave') set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(NIGHT_FLOCK_PREFIX)) }));
+    // Morto-vivo só à noite (26/10): mesma regra de chegar/ir embora, espalhados pelo mapa.
+    const hasZ = get().creatures.some((c) => c.id.startsWith(NIGHT_ZOMBIE_PREFIX));
+    const actZ = nightFlockAction(night, hasZ);
+    if (actZ === 'spawn') set((s) => ({ creatures: [...s.creatures, ...createNightZombies()] }));
+    else if (actZ === 'leave') set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(NIGHT_ZOMBIE_PREFIX)) }));
   },
 
   spawnBoss: () => {

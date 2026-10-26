@@ -18,7 +18,7 @@ export const WILD_SPAWN_COUNTS: Record<string, number> = {
   monster: 7, // Aberração: monstro ~3m (anim própria)
   collector: 0, // FORA por ora: quantizado (não medi) → risco de gigante; reprocessar sem quantize depois
   civilian: 0, // REMOVIDO (Pedro): modelo demo vinha azul + T-pose (anim mixamo não roda). Fora do jogo.
-  zombie: 6,   // Morto-Vivo (humanoide Mixamo, walk próprio)
+  zombie: 0,   // Morto-Vivo: SÓ À NOITE desde 26/10 (createNightZombies, 6 espalhados) — de dia nenhum
   pelter: 0,   // ROBÔ fora (Pedro 26/10: animação da net, pequeno; um robô com a cara do jogo fica pro "mundo vivo")
   flintmaw: 3, // Fauce de Sílex (meio voador, anim própria)
 };
@@ -166,9 +166,38 @@ export function createNightPigeons(center: Position, rng: () => number = Math.ra
  */
 export function mergeResumedWorld(snapshot: CreatureState[], current: CreatureState[]): CreatureState[] {
   const gone = (c: CreatureState) =>
-    (c.id.startsWith('wild_') && !c.id.startsWith(NIGHT_FLOCK_PREFIX) && (WILD_SPAWN_COUNTS[c.speciesId] ?? 0) === 0)
+    (c.id.startsWith('wild_') && !NIGHT_PREFIXES.some((p) => c.id.startsWith(p)) && (WILD_SPAWN_COUNTS[c.speciesId] ?? 0) === 0)
     || (c.speciesId === 'wolf' && /^wolf_\d+$/.test(c.id)); // as 3 raposas fixas do início
   const kept = snapshot.filter((c) => !gone(c));
   const have = new Set(kept.map((c) => c.id));
   return [...kept, ...current.filter((c) => !have.has(c.id) && !gone(c))];
 }
+
+/**
+ * MORTO-VIVO SÓ À NOITE (26/10): de dia nenhum; ao escurecer (mesma regra do bando de pombos) nascem os 6 espalhados
+ * pelo mapa em lugar livre (não em volta do herói); ao clarear vão embora. Id `wild_zombie_night_<n>` (zona/Enfurecido
+ * iguais aos do mapa). Não vão pro save.
+ */
+export const NIGHT_ZOMBIES = 6;
+export const NIGHT_ZOMBIE_PREFIX = 'wild_zombie_night_';
+export function createNightZombies(rng: () => number = Math.random, count = NIGHT_ZOMBIES): CreatureState[] {
+  const def = CREATURES['zombie'];
+  if (!def) return [];
+  const out: CreatureState[] = [];
+  for (let attempts = 0; out.length < count && attempts < count * 300; attempts++) {
+    const pos: Position = {
+      x: Math.round((rng() * 2 - 1) * (WORLD_HALF - 3) * 100) / 100,
+      z: Math.round((rng() * 2 - 1) * (WORLD_HALF - 3) * 100) / 100,
+    };
+    if (!isFreeForWildlife(pos) || out.some((c) => dist(c.position, pos) < WILD_MIN_SPACING * 2)) continue;
+    const hp = scaleEnemyHp(def.maxHp);
+    out.push({
+      id: `${NIGHT_ZOMBIE_PREFIX}${out.length}`, speciesId: 'zombie', name: def.name, hp, maxHp: hp,
+      attackPower: def.attackPower, armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0,
+      position: pos, behavior: 'patrol', lootTable: [], respawnAt: null,
+    });
+  }
+  return out;
+}
+/** Ids que só existem de noite (a retomada de sala e o "some ao clarear" usam). */
+export const NIGHT_PREFIXES = [NIGHT_FLOCK_PREFIX, NIGHT_ZOMBIE_PREFIX];
