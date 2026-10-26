@@ -1,4 +1,5 @@
-import { useGLTF, useAnimations } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
+import { animEvery, useLodAnimations } from './anim-lod';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -158,7 +159,9 @@ export function GlbCreature({
   const gltf = useGLTF(url) as unknown as { scene: THREE.Group; animations: THREE.AnimationClip[]; parser: { json: { textures?: unknown[]; materials?: { name?: string }[] }; getDependency: (t: string, i: number) => Promise<unknown> } };
   const { scene, animations } = gltf;
   const cloned = useMemo(() => skeletonClone(scene), [scene]);
-  const { actions, names, mixer } = useAnimations(animations, inner);
+  // 26/10: animação por distância (anim-lod.ts) — perto todo quadro (igual), longe com menos atualizações.
+  const animEveryRef = useRef(1);
+  const { actions, names, mixer } = useLodAnimations(animations, inner, animEveryRef);
   const current = useRef<string | null>(null);
   /** Malhas do modelo (coletadas uma vez) p/ alternar castShadow sem traverse por quadro. */
   const meshes = useRef<THREE.Mesh[]>([]);
@@ -267,7 +270,9 @@ export function GlbCreature({
     // mesmo jeito todo quadro — pausar só congelava a pose, sem economizar.
     g.getWorldPosition(tmpCreatureV);
     const p = useGameStore.getState().player.position;
-    const near = (p.x - tmpCreatureV.x) * (p.x - tmpCreatureV.x) + (p.z - tmpCreatureV.z) * (p.z - tmpCreatureV.z) < CREATURE_ACTIVE_D2;
+    const d2 = (p.x - tmpCreatureV.x) * (p.x - tmpCreatureV.x) + (p.z - tmpCreatureV.z) * (p.z - tmpCreatureV.z);
+    animEveryRef.current = animEvery(d2);
+    const near = d2 < CREATURE_ACTIVE_D2;
     if (near !== active.current) {
       active.current = near;
       for (const m of meshes.current) m.castShadow = near;

@@ -1,4 +1,5 @@
-import { useGLTF, useAnimations } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
+import { animEvery, useLodAnimations } from './anim-lod';
 import { createPortal, useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
@@ -295,7 +296,9 @@ export function GlbHeroMixamo({
     return [...base, ...extra].filter((c): c is THREE.AnimationClip => c != null);
   }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
 
-  const { actions, mixer } = useAnimations(clips, inner);
+  // 26/10: animação por distância (anim-lod.ts) — herói/perto todo quadro (igual), inimigo longe com menos atualizações.
+  const animEveryRef = useRef(1);
+  const { actions, mixer } = useLodAnimations(clips, inner, animEveryRef);
   const current = useRef<HeroAction | null>(null);
   /** Qual clip de ataque está tocando ('attack' combo ou 'attackBow'). */
   const playingAtk = useRef<string>('attack');
@@ -374,7 +377,9 @@ export function GlbHeroMixamo({
     if (g) {
       g.getWorldPosition(tmpHeroV);
       const p = useGameStore.getState().player.position;
-      const near = (p.x - tmpHeroV.x) * (p.x - tmpHeroV.x) + (p.z - tmpHeroV.z) * (p.z - tmpHeroV.z) < ACTIVE_D2;
+      const d2 = (p.x - tmpHeroV.x) * (p.x - tmpHeroV.x) + (p.z - tmpHeroV.z) * (p.z - tmpHeroV.z);
+      animEveryRef.current = animEvery(d2);
+      const near = d2 < ACTIVE_D2;
       if (near !== active.current) {
         active.current = near;
         for (const m of meshes.current) m.castShadow = near;
