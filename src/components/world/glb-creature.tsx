@@ -86,6 +86,22 @@ export function groundDue(init: boolean, frame: number, near: boolean): boolean 
   return init ? near && frame % 18 === 0 : frame >= 3;
 }
 
+/**
+ * QUANDO medir o chão e com que FORÇA (0 = não mede). Pedro 26/10: "em alguns locais os bichos nascem mais embaixo
+ * do mapa". Causa: a 1ª medição (3 quadros após nascer) pegava a animação ainda ENTRANDO (fade de 0,2 s a partir da
+ * pose T, pé noutra altura) → assentava errado; e LONGE (> 40 m) nunca mais media → ficava enterrado até você chegar.
+ *  1ª (ao nascer): encaixa · 2ª (quadro 30, animação já de verdade): encaixa de novo, em qualquer distância ·
+ *  perto: a cada 18 quadros (35%) · longe: a cada 120 quadros (~2 s, 50%) — barato (só os ~96 pontos do pé).
+ */
+export const GROUND_SETTLE_FRAME = 30;
+export const GROUND_FAR_EVERY = 120;
+export function groundStep(init: boolean, frame: number, near: boolean): number {
+  if (!init) return frame >= 3 ? 1 : 0;
+  if (frame === GROUND_SETTLE_FRAME) return 1;
+  if (near) return frame % 18 === 0 ? 0.35 : 0;
+  return frame % GROUND_FAR_EVERY === 0 ? 0.5 : 0;
+}
+
 /** Próximo deslocamento vertical pra o pé (minY) encostar no chão (groundY), suavizado. */
 export function nextGroundOffset(current: number, minY: number, groundY: number, k = 0.35): number {
   if (!Number.isFinite(minY)) return current;
@@ -260,10 +276,11 @@ export function GlbCreature({
 
     if (autoGround && g.parent) {
       groundAcc.current += 1;
-      if (groundDue(groundInit.current, groundAcc.current, near)) {
+      const step = groundStep(groundInit.current, groundAcc.current, near); // 26/10: 2ª medição + longe também
+      if (step > 0) {
         g.parent.getWorldPosition(tmpCreatureV); // a raiz do bicho fica no chão (Beast/AI)
         g.updateWorldMatrix(true, true);
-        g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpCreatureV.y, groundInit.current ? 0.35 : 1); // 1ª: encaixa
+        g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpCreatureV.y, step); // 1ª/2ª: encaixa
         groundInit.current = true;
       }
     }

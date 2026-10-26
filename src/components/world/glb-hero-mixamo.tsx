@@ -7,7 +7,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
 import { poseToBind, retargetBind, retargetTwist } from './mixamo-retarget';
-import { createFootCache, footMinY, groundDue, nextGroundOffset } from './glb-creature';
+import { createFootCache, footMinY, groundStep, nextGroundOffset } from './glb-creature';
 import { hitStopScale } from './hit-stop';
 
 /** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
@@ -373,11 +373,15 @@ export function GlbHeroMixamo({
       }
       const fast = groundFast.current > 0 && near && groundInit.current;
       if (groundFast.current > 0) groundFast.current--;
-      if (autoGround && g.parent && (fast ? groundFast.current % 3 === 0 : (!groundInit.current && near && ++groundBorn.current >= 3) || groundDue(groundInit.current, ++groundAcc.current, near))) { // 1ª ao nascer (qualquer distância), depois ~0,3 s perto
+      // Força da medição (0 = não mede): troca de clip → rápida; nasceu PERTO → encaixa já; senão `groundStep`
+      // (1ª ao nascer, 2ª depois do fade da animação, perto a cada 0,3 s, LONGE a cada ~2 s — 26/10).
+      const born = autoGround && !groundInit.current && near && ++groundBorn.current >= 3;
+      const step = !autoGround ? 0 : fast ? (groundFast.current % 3 === 0 ? 0.5 : 0) : born ? 1 : groundStep(groundInit.current, ++groundAcc.current, near);
+      if (g.parent && step > 0) {
         g.parent.getWorldPosition(tmpHeroV); // a raiz do raider fica no chão (IA)
         g.updateWorldMatrix(true, true);
         // 1ª medição ENCAIXA na hora (antes subia suave ~1,5 s e parecia "brotar do chão" — Pedro 25/10).
-        g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpHeroV.y, groundInit.current ? (fast ? 0.5 : 0.35) : 1);
+        g.position.y = nextGroundOffset(g.position.y, footMinY(g, footCache.current), tmpHeroV.y, step);
         groundInit.current = true;
       }
     }

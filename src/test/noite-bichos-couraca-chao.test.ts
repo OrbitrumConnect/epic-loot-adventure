@@ -65,6 +65,32 @@ describe('Couraça não sai do chão ao começar a andar', () => {
   it('ligado: só nas trocas parado/andando/correndo; refaz os pontos do pé; 1ª medição perto sem esperar', () => {
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
     expect(hero).toMatch(/if \(loco\(wantNow\) && loco\(groundWant\.current\)\) \{ groundFast\.current = GROUND_FAST_FRAMES; footCache\.current\.picks\.length = 0; \}/);
-    expect(hero).toMatch(/\(!groundInit\.current && near && \+\+groundBorn\.current >= 3\)/);
+    expect(hero).toMatch(/const born = autoGround && !groundInit\.current && near && \+\+groundBorn\.current >= 3;/);
+  });
+});
+
+/* Pedro, 26/10: "em alguns locais do mapa os bichos nascem mais embaixo". 1ª medição pegava a animação ainda entrando
+   (fade 0,2 s da pose T) e LONGE nunca mais media → enterrado até você chegar perto. */
+describe('assenta certo em qualquer lugar (nascer longe)', () => {
+  it('1ª ao nascer, 2ª depois do fade (quadro 30, qualquer distância), perto a cada 18, longe a cada 120', async () => {
+    const { groundStep, GROUND_SETTLE_FRAME, GROUND_FAR_EVERY } = await import('@/components/world/glb-creature');
+    expect(groundStep(false, 2, false)).toBe(0);
+    expect(groundStep(false, 3, false)).toBe(1);
+    expect(groundStep(true, GROUND_SETTLE_FRAME, false)).toBe(1); // longe também re-encaixa com a pose de verdade
+    expect(groundStep(true, 36, true)).toBe(0.35);
+    expect(groundStep(true, 37, true)).toBe(0);
+    expect(groundStep(true, GROUND_FAR_EVERY, false)).toBe(0.5); // antes: longe = nunca
+    expect(groundStep(true, GROUND_FAR_EVERY + 1, false)).toBe(0);
+  });
+  it('bicho nascido longe com o pé 0,9 m errado (pose do fade) assenta em ≤ 0,5 s', () => {
+    let off = 0, err = 0.9;
+    for (let f = 1; f <= 30; f++) { // 1ª no quadro 3 mediu a pose errada; a 2ª (quadro 30) mede a certa e encaixa
+      if (f === 30) { const n = nextGroundOffset(off, -err, 0, 1); err -= n - off; off = n; }
+    }
+    expect(Math.abs(err)).toBeLessThan(1e-9);
+  });
+  it('bichos e raiders usam a mesma regra', () => {
+    const c = fs.readFileSync('src/components/world/glb-creature.tsx', 'utf8');
+    expect(c).toMatch(/const step = groundStep\(groundInit\.current, groundAcc\.current, near\);/);
   });
 });
