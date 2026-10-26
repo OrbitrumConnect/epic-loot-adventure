@@ -8,7 +8,8 @@ const src = fs.readFileSync('src/components/world/beast.tsx', 'utf8');
 const row = (id: string) => new RegExp(`  ${id}: \{ url: '[^']+', height: ([0-9.]+),[^}]*autoGround: true \}`).exec(src);
 
 describe('bichos em tamanho grande/real', () => {
-  for (const [id, h] of [['deer', 3.54], ['bear', 3.39], ['wolf_alpha', 1.85], ['boar', 3.95], ['goose', 2.17], ['pheasant', 2.31]] as const) {
+  // 26/10 (Pedro): búfalo +1 m (3,39 → 5,09), leão ×1,4 (1,85 → 2,59), jacaré ×1,5 (3,95 → 5,93).
+  for (const [id, h] of [['deer', 3.54], ['bear', 5.09], ['wolf_alpha', 2.59], ['boar', 5.93], ['goose', 2.17], ['pheasant', 2.31]] as const) {
     it(`${id}: height ${h} + autoGround`, () => {
       const m = row(id);
       expect(m, id).not.toBeNull();
@@ -18,5 +19,14 @@ describe('bichos em tamanho grande/real', () => {
   it('aves grandes: barra de vida acima da cabeça', () => {
     expect(src).toMatch(/goose: \{ labelHeight: 1\.9, ringRadius: 0\.9 \}/);
     expect(src).toMatch(/pheasant: \{ labelHeight: 1\.95, ringRadius: 0\.9 \}/);
+  });
+});
+
+/* 26/10: maiores → alcance da mordida e nome/anel acompanham (senão o herói ficava "dentro" do jacaré de 6,5 m). */
+describe('bichos maiores 26/10: alcance e rótulo acompanham', () => {
+  it('jacaré 3,6 m · búfalo 3,6 m · leão 3,2 m de alcance; nome acima da cabeça nova', () => {
+    expect(src).toMatch(/labelHeight: 1\.9, ringRadius: 3\.3,[\s\S]{0,200}attackRange: 3\.6,/);  // jacaré
+    expect(src).toMatch(/labelHeight: 3\.6, ringRadius: 2\.5,[\s\S]{0,120}attackRange: 3\.6,/);  // búfalo
+    expect(src).toMatch(/labelHeight: 2\.4, ringRadius: 1\.4,[\s\S]{0,120}attackRange: 3\.2,/);  // leão
   });
 });

@@ -30,9 +30,10 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   // Jacaré em tamanho real (Pedro 25/10: 'tá miúdo'): era 0,8 m de comprimento → ~3 m × 0,42 m de altura.
   // groundBias = pé medido na pose salva (1,37 m acima da base da caixa); perto, assenta pelo corpo animado.
   // 25/10 (Pedro: "jacaré menor que búfalo não faz sentido"): 3 → ~4,5 m de comprimento (búfalo 3,4 m).
-  boar: { url: '/models/animals/alligator.glb', height: 3.95, yaw: 0, tint: '#5a6b4a', groundBias: -2.06, autoGround: true },
-  bear: { url: '/models/animals/buffalo.glb', height: 3.39, yaw: 0, tint: '#4b3a2a', groundBias: -0.59, autoGround: true },
-  wolf_alpha: { url: '/models/animals/lioness.glb', height: 1.85, yaw: 0, tint: '#c49a5e', groundBias: -0.43, autoGround: true },
+  // 26/10 (Pedro): jacaré ×1,5 (~6,5 m), búfalo +1 m de altura (×1,5, ~3 m), leão ×1,4 (~1,5 m × 2,4 m). groundBias junto.
+  boar: { url: '/models/animals/alligator.glb', height: 5.93, yaw: 0, tint: '#5a6b4a', groundBias: -3.09, autoGround: true },
+  bear: { url: '/models/animals/buffalo.glb', height: 5.09, yaw: 0, tint: '#4b3a2a', groundBias: -0.89, autoGround: true },
+  wolf_alpha: { url: '/models/animals/lioness.glb', height: 2.59, yaw: 0, tint: '#c49a5e', groundBias: -0.6, autoGround: true },
   // Aves (texturas próprias → sem tint). OBS: a geometria vem com ASAS ABERTAS, então
   // a envergadura (X/Z) é bem maior que a altura (Y) — por isso a altura aqui é BAIXA
   // (normalizamos por Y). 25/10: o exibido (pele aplicada) era ~0,4 m de altura; Pedro pediu +1 m → ~1,4 m.
@@ -117,24 +118,25 @@ export const BEASTS: Record<string, BeastSpec> = {
     head: [0.4, 0.38, 0.44], headColor: '#4a3322', headPos: [0, 0.02, 0.66],
     snout: { size: [0.24, 0.2, 0.2], color: '#8a6a58', pos: [0, -0.04, 0.93] },
     ears: 'cone', earColor: '#3d2a1b', tail: 'stub', tailColor: '#3d2a1b', eyes: '#d84a28',
-    extras: ['tusks', 'mane'], extraColor: '#e8e0c8', labelHeight: 1.4, ringRadius: 2.2,
-    tuning: { ...hostileBase, speed: 4.1, aggroRange: 7, attackRange: 2.4, leashRange: 16, hitVerb: 'investiu' },
+    extras: ['tusks', 'mane'], extraColor: '#e8e0c8', labelHeight: 1.9, ringRadius: 3.3,
+    // 26/10: ×1,5 → alcance da mordida acompanha (do centro do corpo; senão o herói ficava "dentro" do jacaré).
+    tuning: { ...hostileBase, speed: 4.1, aggroRange: 7, attackRange: 3.6, leashRange: 16, hitVerb: 'investiu' },
   },
   bear: {
     scale: 1, body: [0.85, 0.75, 1.35], bodyColor: '#4b3424', legLen: 0.45, legThick: 0.2, legColor: '#3a281a',
     head: [0.5, 0.45, 0.5], headColor: '#5a412e', headPos: [0, 0.18, 0.9],
     snout: { size: [0.26, 0.2, 0.24], color: '#8a7058', pos: [0, 0.1, 1.2] },
     ears: 'round', earColor: '#3a281a', tail: 'stub', tailColor: '#3a281a', eyes: '#1a0f08',
-    extras: ['hump'], extraColor: '#4b3424', labelHeight: 2.6, ringRadius: 1.7,
-    tuning: { ...hostileBase, speed: 3.3, aggroRange: 8, attackRange: 3.0, leashRange: 16, chaseTimeout: 14, walkSpeedChase: 11, walkSpeedIdle: 6, hitVerb: 'rasgou' },
+    extras: ['hump'], extraColor: '#4b3424', labelHeight: 3.6, ringRadius: 2.5,
+    tuning: { ...hostileBase, speed: 3.3, aggroRange: 8, attackRange: 3.6, leashRange: 16, chaseTimeout: 14, walkSpeedChase: 11, walkSpeedIdle: 6, hitVerb: 'rasgou' },
   },
   wolf_alpha: {
     scale: 1, body: [0.55, 0.6, 1.2], bodyColor: '#3a3d44', legLen: 0.4, legThick: 0.14, legColor: '#2a2c32',
     head: [0.46, 0.46, 0.58], headColor: '#575b64', headPos: [0, 0.2, 0.84],
     snout: { size: [0.26, 0.2, 0.28], color: '#7a7e88', pos: [0, 0.12, 1.2] },
     ears: 'cone', earColor: '#2a2c32', tail: 'long', tailColor: '#2a2c32', eyes: '#ff5a1f',
-    extras: ['mane'], extraColor: '#8a8f9a', labelHeight: 1.9, ringRadius: 1.0,
-    tuning: { ...WOLF_TUNING, speed: 4.4, aggroRange: 11, attackRange: 2.8, leashRange: 28, hitVerb: 'dilacerou' },
+    extras: ['mane'], extraColor: '#8a8f9a', labelHeight: 2.4, ringRadius: 1.4,
+    tuning: { ...WOLF_TUNING, speed: 4.4, aggroRange: 11, attackRange: 3.2, leashRange: 28, hitVerb: 'dilacerou' },
   },
   // Pombo Bravo: ave HOSTIL que mergulha no jogador (usa o clip de voo do GLB).
   // Rápida, alcance curto, fraca. Corpo procedural só é usado se o GLB falhar.
