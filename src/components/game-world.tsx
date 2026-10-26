@@ -229,8 +229,9 @@ function Tree({ x, z, size = 1, seed, c }: { x: number; z: number; size?: number
 const ROCK_SPHERES: FadeSphere[] = [[0, 0, 0, 0.8]];
 
 /** `fade={false}`: o pai (ruína, cristal) registra o grupo inteiro. */
-function Rock({ x, z, size = 1, c, fade = true }: { x: number; z: number; size?: number; c: Palette; fade?: boolean }) {
-  const y = terrainHeight(x, z);
+/** `y`: altura LOCAL (dentro de um grupo já posto no chão). Sem ela, relevo antigo — usado solto no mundo. */
+function Rock({ x, z, size = 1, c, fade = true, y: yLocal }: { x: number; z: number; size?: number; c: Palette; fade?: boolean; y?: number }) {
+  const y = yLocal ?? terrainHeight(x, z);
   const ref = useRef<THREE.Mesh>(null);
   useFadeGroup(ref, fade ? ROCK_SPHERES : null);
   return (
@@ -318,9 +319,35 @@ function FadeGroup({
   return <group ref={ref} {...rest}>{children}</group>;
 }
 
-function Campfire({ c, position: pos }: { c: Palette; position: [number, number, number] }) {
+/**
+ * CHÃO SECO mais perto (Pedro 26/10: "coisas voando no lago, meio poly"). Os enfeites do protótipo (fogueiras, baú,
+ * torre e recurso de cristal) usavam o relevo ANTIGO (`terrainHeight`) e ficaram flutuando sobre o lago do mapa novo.
+ * Agora: altura do chão REAL; se o ponto é água, procura em anéis (até 14 m) o 1º ponto seco. Nada some, nada flutua.
+ */
+export function dryGroundNear(x: number, z: number, groundAt: (x: number, z: number) => number, waterY: number): [number, number, number] {
+  const dry = (gx: number, gz: number) => groundAt(gx, gz) > waterY + 0.3;
+  if (dry(x, z)) return [x, groundAt(x, z), z];
+  for (let r = 1; r <= 14; r++) {
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const nx = x + Math.cos(a) * r, nz = z + Math.sin(a) * r;
+      if (dry(nx, nz)) return [nx, groundAt(nx, nz), nz];
+    }
+  }
+  return [x, groundAt(x, z), z];
+}
+const realGround = (x: number, z: number) => glbSurfaceY(x, z, terrainHeight(x, z));
+/** Posição seca recalculada quando o mapa (GLB) termina de carregar. */
+function useDryGround(x: number, z: number): [number, number, number] {
+  const tv = useTerrainVersion();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => dryGroundNear(x, z, realGround, MAP_WATER_Y), [x, z, tv]);
+}
+
+function Campfire({ c, position: rawPos }: { c: Palette; position: [number, number, number] }) {
   const ref = useRef<THREE.PointLight>(null);
-  const y = terrainHeight(pos[0], pos[2]);
+  const pos = useDryGround(rawPos[0], rawPos[2]);
+  const y = pos[1];
   useFrame(({ clock }) => {
     const l = ref.current;
     if (!l) return;
@@ -2050,6 +2077,11 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
    * Clique num recurso: normal coleta (como antes), Shift enfileira
    * `gather_node`. Marca o clique como consumido para não virar ataque.
    */
+  // Enfeites do protótipo no chão SECO real (antes flutuavam sobre o lago — Pedro 26/10).
+  const crystalPos = useDryGround(-3, -2);
+  const chestPos = useDryGround(2, 3);
+  const towerPos = useDryGround(4, 5);
+
   const resourceClick = useCallback((e: ThreeEvent<PointerEvent>, x: number, z: number) => {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -2310,8 +2342,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <Campfire c={c} position={[-15, 0, -12]} />
 
       {/* Crystal resource */}
-      <FadeGroup spheres={CRYSTAL_SPHERES} position={[-3, terrainHeight(-3, -2), -2]} onPointerDown={e => resourceClick(e, -3, -2)}>
-        <Rock x={0} z={0} size={1.25} c={c} fade={false} />
+      <FadeGroup spheres={CRYSTAL_SPHERES} position={crystalPos} onPointerDown={e => resourceClick(e, crystalPos[0], crystalPos[2])}>
+        <Rock x={0} z={0} y={0} size={1.25} c={c} fade={false} />
         {[-0.4, 0, 0.4].map((x, i) => (
           <mesh key={x} position={[x, 0.9 + i * 0.1, 0.1]} rotation={[0, 0, x]} castShadow>
             <coneGeometry args={[0.18, 0.9, 5]} />
@@ -2321,7 +2353,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       </FadeGroup>
 
       {/* Chest */}
-      <FadeGroup spheres={CHEST_SPHERES} position={[2, terrainHeight(2, 3) + 0.2, 3]} onPointerDown={e => resourceClick(e, 2, 3)}>
+      <FadeGroup spheres={CHEST_SPHERES} position={[chestPos[0], chestPos[1] + 0.2, chestPos[2]]} onPointerDown={e => resourceClick(e, chestPos[0], chestPos[2])}>
         <mesh castShadow>
           <boxGeometry args={[0.65, 0.4, 0.42]} />
           <meshStandardMaterial color={c.trunk} />
@@ -2333,7 +2365,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       </FadeGroup>
 
       {/* Crystal tower */}
-      <FadeGroup spheres={TOWER_SPHERES} position={[4, terrainHeight(4, 5), 5]}>
+      <FadeGroup spheres={TOWER_SPHERES} position={towerPos}>
         <mesh position={[0, 1, 0]}>
           <cylinderGeometry args={[0.3, 0.5, 2, 6]} />
           <meshStandardMaterial color={c.rock} />
