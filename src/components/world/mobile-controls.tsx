@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronsUp, Crosshair, Swords } from 'lucide-react';
 import { aimFire, setAiming, useAim } from './aim';
-import { clearVirtualMove, setVirtualMove } from './virtual-input';
+import { addVirtualLook, clearVirtualMove, setTouchLayout, setVirtualMove } from './virtual-input';
 import { useGameStore } from '@/game/state/game-store';
 
 const RADIUS = 54; // px: distância máxima do knob ao centro (satura em magnitude 1).
@@ -22,16 +22,16 @@ export const RUN_OFF = 0.8;
 /** Tamanhos (px) — 26/10 (Pedro: "mais juntos e um pouco menores; o joystick fica com pouco espaço"): ATACAR 84→72,
  *  botões do arco 52→44, folga menor e o arco abre mais pra cima/baixo em vez de pra esquerda (~271 → ~201 px). */
 export const ATTACK_BTN = 72;
-export const ARC_BTN = 44;
+export const ARC_BTN = 40; // 26/10 (2ª): 44 → 40 ("diminuir levemente"); ATACAR segue 72 (virou joystick de câmera)
 /** Raios dos anéis (px, do centro do ATACAR) e faixa de ângulo (graus: 90 = em cima, 180 = à esquerda). */
-export const ARC_INNER = 74;
-export const ARC_OUTER = 118;
+export const ARC_INNER = 70;
+export const ARC_OUTER = 112;
 export const ARC_FROM = 80;
 export const ARC_TO = 190;
-/** Distância mínima entre centros de botões vizinhos no arco (botão 44 px + folga). */
-export const ARC_GAP = 48;
+/** Distância mínima entre centros de botões vizinhos no arco (botão 40 px + folga). */
+export const ARC_GAP = 44;
 /** Distância mínima entre os anéis (botão + folga). */
-export const ARC_RING_GAP = 52;
+export const ARC_RING_GAP = 48;
 
 /** Raio que cabe `n` botões na abertura `from→to` sem encostar (nunca menor que `min`). */
 export function arcRadius(n: number, min: number, from = ARC_FROM, to = ARC_TO): number {
@@ -57,6 +57,8 @@ type Stick = { bx: number; by: number; kx: number; ky: number };
 
 export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAttack: () => void; canAim?: boolean; powers?: ArcButton[] }) {
   const aiming = useAim(s => s.active);
+  // Câmera de ombro do celular: herói à esquerda enquanto os controles de toque estão na tela.
+  useEffect(() => { setTouchLayout(true); return () => setTouchLayout(false); }, []);
   // Sem 3ª pessoa (ou desmontou): nunca fica preso mirando.
   useEffect(() => { if (!canAim) setAiming(false); return () => setAiming(false); }, [canAim]);
   const toggleAim = (e: React.PointerEvent) => { e.preventDefault(); setAiming(!useAim.getState().active); };
@@ -106,6 +108,21 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
     e.preventDefault();
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
   };
+  // ATACAR = JOYSTICK DE CÂMERA (Pedro 26/10, padrão PUBG/Free Fire): encostar ATIRA na hora; segurar e arrastar
+  // GIRA a câmera (lados/cima), sem atirar de novo. Os 2 polegares embaixo: esquerdo anda, direito mira e atira.
+  const atkLook = useRef<{ id: number; x: number; y: number } | null>(null);
+  const attackDown = (e: React.PointerEvent) => {
+    attack(e);
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    atkLook.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  };
+  const attackMove = (e: React.PointerEvent) => {
+    const s = atkLook.current;
+    if (!s || s.id !== e.pointerId || !Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return;
+    addVirtualLook(e.clientX - s.x, e.clientY - s.y);
+    s.x = e.clientX; s.y = e.clientY;
+  };
+  const attackUp = (e: React.PointerEvent) => { if (atkLook.current?.id === e.pointerId) atkLook.current = null; };
   const attack = (e: React.PointerEvent) => {
     e.preventDefault();
     // Mirando: atira no que está no pontinho; sem nada na mira, o ataque de sempre.
@@ -145,7 +162,8 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
       <div className="mobile-arc">
         {inner.map((b, i) => arcBtn(b, innerPos[i]!))}
         {outer.map((b, i) => arcBtn(b, outerPos[i]!))}
-        <button className="mobile-btn mobile-btn--attack" aria-label="Atacar" onPointerDown={attack}><Swords /></button>
+        <button className="mobile-btn mobile-btn--attack" aria-label="Atacar"
+          onPointerDown={attackDown} onPointerMove={attackMove} onPointerUp={attackUp} onPointerCancel={attackUp}><Swords /></button>
       </div>
     </>
   );

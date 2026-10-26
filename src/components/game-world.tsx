@@ -10,7 +10,7 @@ import { recentShotPoint } from '@/game/systems/shotFacing';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
 import { creatureById } from './world/hostile-ai';
 import { BackgroundSim } from './world/background-sim';
-import { virtualMove } from './world/virtual-input';
+import { takeVirtualLook, touchLayout, virtualMove } from './world/virtual-input';
 import { isTypingTarget } from './world/typing-target';
 import { HarvestNodes } from './world/harvest-nodes';
 import { queueNearestNode } from './world/objective-bridge';
@@ -1856,6 +1856,19 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     const modeChanged = prevCameraMode.current !== cameraMode;
     prevCameraMode.current = cameraMode;
 
+    // Arrasto no ATACAR do celular (joystick de câmera, `virtualLook`): mesma sensibilidade do arrasto na tela.
+    const vl = takeVirtualLook();
+    if (vl.dx !== 0 || vl.dy !== 0) {
+      if (cameraMode === 'third') {
+        const sensitivity = 0.005 * aimSensitivityScale();
+        cameraYaw.current -= vl.dx * sensitivity;
+        cameraPitch.current = THREE.MathUtils.clamp(cameraPitch.current - vl.dy * sensitivity, -1.0, 0.65);
+        noteManualLook();
+      } else if (cameraMode === 'iso') {
+        isoYaw.current -= vl.dx * 0.006;
+      }
+    }
+
     if (cameraMode === 'iso') {
       // Offset horizontal (24,24) GIRADO por isoYaw → vê os outros lados (360°).
       // Altura fixa em 29. Com isoYaw=0 é idêntico ao ângulo atual (sem regressão).
@@ -1970,7 +1983,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       const pitch = cameraPitch.current + recoil.current.x;
       camDist.current = THREE.MathUtils.lerp(camDist.current, aiming ? 1.7 : camDistTarget.current, aiming ? 0.2 : 0.1);
       const dist = camDist.current;
-      const shoulderOffset = aiming ? 0.75 : 0.7;
+      // Celular (controles de toque): ombro do OUTRO lado → herói à esquerda, longe dos botões (Pedro 26/10).
+      const shoulderOffset = (aiming ? 0.75 : 0.7) * (touchLayout.on ? -1 : 1);
       if (camera instanceof THREE.PerspectiveCamera) {
         const wantFov = aiming ? 52 / aimNow.zoom : 65;
         if (Math.abs(camera.fov - wantFov) > 0.05) {

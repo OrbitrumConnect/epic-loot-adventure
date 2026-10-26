@@ -59,3 +59,37 @@ describe('arco do celular', () => {
     expect(idx.match(/data-combat/g)!.length).toBeGreaterThanOrEqual(5);
   });
 });
+
+/* Pedro, 26/10: "2 joysticks, um de cada lado: o de andar e o ATACAR — toque atira, arrastar só gira a câmera";
+   "o herói fica atrás dos botões — melhor do outro lado". */
+describe('ATACAR = joystick de câmera + herói à esquerda no celular', () => {
+  it('encostar atira 1 vez; arrastar segurando só gira a câmera (sem atirar de novo); soltar para', async () => {
+    const { takeVirtualLook, touchLayout } = await import('@/components/world/virtual-input');
+    // jsdom não tem PointerEvent (o navegador tem): mínimo pra o toque levar pointerId + coordenadas.
+    if (!('PointerEvent' in window)) {
+      class PE extends MouseEvent { pointerId: number; constructor(t: string, i: PointerEventInit = {}) { super(t, i); this.pointerId = i.pointerId ?? 0; } }
+      (window as unknown as { PointerEvent: typeof PE }).PointerEvent = PE;
+    }
+    takeVirtualLook();
+    const onAttack = vi.fn();
+    const { unmount } = render(<MobileControls onAttack={onAttack} />);
+    expect(touchLayout.on).toBe(true); // controles de toque na tela → câmera de ombro do lado esquerdo
+    const btn = screen.getByLabelText('Atacar');
+    fireEvent.pointerDown(btn, { pointerId: 7, clientX: 300, clientY: 500 });
+    fireEvent.pointerMove(btn, { pointerId: 7, clientX: 330, clientY: 490 });
+    fireEvent.pointerMove(btn, { pointerId: 7, clientX: 350, clientY: 480 });
+    expect(onAttack).toHaveBeenCalledTimes(1);
+    expect(takeVirtualLook()).toEqual({ dx: 50, dy: -20 });
+    fireEvent.pointerMove(btn, { pointerId: 9, clientX: 999, clientY: 999 }); // outro dedo: ignora
+    fireEvent.pointerUp(btn, { pointerId: 7 });
+    fireEvent.pointerMove(btn, { pointerId: 7, clientX: 400, clientY: 400 }); // soltou: não gira mais
+    expect(takeVirtualLook()).toEqual({ dx: 0, dy: 0 });
+    unmount();
+    expect(touchLayout.on).toBe(false);
+  });
+  it('câmera aplica o arrasto com a mesma sensibilidade do dedo na tela; ombro invertido só com toque', () => {
+    const gw = fs.readFileSync('src/components/game-world.tsx', 'utf8');
+    expect(gw).toMatch(/const vl = takeVirtualLook\(\);[\s\S]{0,300}cameraYaw\.current -= vl\.dx \* sensitivity;/);
+    expect(gw).toMatch(/const shoulderOffset = \(aiming \? 0\.75 : 0\.7\) \* \(touchLayout\.on \? -1 : 1\);/);
+  });
+});
