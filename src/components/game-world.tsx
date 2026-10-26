@@ -6,6 +6,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
 import { BurstRuntime } from './world/burst-runtime';
+import { attachContextGuard, lowGpuMode } from './world/gpu-guard';
 import { bridgeLampSpots, safeZoneLampSpots } from './world/lamp-layout';
 import { recentShotPoint } from '@/game/systems/shotFacing';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
@@ -2402,9 +2403,12 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 /** RESOLUÇÃO DINÂMICA (o "DLSS" do navegador): começa em 1 (como sempre foi); com FPS folgado
  *  sobe a nitidez até a densidade da tela (teto 1,5); com FPS caindo desce até 0,75 e volta quando
  *  melhora. Sombras/efeitos intocados. Limite de vaivém pra não ficar oscilando. */
-const DPR_MIN = 0.75;
+// Modo leve (aparelho que derrubou o 3D 2× — gpu-guard.ts): resolução 0,6–0,85; senão igual a sempre.
+const LOW_GPU = lowGpuMode();
+const DPR_MIN = LOW_GPU ? 0.6 : 0.75;
 function maxDpr(): number {
   if (typeof window === 'undefined') return 1;
+  if (LOW_GPU) return 0.85;
   return Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
 }
 
@@ -2426,7 +2430,8 @@ export default function GameWorld(props: WorldProps) {
 
   return (
     <>
-      <Canvas shadows="percentage" dpr={1} performance={{ min: 0.5 }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
+      <Canvas shadows={LOW_GPU ? false : 'percentage'} dpr={LOW_GPU ? 0.85 : 1} performance={{ min: 0.5 }}
+        onCreated={({ gl }) => { attachContextGuard(gl.domElement); }} gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }} onContextMenu={e => e.preventDefault()}>
         {cameraMode === 'iso' ? (
           <OrthographicCamera makeDefault position={[24, 29, 24]} zoom={33} near={0.1} far={160} />
         ) : (
