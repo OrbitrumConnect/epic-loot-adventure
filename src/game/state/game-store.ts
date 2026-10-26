@@ -11,6 +11,7 @@ import { weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
 import { audioManager, distanceGain } from '../audio/audio-manager';
 import { noteShotAt } from '../systems/shotFacing';
+import { breakGrab } from '../systems/grabSystem';
 import { BOOST_DURATION_MS, BOOST_ITEMS, BOOST_UNLOCK_LEVEL, boostCooldown, boostScale, BURST_GAP, burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
@@ -994,6 +995,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
     noteShotAt(creature.position.x, creature.position.z); // o herói vira pro bicho que LEVOU o golpe
+    // Acertou o jacaré que te agarrou → SOLTA do giro da morte (grabSystem).
+    if (breakGrab(targetId)) set(s => ({ ui: { ...s.ui, message: '💪 Você se soltou do jacaré!' } }));
     // Daqui o tiro SAI: gatilho do rifle abre a rajada (os próximos tiros repetem este mesmo ataque).
     if (!fromBurst && burstN > 1) {
       startBurst(burstN, () => { const b = get().player.lastAttackAt; get().attack(targetId, true); return get().player.lastAttackAt !== b; }, Date.now(), BURST_GAP * boostK);

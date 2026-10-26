@@ -14,6 +14,9 @@ import { CREATURES } from '@/game/data/creatures';
 import type { Position } from '@/game/types';
 import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, WOLF_TUNING, type HostileTuning } from './hostile-ai';
+import { GRAB_SPECIES, grabSpin } from '@/game/systems/grabSystem';
+/** Altura do eixo do giro da morte (m, no corpo do jacaré). */
+const GRAB_ROLL_H = 0.45;
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 import { GlbCreature } from './glb-creature';
 
@@ -294,6 +297,13 @@ export function Beast({
         const want = flyLift(flyer, anim, performance.now() / 1000);
         const y = flyRef.current.position.y;
         flyRef.current.position.y = y + (want - y) * (anim.swing > 0 ? 0.35 : 0.08); // mergulho rápido, subida suave
+      }
+      // GIRO DA MORTE (jacaré, grabSystem): rola em volta do PRÓPRIO corpo (eixo a ~0,45 m), não do pé.
+      if (GRAB_SPECIES.has(speciesId) && flyRef.current) {
+        const a = grabSpin(creatureId);
+        flyRef.current.rotation.z = a;
+        flyRef.current.position.x = GRAB_ROLL_H * Math.sin(a);
+        flyRef.current.position.y = GRAB_ROLL_H * (1 - Math.cos(a));
       }
       if (glb) return;                 // GLB anima sozinho; pula as pernas procedurais
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.5 : 0;

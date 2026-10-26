@@ -42,6 +42,7 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTargets, useNet, waveOwner } from '@/net/multiplayer';
 import { takeKnockback } from '@/game/systems/knockbackSystem';
 import { pushEvent, shotEvent } from '@/game/systems/feedbackSystem';
+import { activeGrab, breakGrab, grabTicksDue, tryStartGrab } from '@/game/systems/grabSystem';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 
 /**
@@ -261,6 +262,23 @@ export type HostileTuning = {
    *  `height` = altura do cano (m). Ausente = golpe normal (todos os outros, números intactos). */
   shot?: { height: number; burst?: number };
 };
+
+/** Pancada do giro da morte no herói local (mesma regra da mordida: armadura + morte). */
+function hurtPlayerFromGrab(name: string, raw: number, at: { x: number; z: number }): void {
+  const st = useGameStore.getState();
+  if (st.player.dead) { breakGrab(); return; }
+  const dmg = mitigateDamage(Math.max(1, raw), st.player);
+  reportDamageToStore('player', dmg, at, true);
+  useGameStore.setState((s) => {
+    if (s.player.dead) return {};
+    const hp = Math.max(0, s.player.hp - dmg);
+    if (hp <= 0) {
+      breakGrab();
+      return { player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 }, ui: { ...s.ui, message: `${name} te afogou no giro da morte!`, deathBy: { name, pvp: false } } };
+    }
+    return { player: { ...s.player, hp }, ui: { ...s.ui, message: `🐊 Giro da morte! -${dmg} HP (${hp}/${s.player.maxHp}) — bata no jacaré!` } };
+  });
+}
 
 /** Intervalo dos tiros da rajada do inimigo (s). A rajada é só visual/som: o dano é o MESMO golpe de antes. */
 export const ENEMY_BURST_GAP_MS = 120;
@@ -575,6 +593,10 @@ export function useHostileAI(opts: HostileOptions) {
               ui: { ...s.ui, message: `${creature.name} ${tuning.hitVerb}! -${dmg} HP (${hp}/${s.player.maxHp})` },
             };
           });
+          // GIRO DA MORTE (jacaré, grabSystem): 30% de agarrar na mordida — preso ~1,2 s, 3 pancadas; bater nele solta.
+          if (!useGameStore.getState().player.dead && tryStartGrab(creatureId, creature.speciesId, Math.max(1, creature.attackPower))) {
+            useGameStore.getState().setMessage(`🐊 ${creature.name} te AGARROU — giro da morte! Bata nele pra se soltar!`);
+          }
         }
       } else {
         // Base do jogador: o jogador está fora de alcance, mas há uma peça
@@ -705,6 +727,10 @@ export function useHostileAI(opts: HostileOptions) {
       // Zona segura do spawn: nenhum inimigo/boss entra — fica barrado na borda.
       [targetX, targetZ] = pushOutSafeZone(targetX, targetZ, CREATURE_RADIUS);
     }
+    // Giro da morte: o jacaré que agarrou fica PARADO girando e aplica as pancadas na hora certa (1/3, 2/3, 3/3).
+    const grabTicks = grabTicksDue(creatureId);
+    if (grabTicks > 0) hurtPlayerFromGrab(creature.name, (activeGrab()?.perTick ?? 1) * grabTicks, { x: px, z: pz });
+    if (activeGrab()?.creatureId === creatureId) { targetX = wx; targetZ = wz; moving = false; }
     g.position.x = THREE.MathUtils.clamp(targetX, -MAP_HALF, MAP_HALF);
     g.position.z = THREE.MathUtils.clamp(targetZ, -MAP_HALF, MAP_HALF);
     // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno — e

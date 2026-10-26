@@ -16,6 +16,7 @@ const cursorRay = new THREE.Raycaster();
 const cursorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const cursorHit = new THREE.Vector3();
 import { recentShotPoint } from '@/game/systems/shotFacing';
+import { isGrabbed } from '@/game/systems/grabSystem';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
 import { creatureById } from './world/hostile-ai';
 import { BackgroundSim } from './world/background-sim';
@@ -627,7 +628,8 @@ function Character({
 
     // Atacando (tiro ou golpe, ~0,4 s): PARA pra atacar (Pedro) — antes seguia deslizando com a
     // pose de tiro ("rastejando"). Freia como ao soltar o movimento; depois retoma o destino.
-    if (attackPhase.current !== 'idle') { targetVx = 0; targetVz = 0; }
+    // Preso no giro da morte do jacaré (grabSystem): não anda até se soltar/acabar.
+    if (attackPhase.current !== 'idle' || isGrabbed()) { targetVx = 0; targetVz = 0; }
 
     if (targetVx !== 0 || targetVz !== 0) {
       const len = Math.sqrt(targetVx * targetVx + targetVz * targetVz);
