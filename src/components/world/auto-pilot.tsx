@@ -25,6 +25,7 @@ import {
 } from './pilot-combat';
 import { buildAutoSnapshot, decideIntent, getObjectives, setAutoMode, tickWorld } from './objective-bridge';
 import { setPilotAim } from './pilot-aim';
+import { useAim } from './aim';
 import { setPilotStatus } from './pilot-status';
 import { MAP_HALF } from './world-kit';
 
@@ -265,6 +266,14 @@ export function AutoPilot({
         // Aproximar ou trocar de arma tira do estado de parada.
         engaged.current = decision.action !== 'approach' && decision.action !== 'switch';
 
+        // Você MIRANDO (botão direito): o gatilho é seu — o piloto não atira no alvo dele (que pode estar do lado/atrás,
+        // Pedro 25/10: "mirando pra frente e bala indo pro lado"). Andar/recuar seguem.
+        const playerAiming = useAim.getState().active && (decision.action === 'attack' || decision.action === 'special');
+        if (playerAiming) {
+          hold();
+          setPilotStatus('attack', 'Você está mirando', '');
+          break;
+        }
         switch (decision.action) {
           case 'switch': {
             // Troca a arma e NÃO ataca neste tick: o ataque sai no próximo,

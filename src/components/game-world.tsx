@@ -6,6 +6,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
 import { AutoPilot } from './world/auto-pilot';
 import { BurstRuntime } from './world/burst-runtime';
+import { recentShotPoint } from '@/game/systems/shotFacing';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
 import { creatureById } from './world/hostile-ai';
 import { BackgroundSim } from './world/background-sim';
@@ -465,7 +466,11 @@ function Character({
     // Vira de frente pro bicho vivo mais próximo, dentro do alcance da arma.
     // Mirando (3ª pessoa): quem manda é a mira — ele já está virado pra câmera.
     const b = body.current;
-    if (b && !useAim.getState().active) {
+    // Vira pro bicho/ponto que LEVOU o tiro (Pedro 25/10: virava pro mais perto → "bala pro lado e o boneco não vira").
+    const shot = recentShotPoint();
+    if (b && !useAim.getState().active && shot && (shot.x - b.position.x) ** 2 + (shot.z - b.position.z) ** 2 > 0.04) {
+      targetRotY.current = Math.atan2(shot.x - b.position.x, shot.z - b.position.z);
+    } else if (b && !useAim.getState().active) {
       const st = useGameStore.getState();
       const range = weaponRangeFor(selectedItemId(st), st.player.level) + 1;
       let best: { x: number; z: number } | null = null;
