@@ -67,7 +67,7 @@ import { useCardWatchers } from '@/components/hud/card-watchers';
 import { hordeCallBonus } from '@/game/systems/waveSystem';
 import { toggleTerrainDetail } from '@/components/world/terrain-detail';
 import { promptInstall, usePwa } from '@/net/pwa-install';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsMobile, useTouchScreen } from '@/hooks/use-mobile';
 import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
 import { supabase, setAway } from '@/net/multiplayer';
 import { SAVE_KEY } from '@/game/systems/persistenceSystem';
@@ -403,7 +403,9 @@ function Index() {
   }, [attack, cameraMode]);
 
   const inCity = ui.mode === 'city';
-  const isMobile = useIsMobile();
+  // Controles de toque: tela estreita OU tela de toque (celular DEITADO também — 26/10).
+  const touchScreen = useTouchScreen();
+  const isMobile = useIsMobile() || touchScreen;
   const authUser = useAuth(s => s.user);
   const signOut = useAuth(s => s.signOut);
   // O mundo 3D só monta DEPOIS do login (Caio, 22/10: no Android fraco o jogo carregava atrás da

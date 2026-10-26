@@ -84,10 +84,13 @@ function aimScore(origin: THREE.Vector3, dir: THREE.Vector3, p: THREE.Vector3, r
   return ang <= tol ? ang : null;
 }
 
-/** Corpo do bicho pela altura da barra de vida (`top`, local): centro e raio. Sem medida → 1,6 m. */
-function creatureBody(a: { y: number; top: number }): { cy: number; r: number } {
+/** Corpo do bicho pela altura da barra de vida (`top`, local): centro e raio. Sem medida → 1,6 m.
+ *  26/10 (Pedro: "no manual a bala passa nos inimigos sem dano"): bicho COMPRIDO (jacaré 6,5 m, búfalo 5 m) tinha a
+ *  bola da mira pela ALTURA (jacaré 0,67 m) → mirando na cabeça/rabo a bala atravessava. Agora o raio é o MAIOR entre
+ *  o da altura e o do CORPO (`r`, o mesmo da separação: jacaré 2,5, búfalo 1,9). Raiders/pirata: igual (altura ganha). */
+export function creatureBody(a: { y: number; top: number; r?: number }): { cy: number; r: number } {
   const h = a.top > 0.3 ? a.top : 1.6;
-  return { cy: a.y + h * 0.5, r: THREE.MathUtils.clamp(h * 0.35, 0.45, 3) };
+  return { cy: a.y + h * 0.5, r: THREE.MathUtils.clamp(Math.max(h * 0.35, a.r ?? 0), 0.45, 3.5) };
 }
 
 /** Coisa GRANDE no caminho (morro/mapa/labirinto, casa, fábrica)? Muro/torre da base passam. */

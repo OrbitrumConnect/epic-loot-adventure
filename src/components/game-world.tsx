@@ -2053,12 +2053,15 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       if (aimC && aimC.behavior !== 'dead') cameraYaw.current = followYaw(cameraYaw.current, Math.atan2(aimC.position.x - px, aimC.position.z - pz), delta);
       const yaw = cameraYaw.current + recoil.current.y;
       const pitch = cameraPitch.current + recoil.current.x;
-      camDist.current = THREE.MathUtils.lerp(camDist.current, aiming ? 1.7 : camDistTarget.current, aiming ? 0.2 : 0.1);
+      // Celular mirando (26/10, Pedro: "dá muito zoom quando vai atirar"): câmera mais longe e campo mais aberto — na tela
+      // pequena, a 1,7 m o herói (à esquerda) saía da tela. PC igual.
+      const aimDist = touchLayout.on ? AIM_DIST_TOUCH : 1.7;
+      camDist.current = THREE.MathUtils.lerp(camDist.current, aiming ? aimDist : camDistTarget.current, aiming ? 0.2 : 0.1);
       const dist = camDist.current;
       // Celular (controles de toque): ombro do OUTRO lado → herói à esquerda, longe dos botões (Pedro 26/10).
       const shoulderOffset = (aiming ? 0.75 : 0.7) * (touchLayout.on ? -1 : 1);
       if (camera instanceof THREE.PerspectiveCamera) {
-        const wantFov = aiming ? 52 / aimNow.zoom : 65;
+        const wantFov = aiming ? (touchLayout.on ? AIM_FOV_TOUCH : 52) / aimNow.zoom : 65;
         if (Math.abs(camera.fov - wantFov) > 0.05) {
           camera.fov = THREE.MathUtils.lerp(camera.fov, wantFov, 0.2);
           camera.updateProjectionMatrix();
@@ -2449,6 +2452,9 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
 // Modo leve (aparelho que derrubou o 3D 2× — gpu-guard.ts): resolução 0,6–0,85; senão igual a sempre.
 const LOW_GPU = lowGpuMode();
 const DPR_MIN = LOW_GPU ? 0.6 : 0.75;
+/** Mira no celular (toque): distância da câmera e campo de visão (PC: 1,7 m e 52°). */
+export const AIM_DIST_TOUCH = 3.2;
+export const AIM_FOV_TOUCH = 58;
 function maxDpr(): number {
   if (typeof window === 'undefined') return 1;
   if (LOW_GPU) return 0.85;
