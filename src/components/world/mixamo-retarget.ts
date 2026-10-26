@@ -197,7 +197,12 @@ export function retargetBind(clip: THREE.AnimationClip, srcRoot: THREE.Object3D,
   const visit = (o: THREE.Object3D) => { if (animated.has(o.name) && T.get(o.name) === o && S.get(o.name)) order.push(o); o.children.forEach(visit); };
   visit(tgt);
   const mixer = new THREE.AnimationMixer(src);
-  mixer.clipAction(clip).play();
+  // UMA vez, preso no fim (26/10): em loop, setTime(duração) volta pro quadro 0 → a ÚLTIMA chave saía igual à 1ª.
+  // Em idle/andar (fim ≈ começo) não aparecia; na MORTE (fica no último quadro) o corpo "levantava" no fim — medido.
+  const bakeAction = mixer.clipAction(clip);
+  bakeAction.setLoop(THREE.LoopOnce, 1);
+  bakeAction.clampWhenFinished = true;
+  bakeAction.play();
   const times = rotTracks.reduce((a, t) => (t.times.length > a.length ? t.times : a), rotTracks[0]!.times);
   const out = new Map(order.map((o) => [o.name, new Float32Array(times.length * 4)]));
   const pre = new Map(order.map((o) => [o.name, (Sw.get(o.name) ?? new THREE.Quaternion()).clone().multiply(C).multiply(restT.get(o.name)!)]));
@@ -254,4 +259,16 @@ function lowestFoot(clip: THREE.AnimationClip, root: THREE.Object3D, standFixX: 
   }
   mixer.stopAllAction();
   return lo;
+}
+
+/**
+ * MORTE (Pedro 26/10): tira a trilha de POSIÇÃO do quadril. Ela vem nas unidades/eixo do esqueleto do Mixamo — nos
+ * nossos modelos (deitados 90° no arquivo, outra escala) a "descida" do corpo saía de lado e no tamanho errado
+ * (medido: raiders afundavam 40–58% da altura, o herói deitava no ar). Só os GIROS deitam o corpo; quem põe o corpo
+ * caído NO CHÃO é o assentamento pelo ponto mais baixo da malha (`GlbHeroMixamo`, durante a morte).
+ */
+export function withoutHipsMotion(clip: THREE.AnimationClip): THREE.AnimationClip {
+  const out = clip.clone();
+  out.tracks = out.tracks.filter((t) => !/hips\.position$/i.test(t.name));
+  return out;
 }

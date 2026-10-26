@@ -312,7 +312,23 @@ export type HostileOptions = {
   onAnimate: (anim: HostileAnim, dt: number) => void;
   /** Raio do corpo (m) — separação entre criaturas proporcional ao tamanho. Padrão 0,55. */
   bodyRadius?: number;
+  /** MORTE com animação (Pedro 26/10): segundos que o corpo fica CAÍDO antes de sumir (0/ausente = some na hora, igual
+   *  antes). `onDeath` = chamado 1× ao morrer (ex.: tocar o clip de queda). */
+  deathHoldS?: number;
+  onDeath?: () => void;
 };
+
+/** Corpos caídos ao mesmo tempo (horda morrendo junta não pesa): passou disso, some do jeito de antes. */
+export const MAX_CORPSES = 12;
+let corpses = 0;
+/** Segundos caído pra este corpo: o pedido, se ainda cabe; senão 0 (encolhe na hora, como antes). */
+export function takeCorpseSlot(holdS: number | undefined): number {
+  if (!holdS || holdS <= 0 || corpses >= MAX_CORPSES) return 0;
+  corpses++;
+  return holdS;
+}
+export function releaseCorpseSlot(): void { corpses = Math.max(0, corpses - 1); }
+export function corpseCount(): number { return corpses; }
 
 const tmpQuat = new THREE.Quaternion();
 
@@ -338,9 +354,12 @@ export function useHostileAI(opts: HostileOptions) {
   const prevHp = useRef<number | null>(null);
   const hitTime = useRef(-Infinity);
   const baseScale = useRef<THREE.Vector3 | null>(null);
-  const death = useRef({ startedAt: -Infinity, y: 0 });
+  const death = useRef({ startedAt: -Infinity, y: 0, hold: 0 });
 
-  useEffect(() => () => { creatureAnchors.delete(creatureId); anchor.current = null; }, [creatureId]);
+  useEffect(() => () => {
+    creatureAnchors.delete(creatureId); anchor.current = null;
+    if (death.current.hold > 0) { releaseCorpseSlot(); death.current.hold = 0; } // saiu da cena caído: libera a vaga
+  }, [creatureId]);
 
   useFrame((state, delta) => {
     const g = group.current;
@@ -364,9 +383,13 @@ export function useHostileAI(opts: HostileOptions) {
       if (death.current.startedAt === -Infinity) {
         death.current.startedAt = state.clock.elapsedTime;
         death.current.y = g.position.y;
+        // Cai (animação) e fica caído `hold` s; depois encolhe/afunda como antes. Sem vaga = como antes.
+        death.current.hold = takeCorpseSlot(opts.deathHoldS);
+        if (death.current.hold > 0) opts.onDeath?.();
       }
       // Tempo absoluto: termina mesmo fora da câmera ou após um quadro longo.
-      const progress = Math.min(1, Math.max(0, (state.clock.elapsedTime - death.current.startedAt) / 0.4));
+      const progress = Math.min(1, Math.max(0, (state.clock.elapsedTime - death.current.startedAt - death.current.hold) / 0.4));
+      if (progress >= 1 && death.current.hold > 0) { releaseCorpseSlot(); death.current.hold = 0; }
       g.visible = progress < 1;
       g.scale.copy(baseScale.current).multiplyScalar(1 - progress);
       g.position.y = death.current.y - 0.5 * progress;
@@ -385,6 +408,7 @@ export function useHostileAI(opts: HostileOptions) {
         }));
         g.position.set(home.x, glbSurfaceY(home.x, home.z, terrainHeight(home.x, home.z)), home.z);
         g.scale.copy(baseScale.current);
+        if (death.current.hold > 0) { releaseCorpseSlot(); death.current.hold = 0; }
         death.current.startedAt = -Infinity;
         hitTime.current = -Infinity;
         prevHp.current = creature.maxHp;
@@ -395,6 +419,7 @@ export function useHostileAI(opts: HostileOptions) {
     if (death.current.startedAt !== -Infinity) {
       g.position.y = death.current.y;
       g.scale.copy(baseScale.current);
+      if (death.current.hold > 0) { releaseCorpseSlot(); death.current.hold = 0; }
       death.current.startedAt = -Infinity;
       hitTime.current = -Infinity;
     }

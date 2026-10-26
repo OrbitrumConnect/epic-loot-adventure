@@ -520,6 +520,8 @@ function Character({
     const dt = Math.min(delta, 0.05);
 
     if (ps.dead) {
+      // Morto: cai de costas e FICA caído até renascer (Pedro 26/10). Ao renascer o fluxo normal troca o estado.
+      heroAction.current = 'death';
       if (ps.respawnAt > 0 && Date.now() >= ps.respawnAt) {
         // Renasce na CAMA da base, se já tiver uma; senão na ZONA SEGURA do spawn.
         const pb = useGameStore.getState().playerBase;

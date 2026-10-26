@@ -6,7 +6,7 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
-import { poseToBind, retargetBind, retargetTwist } from './mixamo-retarget';
+import { poseToBind, retargetBind, retargetTwist, withoutHipsMotion } from './mixamo-retarget';
 import { createFootCache, footMinY, groundStep, nextGroundOffset } from './glb-creature';
 import { hitStopScale } from './hit-stop';
 
@@ -42,7 +42,13 @@ const CLIP_URL: Record<string, string> = {
   // Pistola/rifle: disparo de rifle (Mixamo Shooter Pack) — antes usavam a anim do ARCO.
   attackGun: '/models/red/attack_gun.glb',
   jump: '/models/red/jump.glb',
+  // MORTE (Pedro 26/10, baixados do Mixamo): cai de costas (herói/acampamento) e "Mutant Dying" (Couraça e grandões).
+  deathBack: '/models/red/death_back.glb',
+  deathMutant: '/models/red/death_mutant.glb',
 };
+export type DeathClip = 'back' | 'mutant';
+/** Duração dos clips de morte (s, medida nos arquivos) — o corpo fica caído depois disso (`DEATH_LIE_S`). */
+export const DEATH_CLIP_S: Record<DeathClip, number> = { back: 2.17, mutant: 4.58 };
 /** O mesh do Meshy traz o nó `target_character` com rotX −90° (Z-up), mas os clips
  *  Mixamo são Y-up → a anim DEITA o herói. Cancela com +90° X num wrapper (fora do
  *  esqueleto, não distorce o skinning). Y afina a planta dos pés no chão. */
@@ -135,6 +141,7 @@ export function GlbHeroMixamo({
   rangedAttack = false,
   forceBow = false,
   forceGun = false,
+  deathClip = 'back',
   gripScale = 1,
   gripPos = [0.04, 0.04, 0.08],
   gripRot = [0, Math.PI / 2, Math.PI / 2],
@@ -179,6 +186,8 @@ export function GlbHeroMixamo({
   forceBow?: boolean;
   /** Atirador (pirata de acampamento): todo ataque usa o clip de TIRO (sem os extras do jogador). */
   forceGun?: boolean;
+  /** Clip de MORTE (acionado por actionRef = 'death'): cai de costas ou "Mutant Dying" (grandões). */
+  deathClip?: DeathClip;
   gripScale?: number;
   gripPos?: [number, number, number];
   gripRot?: [number, number, number];
@@ -192,6 +201,7 @@ export function GlbHeroMixamo({
   const attackBowG = useGLTF(CLIP_URL['attackBow']!);
   const attackGunG = useGLTF(CLIP_URL['attackGun']!);
   const jumpG = useGLTF(CLIP_URL['jump']!);
+  const deathG = useGLTF(CLIP_URL[deathClip === 'mutant' ? 'deathMutant' : 'deathBack']!);
   // Extras do jogador (strafe/costas, golpe, gesto de poder, combo de espada) — ~700 KB, 1 vez.
   const extraG = useGLTF(EXTRA_URLS) as unknown as { animations: THREE.AnimationClip[]; scene: THREE.Object3D }[];
 
@@ -253,22 +263,23 @@ export function GlbHeroMixamo({
     // ~180° → cintura "embrulhada". Ligado no herói e nos raiders onde a medição nos GLB reais
     // (`mixamo-retarget.test.ts`) prova que nunca piora (`twistFix`).
     const fixTwist = twistFix ?? charUrl === RED_URL;
-    const mk = (g: { animations: THREE.AnimationClip[]; scene: THREE.Object3D }, name: string): THREE.AnimationClip | null => {
+    // keepY: a MORTE precisa do quadril DESCENDO até o chão (fixHipsY travaria o corpo deitado no ar).
+    const mk = (g: { animations: THREE.AnimationClip[]; scene: THREE.Object3D }, name: string, keepY = false): THREE.AnimationClip | null => {
       const src = g.animations[0];
       if (!src) return null;
       let a = src.clone();
       a.name = name;
       a.tracks = a.tracks.filter((t) => boneNames.has(t.name.split('.')[0] ?? ''));
       if (bindFix) {
-        const key = `${charUrl}|${name}|${standFixX}`;
+        const key = `${charUrl}|${name}|${standFixX}${keepY ? `|${deathClip}` : ''}`; // mesmo modelo, morte diferente (tropa × Brutamontes)
         let baked = bindClipCache.get(key);
-        if (!baked) { baked = stripRootMotion(retargetBind(a, g.scene, cloned, standFixX, scene), fixHipsY); bindClipCache.set(key, baked); }
+        if (!baked) { baked = stripRootMotion(retargetBind(a, g.scene, cloned, standFixX, scene), keepY ? null : fixHipsY); bindClipCache.set(key, baked); }
         return baked;
       }
       if (fixTwist) a = retargetTwist(a, g.scene, cloned, standFixX);
-      return stripRootMotion(a, fixHipsY);
+      return stripRootMotion(a, keepY ? null : fixHipsY);
     };
-    const base = [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump')];
+    const base = [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump'), (() => { const d = mk(deathG, 'death', true); return d && withoutHipsMotion(d); })()];
     // Só JOGADORES (rangedAttack) ganham os extras; raiders ficam exatamente como antes.
     const extra = rangedAttack
       ? EXTRA_KEYS.map((k, i) => {
@@ -277,7 +288,7 @@ export function GlbHeroMixamo({
         })
       : [];
     return [...base, ...extra].filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
+  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
 
   const { actions, mixer } = useAnimations(clips, inner);
   const current = useRef<HeroAction | null>(null);
@@ -339,7 +350,9 @@ export function GlbHeroMixamo({
   const groundInit = useRef(false);
   const groundWant = useRef<HeroAction | null>(null);
   const groundFast = useRef(0);
-  const groundBorn = useRef(0); // quadros desde que nasceu (a 1ª medição PERTO não espera o espalhamento)
+  const groundBorn = useRef(0);
+  const deathBaseY = useRef<number | null>(null); // altura do corpo antes de cair (volta ao reviver)
+  const deathFrames = useRef(0); // quadros desde que nasceu (a 1ª medição PERTO não espera o espalhamento)
   const footCache = useRef(createFootCache());
   const sideDir = useRef<{ dir: MoveDir; t: number }>({ dir: 'fwd', t: 0 });
   const overlay = useRef<string | null>(null);
@@ -376,7 +389,18 @@ export function GlbHeroMixamo({
       // Força da medição (0 = não mede): troca de clip → rápida; nasceu PERTO → encaixa já; senão `groundStep`
       // (1ª ao nascer, 2ª depois do fade da animação, perto a cada 0,3 s, LONGE a cada ~2 s — 26/10).
       const born = autoGround && !groundInit.current && near && ++groundBorn.current >= 3;
-      const step = !autoGround ? 0 : fast ? (groundFast.current % 3 === 0 ? 0.5 : 0) : born ? 1 : groundStep(groundInit.current, ++groundAcc.current, near);
+      // MORTE (26/10): o clip vem sem a descida do quadril (`withoutHipsMotion`) → quem põe o corpo caído NO CHÃO é
+      // o ponto mais baixo da malha (costas/ombro), pra QUALQUER modelo (herói também). Pontos refeitos a cada 4
+      // medições (a pose muda muito na queda). Ao reviver volta pra altura de antes.
+      const dying = wantNow === 'death';
+      if (dying && deathBaseY.current === null) { deathBaseY.current = g.position.y; deathFrames.current = 0; }
+      if (!dying && deathBaseY.current !== null) { g.position.y = deathBaseY.current; deathBaseY.current = null; footCache.current.picks.length = 0; }
+      let step: number;
+      if (dying) {
+        const f = deathFrames.current++;
+        if (f % 12 === 0) footCache.current.picks.length = 0;
+        step = f % 3 === 0 ? 0.5 : 0;
+      } else step = !autoGround ? 0 : fast ? (groundFast.current % 3 === 0 ? 0.5 : 0) : born ? 1 : groundStep(groundInit.current, ++groundAcc.current, near);
       if (g.parent && step > 0) {
         g.parent.getWorldPosition(tmpHeroV); // a raiz do raider fica no chão (IA)
         g.updateWorldMatrix(true, true);
@@ -407,6 +431,20 @@ export function GlbHeroMixamo({
       else sideDir.current = { dir: raw, t: 0 };
     }
     const moveDir: MoveDir = sideDir.current.t >= SIDE_SUSTAIN_S ? sideDir.current.dir : 'fwd';
+
+    // MORTE (Pedro 26/10): cai UMA vez e FICA caído (preso no último quadro). Ao renascer o estado sai de 'death' e
+    // o fluxo normal abaixo apaga o clip de morte (fadeOut pelo nome) e volta pro parado/andar.
+    if (want === 'death') {
+      if (current.current !== 'death') {
+        const d = actions['death'];
+        for (const k in actions) { const a = actions[k]; if (a && a !== d && a.isRunning()) a.fadeOut(0.15); }
+        overlay.current = null;
+        if (d) { d.reset(); d.timeScale = 1; d.setLoop(THREE.LoopOnce, 1); d.clampWhenFinished = true; d.fadeIn(0.12).play(); }
+        current.current = 'death';
+        playingLoco.current = null;
+      }
+      return;
+    }
 
     // Camadas "metade de cima": GESTO ao lançar poder (local) e TRANCO ao tomar golpe.
     if (extras) {
@@ -606,4 +644,6 @@ useGLTF.preload(CLIP_URL['attack']!);
 useGLTF.preload(CLIP_URL['attackBow']!);
 useGLTF.preload(CLIP_URL['attackGun']!);
 useGLTF.preload(CLIP_URL['jump']!);
+useGLTF.preload(CLIP_URL['deathBack']!);
+useGLTF.preload(CLIP_URL['deathMutant']!);
 useGLTF.preload(EXTRA_URLS);

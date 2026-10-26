@@ -15,7 +15,7 @@ import { EnemyLabel, SelectionRing } from './enemy-label';
 import { useEnemyClick, useHostileAI, type HostileTuning } from './hostile-ai';
 import { HeldItem } from './held-weapon';
 import { GlbHero, type HeroAction } from './glb-hero';
-import { GlbHeroMixamo } from './glb-hero-mixamo';
+import { DEATH_CLIP_S, GlbHeroMixamo, type DeathClip } from './glb-hero-mixamo';
 import { GlbStaticBoss } from './glb-static-boss';
 import { GlbCreature } from './glb-creature';
 import { isCampSpawn } from '@/game/systems/difficultySystem';
@@ -52,6 +52,8 @@ const IMP_URL = '/models/Imp.glb';
 const BOSS_GLB_SCALE = 2.5; // ajustável: tamanho do Imp como boss
 const BOSS_GLB_YAW = 0;
 /** Escala dos inimigos que nascem em ACAMPAMENTO (Pedro 25/10: −30% e depois mais −30% → 0,7 × 0,7). */
+/** Segundos que o corpo fica CAÍDO depois do clip de morte (Pedro 26/10: "cai ali no vermelho e some"). */
+export const DEATH_LIE_S = 2;
 export const CAMP_SCALE = 0.49;
 /** Exceção (Pedro 25/10: "a Couraça estava ok grande; só ela pode aumentar 1 a 1,5 m"): no acampamento ela fica
  *  0,87 (3,32 → ~2,9 m, +1,25 m sobre os 1,63 do −51%). Horda/mapa seguem no tamanho original (3,32 m). */
@@ -86,14 +88,14 @@ const RAIDER_GLB: Record<string, string> = {
  *  girado ~105° e pioram um pouco → ficam como estão até refazer o rig no Mixamo. */
 // bindFix (24/10): Couraça e Fúngico vinham com o esqueleto fora da pose da pele (até 96°) → malha torcida.
 // 25/10: pirata, pântano e Brutamontes também (medido: pele +130–159° → +17–30°, direção 27–31° → 2–3°; pé igual).
-const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean; strideSync?: boolean }> = {
-  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.32, bindFix: true, autoGround: true, strideSync: true }, // 3,9→3,32 m (−15%, Pedro 25/10: muitos na base embolavam) // autoGround: andava meio enterrado (Pedro 25/10)     // spiked, 2x (Pedro)
+const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean; strideSync?: boolean; death?: DeathClip }> = {
+  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.32, bindFix: true, autoGround: true, strideSync: true, death: 'mutant' }, // 3,9→3,32 m (−15%, Pedro 25/10: muitos na base embolavam) // autoGround: andava meio enterrado (Pedro 25/10)     // spiked, 2x (Pedro)
   // 25/10 (Pedro): autoGround (nasciam enterrados até o peito). Tamanho de ACAMPAMENTO = CAMP_SCALE (só quem nasce lá).
   raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8, bindFix: true, autoGround: true },       // pirata
-  raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, bindFix: true, autoGround: true },  // brutamontes (maior)
+  raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, bindFix: true, autoGround: true, death: 'mutant' },  // brutamontes (maior)
   raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true, twistFix: true, autoGround: true },// arqueiro: só ataque de longe
   raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9, bindFix: true, autoGround: true },      // swamp winged hybrid
-  raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 3.83, bindFix: true, autoGround: true, strideSync: true }, // 4,5→3,83 m (−15%) // alien giant brute (boss) — grandão 4.5m
+  raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 3.83, bindFix: true, autoGround: true, strideSync: true, death: 'mutant' }, // 4,5→3,83 m (−15%) // alien giant brute (boss) — grandão 4.5m
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
@@ -406,6 +408,9 @@ export function Raider({
     hpFill,
     hpGroup,
     ring,
+    // MORTE com animação (Pedro 26/10): cai (clip Mixamo) e fica caído DEATH_LIE_S antes de sumir. Só raiders Mixamo.
+    deathHoldS: mxBody ? DEATH_CLIP_S[mxBody.death ?? 'back'] + DEATH_LIE_S : 0,
+    onDeath: () => { bossAction.current = 'death'; },
     onAnimate: (anim, dt) => {
       if (anim.elite !== eliteNow.current) { eliteNow.current = anim.elite; setElite(anim.elite); }
       // Horda Mixamo rápida (onda 8+): anda CORRENDO (Pedro 25/10).
@@ -498,6 +503,7 @@ export function Raider({
               standFixX={mx.standFixX}
               forceBow={mx.forceBow ?? false}
               forceGun={gunner}
+              deathClip={mx.death ?? 'back'}
               weapon={gunner ? <HeldItem c={c} itemId="rifle" /> : undefined}
               twistFix={mx.twistFix ?? false}
               bindFix={mx.bindFix ?? false}
