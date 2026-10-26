@@ -47,3 +47,14 @@ describe('rajada: cada bala soa', () => {
     spy.mockRestore();
   });
 });
+
+/* 26/10 (Pedro: "o sangue só sai quando mata, não quando está sendo atingido"): golpe mais visível; tempo igual. */
+describe('sangue do golpe mais visível', () => {
+  it('golpe 18 gotas 35% maiores, crítico 24, morte 24 (igual); estoque 200; tempo das gotas/manchas igual', () => {
+    const fb = fs.readFileSync('src/components/world/combat-feedback.tsx', 'utf8');
+    expect(fb).toMatch(/const n = isDeath \? 24 : ev\.critical \? 24 : 18;/);
+    expect(fb).toMatch(/export const HIT_DROP_SIZE = 1\.35;/);
+    expect(fb).toMatch(/const PARTICLE_POOL = 200;/);
+    expect(fb).toMatch(/arr\[o \+ 7\] = 0\.55 \+ Math\.random\(\) \* 0\.5;/); // vida das gotas: igual
+  });
+});

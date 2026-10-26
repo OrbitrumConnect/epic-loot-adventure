@@ -28,8 +28,10 @@ import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 import { creatureById } from './hostile-ai';
 
 const NUMBER_POOL = 18;
-const PARTICLE_POOL = 120;
+const PARTICLE_POOL = 200; // 26/10: 120 → 200 (golpe com mais gotas + rajada de 8 tiros sem apagar as primeiras)
 const DECAL_POOL = 40;
+/** Gotas do GOLPE (não da morte) 35% maiores — o sangue do golpe aparece (26/10). */
+export const HIT_DROP_SIZE = 1.35;
 /** Mancha no chão: dura isso (s) e encolhe no último DECAL_FADE s (Pedro 25/10: 8 s → 3 s). */
 const DECAL_LIFE = 3;
 const DECAL_FADE = 1;
@@ -192,7 +194,10 @@ export function CombatFeedback() {
     if (!m) return;
     const isDeath = ev.kind === 'death';
     const palette = ev.fire ? FIRE : BLOOD;
-    const n = isDeath ? 24 : ev.critical ? 18 : 12;
+    // 26/10 (Pedro: "o sangue só aparece quando mata"): golpe 12 → 18 gotas e 35% maiores, crítico 18 → 24; morte igual.
+    // Tempo das gotas e das manchas NÃO muda (Pedro: "o sangue já tem o tempo dele").
+    const n = isDeath ? 24 : ev.critical ? 24 : 18;
+    const sizeK = isDeath ? 1 : HIT_DROP_SIZE;
     // Chão REAL do mapa, calculado 1× por golpe (as gotas andam < 2 m — não precisa por gota).
     const ground = glbSurfaceY(ev.position.x, ev.position.z, terrainHeight(ev.position.x, ev.position.z));
     const baseY = ground + (ev.onPlayer ? 1.1 : 0.8);
@@ -216,7 +221,7 @@ export function CombatFeedback() {
       arr[o + 5] = Math.sin(a) * sp * 0.55 + dz * sp * 0.9;
       arr[o + 6] = now.current;
       arr[o + 7] = 0.55 + Math.random() * 0.5;
-      arr[o + 8] = 0.08 + Math.random() * 0.12;
+      arr[o + 8] = (0.08 + Math.random() * 0.12) * sizeK;
       arr[o + 9] = ground + 0.04;
       partActive.current[i] = 1;
       const spark = ev.critical && k % 4 === 0;
