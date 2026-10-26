@@ -36,6 +36,7 @@ import { ARMOR_SLOTS, equipmentKeyForArmorSlot, isEquipped } from '@/game/system
 import { RARITY_LABEL, type ArmorSlot, type Item } from '@/game/types/item';
 import { baseLv1Progress } from '@/game/systems/baseLv1';
 import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
+import { freeShotPoint } from '@/components/world/free-aim';
 import { RECIPES } from '@/game/data/recipes';
 import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
 import { MusicPlayer } from '@/components/MusicPlayer';
@@ -392,6 +393,9 @@ function Index() {
       if (d < bestDist) { bestDist = d; nearest = c.id; }
     }
     if (nearest && bestDist <= range) attack(nearest);
+    // TIRO LIVRE (Pedro 26/10: "só consigo atirar perto de inimigo"): arma de longe sem alvo no alcance → atira
+    // mesmo assim, no cursor (PC, câmera de cima) ou pra onde o herói olha (celular). Gasta munição normal.
+    else if (weaponFor(heldId).ranged) useGameStore.getState().fireMiss(freeShotPoint(p, range, cameraMode === 'iso'));
     // Câmera de ombro com espada: ninguém no alcance → golpe no AR (animação/som), como jogo de ação.
     else if (!(cameraMode === 'third' && useGameStore.getState().swingAir())) useGameStore.getState().setMessage('Nenhum inimigo próximo.');
   }, [attack, cameraMode]);

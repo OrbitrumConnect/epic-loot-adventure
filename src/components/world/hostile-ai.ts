@@ -127,6 +127,8 @@ const SEP_RADIUS = 1.1;
 const SEP_STRENGTH = 3.2;
 /** Fração do alcance de ataque em que o perseguidor PARA (borda do alcance → cerco). */
 export const CHASE_STOP = 0.85;
+/** Fúria padrão (m) do hostil FERIDO sem `provokeRange` próprio (26/10: bicho atingido de longe reage). */
+export const PROVOKE_DEFAULT = 30;
 /** Grade de vizinhança da separação (25/10, desempenho): antes cada criatura comparava com TODAS (~200 → ~40 mil
  *  contas/quadro); agora só com as das 9 células em volta. Célula ≥ maior soma de raios (2 grandões ≈ 2,6 m). */
 const SEP_CELL = 3;
@@ -484,8 +486,11 @@ export function useHostileAI(opts: HostileOptions) {
     );
 
     // Levou dano -> entra em fúria e persegue de mais longe (lobo usa 0).
-    const provoked = tuning.provokeRange > 0 && creature.hp < creature.maxHp;
-    const aggroRange = provoked ? Math.max(tuning.aggroRange, tuning.provokeRange) : tuning.aggroRange;
+    // Pedro 26/10: "qualquer bicho que eu atacar luta". Bicho HOSTIL sem fúria própria (provokeRange 0 — jacaré,
+    // búfalo, leoa, Aberração, morto-vivo…) ficava parado apanhando de longe; ferido agora vem de até 30 m.
+    const provokeRange = tuning.provokeRange > 0 ? tuning.provokeRange : tuning.peaceful ? 0 : PROVOKE_DEFAULT;
+    const provoked = provokeRange > 0 && creature.hp < creature.maxHp;
+    const aggroRange = provoked ? Math.max(tuning.aggroRange, provokeRange) : tuning.aggroRange;
 
     let chasing = false;
     let flee = false;

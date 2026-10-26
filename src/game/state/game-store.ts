@@ -967,7 +967,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst, boostK)) return;
 
     const dist = getDistance(state.player.position, creature.position);
-    if (dist > weaponRangeFor(heldItemId, state.player.level)) {
+    const reach = weaponRangeFor(heldItemId, state.player.level);
+    if (dist > reach) {
+      // Pedro 26/10 ("só consigo atirar perto"): arma de longe + alvo além do alcance → o tiro SAI na direção dele e
+      // cai no limite do alcance (gasta bala, sem dano). Antes não acontecia nada. Corpo a corpo: aviso, como antes.
+      if (prof.ranged && prof.projectile && !fromBurst) {
+        const p = state.player.position;
+        const k = reach / Math.max(dist, 1e-6);
+        if (get().fireMiss({ x: p.x + (creature.position.x - p.x) * k, z: p.z + (creature.position.z - p.z) * k })) {
+          set(s => ({ ui: { ...s.ui, message: `${creature.name} está longe — o tiro não alcança (${Math.round(reach)} m).` } }));
+        }
+        return;
+      }
       set(s => ({ ui: { ...s.ui, message: `${creature.name} está longe demais.` } }));
       return;
     }

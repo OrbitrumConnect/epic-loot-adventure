@@ -9,6 +9,10 @@ import { BurstRuntime } from './world/burst-runtime';
 import { attachContextGuard, lowGpuMode } from './world/gpu-guard';
 import { lightAllowed, useLightId } from './world/light-budget';
 import { bridgeLampSpots, safeZoneLampSpots } from './world/lamp-layout';
+import { heroFacing, setIsoCursor } from './world/free-aim';
+const cursorRay = new THREE.Raycaster();
+const cursorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const cursorHit = new THREE.Vector3();
 import { recentShotPoint } from '@/game/systems/shotFacing';
 import { followYaw, noteManualLook, pilotAimId } from './world/pilot-aim';
 import { creatureById } from './world/hostile-ai';
@@ -694,6 +698,7 @@ function Character({
     while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
     currentRotY.current += rotDiff * Math.min(15 * dt, 1);
     body.current.rotation.y = currentRotY.current;
+    heroFacing.yaw = currentRotY.current; // tiro livre no celular: pra onde o herói olha
 
     // Multiplayer: transmite a pose do jogador local (throttla sozinho ~11Hz).
     const netPlayer = useGameStore.getState().player;
@@ -1623,6 +1628,8 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
   const camLookAt = useRef(new THREE.Vector3(0, 0, 1));
   const playerRef = useRef<THREE.Group | null>(null);
   const cameraYaw = useRef(0);
+  const lastPointer = useRef(new THREE.Vector2(9, 9));
+  const pointerMovedAt = useRef(-Infinity);
   const cameraPitch = useRef(-0.3);
   const camDist = useRef(5);
   const camDistTarget = useRef(5);
@@ -1877,7 +1884,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
     };
   }, [cameraMode]);
 
-  useFrame(({ clock }, delta) => {
+  useFrame(({ clock, pointer }, delta) => {
     waterTime.value = clock.elapsedTime;
     const p = playerRef.current;
     if (!p) return;
@@ -1928,6 +1935,16 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       camera.position.copy(camTarget.current);
       camLookAt.current.lerp(tmpLook.current.set(cx, py, cz), lerpFactor);
       camera.lookAt(camLookAt.current);
+      // TIRO LIVRE no PC (free-aim.ts): ponto do chão sob o cursor; "fresco" enquanto o mouse se mexe.
+      if (!touchLayout.on) {
+        if (pointer.x !== lastPointer.current.x || pointer.y !== lastPointer.current.y) {
+          lastPointer.current.set(pointer.x, pointer.y);
+          pointerMovedAt.current = performance.now();
+        }
+        cursorRay.setFromCamera(pointer, camera);
+        cursorPlane.constant = -py;
+        if (cursorRay.ray.intersectPlane(cursorPlane, cursorHit)) setIsoCursor(cursorHit.x, cursorHit.z, pointerMovedAt.current);
+      }
     } else if (cameraMode === 'free') {
       const free = getFreeCam();
       const yaw = cameraYaw.current;

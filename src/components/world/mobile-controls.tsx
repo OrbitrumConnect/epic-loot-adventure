@@ -125,8 +125,9 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
   const attackUp = (e: React.PointerEvent) => { if (atkLook.current?.id === e.pointerId) atkLook.current = null; };
   const attack = (e: React.PointerEvent) => {
     e.preventDefault();
-    // Mirando: atira no que está no pontinho; sem nada na mira, o ataque de sempre.
-    if (!(useAim.getState().active && aimFire())) onAttack();
+    // Mirando OU câmera de ombro (26/10, igual ao clique do PC): atira no CENTRO da mira — acerta o que está lá ou sai
+    // no vazio (tiro livre). Espada sem ninguém no alcance → o ataque de sempre (o mais perto).
+    if (!((useAim.getState().active || canAim) && aimFire())) onAttack();
   };
 
   // Anel de dentro: Pular, Mirar (3ª pessoa) e os especiais Q/R; anel de fora: poderes liberados.
