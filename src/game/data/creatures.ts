@@ -293,7 +293,7 @@ export const CREATURES: Record<string, CreatureDefinition> = {
       { itemId: 'raw_meat', quantity: 1, chance: 0.8 },
     ],
     icon: 'Bird',
-    peaceful: true,
+    peaceful: false, // 26/10 (Pedro): agora ATACA correndo (QUICK_BIRD_TUNING em beast.tsx)
   },
 
   pigeon: {
@@ -325,7 +325,7 @@ export const CREATURES: Record<string, CreatureDefinition> = {
       { itemId: 'raw_meat', quantity: 1, chance: 0.75 },
     ],
     icon: 'Bird',
-    peaceful: true,
+    peaceful: false, // 26/10 (Pedro): agora ATACA correndo (QUICK_BIRD_TUNING em beast.tsx)
   },
 
   eel: {

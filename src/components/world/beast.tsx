@@ -173,6 +173,13 @@ const BIG_BIRD: Record<string, { labelHeight: number; ringRadius: number }> = {
   pheasant: { labelHeight: 1.95, ringRadius: 0.9 },
 };
 
+/** Ganso e faisão AGRESSIVOS (Pedro 26/10: "atacam rapidinho, correndo"): notam a 7 m, correm rápido (mais que a
+ *  leoa), bicam de perto (dano fraco da tabela: 2 / 1) e desistem logo (~5 s ou 12 m de casa). */
+export const QUICK_BIRD_TUNING: Record<string, HostileTuning> = {
+  goose: { ...hostileBase, speed: 5.4, aggroRange: 7, attackRange: 1.6, leashRange: 12, chaseTimeout: 5, provokeRange: 12, hitVerb: 'bicou' },
+  pheasant: { ...hostileBase, speed: 5.8, aggroRange: 7, attackRange: 1.5, leashRange: 12, chaseTimeout: 5, provokeRange: 12, hitVerb: 'bicou' },
+};
+
 function fallbackSpec(peaceful: boolean): BeastSpec {
   return {
     scale: 1, body: [0.42, 0.42, 0.85], bodyColor: '#6b6458', legLen: 0.3, legThick: 0.1, legColor: '#4e483f',
@@ -249,7 +256,8 @@ export function Beast({
   const baseSpec = BEASTS[speciesId] ?? fallbackSpec(peaceful);
   // Aves grandes (Pedro 25/10: ~1,4 m): barra de vida acima da cabeça (a mira usa a altura dela) e anel maior.
   const bird = BIG_BIRD[speciesId];
-  const spec = bird ? { ...baseSpec, ...bird } : baseSpec;
+  const quick = QUICK_BIRD_TUNING[speciesId];
+  const spec = bird ? { ...baseSpec, ...bird, ...(quick ? { tuning: quick } : {}) } : baseSpec;
   const ref = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
   const leg0 = useRef<THREE.Mesh>(null);

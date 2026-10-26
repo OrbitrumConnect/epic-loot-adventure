@@ -60,3 +60,19 @@ describe('acampamentos mais cheios', () => {
     }
   });
 });
+
+/* 26/10 (Pedro): "ganso e faisão atacam, mais rapidinho, correndo". */
+describe('ganso e faisão agressivos rápidos', () => {
+  it('hostis (não fogem), correm mais que a leoa, bicada fraca, desistem logo', async () => {
+    const { QUICK_BIRD_TUNING } = await import('@/components/world/beast');
+    for (const sp of ['goose', 'pheasant']) {
+      expect(CREATURES[sp]!.peaceful).toBe(false);
+      const t = QUICK_BIRD_TUNING[sp]!;
+      expect(t.peaceful).toBeUndefined();
+      expect(t.speed).toBeGreaterThan(4.4); // leoa
+      expect(t.chaseTimeout).toBeLessThanOrEqual(5);
+      expect(t.leashRange).toBeLessThanOrEqual(12);
+      expect(CREATURES[sp]!.attackPower).toBeLessThanOrEqual(2);
+    }
+  }, 20_000);
+});
