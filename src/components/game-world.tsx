@@ -2424,7 +2424,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <SafeZoneMarker />
       <Camps c={c} />
       <MultiplayerWorldSync />
-      <Enemies c={c} playerRef={playerRef} />
+      <Enemies c={c} playerRef={playerRef} cameraMode={cameraMode} />
 
       <TargetRoute playerRef={playerRef} />
       <CombatFeedback />

@@ -7,7 +7,7 @@
  * `BEASTS` (silhueta, escala, cor e tuning); geometrias e materiais são
  * cacheados por dimensão/cor e compartilhados entre TODOS os animais.
  */
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { EliteAura } from './elite-aura';
 import * as THREE from 'three';
 import { CREATURES } from '@/game/data/creatures';
@@ -245,14 +245,15 @@ export function isBeast(speciesId: string) {
   return speciesId in BEASTS;
 }
 
-export function Beast({
-  c, creatureId, speciesId, name, start, playerRef,
+function BeastImpl({
+  c, creatureId, speciesId, name, start, renderBody, playerRef,
 }: {
   c: Palette;
   creatureId: string;
   speciesId: string;
   name: string;
   start: Position;
+  renderBody: boolean;
   playerRef: React.RefObject<THREE.Group | null>;
 }) {
   const peaceful = CREATURES[speciesId]?.peaceful === true;
@@ -336,6 +337,7 @@ export function Beast({
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
+      {renderBody && <>
       {elite && <EliteAura height={spec.labelHeight * 0.8} />}
       <SelectionRing ring={ring} radius={spec.ringRadius} c={c} />
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
@@ -436,6 +438,10 @@ export function Beast({
           <mesh position={[0, bodyY + bh * 0.1, -bd * 0.55]} geometry={ballGeo(0.07)} material={matOf(spec.tailColor)} raycast={noRaycast} />
         )}
       </group>
+      </>}
     </group>
   );
 }
+
+export const Beast = memo(BeastImpl);
+Beast.displayName = 'Beast';

@@ -6,7 +6,7 @@
  * Geometrias e materiais são compartilhados entre TODOS os saqueadores
  * (um acampamento tem até ~10 e o mapa 4+ acampamentos).
  */
-import { useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { EliteAura } from './elite-aura';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -355,14 +355,15 @@ function Weaponry({ weapon, kit }: { weapon: Weapon; kit: Kit }) {
   );
 }
 
-export function Raider({
-  c, creatureId, speciesId, name, start, playerRef,
+function RaiderImpl({
+  c, creatureId, speciesId, name, start, renderBody, playerRef,
 }: {
   c: Palette;
   creatureId: string;
   speciesId: string;
   name: string;
   start: Position;
+  renderBody: boolean;
   playerRef: React.RefObject<THREE.Group | null>;
 }) {
   const kit = useMemo(() => raiderKit(c), [c]);
@@ -478,6 +479,7 @@ export function Raider({
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
+      {renderBody && <>
       {elite && <EliteAura height={mxBody ? mxBody.height * sizeK : 1.9} />}
       <SelectionRing ring={ring} radius={0.55 * labelScale} c={c} />
       <EnemyLabel name={name} height={2.15 * labelScale} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
@@ -578,6 +580,10 @@ export function Raider({
         </group>
       </group>
       )}
+      </>}
     </group>
   );
 }
+
+export const Raider = memo(RaiderImpl);
+Raider.displayName = 'Raider';

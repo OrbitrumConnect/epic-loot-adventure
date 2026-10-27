@@ -2,7 +2,7 @@
  * Lobo do Vale: anatomia facetada, pelagem em camadas e presas.
  * IA e parâmetros originais preservados em `useHostileAI` / `WOLF_TUNING`.
  */
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { EliteAura } from './elite-aura';
 import * as THREE from 'three';
 import type { Position } from '@/game/types';
@@ -26,13 +26,14 @@ function fur(color: string, glow = false) {
   return furMaterials.get(key)!;
 }
 
-export function Wolf({
-  c, creatureId, name, start, playerRef,
+function WolfImpl({
+  c, creatureId, name, start, renderBody, playerRef,
 }: {
   c: Palette;
   creatureId: string;
   name: string;
   start: Position;
+  renderBody: boolean;
   playerRef: React.RefObject<THREE.Group | null>;
 }) {
   const ref = useRef<THREE.Group>(null);
@@ -79,6 +80,7 @@ export function Wolf({
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} onPointerDown={onClick}>
+      {renderBody && <>
       {elite && <EliteAura height={1.1} />}
       <SelectionRing ring={ring} radius={0.6} c={c} />
       <EnemyLabel name={name} height={1.5} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
@@ -138,6 +140,10 @@ export function Wolf({
       {/* Tail */}
       <mesh position={[0, 0.48, -0.62]} rotation={[0.6, 0, 0]} scale={[0.18, 0.2, 0.58]} geometry={furGeometry} material={coat} castShadow />
       </group>
+      </>}
     </group>
   );
 }
+
+export const Wolf = memo(WolfImpl);
+Wolf.displayName = 'Wolf';

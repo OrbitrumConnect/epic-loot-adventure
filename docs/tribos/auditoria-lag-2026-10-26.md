@@ -132,7 +132,8 @@ Bundle de produção: `@react-three/drei` 2.384 kB (gzip 486 kB), `game-world` 5
 | --- | --- | --- | --- |
 | 1 | `React.memo` no export padrão de `GameWorld` | `game-world.tsx:2476` | tirar as 3,47 rajadas/s de ~300 ms — o maior ganho |
 | 1b | Isolar o relógio e os cooldowns em componentes-folha do HUD | `routes/index.tsx:253-258, 697` | tira a causa na origem, não só o escudo |
-| 2 | Cortar alocação por quadro (vetores/arrays reaproveitados) nos 10 piores | ver `r1-perframe.md` | fim das tarefas longas de GC |
+| ~~2~~ | ~~Cortar alocação por quadro~~ — **cancelado**: o `memo` já curou (ver 6c) | — | — |
+| 2 | Não desenhar o corpo 3D de criatura fora do alcance de visão | `world-entities.tsx`, `beast/raider/wolf` | 16,5 → 30,4 FPS medido |
 | 3 | Texturas para KTX2/Basis + mipmap | 89 GLB | 617 MiB → algo perto de 100 MiB de VRAM |
 | 4 | Compressão de malha (meshopt) + `Cache-Control` para `/models/*` | `public/models`, `_headers` | 209 MB → bem menos no download |
 | 5 | Compartilhar material por variante | 1.233 materiais, 139 programas | menos draw call e menos troca de shader |
@@ -177,6 +178,79 @@ Os 2 `raider_samurai` (Couraça de Espinhos) estão na cena com escala de mundo 
 **9,4 m** pela extensão dos ossos, enquanto `raider.tsx:92` declara `height: 3.32`. Medi **com e sem** o
 `memo`: o número é idêntico nos dois (6,808 / 9,36 m), então vem de antes e não desta mudança. Pode ser
 só a métrica (extensão de osso não é altura visual em rig com `bindFix`), mas vale o Pedro olhar na tela.
+
+## 6c. Item 2 — FEITO e medido (e mudou de alvo no caminho)
+
+### O item 2 do plano original perdeu o sentido
+
+O plano dizia "cortar alocação por quadro". Medido depois do `memo`: a alocação **já tinha curado
+sozinha**, porque quase todo o lixo era re-render do React.
+
+| Medida | Antes do memo | Depois do memo |
+| --- | ---: | ---: |
+| Alocação | 15,3 MB/s | **5,3 MB/s** |
+| Heap | 580 → 722 MB, subindo sem parar | oscila 588–615 MB, 8 coletas em 12 s |
+| Maior pausa de GC | **460 ms** | **59 ms** |
+
+Não sobrou problema ali. Fui atrás de onde o tempo passou a ir.
+
+### O alvo real
+
+Com 27 ms por quadro: `useFrame` do jogo 8,3 ms · `gl.render` **14,5 ms** (dos quais **10,6 ms antes do
+primeiro desenho**) · fora do laço 6,4 ms.
+
+Esses 10,6 ms são `scene.updateMatrixWorld` passando por **24.510 objetos, 15.906 deles ossos** de 193
+criaturas. Desligando o update: 22,1 → 37,1 FPS.
+
+Três hipóteses foram testadas e **duas caíram**:
+
+| Teste | Resultado |
+| --- | --- |
+| `matrixAutoUpdate = false` em todos os 15.906 ossos | +4%. Não é isso. |
+| `visible = false` nas 194 criaturas | **0%**. `updateMatrixWorld` não olha visibilidade. |
+| Tirar criatura distante da cena | 32,8 → 51,5 FPS. **É isso.** |
+
+Raio medido, não chutado: a câmera **isométrica** mostra 8 a 13 criaturas, a mais distante a **69 m**; a
+de **3ª pessoa** mostra 19, a mais distante a **122 m**. Daí os raios 85 m (iso), 135 m (3ª pessoa) e
+nenhum corte na câmera livre, que voa para qualquer lado.
+
+### Primeira tentativa REPROVADA (não repetir)
+
+Desmontar o componente da criatura longe dava 52,3 FPS, mas tinha dois defeitos medidos:
+
+1. **A IA parava.** Em 6 s, 123 de 124 criaturas até 85 m andaram, contra **3 de 68** além disso. O laço de
+   IA e o renascimento vivem dentro do componente (`hostile-ai.ts:385` e `:418`). A horda que caminha para
+   a base congelaria com o jogador longe.
+2. **A criatura voltava no lugar errado.** O cache de `start` guardava a posição da PRIMEIRA montagem, e
+   `start` é a posição inicial do grupo (`beast.tsx:338`); como `flushPositions` (`hostile-ai.ts:212-229`)
+   grava o grupo de volta na store, o teletransporte viraria permanente.
+
+### O que foi feito
+
+A criatura **nunca desmonta** — a IA segue rodando e `start` só é lido uma vez. O que deixa de ser
+desenhado longe é só o **corpo 3D** (GLB, rótulo, anel, aura); o `<group ref>` externo continua nos dois
+caminhos, senão a IA perde a alça para mover o bicho. `Beast`, `Raider` e `Wolf` viraram `memo`, então só
+re-renderiza a criatura cujo booleano virou.
+
+Medido na mesma sessão, mesma cena, 192 criaturas:
+
+| Medida | Só com o memo | Com o corte de corpo |
+| --- | ---: | ---: |
+| FPS | **16,5** | **30,4** |
+| `gl.render` | 19,0 ms | **11,1 ms** |
+| Objetos na cena | 24.420 | **15.975** |
+| Ossos | 15.906 | **9.997** |
+| Malhas com esqueleto | 229 | 150 |
+| Heap em uso | 709 MB | **514 MB** |
+
+Conferido que nada quebrou:
+
+- **IA viva**: 62 de 62 criaturas além de 85 m mudaram de posição em 8 s (100%).
+- **Nada sumindo da tela**: 0 criaturas dentro do quadro sem corpo, no isométrico e em 6 amostras na 3ª
+  pessoa (a mais distante no quadro a 118 m, dentro do raio de 135). 0 dentro de 85 m sem corpo e 0 além
+  de 100 m ainda com corpo — a histerese está valendo.
+- `npx vitest run`: **914 passam**, só a falha CRLF pré-existente de `dificuldade-mundo.test.ts`.
+- Prints do isométrico e da 3ª pessoa sem diferença visual.
 
 ## 7. Coisas que NÃO são o problema (não reabrir sem número novo)
 
