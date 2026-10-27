@@ -169,3 +169,5 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
     </>
   );
 }
+
+export default MobileControls;

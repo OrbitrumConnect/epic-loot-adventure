@@ -491,3 +491,108 @@ em `window.__tribos`, so em DEV, no mesmo espirito do `__celMat` e do
 `__celStats` que ja existiam. Sem ela nao da para contar material, geometria e
 programa de shader a partir do console: o R3F roda num reconciler separado, e a
 cena nao aparece na arvore de fibers do DOM.
+
+## 6g. Item 7 — tirar o three do primeiro carregamento (27/10)
+
+### O item estava apontando para o lugar errado
+
+Estava anotado como "fatiar o `@react-three/drei` (2.384 kB / gzip 486 kB)". No
+build de hoje nao existe nenhum chunk desse tamanho, e fatiar por `manualChunks`
+so renomearia arquivos: o navegador continuaria baixando tudo antes de desenhar
+a primeira tela.
+
+O problema real era outro. `src/routes/index.tsx:53` JA carregava o mundo sob
+demanda:
+
+```tsx
+const GameWorld = lazy(() => import('@/components/game-world'));
+```
+
+...e esse `lazy` nao valia de nada, porque tres imports **estaticos** da propria
+rota alcancavam `three` por caminhos laterais. Com isso o empacotador juntava
+tudo no primeiro carregamento.
+
+| raiz | o que a rota usava de la | o que vinha junto |
+|---|---|---|
+| `index.tsx:63` -> `world/aim.ts` | so `useAim`, em 2 linhas | `three`, `fiber` (hostile-ai, held-weapon), `drei` (weapon-models) |
+| `index.tsx:62` -> `world/mobile-controls.tsx` | o componente | `aimFire`/`setAiming` de `aim.ts` -> `three` |
+| `index.tsx:58` -> `editor/editor-panel.tsx` | o componente | `terrainHeight` do `world-kit` -> `three` |
+
+### O conserto
+
+Nada de `manualChunks`. Tres mudancas pequenas, que fazem o `lazy` que ja
+existia finalmente valer:
+
+1. A parte PURA do modulo de mira (`AIM_ZOOM_MAX`, `useAim`, `setAiming`,
+   `aimSensitivityScale`) saiu para `src/components/world/aim-store.ts`, sem
+   three. `aim.ts` re-exporta, entao nenhum dos outros consumidores mudou.
+   A rota passou a importar de `aim-store`.
+2. `EditorPanel` virou `lazy` + `Suspense`. Ja era condicional (`{editorActive && ...}`).
+3. `MobileControls` virou `lazy` + `Suspense`. Ja era condicional
+   (`{isMobile && !panel && !player.dead && ...}`). O `type ArcButton` continua
+   vindo por `import type`, que some na compilacao.
+
+### Medido
+
+Fecho estatico da entrada `routes`, que e o que o navegador precisa baixar antes
+de desenhar a primeira tela:
+
+| | antes | depois |
+|---|---|---|
+| primeiro carregamento | 2.018,4 kB | **977,4 kB** |
+| idem, gzip | 572,3 kB | **291,8 kB** |
+
+Corte de 1.041,0 kB brutos e **280,5 kB comprimidos** — pouco mais da metade. O
+chunk com three/fiber/drei (666,4 kB) saiu do fecho da rota e agora so aparece
+atras de `game-world` e de `mobile-controls`, ambos sob `import()`.
+
+### O teste que impede a volta
+
+`src/test/primeiro-carregamento-sem-three.test.ts` comeca em `routes/index.tsx`,
+segue so os imports estaticos de valor (ignora `import type` e nao entra em
+`import()`), e falha se alcancar `three` ou `@react-three/*`. Antes de confiar
+nele, reintroduzi o import antigo de proposito; ele falhou com o caminho exato:
+
+```
+Import proibido alcancado: src/routes/index.tsx -> src/components/world/aim.ts -> three
+```
+
+### Duas correcoes de rota durante a auditoria
+
+**Primeiro levantamento incompleto.** A primeira delegacao listou so duas raizes,
+porque o script mostrava o caminho mais curto por arquivo e escondia que
+`mobile-controls` tambem chega em `aim.ts`. O executor parou, relatou o caminho
+que faltava e reverteu o patch em vez de mexer num arquivo fora da lista. O
+levantamento foi refeito avaliando cada import de primeiro nivel da rota
+separadamente, e so entao as tres raizes apareceram.
+
+**Falso alarme de regressao no celular.** Em modo celular o mundo 3D parecia nao
+montar com o patch (canvas orfao de 300x150, sonda muda). Era estado sujo de
+HMR: eu tinha trocado arquivos no disco com o servidor de dev ligado, varias
+vezes, para comparar com o HEAD. Com o servidor reiniciado limpo, o patch da o
+mesmo resultado do HEAD: canvas 256x487, sonda respondendo, controles de toque
+(`mobile-stick-zone`, `mobile-arc`, `mobile-btn--attack`) no lugar. **Medicao no
+navegador so vale com o servidor reiniciado.**
+
+### Na tela
+
+Desktop: mundo igual, 1.460 meshes / 367 materiais / 587 geometrias — em linha
+com o item 5 e sem artefato. Celular (375x812): mundo 3D renderizando, HUD,
+minimapa e os controles de toque em arco com o botao de ataque, tudo no lugar.
+
+### Dois testes intermitentes (pre-existentes, nao e deste item)
+
+`game-world-memo` e `enfeites-no-seco` dao timeout as vezes, os dois no
+`await import('@/components/game-world')`. Nao e regressao: **no HEAD limpo, sem
+nenhuma mudanca deste item, `enfeites-no-seco` tambem estourou.**
+
+| execucao | servidor de dev | resultado | duracao |
+|---|---|---|---|
+| HEAD + item 5 | parado | 131/131 verde | 76 s |
+| HEAD limpo | parado | 1 timeout | 100 s |
+| com o item 7 | parado | 2 timeouts | 102 s |
+
+Correlaciona com a duracao da execucao, nao com o patch: importar `game-world`
+custa caro e os limites (20 s e 30 s) sao apertados. Rodando os dois arquivos
+sozinhos, passam. Fica anotado para o Pedro decidir: um `testTimeout` maior
+nesses dois casos resolveria.
