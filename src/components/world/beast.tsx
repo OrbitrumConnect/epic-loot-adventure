@@ -241,6 +241,19 @@ function matOf(color: string, emissive = false) {
   return m;
 }
 
+/** Contorno do corpo procedural (do chão até o topo da cabeça/galhada, da traseira ao focinho) — área de clique
+ *  dos bichos com GLB, que antes era o próprio corpo procedural escondido. */
+export function beastHitbox(spec: Pick<BeastSpec, 'body' | 'legLen' | 'head' | 'headPos' | 'extras'>) {
+  const [bw, bh, bd] = spec.body;
+  const [hw, hh, hd] = spec.head;
+  const bodyY = spec.legLen + bh / 2;
+  const headY = bodyY + spec.headPos[1];
+  const top = Math.max(bodyY + bh / 2, headY + hh / 2 + (spec.extras?.includes('antlers') ? 0.46 : 0));
+  const front = Math.max(bd / 2, spec.headPos[2] + hd / 2);
+  const back = -bd / 2;
+  return { w: Math.max(bw * 1.02, hw), h: top, d: front - back, cy: top / 2, cz: (front + back) / 2 };
+}
+
 export function isBeast(speciesId: string) {
   return speciesId in BEASTS;
 }
@@ -333,6 +346,7 @@ export function Beast({
   const extras = spec.extras ?? [];
   const coat = matOf(mixColor(spec.bodyColor, c.trunk, 0.2));
   const face = matOf(mixColor(spec.headColor, c.rock, 0.15));
+  const hit = beastHitbox(spec);
 
   return (
     <group ref={ref} position={[start.x, y, start.z]} scale={spec.scale} onPointerDown={onClick}>
@@ -342,7 +356,13 @@ export function Beast({
       {glb && <group ref={flyRef}>
         <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} fixedScale={glb.fixedScale} autoGround={glb.autoGround ?? false} />
       </group>}
-      <group ref={inner} visible={!glb}>
+      {/* 27/10: com GLB o corpo procedural (~20 peças) ficava montado e escondido só pra servir de área de clique (o
+          three.js clica em objeto invisível) — mas pagava o cálculo de matriz todo quadro. Vira UMA caixa invisível
+          com o mesmo contorno (corpo + cabeça), mesma área de clique/toque. */}
+      {glb ? (
+        <mesh visible={false} position={[0, hit.cy, hit.cz]} geometry={boxGeo(hit.w, hit.h, hit.d)} material={coat} />
+      ) : (
+      <group ref={inner}>
         {/* Corpo */}
         <mesh position={[0, bodyY, 0]} castShadow geometry={organicGeo(bw, bh, bd)} material={coat} />
         {/* Anatomical shoulder and haunch masses share cached geometry. */}
@@ -436,6 +456,7 @@ export function Beast({
           <mesh position={[0, bodyY + bh * 0.1, -bd * 0.55]} geometry={ballGeo(0.07)} material={matOf(spec.tailColor)} raycast={noRaycast} />
         )}
       </group>
+      )}
     </group>
   );
 }
