@@ -45,3 +45,19 @@ describe('conversão toon só quando a cena muda', () => {
     expect(cel.CONVERT_IDLE_S).toBe(3);
   }, 20_000);
 });
+
+/* 27/10 — sombra: interruptor GERAL junto com o do sol (15×/s); céu: cálculo reaproveitado por 0,1 s. */
+describe('sombra e céu mais leves', () => {
+  it('renderizador não checa sombra todo quadro (só o sol projeta sombra; mesma cadência de 15×/s)', () => {
+    const gw = fs.readFileSync('src/components/game-world.tsx', 'utf8');
+    expect(gw).toMatch(/gl\.shadowMap\.autoUpdate = false;/);
+    expect(gw).toMatch(/dir\.current\.shadow\.needsUpdate = true;\n\s*gl\.shadowMap\.needsUpdate = true;/);
+  });
+  it('dia/noite: mesma resposta dentro de 0,1 s (sem lixo de memória); passou disso, recalcula', async () => {
+    const { dayNight, DAYNIGHT_REUSE_MS } = await import('@/game/systems/dayNightSystem');
+    const t = Date.now();
+    const a = dayNight(t);
+    expect(dayNight(t + 50)).toBe(a);
+    expect(dayNight(t + DAYNIGHT_REUSE_MS + 1)).not.toBe(a);
+  });
+});

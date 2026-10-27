@@ -1087,7 +1087,7 @@ function RockInstances({ c }: { c: Palette }) {
 function DayNightLighting({ c }: { c: Palette }) {
   const dir = useRef<THREE.DirectionalLight>(null);
   const amb = useRef<THREE.AmbientLight>(null);
-  const { scene } = useThree();
+  const { scene, gl } = useThree();
   const fog = useRef(new THREE.Fog(c.ground, 80, 180));
   const bg = useRef(new THREE.Color(c.ground));
 
@@ -1098,6 +1098,10 @@ function DayNightLighting({ c }: { c: Palette }) {
     // o autoUpdate e marco needsUpdate a ~15 Hz (ver abaixo) — corta ~75% dos
     // passes de sombra (o mais caro da cena, com ~70 criaturas) sem perda visível.
     const d = dir.current;
+    // 27/10 (auditoria do Caio, A/B +5%): o renderizador também checava sombra TODO quadro; só o sol projeta sombra,
+    // então o interruptor GERAL acompanha o do sol (15×/s, abaixo).
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
     if (d) {
       d.shadow.autoUpdate = false;
       d.shadow.needsUpdate = true;
@@ -1107,7 +1111,7 @@ function DayNightLighting({ c }: { c: Palette }) {
       scene.add(d.target);
     }
     return () => { if (d) scene.remove(d.target); };
-  }, [scene]);
+  }, [scene, gl]);
 
   const shadowAccum = useRef(0);
   useFrame((_s, delta) => {
@@ -1140,6 +1144,7 @@ function DayNightLighting({ c }: { c: Palette }) {
     if (dir.current && shadowAccum.current >= 1 / 15) {
       shadowAccum.current = 0;
       dir.current.shadow.needsUpdate = true;
+      gl.shadowMap.needsUpdate = true;
     }
   });
 
