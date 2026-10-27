@@ -29,3 +29,19 @@ describe('lista de bichos estável', () => {
     expect(src).toMatch(/<WolfM key=/);
   });
 });
+
+/* 27/10 — efeito visual (cel-shade) varria a cena inteira (~24,5 mil objetos) 4×/s; agora só quando entra objeto. */
+describe('conversão toon só quando a cena muda', () => {
+  it('objeto entrando na cena marca; a conversão consome; sem novidade a passada de segurança é a cada 3 s', async () => {
+    const THREE = await import('three');
+    const cel = await import('@/components/world/cel-shade');
+    cel.takeSceneDirty();
+    expect(cel.peekSceneDirty()).toBe(false);
+    new THREE.Group().add(new THREE.Object3D());
+    expect(cel.peekSceneDirty()).toBe(true);
+    expect(cel.takeSceneDirty()).toBe(true);
+    expect(cel.peekSceneDirty()).toBe(false);
+    expect(cel.CONVERT_DIRTY_S).toBe(0.25); // mesmo ritmo de antes quando há novidade
+    expect(cel.CONVERT_IDLE_S).toBe(3);
+  }, 20_000);
+});
