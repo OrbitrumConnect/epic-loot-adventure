@@ -1,0 +1,31 @@
+import fs from 'node:fs';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@react-three/drei', () => ({ useGLTF: Object.assign(vi.fn(), { preload: vi.fn() }), useAnimations: vi.fn(), Html: () => null }));
+vi.mock('@react-three/fiber', () => ({ useFrame: vi.fn(), useThree: vi.fn(), createPortal: vi.fn() }));
+
+/* 27/10 — auditoria do Caio (o jogo "não roda" no PC/celular dele), conferida no código: cada bicho que nascia
+   refazia a lista com `start` novo pra TODOS (~224) → todos re-renderizavam (~300 ms travado, ~3×/s na horda). */
+describe('lista de bichos estável', () => {
+  const mk = (id: string, x = 0, name = 'Pirata') => ({ id, speciesId: 'raider_scout', name, position: { x, z: 0 } });
+  it('bicho que não mudou devolve o MESMO objeto (não re-renderiza); só o novo ganha objeto novo', async () => {
+    const { nextEnemyList } = await import('@/components/world/world-entities');
+    const a = nextEnemyList(new Map(), [mk('a'), mk('b')]);
+    const b = nextEnemyList(a.cache, [mk('a', 5), mk('b', 9), mk('c')]); // a/b andaram; c nasceu
+    expect(b.list[0]).toBe(a.list[0]);       // mesmo objeto → memo pula
+    expect(b.list[1]).toBe(a.list[1]);
+    expect(b.list[0]!.start).toEqual({ x: 0, z: 0 }); // "start" é só onde nasceu (a IA move o corpo)
+    expect(b.list[2]!.id).toBe('c');
+    const c = nextEnemyList(b.cache, [mk('a', 5, 'Pirata Enfurecido'), mk('c')]); // b saiu; a virou Enfurecido
+    expect(c.list[0]).not.toBe(b.list[0]);   // mudou de nome: só ele desenha de novo
+    expect(c.list[1]).toBe(b.list[2]);
+    expect(c.cache.has('b')).toBe(false);
+  }, 20_000);
+  it('componentes dos bichos com memo; roster inclui o nome', () => {
+    const src = fs.readFileSync('src/components/world/world-entities.tsx', 'utf8');
+    expect(src).toMatch(/const RaiderM = memo\(Raider\);/);
+    expect(src).toMatch(/<RaiderM\n/);
+    expect(src).toMatch(/<BeastM\n/);
+    expect(src).toMatch(/<WolfM key=/);
+  });
+});
