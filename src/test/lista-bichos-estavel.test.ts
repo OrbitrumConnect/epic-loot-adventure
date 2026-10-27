@@ -22,7 +22,7 @@ describe('lista de bichos estável', () => {
     expect(c.cache.has('b')).toBe(false);
   }, 20_000);
   it('componentes dos bichos com memo; roster inclui o nome', () => {
-    const src = fs.readFileSync('src/components/world/world-entities.tsx', 'utf8');
+    const src = fs.readFileSync('src/components/world/world-entities.tsx', 'utf8').replace(/\r\n/g, '\n'); // Windows (CRLF)
     expect(src).toMatch(/const RaiderM = memo\(Raider\);/);
     expect(src).toMatch(/<RaiderM\n/);
     expect(src).toMatch(/<BeastM\n/);
@@ -49,7 +49,7 @@ describe('conversão toon só quando a cena muda', () => {
 /* 27/10 — sombra: interruptor GERAL junto com o do sol (15×/s); céu: cálculo reaproveitado por 0,1 s. */
 describe('sombra e céu mais leves', () => {
   it('renderizador não checa sombra todo quadro (só o sol projeta sombra; mesma cadência de 15×/s)', () => {
-    const gw = fs.readFileSync('src/components/game-world.tsx', 'utf8');
+    const gw = fs.readFileSync('src/components/game-world.tsx', 'utf8').replace(/\r\n/g, '\n'); // Windows (CRLF)
     expect(gw).toMatch(/gl\.shadowMap\.autoUpdate = false;/);
     expect(gw).toMatch(/dir\.current\.shadow\.needsUpdate = true;\n\s*gl\.shadowMap\.needsUpdate = true;/);
   });

@@ -61,7 +61,7 @@ describe('perigo pela geografia', () => {
 
 describe('ligado no jogo (sem nível do jogador)', () => {
   it('IA usa a zona da CASA do bicho (1ª vez + renascer, com noite); nada de nível do jogador', () => {
-    const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
+    const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8').replace(/\r\n/g, '\n'); // Windows (CRLF)
     expect(ai).toMatch(/applyWorldLevel\(back, def, zoneLevel\(home\), Math\.random, true, isNight\(\)\)/);
     expect(ai).toMatch(/const lv = zoneLevel\(homePos\.current\);/);
     expect(ai).not.toMatch(/player\.level/);
