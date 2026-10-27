@@ -59,7 +59,8 @@ describe('dia/noite sincronizado na sala', () => {
   });
   it('ligado: a foto do mundo leva o relógio e o convidado aplica', () => {
     const mp = fs.readFileSync('src/net/multiplayer.ts', 'utf8');
-    expect(mp).toMatch(/payload: \{ id: selfId, creatures, epoch: worldEpoch\(\) \}/);
+    // 27/10: o mundo vai em diferenças (world-delta.ts), mas TODO pacote continua levando o relógio.
+    expect(mp).toMatch(/payload: \{ id: selfId, \.\.\.pkt, epoch: worldEpoch\(\) \}/);
     expect(mp).toMatch(/if \(typeof p\.epoch === 'number'\) setWorldEpoch\(p\.epoch\);/);
   });
 });

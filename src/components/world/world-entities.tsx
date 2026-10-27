@@ -8,7 +8,7 @@
  * quadro continua lendo `getState()` dentro do laço.
  */
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { deadCreature, spawnWaveRaiders, useGameStore } from '@/game/state/game-store';
 import { Beast } from './beast';
@@ -47,8 +47,38 @@ function PositionSync() {
   return null;
 }
 
+/**
+ * LISTA DE BICHOS ESTÁVEL (27/10 — auditoria do Caio, conferida no código). Antes: qualquer bicho que nascia/saía
+ * mudava o `roster` → a lista era refeita com um `start` NOVO pra CADA um dos ~224 → todos re-renderizavam (medido
+ * pelo Caio: ~300 ms de thread travada, ~3×/s na horda). Agora: o bicho que não mudou devolve o MESMO objeto (cache
+ * por id) e os componentes têm `memo` → só o que nasceu (ou mudou de nome, ex.: virou Enfurecido) desenha de novo.
+ */
+export type EnemyEntry = { id: string; speciesId: string; name: string; start: { x: number; z: number } };
+export function nextEnemyList(
+  cache: Map<string, EnemyEntry>,
+  creatures: readonly { id: string; speciesId: string; name: string; position: { x: number; z: number } }[],
+): { list: EnemyEntry[]; cache: Map<string, EnemyEntry> } {
+  const next = new Map<string, EnemyEntry>();
+  const list: EnemyEntry[] = [];
+  for (const cr of creatures) {
+    let e = cache.get(cr.id);
+    if (!e || e.speciesId !== cr.speciesId || e.name !== cr.name) {
+      e = { id: cr.id, speciesId: cr.speciesId, name: cr.name, start: { x: cr.position.x, z: cr.position.z } };
+    }
+    next.set(cr.id, e);
+    list.push(e);
+  }
+  return { list, cache: next };
+}
+const RaiderM = memo(Raider);
+const BeastM = memo(Beast);
+const WolfM = memo(Wolf);
+
 export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: React.RefObject<THREE.Group | null>; cameraMode: CameraMode }) {
-  const roster = useGameStore(s => s.creatures.map(cr => `${cr.id}#${cr.speciesId}`).join('|'));
+  const roster = useGameStore(s => s.creatures.map(cr => `${cr.id}#${cr.speciesId}#${cr.name}`).join('|'));
+  const cache = useRef(new Map<string, EnemyEntry>());
+  // CORTE POR DISTÂNCIA (26/10): o bicho longe continua vivo na IA, mas não desenha o corpo.
+  // Convive com o `memo` acima: `renderBody` é prop, então só o bicho que cruzou o raio redesenha.
   const renderBodyIds = useRef(new Set<string>());
   const cullAcc = useRef(CREATURE_CULL_INTERVAL);
   const [, setRenderBodyRoster] = useState('');
@@ -73,23 +103,19 @@ export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: R
     renderBodyIds.current = nextRenderBody;
     if (changed) setRenderBodyRoster([...nextRenderBody].join('|'));
   });
-
-  const list = useMemo(
-    () => useGameStore.getState().creatures.map(cr => ({
-      id: cr.id,
-      speciesId: cr.speciesId,
-      name: cr.name,
-      start: { x: cr.position.x, z: cr.position.z },
-    })),
-    [roster],
-  );
+  const list = useMemo(() => {
+    const r = nextEnemyList(cache.current, useGameStore.getState().creatures);
+    cache.current = r.cache;
+    return r.list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roster]);
 
   return (
     <>
       <PositionSync />
       {list.map(cr =>
         isRaider(cr.speciesId) ? (
-          <Raider
+          <RaiderM
             key={cr.id}
             c={c}
             creatureId={cr.id}
@@ -100,11 +126,11 @@ export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: R
             playerRef={playerRef}
           />
         ) : cr.speciesId === 'wolf' ? (
-          <Wolf key={cr.id} c={c} creatureId={cr.id} name={cr.name} start={cr.start} renderBody={renderBodyIds.current.has(cr.id)} playerRef={playerRef} />
+          <WolfM key={cr.id} c={c} creatureId={cr.id} name={cr.name} start={cr.start} renderBody={renderBodyIds.current.has(cr.id)} playerRef={playerRef} />
         ) : (
           // Fauna nova (cervo, javali, urso, lobo alfa...) e qualquer espécie
           // desconhecida: `Beast` tem fallback em vez de sumir.
-          <Beast
+          <BeastM
             key={cr.id}
             c={c}
             creatureId={cr.id}

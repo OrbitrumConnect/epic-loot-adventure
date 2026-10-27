@@ -98,6 +98,27 @@ function makeBloomRT(w: number, h: number): THREE.WebGLRenderTarget {
 
 const BLOOM_DIV = 4;
 
+/**
+ * CONVERSÃO SÓ QUANDO PRECISA (27/10 — auditoria do Caio). Antes: percorria a cena INTEIRA (~24,5 mil objetos) 4×/s,
+ * sempre — num celular um soluço de ~30 ms a cada 0,25 s. Agora: entrou objeto na cena (Object3D.add — bicho nascendo,
+ * peça construída, GLB carregando) → converte no mesmo ritmo de antes; nada novo → só uma passada de segurança a cada
+ * 3 s (material trocado sem add). Mesmo resultado visual.
+ */
+export const CONVERT_DIRTY_S = 0.25;
+export const CONVERT_IDLE_S = 3;
+let sceneDirty = true;
+export function markSceneDirty(): void { sceneDirty = true; }
+export function takeSceneDirty(): boolean { const d = sceneDirty; sceneDirty = false; return d; }
+export function peekSceneDirty(): boolean { return sceneDirty; }
+{
+  const proto = THREE.Object3D.prototype as THREE.Object3D & { __celAddPatched?: boolean };
+  if (!proto.__celAddPatched) {
+    const origAdd = proto.add;
+    proto.add = function (this: THREE.Object3D, ...objects: THREE.Object3D[]) { sceneDirty = true; return origAdd.apply(this, objects); };
+    proto.__celAddPatched = true;
+  }
+}
+
 export function CelShade() {
   const { gl, scene, camera, size } = useThree();
 
@@ -205,8 +226,9 @@ export function CelShade() {
   useFrame((state, delta) => {
     // Converte materiais novos pra rampa toon (barato, idempotente).
     convertAcc.current += delta;
-    if (CEL.toon.enabled && convertAcc.current > 0.25) {
+    if (CEL.toon.enabled && convertAcc.current > (peekSceneDirty() ? CONVERT_DIRTY_S : CONVERT_IDLE_S)) {
       convertAcc.current = 0;
+      takeSceneDirty();
       let n = 0;
       scene.traverse(obj => {
         const mesh = obj as THREE.Mesh;

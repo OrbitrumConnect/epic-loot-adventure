@@ -121,7 +121,21 @@ export function gameClock(now: number = Date.now()): { day: number; time: string
 }
 
 /** Estado de iluminação interpolado para o instante real `now`. */
+/**
+ * Reaproveita o cálculo por 0,1 s (27/10 — auditoria do Caio: memória subindo ~15 MB/s). Iluminação, sol e cel-shade
+ * pediam isto 3× POR QUADRO, cada vez criando textos de cor novos (lixo pro coletor). Em 0,1 s o céu não muda
+ * perceptivelmente (≈ 3 s do relógio do jogo). Trocar o relógio da sala (setWorldEpoch) invalida.
+ */
+export const DAYNIGHT_REUSE_MS = 100;
+let dnCache: { at: number; epoch: number; value: DayNight } | null = null;
 export function dayNight(now: number = Date.now()): DayNight {
+  if (dnCache && dnCache.epoch === epoch && Math.abs(now - dnCache.at) < DAYNIGHT_REUSE_MS) return dnCache.value;
+  const value = computeDayNight(now);
+  dnCache = { at: now, epoch, value };
+  return value;
+}
+
+function computeDayNight(now: number): DayNight {
   const h = gameHour(now);
   const first = KEYFRAMES[0]!;
   const last = KEYFRAMES[KEYFRAMES.length - 1]!;
