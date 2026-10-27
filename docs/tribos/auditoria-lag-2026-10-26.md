@@ -268,3 +268,47 @@ Conferido que nada quebrou:
 - `[NÃO VERIFICADO]` O "TOP 10 desperdícios" de `r3-gpu-waste.md` é ordenação estática por contagem de
   ocorrência, sem medição de GPU por item. A medição de GPU acima contradiz a premissa dele: desperdício
   de GPU não é o que trava este jogo hoje.
+
+## 6d. Item 3 — textura em KTX2 (FEITO, commit e64dbc0)
+
+Piloto em 3 modelos. A fiacao ja existia (`ktx2-gltf.ts`) e so o chao usava.
+
+| arquivo | disco antes | disco depois | VRAM antes | VRAM depois |
+|---|---:|---:|---:|---:|
+| red/hero-preview.glb (2048) | 8,17 MB | 1,92 MB | 16 MB | 4 MB |
+| raiders/pirate.glb (2x1024) | 1,44 MB | 1,58 MB | 8 MB | 2 MB |
+| crystal/crystal.glb (3x1024) | 9,39 MB | 6,84 MB | 12 MB | 3 MB |
+
+Medido na cena viva: 5 texturas comprimidas, formato 36492 = BC7 (1 byte/px).
+8 MB onde eram 32 MB em RGBA8. Sem mipmap na conta; com mipmap o fator 1,33
+vale para os dois lados.
+
+Qualidade (PSNR, KTX2 transcodificado de volta para RGBA8 e comparado ao
+original): heroi 34,5 dB; cristal 35,2 (cor) / 39,6 e 45,9 (UASTC, nao-cor);
+pirata 30,9 dB — o original do pirata ja era JPEG, parte do erro e dele.
+Recorte 1:1 do atlas do heroi lado a lado: sem artefato de bloco visivel.
+
+Cobertura de call-site conferida: os 3 GLB declaram `extensionsRequired:
+KHR_texture_basisu`, ou seja, um carregamento SEM o KTX2Loader falha duro.
+Os unicos pontos que carregam esses URLs sao `GlbHeroMixamo` (heroi por
+`RED_URL` e pirata por `MIXAMO_RAIDER[raider_scout].url`) e `GlbCrystals` —
+ambos fiados. `RAIDER_GLB` nao tem o pirata; `glb-hero.tsx` usa outro modelo.
+
+Interacao com o corte de textura do celular: `capTextures`
+(device-profile.ts:61) ja pulava `isCompressedTexture`. Entao no celular o
+heroi deixa de cair para 1024. Nao e regressao: 2048 em BC7 = 4 MB, igual ao
+1024 em RGBA8 que existia antes. `textureCapFor` nao mudou, e o teste
+`perfil-aparelho.test.ts` continua valendo.
+
+`src/test/resolucao-minima.test.ts` foi ajustado para ler largura/altura do
+cabecalho KTX2 (offsets 20 e 24) e para seguir
+`texture.extensions.KHR_texture_basisu.source`. A expectativa de 2048 px no
+heroi continua a mesma — nao foi afrouxada.
+
+Ferramenta nova: `tools/ktx2-glb.mjs` (ETC1S na cor, UASTC no nao-cor,
+`--genmipmap`, backup do original antes de sobrescrever em `KTX2_BACKUP_DIR`).
+Serve para os outros 86 GLB.
+
+Suite: 913 passam. 2 falhas que nao sao desta mudanca — `dificuldade-mundo`
+(CRLF, pre-existente) e `enfeites-no-seco` (timeout de 20 s so quando roda
+junto; passa isolado, 136/136 com os afetados). `vite build` exit 0.
