@@ -312,3 +312,89 @@ Serve para os outros 86 GLB.
 Suite: 913 passam. 2 falhas que nao sao desta mudanca — `dificuldade-mundo`
 (CRLF, pre-existente) e `enfeites-no-seco` (timeout de 20 s so quando roda
 junto; passa isolado, 136/136 com os afetados). `vite build` exit 0.
+
+## 6e. Item 4 — malha em meshopt + cache dos modelos (FEITO)
+
+### O que entrou
+
+35 GLB **sem animacao** passaram para `EXT_meshopt_compression`:
+**92,34 -> 58,70 MB** (-36%). O acervo inteiro sai de 180,38 para 146,74 MB.
+Nao mexe em codigo: o `useGLTF` do drei ja liga o `MeshoptDecoder` sozinho, e
+4 arquivos da casa ja rodavam assim em producao.
+
+| arquivo | antes | depois |
+|---|---:|---:|
+| map/desert-palm-cluster.glb | 6,21 MB | 2,14 MB |
+| trees/tree-split.glb | 5,74 MB | 1,99 MB |
+| terrain/mountain.glb | 1,00 MB | 0,46 MB |
+
+### Por que os 49 arquivos COM animacao ficaram de fora
+
+Primeiro a conversao pegou os 84, e o acervo foi para 115,65 MB. Parecia melhor.
+Medindo a animacao antes e depois, porem (HEAD cru contra arvore decodificada,
+sampler por sampler, em todas as animacoes de cada arquivo):
+
+- pior erro de **rotacao**: 0,82 grau (`ranger/UAL2_Standard.glb`);
+- pior erro de **translacao**: 6,2 cm (`animals/buffalo.glb`), veado 3,1 cm,
+  heroi 3,1 cm, civil 2,3 cm.
+
+0,82 grau nao se ve. 6,2 cm de translacao de osso se ve: e pe deslizando,
+corpo flutuando ou afundando. E o `withoutHipsMotion` so e aplicado ao clipe de
+MORTE (`glb-hero-mixamo.tsx:287`) — nos outros clipes a translacao do quadril
+vale. A perda nao vem do `quantize()` (que aqui so pega TEXCOORD, JOINTS,
+WEIGHTS e COLOR): vem do proprio `EXT_meshopt_compression`, cujos dois metodos
+sao lossy (`@gltf-transform/extensions` index.d.ts:909-912), sem opcao para
+pular animacao. Como a extensao decide por bufferView e nao por tipo de dado, a
+unica divisao possivel e por ARQUIVO.
+
+Troca recusada: 24,55 MB a mais em troca de erro de animacao. Ficam 33,64 MB de
+economia com fidelidade intacta.
+
+### Prova
+
+- Erro de animacao no que sobrou: **0,0000 grau**. Nenhum arquivo passou de
+  0,5 grau nem de 5 mm.
+- Caixa delimitadora, vertices, triangulos, animacoes, skins e nodes: iguais em
+  todos os 35, comparados contra `HEAD`. Zero problema de caixa.
+- 9 arquivos de cenario tem POSITION em `5122` (SHORT) em vez de float — mas
+  **ja vinham assim do original**, conferido arquivo por arquivo contra `HEAD`.
+  A ferramenta nao quantizou POSITION.
+- Suite: **914 passam, 1 falha** (`dificuldade-mundo`, CRLF desta maquina,
+  pre-existente). `vite build` exit 0.
+
+### Armadilha que isso descobriu (vale para quem for comprimir de novo)
+
+`src/test/mixamo-retarget.test.ts` e `src/test/morte-cai-no-chao.test.ts` leem o
+GLB na mao, sem loader, e fazem `new Float32Array()` em cima do byte CRU do
+bufferView. Com a animacao comprimida esses bytes viram lixo, o
+`new THREE.AnimationClip('c', -1, tracks)` calcula duracao em cima do lixo e o
+teste **roda para sempre** — nao falha, trava. Era isso que impedia a suite
+inteira de fechar. Com a animacao fora da compressao os dois voltam a passar
+sem precisar tocar em nenhum `expect`: 39/39 e 11/11. A suite inteira fecha em
+166 s.
+
+### Cache dos modelos
+
+Antes, o `_headers` do build cobria so `/assets/*`: todo GLB era rebaixado a
+cada visita. `nitro.config.ts` novo acrescenta `/models/**`:
+
+```
+/models/*
+  cache-control: public, max-age=86400
+```
+
+**Sem `immutable`, e um dia em vez de um ano, de proposito.** Os arquivos em
+`/assets/*` levam hash no nome (o Vite renomeia quando o conteudo muda), mas
+`/models/fox.glb` nao. Com `immutable` por um ano, trocar um modelo deixaria
+quem ja visitou com o antigo por um ano, sem jeito de forcar. Um dia ja corta o
+re-download de toda visita. Se os modelos ganharem hash no nome, da para subir.
+
+### Na tela
+
+Mundo carregado: arvores, terreno, rochas e bicho nas proporcoes certas, nada
+gigante. **38,6 FPS e 126 draw calls**, contra 30,0 FPS e 161 draw calls do
+item 3. Requisicao de cada GLB em 200 com o tamanho exato do disco.
+
+Ferramenta nova: `tools/meshopt-glb.mjs`, com portao de fidelidade embutido
+(caixa delimitadora a 0,5%, vertices, triangulos, animacoes, skins, nodes e
+KTX2) e backup do original em `MESHOPT_BACKUP_DIR` antes de sobrescrever.
