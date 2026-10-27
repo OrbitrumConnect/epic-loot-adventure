@@ -1,10 +1,11 @@
 import { useGLTF } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { terrainHeight } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
+import { extendKTX2, primeKTX2 } from './ktx2-gltf';
 
 /**
  * Cristal da Essência como GLB BONITO — mas o modelo é PESADO (~92k tris!). Então
@@ -20,7 +21,9 @@ const POOL = 4;
 function noRaycast() {}
 
 export function GlbCrystals() {
-  const { scene } = useGLTF(URL);
+  const gl = useThree((state) => state.gl);
+  primeKTX2(gl);
+  const { scene } = useGLTF(URL, true, true, extendKTX2);
 
   const proto = useMemo(() => {
     const o = scene.clone(true);

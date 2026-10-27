@@ -10,7 +10,9 @@ function glb(f: string) {
   return { json: JSON.parse(b.subarray(20, 20 + jl).toString()), bin: b.subarray(20 + jl + 8) };
 }
 /** Largura × altura de um JPEG/PNG pelos bytes do cabeçalho. */
-function dims(buf: Buffer): [number, number] {
+function dims(buf: Buffer, mime?: string): [number, number] {
+  // KTX2 keeps the source dimensions in its 68-byte header; compressed data has no PNG/JPEG SOF.
+  if (mime === 'image/ktx2') return [buf.readUInt32LE(20), buf.readUInt32LE(24)];
   if (buf[0] === 0x89 && buf[1] === 0x50) return [buf.readUInt32BE(16), buf.readUInt32BE(20)]; // PNG
   let i = 2; // JPEG: procura o SOF
   while (i < buf.length) {
@@ -27,8 +29,10 @@ function dims(buf: Buffer): [number, number] {
 function baseColorDims(file: string): [number, number] {
   const { json, bin } = glb(file);
   const tex = json.textures[json.materials[0].pbrMetallicRoughness.baseColorTexture.index];
-  const bv = json.bufferViews[json.images[tex.source].bufferView];
-  return dims(bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength));
+  const source = tex.source ?? tex.extensions?.KHR_texture_basisu?.source;
+  const image = json.images[source];
+  const bv = json.bufferViews[image.bufferView];
+  return dims(bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength), image.mimeType);
 }
 
 describe('nitidez mínima do que mais aparece', () => {

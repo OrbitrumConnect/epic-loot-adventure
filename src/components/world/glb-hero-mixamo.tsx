@@ -1,6 +1,6 @@
 import { useGLTF } from '@react-three/drei';
 import { animEvery, useLodAnimations } from './anim-lod';
-import { createPortal, useFrame } from '@react-three/fiber';
+import { createPortal, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -11,6 +11,7 @@ import { poseToBind, retargetBind, retargetTwist, withoutHipsMotion } from './mi
 import { DODGE_CLIP_FROM, DODGE_CLIP_TO, DODGE_MS } from '@/game/systems/dodgeSystem';
 import { createFootCache, footMinY, groundStep, nextGroundOffset } from './glb-creature';
 import { hitStopScale } from './hit-stop';
+import { extendKTX2, preloadKTX2GLTF, primeKTX2 } from './ktx2-gltf';
 
 /** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
 const bindClipCache = new Map<string, THREE.AnimationClip>();
@@ -223,7 +224,9 @@ export function GlbHeroMixamo({
   gripRot?: [number, number, number];
 }) {
   const inner = useRef<THREE.Group>(null);
-  const { scene } = useGLTF(charUrl);
+  const gl = useThree((state) => state.gl);
+  primeKTX2(gl);
+  const { scene } = useGLTF(charUrl, true, true, extendKTX2);
   const idleG = useGLTF(CLIP_URL['idle']!);
   const walkG = useGLTF(CLIP_URL['walk']!);
   const runG = useGLTF(CLIP_URL['run']!);
@@ -688,7 +691,7 @@ export function GlbHeroMixamo({
   );
 }
 
-useGLTF.preload(RED_URL);
+preloadKTX2GLTF(RED_URL);
 useGLTF.preload(CLIP_URL['idle']!);
 useGLTF.preload(CLIP_URL['walk']!);
 useGLTF.preload(CLIP_URL['run']!);
