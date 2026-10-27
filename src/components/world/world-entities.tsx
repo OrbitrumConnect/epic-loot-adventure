@@ -8,7 +8,7 @@
  * quadro continua lendo `getState()` dentro do laço.
  */
 import { useFrame } from '@react-three/fiber';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { deadCreature, spawnWaveRaiders, useGameStore } from '@/game/state/game-store';
 import { Beast } from './beast';
@@ -18,6 +18,8 @@ import { getCamps } from './objective-bridge';
 import { isRaider, Raider } from './raider';
 import { Wolf } from './wolf';
 import type { Palette } from './world-kit';
+import type { CameraMode } from '@/components/game-world';
+import { shouldMountCreature } from './creature-culling';
 import {
   broadcastWorld, fetchResumeSnapshot, MP_ENABLED, registerBaseHitHandler, registerCreatureHitHandler,
   registerMobHitHandler, registerPlayerHitHandler, registerTroopHitHandler, registerWaveSpawnHandler, registerWorldSnapshotProvider, useNet,
@@ -29,6 +31,10 @@ import { pvpBaseDamage, pvpPlayerDamage } from '@/game/systems/pvpSystem';
 import { mergeResumedWorld } from '@/game/systems/wildlifeSystem';
 
 const SYNC_INTERVAL = 0.2;
+export const ISO_CREATURE_RENDER_RADIUS = 85; // medição: câmera iso vê até 69 m
+export const THIRD_CREATURE_RENDER_RADIUS = 135; // medição: 3a pessoa vê até 122 m
+export const FREE_CREATURE_RENDER_RADIUS = Number.POSITIVE_INFINITY; // câmera livre não corta
+const CREATURE_CULL_INTERVAL = 0.25;
 
 function PositionSync() {
   const acc = useRef(0);
@@ -68,9 +74,35 @@ const RaiderM = memo(Raider);
 const BeastM = memo(Beast);
 const WolfM = memo(Wolf);
 
-export function Enemies({ c, playerRef }: { c: Palette; playerRef: React.RefObject<THREE.Group | null> }) {
+export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: React.RefObject<THREE.Group | null>; cameraMode: CameraMode }) {
   const roster = useGameStore(s => s.creatures.map(cr => `${cr.id}#${cr.speciesId}#${cr.name}`).join('|'));
   const cache = useRef(new Map<string, EnemyEntry>());
+  // CORTE POR DISTÂNCIA (26/10): o bicho longe continua vivo na IA, mas não desenha o corpo.
+  // Convive com o `memo` acima: `renderBody` é prop, então só o bicho que cruzou o raio redesenha.
+  const renderBodyIds = useRef(new Set<string>());
+  const cullAcc = useRef(CREATURE_CULL_INTERVAL);
+  const [, setRenderBodyRoster] = useState('');
+
+  useFrame((_s, delta) => {
+    cullAcc.current += delta;
+    if (cullAcc.current < CREATURE_CULL_INTERVAL) return;
+    cullAcc.current = 0;
+
+    const creatures = useGameStore.getState().creatures;
+    const player = useGameStore.getState().player.position;
+    const radius = cameraMode === 'iso'
+      ? ISO_CREATURE_RENDER_RADIUS
+      : cameraMode === 'third' ? THIRD_CREATURE_RENDER_RADIUS : FREE_CREATURE_RENDER_RADIUS;
+    const nextRenderBody = new Set<string>();
+    for (const cr of creatures) {
+      const dx = cr.position.x - player.x;
+      const dz = cr.position.z - player.z;
+      if (shouldMountCreature(dx * dx + dz * dz, radius, renderBodyIds.current.has(cr.id), cameraMode)) nextRenderBody.add(cr.id);
+    }
+    const changed = nextRenderBody.size !== renderBodyIds.current.size || [...nextRenderBody].some(id => !renderBodyIds.current.has(id));
+    renderBodyIds.current = nextRenderBody;
+    if (changed) setRenderBodyRoster([...nextRenderBody].join('|'));
+  });
   const list = useMemo(() => {
     const r = nextEnemyList(cache.current, useGameStore.getState().creatures);
     cache.current = r.cache;
@@ -90,10 +122,11 @@ export function Enemies({ c, playerRef }: { c: Palette; playerRef: React.RefObje
             speciesId={cr.speciesId}
             name={cr.name}
             start={cr.start}
+            renderBody={renderBodyIds.current.has(cr.id)}
             playerRef={playerRef}
           />
         ) : cr.speciesId === 'wolf' ? (
-          <WolfM key={cr.id} c={c} creatureId={cr.id} name={cr.name} start={cr.start} playerRef={playerRef} />
+          <WolfM key={cr.id} c={c} creatureId={cr.id} name={cr.name} start={cr.start} renderBody={renderBodyIds.current.has(cr.id)} playerRef={playerRef} />
         ) : (
           // Fauna nova (cervo, javali, urso, lobo alfa...) e qualquer espécie
           // desconhecida: `Beast` tem fallback em vez de sumir.
@@ -104,6 +137,7 @@ export function Enemies({ c, playerRef }: { c: Palette; playerRef: React.RefObje
             speciesId={cr.speciesId}
             name={cr.name}
             start={cr.start}
+            renderBody={renderBodyIds.current.has(cr.id)}
             playerRef={playerRef}
           />
         ),

@@ -2,7 +2,7 @@
 import './world/device-profile';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrthographicCamera, PerformanceMonitor, PerspectiveCamera, Stats, useGLTF } from '@react-three/drei';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { CAMPS, CAMP_PLACEMENTS, RUINS_POSITION } from '@/game/data/camps';
@@ -2429,7 +2429,7 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       <SafeZoneMarker />
       <Camps c={c} />
       <MultiplayerWorldSync />
-      <Enemies c={c} playerRef={playerRef} />
+      <Enemies c={c} playerRef={playerRef} cameraMode={cameraMode} />
 
       <TargetRoute playerRef={playerRef} />
       <CombatFeedback />
@@ -2478,7 +2478,7 @@ function AdaptiveResolution() {
   );
 }
 
-export default function GameWorld(props: WorldProps) {
+function GameWorld(props: WorldProps) {
   const c = useMemo(palette, []);
   const cameraMode = props.cameraMode ?? 'iso';
 
@@ -2505,3 +2505,7 @@ export default function GameWorld(props: WorldProps) {
     </>
   );
 }
+
+const MemoGameWorld = memo(GameWorld);
+MemoGameWorld.displayName = 'GameWorld';
+export default MemoGameWorld;
