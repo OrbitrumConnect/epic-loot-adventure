@@ -13,6 +13,7 @@ import { create } from 'zustand';
 import type { PlayerBaseState } from '@/game/types/playerbase';
 import type { CreatureState } from '@/game/types/creature';
 import { setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
+import { createWorldDecoder, createWorldEncoder, type WorldPacket } from './world-delta';
 
 const SUPA_URL = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
 const SUPA_ANON = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
@@ -139,6 +140,11 @@ export function setAway(away: boolean): void {
 let channel: RealtimeChannel | null = null;
 /** Recebi mundo AO VIVO de um host nesta sala? (decide se "retomar" usa a foto do banco) */
 let hadLiveWorld = false;
+/** Mundo em diferenças (world-delta.ts): host codifica, convidado remonta. Zera ao entrar/virar host. */
+let worldEncoder = createWorldEncoder();
+let worldDecoder = createWorldDecoder();
+/** Convidados PRESENTES (aba visível, fora do Clash): sem nenhum, o host não manda o mundo pra ninguém. */
+let presentGuests = new Set<string>();
 let creatureHitHandler: ((intent: CreatureHitIntent) => void) | null = null;
 let playerHitHandler: ((intent: PlayerHitIntent) => void) | null = null;
 
@@ -168,6 +174,9 @@ export const useNet = create<NetState>((set, get) => ({
     const selfId = get().selfId;
     const joinedAt = Date.now(); // ordem de chegada → quem assume se o host sair
     hadLiveWorld = false;
+    worldEncoder = createWorldEncoder();
+    worldDecoder = createWorldDecoder();
+    presentGuests = new Set();
     const ch = supabase.channel('tribos:' + room, {
       config: { presence: { key: selfId }, broadcast: { self: false } },
     });
@@ -190,12 +199,14 @@ export const useNet = create<NetState>((set, get) => ({
     });
 
     ch.on('broadcast', { event: 'world' }, ({ payload }) => {
-      const p = payload as { id: string; creatures: CreatureState[]; epoch?: number };
+      const p = payload as WorldPacket;
       // O anfitrião é a autoridade. Ele não deve aceitar um snapshot de convidado.
-      if (p.id === selfId || get().isHost || !Array.isArray(p.creatures)) return;
-      hadLiveWorld = true;
+      if (p.id === selfId || get().isHost) return;
       if (typeof p.epoch === 'number') setWorldEpoch(p.epoch); // dia/noite iguais ao do anfitrião (26/10)
-      set({ world: p.creatures });
+      const world = worldDecoder.apply(p); // foto completa ou só o que mudou (27/10)
+      if (!world) return;
+      hadLiveWorld = true;
+      set({ world });
     });
 
     ch.on('broadcast', { event: 'creature-hit' }, ({ payload }) => {
@@ -263,6 +274,10 @@ export const useNet = create<NetState>((set, get) => ({
       // MIGRAÇÃO DE HOST: se o host saiu (ou a sala estava vazia), o mais antigo assume e
       // segue simulando a partir do último snapshot que já tem no store. Nada quebra.
       const members = ids.map(id => ({ id, meta: ((st[id] as unknown as PresenceMeta[])?.[0]) ?? {} }));
+      // Quem entrou ou voltou (aba visível de novo) recebe a foto completa no próximo envio.
+      const guests = new Set(members.filter(m => m.id !== selfId && !m.meta.away).map(m => m.id));
+      if ([...guests].some(id => !presentGuests.has(id))) worldEncoder.keyframe();
+      presentGuests = guests;
       const elected = electHost(members);
       if (elected && (elected === selfId) !== get().isHost) setHost(elected === selfId);
     });
@@ -273,6 +288,8 @@ export const useNet = create<NetState>((set, get) => ({
     };
     retrack = track;
     const setHost = (host: boolean) => {
+      if (host) worldEncoder = createWorldEncoder(); // virou host: 1º envio = foto completa
+      else worldDecoder = createWorldDecoder();      // virou convidado: espera a foto do novo host
       set({ isHost: host, ...(host ? { world: null } : {}) });
       track();
       if (host) void registerRoom(room); else unregisterRoom();
@@ -359,8 +376,11 @@ export function broadcastBase(base: PlayerBaseState | null, tier = 0): void {
 /** Estado comum dos inimigos. Só o anfitrião publica; convidados apenas o consomem. */
 export function broadcastWorld(creatures: CreatureState[]): void {
   if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
+  if (presentGuests.size === 0) return; // ninguém presente pra ver: não gasta tráfego (27/10)
+  const pkt = worldEncoder.encode(creatures, Date.now()); // só o que mudou; foto completa a cada 30 s
+  if (!pkt) return;
   const { selfId } = useNet.getState();
-  void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, creatures, epoch: worldEpoch() } });
+  void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, ...pkt, epoch: worldEpoch() } });
 }
 
 /** Em uma sala, a simulação pertence ao anfitrião. Fora dela, o jogo continua solo. */
