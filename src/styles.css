@@ -901,3 +901,41 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .mobile-cd { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #fff; text-shadow: 0 0 4px #000; }
 /* Com os controles de toque montados, os botões de COMBATE saem do rodapé (estão no arco). PC/janela estreita: iguais. */
 [data-touch] .world-actions--footer [data-combat] { display: none; }
+
+/* CELULAR DEITADO (Pedro 27/10: "ao virar o celular os triggers ficam fora da tela, o rodapé não aparece, não consigo
+   pôr auto farm"). Medido: o jogo exigia 550 px de altura (`min-height`) numa tela de ~340 → rodapé 210 px FORA, AUTO e
+   triggers fora, arco de ataque 38 px fora. Aqui (só tela BAIXA, ≤ 500 px de altura; PC/tablet/celular em pé iguais):
+   o jogo cabe na tela, cabeçalho fino, rodapé numa linha só (slots | AUTO | triggers), painel da missão fora (cobria o
+   arco) e a lateral rola se não couber. */
+@media (max-height: 500px) {
+  .game-shell { min-height: 0; }
+  .game-sidebar { overflow-y: auto; overscroll-behavior: contain; }
+  .brand { height: 44px; }
+  .nav-item { height: 34px; }
+  .sidebar-nav { gap: 2px; margin-top: 4px; }
+
+  .game-header { height: 44px; gap: 10px; }
+  .portrait { width: 28px; height: 30px; }
+  .portrait svg { width: 18px; height: 18px; }
+  .player-name { font-size: 12px; }
+  .player-class { display: none; }
+  .xp-bar { margin-top: 2px; }
+  .vitals { margin-left: 12px; }
+
+  .quest { display: none; }
+  .loot-summary { display: none; }
+  /* Minimapa menor e mais alto: os botões de cima do arco não cobrem mais a coordenada. */
+  .world-right { top: 5px; width: 76px; }
+  .minimap { width: 76px; height: 62px; }
+  .map-coordinate { margin: 2px 0 0; }
+
+  .game-footer { min-height: 0; padding: 3px 6px; justify-content: center; }
+  .hotbar { flex-wrap: nowrap; }
+  .hotbar-note-row { margin-top: 1px; }
+  .potion-ctl { flex-direction: row; align-items: center; gap: 4px; }
+  .potion-drink { display: none; }
+  .world-actions--footer {
+    width: auto; max-width: 300px; margin-top: 0; padding-top: 0; padding-left: 4px;
+    border-top: 0; border-left: 1px solid var(--border);
+  }
+}
