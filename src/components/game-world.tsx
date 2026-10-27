@@ -2470,6 +2470,11 @@ function maxDpr(): number {
  *  antes o setState reaplicava zoom={33} na câmera de cima a cada ajuste e o zoom da rodinha "sumia". */
 function AdaptiveResolution() {
   const setDpr = useThree((st) => st.setDpr);
+  const gl = useThree((st) => st.gl);
+  const scene = useThree((st) => st.scene);
+  // Sonda de auditoria: em DEV, abre o renderer e a cena pro console (contar material,
+  // geometria e programa de shader). Em produção o corpo do efeito some no build.
+  useEffect(() => { if (import.meta.env.DEV) (window as Window & { __tribos?: unknown }).__tribos = { gl, scene }; }, [gl, scene]);
   const dprMax = useMemo(maxDpr, []);
   const startFactor = (1 - DPR_MIN) / (dprMax - DPR_MIN);
   return (

@@ -398,3 +398,96 @@ item 3. Requisicao de cada GLB em 200 com o tamanho exato do disco.
 Ferramenta nova: `tools/meshopt-glb.mjs`, com portao de fidelidade embutido
 (caixa delimitadora a 0,5%, vertices, triangulos, animacoes, skins, nodes e
 KTX2) e backup do original em `MESHOPT_BACKUP_DIR` antes de sobrescrever.
+
+## 6f. Item 5 — compartilhar material e geometria (27/10)
+
+### O que a tela mostrou
+
+O item estava escrito como "1.233 materiais / 139 programas de shader". Medindo
+de novo, com o mundo montado, em modo iso, nenhum dos dois numeros era o alvo.
+O que o renderer realmente tinha:
+
+| medido na cena, mundo montado | antes | depois |
+|---|---|---|
+| materiais | 909 | 372 |
+| geometrias | 1.117 | 592 |
+| meshes (base de comparacao) | 1.501 | 1.496 |
+| programas de shader no cache | 81 | 79 |
+
+Os dois lados foram medidos com o mesmo procedimento: servidor reiniciado,
+pagina recarregada, ~75 s de espera ate a cena parar de crescer, e so entao a
+contagem. A contagem de meshes quase identica (1.501 contra 1.496) e o que
+garante que os dois retratos sao do mesmo estado de mundo.
+
+### Onde estavam
+
+716 dos 909 materiais eram `MeshBasicMaterial`, e ~695 deles saiam de um
+arquivo so: `src/components/world/enemy-label.tsx`, a plaquinha de nome e vida
+do inimigo. Cada criatura montava os mesmos cinco planos com
+`<planeGeometry>` e `<meshBasicMaterial>` escritos direto no JSX. Escrito
+assim, o React cria um objeto NOVO por instancia. Com ~139 criaturas no mundo,
+davam cinco familias identicas repetidas 139 vezes cada:
+
+```
+PlaneGeometry | #17120f | transp | 139x   (fundo da barra)
+PlaneGeometry | #c8412f | transp | 138x   (preenchimento da barra)
+PlaneGeometry | #e2bd6e | transp | 139x   (moldura "hl")
+RingGeometry  | #e2bd6e | transp | 140x   (anel de selecao)
+PlaneGeometry | #ffffff | com map | 142x  (o nome — esse e unico de verdade)
+```
+
+Dos 909 materiais, 870 eram usados por um unico mesh.
+
+### O conserto
+
+Geometria e material de tamanho e cor fixos subiram para o escopo do modulo,
+cacheados por cor (e por raio, no caso do anel), e os `<mesh>` passaram a
+recebe-los pelas props `geometry={}` e `material={}`. Cuidado que vale
+registrar: a moldura e o anel usam a MESMA cor (`c.gold`) com flags
+DIFERENTES, entao cada familia tem o seu proprio cache — um cache unico por cor
+devolveria o material errado para um dos dois.
+
+### O mesh do nome fica inline, de proposito
+
+O primeiro patch tirou tambem o mesh do nome do JSX, criando geometria e
+material com `useMemo`. Isso **vaza**. A prova esta no reconciler do R3F
+instalado aqui, `node_modules/@react-three/fiber/dist/events-21d8cd92.cjs.dev.js`:
+em `removeChild` (linha ~16656), o descarte no desmonte e feito por
+`disposeOnIdle(child.object)` (linha ~16690), que so alcanca os objetos que o
+proprio reconciler criou como filhos no JSX. Geometria e material passados por
+prop nao sao filhos do reconciler — ninguem chama `.dispose()` neles. Como a
+plaquinha e uma por criatura e criatura desmonta, cada uma que saisse deixaria
+um material e uma geometria orfaos na GPU para sempre.
+
+Por isso o mesh do nome voltou a ter os filhos inline. Ele e o unico que nao
+pode ser compartilhado mesmo (a textura e unica por nome), e e justamente o que
+precisa ser descartado no desmonte. Sobra exatamente um `<meshBasicMaterial>` e
+um `<planeGeometry>` no arquivo, e o teste novo guarda esse numero.
+
+### Sobre FPS
+
+Nao da para afirmar ganho de FPS com esta medicao. Em dev o `PerformanceMonitor`
+mexe no `dpr` sozinho, e tres leituras do mesmo estado deram 27,8, 47,6 e 71,6
+FPS. O que e reprodutivel e o numero de objetos. O ganho direto esta na memoria,
+no coletor de lixo e no laco do cel-shade (`cel-shade.tsx:237`), que percorre
+material por material da cena de tempos em tempos: 909 chamadas viram 372.
+
+### Na tela
+
+Duas plaquinhas de inimigo visiveis em combate ("Pombo Bravo" e "Couraca de
+Espinhos"): fundo escuro, barra vermelha, nome legivel, tamanho normal, sem
+nenhum artefato. Nada gigante no mapa por causa desta mudanca — o diff nao tem
+uma linha com `scale`.
+
+**Pendencia pre-existente confirmada de novo:** a "Couraca de Espinhos"
+(`raider_samurai`) mediu **13,75 m de altura por 8,90 m de largura** na cena,
+contra `height: 3.32` declarado em `src/game/data/creatures.ts:224`. Nao e
+regressao deste item; e a mesma pendencia ja aberta e continua valendo.
+
+### Sonda de auditoria
+
+`AdaptiveResolution` em `game-world.tsx` passou a publicar o renderer e a cena
+em `window.__tribos`, so em DEV, no mesmo espirito do `__celMat` e do
+`__celStats` que ja existiam. Sem ela nao da para contar material, geometria e
+programa de shader a partir do console: o R3F roda num reconciler separado, e a
+cena nao aparece na arvore de fibers do DOM.
