@@ -1,35 +1,47 @@
 /**
- * ZONA SUL — CARRO VOADOR (Pedro 28/10), lógica pura (testável):
- *  - flutua HOVER (0,5 m) acima do chão; sobre a água desce pra HOVER_WATER (0,25 m) — a água "sente" ele passar (rastro);
- *  - ESPAÇO = impulso leve de velocidade e SOBE aos poucos até FLY_ALT (~35 m) por até FLY_MS (60 s); C desce quando
- *    quiser; DESCE suave; recarga COOLDOWN_MS (15 s) depois do voo; Shift = turbo;
- *  - paredão é parede (não sobe rampa mais íngreme que CLIMB, nem voando se o morro passar da altura do voo);
- *  - 5 lugares (o motorista agora; os outros prontos pro multiplayer).
+ * ZONA SUL — CARRO VOADOR / HOVERCRAFT (Pedro 28/10), lógica pura (testável). 2ª versão ("tá engessado, não fluido; o
+ * speed não tá rápido; segurar Espaço sobe com limite, segurar C desce rápido"):
+ *  - FÍSICA COM INÉRCIA: velocidade é um vetor (não anda "em trilho"); aderência lateral baixa = escorrega um pouco na
+ *    curva como hovercraft; a curva entra e sai suave (taxa de giro com resposta); altura numa MOLA (sem degrau).
+ *  - ALTURA: segurar ESPAÇO sobe (até MAX_ALT), segurar C desce rápido, soltou = fica na altura. Rente: flutua 0,5 m do
+ *    chão e 0,25 m da água (a água "sente" — rastro).
+ *  - ENERGIA de voo: FLY_S segundos no ar (acima de AIR_ALT); acabou → desce sozinho, suave, e só volta a subir depois
+ *    da recarga (COOLDOWN_MS). No chão a energia enche de novo.
+ *  - Shift = turbo; no ar a máxima sobe um pouco (impulso). Paredão é parede (desliza; perde a velocidade contra ele).
+ *  - 5 lugares (motorista agora; os outros prontos pro multiplayer).
  * Frente do carro = (sin yaw, cos yaw), igual ao herói.
  */
 import { type ZsTerrain, zsBounds, zsHeightAt, ZS_WATER_Y } from './zs-terrain-data';
 
 export const CAR = {
   HOVER: 0.5, HOVER_WATER: 0.25,
-  MAX: 16, REVERSE: 5, BOOST: 1.3, TURBO: 1.35, // m/s (16 ≈ 58 km/h); impulso do voo +30%; Shift = turbo +35%
-  ACCEL: 7, BRAKE: 12, DRAG: 0.7, STEER: 1.6,
-  FLY_ALT: 35, FLY_MS: 60_000, COOLDOWN_MS: 15_000, // Pedro: "o espaço pode ir mais alto um pouco" (25 → 35 m)
-  RISE: 2.4, SINK: 2.2, HUG: 14,         // m/s: subir voando, descer, acompanhar o chão rente
-  CLIMB: 0.9,                             // subida máx. por metro (≈ 42°)
+  MAX: 24, TURBO: 1.4, AIR_BOOST: 1.2, REVERSE: 8,  // m/s: 24 ≈ 86 km/h; turbo ≈ 121 km/h; no ar +20%
+  ACCEL: 15, BRAKE: 22, COAST: 0.45,                 // aceleração, freio, arrasto solto (1/s)
+  GRIP: 3.2,                                         // aderência lateral (1/s): baixa = escorrega um pouco
+  STEER: 2.1, STEER_RESP: 7,                         // giro máx (rad/s) e resposta (1/s)
+  MAX_ALT: 40, CLIMB: 7, DESCEND: 14,                // segurar Espaço sobe 7 m/s até 40 m; segurar C desce 14 m/s
+  SPRING: 16, DAMP: 8,                               // mola da altura (firme e sem quicar: amortecimento crítico)
+  AIR_ALT: 1.5, FLY_S: 60, COOLDOWN_MS: 15_000,      // energia de voo (s no ar) e recarga
+  CLIMB_WALL: 0.9,                                   // rampa máx. que dá pra subir rente (≈ 42°)
   ENTER_DIST: 4.5, EXIT_MAX_SPEED: 3, EXIT_MAX_ALT: 2,
-  LENGTH: 5.5,                            // comprimento no jogo (m) — Pedro: "uns 20% maior" (4,6 → 5,5); 5 lugares
+  LENGTH: 5.5,                                       // m — Pedro: "uns 20% maior" (4,6 → 5,5); 5 lugares
 } as const;
 
 export type ZsCar = {
-  x: number; z: number; y: number; yaw: number; speed: number;
-  flying: boolean; flyUntil: number; cooldownUntil: number;
-  overWater: boolean; altitude: number; steerVis: number;
+  x: number; z: number; y: number; yaw: number;
+  vx: number; vz: number; vy: number; yawRate: number;
+  /** velocidade pra FRENTE (HUD / sair do carro), m/s */
+  speed: number;
+  /** altura pedida acima da superfície (Espaço/C) e a real */
+  alt: number; altitude: number;
+  /** energia de voo (s), recarga e se está no ar */
+  energy: number; cooldownUntil: number; flying: boolean;
+  overWater: boolean; steerVis: number;
 };
-/** `descend` (tecla C): encerra o voo NA HORA e desce suave (Pedro: "quero apertar C pra ele descer"). */
-export type ZsCarInput = { throttle: number; steer: number; boost: boolean; turbo?: boolean; descend?: boolean };
+export type ZsCarInput = { throttle: number; steer: number; up?: boolean; down?: boolean; turbo?: boolean };
 
 export function newCar(x: number, z: number, yaw: number, t: ZsTerrain): ZsCar {
-  return { x, z, yaw, y: carSurface(t, x, z).y, speed: 0, flying: false, flyUntil: 0, cooldownUntil: 0, overWater: false, altitude: 0, steerVis: 0 };
+  return { x, z, yaw, y: carSurface(t, x, z).y, vx: 0, vz: 0, vy: 0, yawRate: 0, speed: 0, alt: 0, altitude: 0, energy: CAR.FLY_S, cooldownUntil: 0, flying: false, overWater: false, steerVis: 0 };
 }
 
 /** Altura de flutuar em (x, z): chão + 0,5 m, ou água + 0,25 m. */
@@ -40,49 +52,67 @@ export function carSurface(t: ZsTerrain, x: number, z: number): { y: number; wat
 
 /** Um passo do carro (mexe em `c`). `now` em ms. */
 export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now: number): void {
-  // voo: liga no espaço (fora da recarga); termina sozinho e começa a recarga
-  if (inp.boost && !c.flying && now >= c.cooldownUntil) { c.flying = true; c.flyUntil = now + CAR.FLY_MS; }
-  if (c.flying && (now >= c.flyUntil || inp.descend)) { c.flying = false; c.cooldownUntil = now + CAR.COOLDOWN_MS; } // 60 s é o MÁXIMO
-  // velocidade
-  const max = CAR.MAX * (c.flying ? CAR.BOOST : 1) * (inp.turbo ? CAR.TURBO : 1);
-  if (inp.throttle > 0) c.speed = Math.min(max, c.speed + CAR.ACCEL * inp.throttle * dt);
-  else if (inp.throttle < 0) c.speed = c.speed > 0 ? Math.max(0, c.speed - CAR.BRAKE * dt) : Math.max(-CAR.REVERSE, c.speed + CAR.ACCEL * inp.throttle * dt);
-  else c.speed *= Math.max(0, 1 - CAR.DRAG * dt);
-  if (c.speed > max) c.speed += (max - c.speed) * Math.min(1, dt * 1.5); // saiu do voo: perde o impulso devagar
-  if (Math.abs(c.speed) < 0.02) c.speed = 0;
-  // direção (só vira andando; de ré inverte)
-  const grip = Math.min(1, Math.abs(c.speed) / 6) * Math.sign(c.speed || 1);
-  c.yaw -= inp.steer * CAR.STEER * dt * grip;
-  c.steerVis += (inp.steer * Math.min(1, Math.abs(c.speed) / 8) - c.steerVis) * Math.min(1, dt * 4);
-  // movimento com parede (desliza no eixo livre)
+  // ── altura pedida: Espaço sobe, C desce, soltou fica ─────────────────────────────────────────────────────────
+  const canFly = now >= c.cooldownUntil && c.energy > 0;
+  if (inp.up && canFly) c.alt = Math.min(CAR.MAX_ALT, c.alt + CAR.CLIMB * dt);
+  if (inp.down) c.alt = Math.max(0, c.alt - CAR.DESCEND * dt);
+  if (!canFly) c.alt = Math.max(0, c.alt - CAR.DESCEND * 0.35 * dt); // sem energia / em recarga: desce sozinho, suave
+  c.flying = c.altitude > CAR.AIR_ALT;
+  if (c.flying) {
+    c.energy = Math.max(0, c.energy - dt);
+    if (c.energy === 0 && now >= c.cooldownUntil) c.cooldownUntil = now + CAR.COOLDOWN_MS; // acabou: recarga
+  } else if (now >= c.cooldownUntil) c.energy = Math.min(CAR.FLY_S, c.energy + dt * (CAR.FLY_S / 20)); // no chão enche em 20 s
+  // ── velocidade (vetor): pra frente + de lado ────────────────────────────────────────────────────────────────
+  const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw);
+  let vf = c.vx * fx + c.vz * fz;
+  let vl = c.vx * fz - c.vz * fx;
+  const max = CAR.MAX * (inp.turbo ? CAR.TURBO : 1) * (c.flying ? CAR.AIR_BOOST : 1);
+  if (inp.throttle > 0) vf += CAR.ACCEL * inp.throttle * Math.max(0, 1 - vf / max) * dt;
+  else if (inp.throttle < 0) vf = vf > 0.2 ? Math.max(0, vf - CAR.BRAKE * -inp.throttle * dt) : Math.max(-CAR.REVERSE, vf + CAR.ACCEL * 0.6 * inp.throttle * dt);
+  else vf *= Math.exp(-CAR.COAST * dt);
+  if (vf > max) vf += (max - vf) * Math.min(1, dt * 1.2); // perdeu o turbo/impulso: devagar
+  vl *= Math.exp(-CAR.GRIP * (c.flying ? 0.6 : 1) * dt);  // escorrega um pouco (no ar, mais)
+  // giro com resposta (entra e sai suave); só gira andando; rápido gira um pouco menos; de ré inverte
+  const sp = Math.abs(vf), dir = vf >= 0 ? 1 : -1;
+  const wantRate = -inp.steer * CAR.STEER * Math.min(1, sp / 7) * (1 - 0.35 * Math.min(1, sp / CAR.MAX)) * dir;
+  c.yawRate += (wantRate - c.yawRate) * Math.min(1, CAR.STEER_RESP * dt);
+  c.yaw += c.yawRate * dt;
+  const nfx = Math.sin(c.yaw), nfz = Math.cos(c.yaw);
+  c.vx = nfx * vf + nfz * vl; c.vz = nfz * vf - nfx * vl;
+  c.steerVis += (inp.steer * Math.min(1, sp / 10) - c.steerVis) * Math.min(1, dt * 5);
+  // ── movimento: borda do mapa e paredão (desliza; perde a velocidade CONTRA a parede) ─────────────────────────
   const b = zsBounds(t), E = 8;
-  const clampX = (v: number) => Math.max(b.minX + E, Math.min(b.maxX - E, v)), clampZ = (v: number) => Math.max(b.minZ + E, Math.min(b.maxZ - E, v));
-  const dx = Math.sin(c.yaw) * c.speed * dt, dz = Math.cos(c.yaw) * c.speed * dt;
-  const ok = (nx: number, nz: number) => {
-    const run = Math.hypot(nx - c.x, nz - c.z); if (run < 1e-6) return true;
-    return carSurface(t, nx, nz).y <= c.y + run * CAR.CLIMB + 0.35; // morro mais alto que dá pra subir agora = parede
+  const rawX = c.x + c.vx * dt, rawZ = c.z + c.vz * dt;
+  let nx = Math.max(b.minX + E, Math.min(b.maxX - E, rawX)), nz = Math.max(b.minZ + E, Math.min(b.maxZ - E, rawZ));
+  if (nx !== rawX) c.vx = 0;
+  if (nz !== rawZ) c.vz = 0;
+  const ok = (px: number, pz: number) => {
+    const run = Math.hypot(px - c.x, pz - c.z); if (run < 1e-6) return true;
+    return carSurface(t, px, pz).y <= c.y + run * CAR.CLIMB_WALL + 0.35;
   };
-  let nx = clampX(c.x + dx), nz = clampZ(c.z + dz);
   if (!ok(nx, nz)) {
-    if (ok(nx, c.z)) nz = c.z; else if (ok(c.x, nz)) nx = c.x; else { nx = c.x; nz = c.z; }
-    c.speed *= Math.max(0, 1 - dt * 4); // bateu: perde velocidade
+    if (ok(nx, c.z)) { nz = c.z; c.vz *= -0.1; }
+    else if (ok(c.x, nz)) { nx = c.x; c.vx *= -0.1; }
+    else { nx = c.x; nz = c.z; c.vx *= -0.1; c.vz *= -0.1; }
   }
   c.x = nx; c.z = nz;
-  // altura: rente ao chão (acompanha rápido) ou voando (sobe/desce suave)
+  c.speed = c.vx * Math.sin(c.yaw) + c.vz * Math.cos(c.yaw);
+  // ── altura na MOLA (rente acompanha o chão firme; no ar flutua suave) ───────────────────────────────────────
   const s = carSurface(t, c.x, c.z);
   c.overWater = s.water;
-  const target = s.y + (c.flying ? CAR.FLY_ALT : 0);
-  const d = target - c.y;
-  const up = c.flying ? CAR.RISE : CAR.HUG, down = c.y - s.y > 1.5 ? CAR.SINK : CAR.HUG;
-  c.y += Math.max(-down * dt, Math.min(up * dt, d));
-  if (c.y < s.y) c.y = s.y;
+  const target = s.y + c.alt;
+  const low = c.alt < 0.2;
+  c.vy += ((target - c.y) * (low ? CAR.SPRING * 2.2 : CAR.SPRING) - c.vy * (low ? CAR.DAMP * 1.6 : CAR.DAMP)) * dt;
+  c.vy = Math.max(-CAR.DESCEND * 1.3, Math.min(CAR.CLIMB * 1.6 + 8, c.vy));
+  c.y += c.vy * dt;
+  if (c.y < s.y) { c.y = s.y; if (c.vy < 0) c.vy = 0; }
   c.altitude = c.y - s.y;
 }
 
 /** Bancos (5): posição relativa ao carro (x = ESQUERDA de quem está sentado olhando pra frente (+z), z = frente), em
- *  frações de largura/comprimento. 0 = motorista (esquerda — medido na foto de trás: com x negativo ele ia pro carona). */
+ *  frações de largura/comprimento. 0 = motorista (esquerda — conferido nas fotos de trás). */
 export const CAR_SEATS: { x: number; z: number }[] = [
-  { x: 0.12, z: 0.06 }, { x: -0.12, z: 0.06 }, { x: 0.13, z: -0.2 }, { x: 0, z: -0.2 }, { x: -0.13, z: -0.2 }, // largura medida inclui as turbinas: a cabine é ~metade
+  { x: 0.12, z: -0.02 }, { x: -0.12, z: -0.02 }, { x: 0.13, z: -0.2 }, { x: 0, z: -0.2 }, { x: -0.13, z: -0.2 }, // largura medida inclui as turbinas: a cabine é ~metade
 ];
 /** Altura do pé do herói sentado, em fração da altura do carro (conferido nas fotos de lado e de trás). */
-export const SEAT_FOOT_K = 0.16; // 0,13 o pé aparecia embaixo do carro; 0,18 a cabeça batia no teto
+export const SEAT_FOOT_K = 0.21; // 0,13–0,16 as pernas apareciam embaixo do carro (Pedro); conferido em foto de lado

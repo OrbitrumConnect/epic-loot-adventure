@@ -48,6 +48,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
   const fog = useMemo(() => new THREE.Fog(FOG, 200, 2200), []); // névoa LEVE (custo ~zero: é uma conta no shader)
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
+  const camTarget = useRef(new THREE.Vector3());
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(0.05, dtRaw);
@@ -85,11 +86,11 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
         facing.current = car.yaw; grounded.current = true; vy.current = 0;
       }
     }
-    if (drive.mode === 'entering' && now - drive.enterAt >= ENTER_MS) { drive.mode = 'driving'; input.dist = Math.max(input.dist, 12); }
+    if (drive.mode === 'entering' && now - drive.enterAt >= ENTER_MS) { drive.mode = 'driving'; input.dist = Math.max(input.dist, 12); if (car) camTarget.current.set(car.x, car.y + 1.8, car.z); }
     if (drive.mode === 'driving' && car) {
       const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z;
       const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x;
-      carStep(t, car, { throttle: Math.max(-1, Math.min(1, throttle)), steer: Math.max(-1, Math.min(1, steer)), boost: k.has('Space'), turbo: k.has('ShiftLeft') || k.has('ShiftRight'), descend: k.has('KeyC') }, dt, now);
+      carStep(t, car, { throttle: Math.max(-1, Math.min(1, throttle)), steer: Math.max(-1, Math.min(1, steer)), up: k.has('Space'), down: k.has('KeyC'), turbo: k.has('ShiftLeft') || k.has('ShiftRight') }, dt, now);
       p.set(car.x, car.y, car.z);
       focusRef.current.copy(p);
       // herói SENTADO no banco do motorista, olhando pra frente
@@ -101,19 +102,23 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
         group.current.rotation.y = car.yaw;
       }
       action.current = 'drive'; speed.current = 0;
-      // câmera atrás do carro (gira junto; arrastar ainda ajusta)
-      if (now - input.lookAt > 1500) { let d = car.yaw + Math.PI - input.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; input.yaw += d * Math.min(1, dt * 2.2); }
-      const tx = car.x, ty = car.y + 1.8, tz = car.z, cp = Math.cos(input.pitch);
-      const cx = tx + Math.sin(input.yaw) * cp * input.dist, cz = tz + Math.cos(input.yaw) * cp * input.dist;
-      let cyy = ty + Math.sin(input.pitch) * input.dist;
+      // câmera atrás do carro, com ATRASO suave (fluido): segue o alvo amortecido, gira junto com a direção e se
+      // afasta com a velocidade; arrastar ainda ajusta
+      if (now - input.lookAt > 1500) { let d = car.yaw + Math.PI - input.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; input.yaw += d * Math.min(1, dt * 3); }
+      const ct = camTarget.current, follow = 1 - Math.exp(-8 * dt);
+      ct.x += (car.x - ct.x) * follow; ct.y += (car.y + 1.8 - ct.y) * follow; ct.z += (car.z - ct.z) * follow;
+      const dist = input.dist + Math.min(8, Math.abs(car.speed) * 0.18);
+      const tx = ct.x, ty = ct.y, tz = ct.z, cp = Math.cos(input.pitch);
+      const cx = tx + Math.sin(input.yaw) * cp * dist, cz = tz + Math.cos(input.yaw) * cp * dist;
+      let cyy = ty + Math.sin(input.pitch) * dist;
       const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6; if (cyy < gcam) cyy = gcam;
       camera.position.set(cx, cyy, cz); camera.lookAt(tx, ty, tz);
       if (sun.current) { sun.current.position.set(p.x + SUN.x * 120, p.y + SUN.y * 120, p.z + SUN.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); }
       hudAcc.current += dt;
       if (hudAcc.current > 0.25) {
         hudAcc.current = 0;
-        const flyLeft = Math.max(0, Math.ceil((car.flyUntil - now) / 1000)), cd = Math.max(0, Math.ceil((car.cooldownUntil - now) / 1000));
-        const voo = car.flying ? 'voando · ' + flyLeft + ' s · C desce' : cd > 0 ? 'recarga do voo ' + cd + ' s' : 'Espaço = voar · Shift = turbo';
+        const cd = Math.max(0, Math.ceil((car.cooldownUntil - now) / 1000)), en = Math.ceil(car.energy);
+        const voo = cd > 0 ? 'recarga do voo ' + cd + ' s' : 'Espaço sobe · C desce · energia ' + en + ' s · Shift turbo';
         onHud({ x: car.x, z: car.z, y: car.y, state: 'dirigindo · ' + Math.round(Math.abs(car.speed) * 3.6) + ' km/h · altura ' + car.altitude.toFixed(1) + ' m' + (car.overWater ? ' · sobre a água' : ''), near: '', overview: false, car: voo + ' · E sai (parado e baixo)' });
       }
       return;

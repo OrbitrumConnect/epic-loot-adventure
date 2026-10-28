@@ -62,7 +62,7 @@ export function ZsCarView({ carRef, dimsRef }: { carRef: React.MutableRefObject<
     g.position.set(c.x, c.y + bob, c.z);
     g.rotation.set(0, c.yaw, 0);
     g.rotateZ(-c.steerVis * 0.16);                           // inclina na curva
-    g.rotateX(-Math.min(0.08, Math.max(-0.08, c.speed * 0.004)) * (c.flying ? 1.5 : 1)); // bico levemente
+    g.rotateX(-Math.min(0.14, Math.max(-0.14, c.vy * 0.025 + c.speed * 0.002))); // bico sobe subindo / desce descendo
     // anéis
     emitAcc.current += dt;
     if (c.overWater && c.altitude < 1.5 && Math.abs(c.speed) > 2 && emitAcc.current >= RING_EVERY) {
