@@ -54,5 +54,5 @@ export function loadMapGround(file = MAP_GLB) {
     const hit = ray.intersectObject(wmesh, false)[0];
     return hit ? hit.point.y : null;
   };
-  return { box, heightAt };
+  return { box, heightAt, mesh: wmesh };
 }

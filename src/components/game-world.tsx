@@ -38,7 +38,7 @@ import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { HeroNameplate } from './world/hero-nameplate';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { registerWall, blockedByWall, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
+import { registerWall, blockedByWall, glbSurfaceY, groundUnder, ceilingAbove, CAVE_DROP_AIR, mapCaveClip, useTerrainVersion } from './world/terrain-collision';
 import { walkStep } from './world/map-walk';
 import { MapFloor } from './world/map-floor';
 import { broadcastPose } from '@/net/multiplayer';
@@ -764,11 +764,21 @@ function Character({
     // Casa de PEDRA/METAL: piso por altura (degrau, rampa/escada, 2º andar). Madeira: igual antes.
     const houseWalk = houseWalkFloorY(bx, bz, body.current.position.y);
     housePlayerFeetY.current = houseWalk;
-    const groundY = Math.max(glbSurfaceY(bx, bz, Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor)), houseWalk);
+    // 28/10 CAVERNA: chão = piso logo abaixo dos pés quando há rocha em cima (túnel); céu aberto = topo, igual antes.
+    const feetY = body.current.position.y;
+    const groundY = Math.max(
+      groundUnder(bx, bz, feetY, Math.max(terrainHeight(bx, bz), bridgeSurfaceY(bx, bz), houseFloor), isGrounded.current ? undefined : CAVE_DROP_AIR),
+      houseWalk,
+    );
 
     if (!isGrounded.current) {
       jumpVelocity.current -= 15 * dt;
       body.current.position.y += jumpVelocity.current * dt;
+      // Pulo dentro do túnel: a cabeça (1,8 m) bate no teto e para de subir.
+      if (jumpVelocity.current > 0) {
+        const roof = ceilingAbove(bx, bz, groundY + 0.5);
+        if (body.current.position.y + 1.8 > roof) { body.current.position.y = Math.max(groundY, roof - 1.8); jumpVelocity.current = 0; }
+      }
       if (body.current.position.y <= groundY) {
         body.current.position.y = groundY;
         isGrounded.current = true;
@@ -777,6 +787,9 @@ function Character({
     } else {
       body.current.position.y = groundY;
     }
+    // Câmera de cima dentro do túnel: corta o mapa 2,4 m acima do pé (senão só se vê a montanha por fora).
+    const caveRoof = cameraMode === 'iso' ? ceilingAbove(bx, bz, body.current.position.y + 1) : Infinity;
+    mapCaveClip.constant = caveRoof < body.current.position.y + 8 ? body.current.position.y + 2.4 : 1e9;
 
     // Walk + idle animation — coxa balança no quadril, joelho dobra em contratempo;
     // ombro balança oposto à perna, cotovelo mantém leve flexão.
@@ -2090,11 +2103,16 @@ function WorldScene(props: WorldProps & { c: Palette; cameraMode: CameraMode }) 
       // marcha da cabeça até a câmera; bateu → aproxima NA HORA; liberou → volta suave.
       const hx = piv.x, hy = piv.y + 1.5, hz = piv.z;
       let free = 1;
+      // 28/10 CAVERNA: chão da câmera = o mesmo do herói (piso do túnel, não o topo da montanha) e, com rocha em
+      // cima do herói, a câmera também bate no TETO (senão fica dentro da rocha e a tela vira parede).
+      const underRoof = ceilingAbove(px, pz, py + 1) < py + 8;
       // 6 pontos (~1,3 m entre eles com a câmera a 8 m) — otimização 25/10 (eram 10 consultas de chão/quadro).
       for (let i = 1; i <= CAM_COLLIDE_STEPS; i++) {
         const t = i / CAM_COLLIDE_STEPS;
-        const sx = hx + (camX - hx) * t, sz = hz + (camZ - hz) * t;
-        if (hy + (camY - hy) * t < glbSurfaceY(sx, sz, terrainHeight(sx, sz)) + 0.3) { free = (i - 1) / CAM_COLLIDE_STEPS; break; }
+        const sx = hx + (camX - hx) * t, sz = hz + (camZ - hz) * t, sy = hy + (camY - hy) * t;
+        const hitFloor = sy < groundUnder(sx, sz, py, terrainHeight(sx, sz)) + 0.3;
+        const hitRoof = underRoof && sy > ceilingAbove(sx, sz, py + 1) - 0.25;
+        if (hitFloor || hitRoof) { free = (i - 1) / CAM_COLLIDE_STEPS; break; }
       }
       camFree.current = modeChanged || free < camFree.current ? free : camFree.current + (free - camFree.current) * 0.1;
       const k = camFree.current;

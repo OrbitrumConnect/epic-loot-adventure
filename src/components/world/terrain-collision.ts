@@ -113,6 +113,47 @@ export function glbSurfaceY(x: number, z: number, fallback: number): number {
   return m > -Infinity ? m : fallback;
 }
 
+/** Desce no túnel só se o piso achado estiver até isto abaixo dos pés (senão é rocha por baixo de uma ladeira). */
+const CAVE_DROP = 1.0;
+
+/**
+ * CHÃO com CAVERNA (28/10, Pedro: "não consigo entrar nas caves, ando por cima"). Desde 20/10 todo mundo pisa no
+ * TOPO da malha (raio do céu) — certo pra morro/vale, mas num túnel o topo é a MONTANHA → subia por cima.
+ *  - céu aberto (topo até STEP_UP acima dos pés): o topo, igual antes;
+ *  - topo bem acima dos pés: procura o piso logo abaixo dos pés (raio de pés+STEP_UP pra baixo). Achou perto
+ *    (≥ pés − CAVE_DROP) → é TÚNEL: anda no piso, debaixo da rocha;
+ *  - não achou (ladeira íngreme / ficou abaixo do mapa): o topo, igual antes (sobe o morro, nunca cai pro fundo).
+ * Sem malha ali: `fallback`. Custo fora de caverna = o mesmo de antes (1 raio).
+ */
+export function groundUnder(x: number, z: number, feetY: number, fallback: number, maxDrop = CAVE_DROP): number {
+  const top = terrainMeshTopY(x, z);
+  if (top === -Infinity) return fallback;
+  if (top <= feetY + STEP_UP) return top;
+  const floor = terrainMeshY(x, z, feetY);
+  return floor > -Infinity && floor >= feetY - maxDrop ? floor : top;
+}
+/** No AR (pulo dentro do túnel o pé sobe ~1,6 m): tolerância maior pra não "subir pro topo" no meio do pulo. */
+export const CAVE_DROP_AIR = 2.5;
+
+/** Corte do MAPA acima da cabeça quando o herói está no túnel com a câmera de cima (iso). 1e9 = sem corte. */
+export const mapCaveClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e9);
+
+const UP = new THREE.Vector3(0, 1, 0);
+/** Primeira superfície de terreno ACIMA de `fromY` em (x,z) (teto da caverna); `Infinity` = céu aberto. */
+export function ceilingAbove(x: number, z: number, fromY: number): number {
+  if (terrains.size === 0) return Infinity;
+  ORIGIN.set(x, fromY, z);
+  ray.set(ORIGIN, UP);
+  ray.far = 60;
+  let best = Infinity;
+  for (const root of terrains) {
+    const hits = ray.intersectObject(root, true);
+    if (hits.length > 0 && hits[0]!.point.y < best) best = hits[0]!.point.y;
+  }
+  ray.far = Infinity;
+  return best;
+}
+
 /* ------------------------------------------------------------------ *
  * Amostra de COR da superfície (pra espalhar grama só na malha VERDE).
  * Raycast de cima → primeiro acerto; lê a cor do pixel da textura (map)

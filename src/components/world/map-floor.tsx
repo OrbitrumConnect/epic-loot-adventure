@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { extendKTX2, preloadKTX2GLTF, primeKTX2 } from './ktx2-gltf';
-import { registerTerrain } from './terrain-collision';
+import { mapCaveClip, registerTerrain } from './terrain-collision';
 import { terrainDetail } from './terrain-detail';
 
 /**
@@ -76,6 +76,8 @@ function matte(root: THREE.Object3D) {
         pm.map.needsUpdate = true;
       }
       addDetail(pm);
+      // Caverna na câmera de cima (28/10): com o herói debaixo da rocha, corta o mapa acima da cabeça (igual teto da fábrica).
+      pm.clippingPlanes = [mapCaveClip];
       pm.needsUpdate = true;
     }
   });
@@ -86,6 +88,7 @@ export function MapFloor() {
   // useGLTF carregar o GLB basisu — por isso prime no corpo, antes da linha do useGLTF.
   const gl = useThree((s) => s.gl);
   primeKTX2(gl);
+  useEffect(() => { gl.localClippingEnabled = true; }, [gl]); // corte da caverna (mapCaveClip)
   const { scene } = useGLTF(URL, true, true, extendKTX2);
   const ref = useRef<THREE.Group>(null);
   const { model, pivot } = useMemo(() => {

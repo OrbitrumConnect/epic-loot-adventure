@@ -19,7 +19,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
-import { blockedByWall, glbSurfaceY } from './terrain-collision';
+import { blockedByWall, glbSurfaceY, groundUnder } from './terrain-collision';
 import { walkStep } from './map-walk';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
@@ -750,8 +750,9 @@ export function useHostileAI(opts: HostileOptions) {
     // SOBE na superfície das montanhas (malha) quando está sobre elas.
     // Segue a superfície do GLB (sobe nos morros E DESCE nos vales/rio), igual ao
     // player e aos props. Sem GLB, cai no chão procedural / assoalho da casa.
-    g.position.y = glbSurfaceY(
-      g.position.x, g.position.z,
+    // 28/10 CAVERNA: mesmo chão do herói — no túnel anda no piso (persegue pra dentro), céu aberto = topo como antes.
+    g.position.y = groundUnder(
+      g.position.x, g.position.z, g.position.y,
       Math.max(terrainHeight(g.position.x, g.position.z), houseFloorSurfaceY(g.position.x, g.position.z)),
     );
 
