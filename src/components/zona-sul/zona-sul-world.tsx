@@ -187,7 +187,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
       // a onda leva quem está nadando (espuma forte, face média) — somado à braçada. JACARÉ (surf de peito, Pedro 28/10):
       // nadando A FAVOR da onda (rumo à praia) você "pega" ela e vai um pouco mais rápido que ela (corpo desliza pouco)
       let pw = 0;
-      if (water0.swimming && zsWaterPushAt(p.x, p.z, HERO_PUSH)) {
+      if (water0.swimming && zsWaterPushAt(p.x, p.z, HERO_PUSH, p.y + 0.3)) {
         const pm = Math.hypot(HERO_PUSH.x, HERO_PUSH.z), along = wantMove ? Math.max(0, (wx * HERO_PUSH.x + wz * HERO_PUSH.z) / pm) : 0;
         pw = ZS_SWIM_WAVE_CARRY + ZS_BODYSURF_EXTRA * along;
         bodysurf.current = along > 0.5 && pm > 1.2;

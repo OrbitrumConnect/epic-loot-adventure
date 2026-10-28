@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { barrelAt, barrelBand, branchOf, SURF, surfHeightAt, surfPoint, surfPushAt, TUBE, tubeAx, type WaveState, type WaveVar, waveStateAt } from '@/components/zona-sul/surf/surf-wave';
+import { barrelAt, barrelBand, branchOf, crestQ, FULL, SURF, surfHeightAt, surfPoint, surfPushAt, TUBE, tubeAx, type WaveState, type WaveVar, waveStateAt } from '@/components/zona-sul/surf/surf-wave';
 import { SERIES, SurfScheduler, WAVE_LIFE } from '@/components/zona-sul/surf/surf-scheduler';
 import { findSurfFrame, toSurfLocal } from '@/components/zona-sul/surf/surf-frame';
 import { decodeTerrain } from '@/components/zona-sul/zs-terrain-data';
@@ -73,12 +73,32 @@ describe('surf — onda e tubo', () => {
     expect(q - q0).toBeGreaterThan(SURF.C * 15 * 0.8);             // andou quase tudo que a onda andou em 15 s
     expect(x).toBeGreaterThan(-2 * R); expect(x).toBeLessThan(4 * R); // continua no bolso da frente da onda
   });
+  it('DENTRO do tubo sem tranco ("leve colisão"): água lisa, entra/sai atravessando a cortina, anda JUNTO com a onda', () => {
+    const st = waveStateAt(ageAtBreak + 3, V), s = -6, R = barrelBand(barrelAt(s, st, V).hSide).r;
+    const crest = crestQ(st, s), y = 0.2;                            // nadando lá embaixo
+    const x0 = TUBE.CQ * R - 0.9 * tubeAx(R) * R;                    // dentro, junto da face (atrás dela é a massa da onda)
+    let prev = surfHeightAt(s, crest + x0, [st], [V], y), maxJump = 0;
+    for (let x = x0; x <= 3 * tubeAx(R) * R; x += 0.25) {
+      const h = surfHeightAt(s, crest + x, [st], [V], y);
+      maxJump = Math.max(maxJump, Math.abs(h - prev)); prev = h;
+      if (x > 0 && x < tubeAx(R) * R) expect(h).toBeLessThan(0.3);   // da cavidade até a cortina: água baixa (passa)
+    }
+    expect(maxJump).toBeLessThan(0.6);                               // nada de pulo pro topo do lip no meio do caminho
+    const inside = surfPushAt(s, crest + 0.3 * R, [st], [V], FULL, y);
+    expect(Math.abs(inside - SURF.C)).toBeLessThan(0.35);            // dentro: só anda junto (nada livre)
+  });
+  it('a face é uma RAMPA que anda: na face da frente a gravidade leva pra praia; nas costas não empurra', () => {
+    const st = waveStateAt(ageAtBreak - 4, V), R = barrelBand(st.h).r; // empinando, antes de quebrar
+    const face = surfPushAt(-30, st.qc + 1.2 * R, [st], [V]), back = surfPushAt(-30, st.qc - 2 * R, [st], [V]);
+    expect(face).toBeGreaterThan(back);
+    expect(face).toBeGreaterThan(SURF.C * 0.8);
+  });
   it('a onda EMPURRA rumo à praia: espuma forte (~velocidade da onda), ondulação longe quase nada', () => {
     const st = waveStateAt(ageAtBreak + 8, V), R = barrelBand(st.h).r;
     expect(surfPushAt(0, st.qc + R, [st], [V])).toBeGreaterThan(SURF.C * 0.8); // espuma já fechada no pico: ~velocidade da onda
     expect(surfPushAt(0, st.qc + 40, [st], [V])).toBeLessThan(0.05);                 // longe na frente: nada
     const swell = waveStateAt(ageAtBreak - 20, V);
-    expect(surfPushAt(0, swell.qc, [swell], [V])).toBeLessThan(SURF.C * 0.2);       // ondulação sem quebrar: pouco
+    expect(surfPushAt(0, swell.qc, [swell], [V])).toBeLessThan(SURF.C * 0.3);       // ondulação sem quebrar: só um embalo
   });
   it('malha: a FRENTE dos triângulos é o lado do ar (normal pra cima no mar liso) — senão a luz sai invertida', async () => {
     const { buildSurfGeometry } = await import('@/components/zona-sul/surf/surf-break');

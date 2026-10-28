@@ -1,7 +1,7 @@
 /**
  * ZONA SUL — agenda das SÉRIES de onda (surf, fase B). Um relógio só (avança no quadro do jogo), 5 VAGAS FIXAS de onda
  * (nada criado/destruído), semente fixa (determinístico). Regras do documento do Pedro:
- *  - série de 3–5 ondas a 6,5–9,5 s uma da outra (≥ 20 m: o tubo de uma não encosta na outra); CALMARIA de 45–60 s depois da última onda da série (Pedro 28/10: "o
+ *  - série de 3–5 ondas a 7–10 s uma da outra (≥ 22 m: o tubo de uma não encosta na outra); CALMARIA de 45–60 s depois da última onda da série (Pedro 28/10: "o
  *    intervalo tá 3 min? pode ser uns 45 s, 1 min") e vem a próxima;
  *  - nunca sobrepõe: cada onda nova só ocupa uma vaga cuja onda antiga já saiu da zona (sem vaga, a série vem menor);
  *  - aba escondida/voltando: o quadro trava o passo (sem "rajada" de séries atrasadas);
@@ -9,7 +9,7 @@
  */
 import { SURF, type WaveState, type WaveVar, waveStateAt } from './surf-wave';
 
-export const SERIES = { CALM_MIN: 45, CALM_MAX: 60, MIN_WAVES: 3, MAX_WAVES: 5, GAP_MIN: 6.5, GAP_MAX: 9.5, FIRST_AT: 10, MAX_DT: 0.25 } as const;
+export const SERIES = { CALM_MIN: 45, CALM_MAX: 60, MIN_WAVES: 3, MAX_WAVES: 5, GAP_MIN: 7, GAP_MAX: 10, FIRST_AT: 10, MAX_DT: 0.25 } as const;
 /** Vida de uma onda (s): da origem até sumir. */
 export const WAVE_LIFE = (SURF.Q_MAX + 6 - SURF.Q_MIN) / SURF.C;
 export const SLOTS = 5;

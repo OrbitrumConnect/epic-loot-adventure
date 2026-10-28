@@ -20,7 +20,7 @@ export const SURF = {
   Q_OPEN: 25,             // até aqui a zona tem que ser água aberta (o tubo fecha antes)
   C: 3.2,                 // m/s rumo à praia → (70 + 6 + 150) / 3,2 ≈ 71 s de vida
   BREAK_Q: -25,           // quebra 25 m antes do pico (mais atrás)
-  H_START: 0.35, H_MAX: 4.2,
+  H_START: 0.35, H_MAX: 4.8,             // Pedro 28/10: "a onda pode ser um pouco mais alta" (4,2 → 4,8)
   V_PEEL: 6.5,            // abertura pros lados (m/s)
   CLOSE_LAG: 22,          // a quantos metros atrás da frente de abertura o tubo fecha (tubo aberto mais comprido)
   OPEN_EDGE: 5, CLOSE_EDGE: 7,
@@ -85,7 +85,7 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; 
  * O tubo CABE na onda: topo = R·(CY + 1 + LIP) ≈ 2,09R ≈ h. Onda de 4,2 m → R = 2,1 m: vão de ~4 m de altura por
  * ~7 m de largura. Costas longas (WB) como as do corpo da onda.
  */
-export const TUBE = { K: 0.5, MIN: 0.5, MAX: 2.4, WF: 2.6, WB: 5.5, AX0: 1.3, AXK: 0.2, LIP: 0.14, CQ: 0.2, CY: 0.95 } as const;
+export const TUBE = { K: 0.5, MIN: 0.5, MAX: 2.7, WF: 2.6, WB: 5.5, AX0: 1.3, AXK: 0.2, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
 /** Largura da cavidade em alturas (o lip arremessa mais longe na onda maior). */
 export function tubeAx(R: number): number { return TUBE.AX0 + TUBE.AXK * R; }
 /** Raio do tubo pra esta altura e a faixa da dobra (frente wf, costas wb). */
@@ -168,8 +168,20 @@ export function surfPoint(s: number, q0: number, waves: WaveState[], vars: WaveV
 }
 
 /**
- * Altura da água (y local) num ponto (s, q). Por padrão o TOPO (por cima do tubo — o carro passa por cima). Com `yRef`
- * (altura de quem está ali): se estiver DENTRO da cavidade (abaixo do teto), vale o CHÃO do tubo — dá pra entrar nele.
+ * Quem está na altura `yRef` está DENTRO do tubo aberto nesta coluna? Vale da face até a cortina do lip (inclusive um
+ * pouco à frente dela: a cortina é FINA — dá pra entrar e sair atravessando, como o "roll through the lip" de verdade),
+ * enquanto estiver abaixo do meio da cavidade. Uma regra só, larga, sem borda que vira "fora" no meio (Pedro 28/10:
+ * "parece que tem leve colisão dentro do tubo" — a regra antiga trocava pra "topo" perto da parede e dava tranco).
+ */
+export function tubeInside(c: { curl: number; blend: number; rs: number }, x: number, R: number, yRef: number): boolean {
+  if (c.curl < 0.6 || c.blend < 0.5) return false;
+  const Re = R * c.rs, cq = TUBE.CQ * R, cy = TUBE.CY * Re, ax = tubeAx(R) * Re;
+  return yRef < cy + 0.5 * Re && x > cq - ax && x < cq + ax * (1 + TUBE.LIP) + 1.5;
+}
+
+/**
+ * Altura da água (y local) num ponto (s, q). Por padrão o TOPO (por cima do tubo). Com `yRef` (altura de quem está ali):
+ * DENTRO do tubo vale o chão dele — água quase lisa, só subindo de leve junto da face — e dá pra entrar e sair.
  */
 export function surfHeightAt(s: number, q: number, waves: WaveState[], vars: WaveVar[], yRef = Infinity, lim: Lim = FULL): number {
   let y = 0;
@@ -181,9 +193,9 @@ export function surfHeightAt(s: number, q: number, waves: WaveState[], vars: Wav
     if (c.blend > 0 && x <= band.wf && x >= -band.wb) {
       const R = band.r, Re = R * c.rs, cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAx(R), ax = AX * Re, u = (x - cq) / ax;
       let shape: number;
-      if (c.curl > 0.6 && Math.abs(u) < 1 && yRef < cy + Re * Math.sqrt(1 - u * u) - 0.3) {
-        // DENTRO: chão da cavidade (do lado do mar é a face subindo; embaixo do lip, a água da frente)
-        shape = x < cq - 0.17 * ax ? cy - Re * Math.sqrt(1 - u * u) : 0;
+      if (tubeInside(c, x, R, yRef)) {
+        // DENTRO: chão do tubo — liso; junto da face (lado do mar) vira RAMPA subindo pela parede (contínua)
+        shape = u < -0.6 ? cy - Re * Math.sqrt(Math.max(0, 1 - u * u)) - (cy - 0.8 * Re) : 0;
       } else {
         // POR FORA: casca do lip (até onde ele já se projetou) e, atrás do topo, as costas descendo
         const ro = Re * (1 + TUBE.LIP), axo = AX * ro * (0.3 + 0.7 * c.curl), uo = (x - cq) / axo;
@@ -203,13 +215,16 @@ export function surfHeightAt(s: number, q: number, waves: WaveState[], vars: Wav
  * velocidade dela; ficou pra trás → empurra mais, adiantou → empurra menos (equilíbrio ~1R à frente da crista). Assim
  * ela LEVA até perto da areia. Ondulação sem quebrar: só um leve embalo.
  */
-export function surfPushAt(s: number, q: number, waves: WaveState[], vars: WaveVar[], lim: Lim = FULL): number {
+export function surfPushAt(s: number, q: number, waves: WaveState[], vars: WaveVar[], lim: Lim = FULL, yRef = Infinity): number {
   let p = 0;
   for (let i = 0; i < waves.length; i++) {
     const w = waves[i]!; if (!w.active || w.h <= 0) continue;
     const b = barrelAt(s, w, vars[i]!), x = q - crestQ(w, s), R = barrelBand(b.hSide).r;
     const win = smooth(-2.5 * R, -R, x) * smooth(5 * R, 3 * R, x);            // bolso: da crista até ~4R à frente
     if (win <= 0) continue;
+    // DENTRO do tubo aberto: a água anda JUNTO com a onda, sem empurrão a mais — você fica no lugar em relação ao tubo e
+    // nada livre pra entrar/sair (pelo lado ou atravessando a cortina). O empurrão forte é da parede de fora e da espuma.
+    if (tubeInside(curlOf(b.open, b.closed), x, R, yRef)) { p = Math.max(p, SURF.C * win); continue; }
     // segura: espuma/quebrando (forte — Pedro: "pode me levar mais, ainda tô pesado"), face empinada prestes a quebrar
     // (médio), ondulação (leve). A espuma pequena perto da areia ainda leva bem (mínimo de 60% pela altura).
     // (2ª — "ainda tô pesado"): onda grande chegando na quebra já segura forte ao longo da crista inteira, não só onde a
@@ -218,5 +233,12 @@ export function surfPushAt(s: number, q: number, waves: WaveState[], vars: WaveV
     const hold = 1 + 0.6 * Math.max(-1, Math.min(1, (R - x) / (2 * R)));      // pra trás empurra mais, adiantado menos
     p = Math.max(p, SURF.C * hold * grip * win);
   }
+  // A FACE É UMA RAMPA QUE ANDA (Pedro 28/10): quem boia nela escorrega rampa abaixo (gravidade ∝ inclinação) enquanto
+  // ela avança — na face da frente isso leva pra praia (é o que segura surfista/carro no bolso); nas costas da onda não
+  // empurra (ela passa por baixo); dentro do tubo a água é lisa (inclinação 0) e só anda junto.
+  const d = 0.5, slope = (surfHeightAt(s, q + d, waves, vars, yRef, lim) - surfHeightAt(s, q - d, waves, vars, yRef, lim)) / (2 * d);
+  if (slope < 0) p += FACE_SLIDE * Math.min(1.5, -slope);
   return p * zoneFade(s, q, lim);
 }
+/** Quanto a face da onda (rampa) acelera quem boia nela, em m/s por unidade de inclinação (face a 45° → +2 m/s). */
+export const FACE_SLIDE = 2;

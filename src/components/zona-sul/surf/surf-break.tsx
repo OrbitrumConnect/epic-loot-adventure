@@ -165,9 +165,9 @@ export function SurfBreak({ t, shoreX, shoreZ }: { t: ZsTerrain; shoreX: number;
     const inZone = (s: number, q: number) => Math.abs(s) <= SURF.ZONE_S && q >= SURF.Q_MIN && q <= SURF.Q_MAX;
     setZsWaterExtra((x, z, yRef) => { const [s, q] = toSurfLocal(frame, x, z); return inZone(s, q) ? surfHeightAt(s, q, scheduler.states, scheduler.vars, yRef, frame.lim) : 0; });
     // a onda EMPURRA quem boia (carro parado na água, herói nadando) rumo à praia
-    setZsWaterPush((x, z, out) => {
+    setZsWaterPush((x, z, out, yRef) => {
       const [s, q] = toSurfLocal(frame, x, z); if (!inZone(s, q)) return false;
-      const p = surfPushAt(s, q, scheduler.states, scheduler.vars, frame.lim); if (p < 0.02) return false;
+      const p = surfPushAt(s, q, scheduler.states, scheduler.vars, frame.lim, yRef); if (p < 0.02) return false;
       out.x = frame.qx * p; out.z = frame.qz * p; return true;
     });
     const key = (e: KeyboardEvent) => { if (e.code === 'KeyJ' && !e.repeat) scheduler.trigger(); };

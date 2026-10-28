@@ -46,10 +46,13 @@ export function newCar(x: number, z: number, yaw: number, t: ZsTerrain): ZsCar {
   return { x, z, yaw, y: carSurface(t, x, z).y, vx: 0, vz: 0, vy: 0, yawRate: 0, speed: 0, alt: 0, altitude: 0, energy: CAR.FLY_S, cooldownUntil: 0, flying: false, overWater: false, steerVis: 0 };
 }
 
-/** Altura de flutuar em (x, z): chão + 0,5 m, ou água + 0,25 m. */
-export function carSurface(t: ZsTerrain, x: number, z: number): { y: number; water: boolean } {
+/**
+ * Altura de flutuar em (x, z): chão + 0,5 m, ou água + 0,25 m. `yRef` = altura do carro: rente à água na frente da onda
+ * ele fica NA água do bolso/tubo (não é jogado pra cima do lip); sem ele, por cima da onda.
+ */
+export function carSurface(t: ZsTerrain, x: number, z: number, yRef = Infinity): { y: number; water: boolean } {
   const g = zsHeightAt(t, x, z);
-  return g < ZS_WATER_Y ? { y: zsWaterYAt(x, z) + CAR.HOVER_WATER, water: true } : { y: g + CAR.HOVER, water: false }; // na água: acima da ONDA
+  return g < ZS_WATER_Y ? { y: zsWaterYAt(x, z, yRef) + CAR.HOVER_WATER, water: true } : { y: g + CAR.HOVER, water: false }; // na água: acima da ONDA
 }
 
 /** Um passo do carro (mexe em `c`). `now` em ms. */
@@ -68,8 +71,10 @@ export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now
   // ONDA EMPURRA (Pedro 28/10: "se o hover car estiver parado a onda empurra ele"): rente à água o carro boia NA água
   // que anda — atrito e aderência valem em relação à correnteza (parado, vai junto com ela); subindo, sente cada vez
   // menos; voando alto, nada
+  // (2ª, Pedro: "o carrinho começa a andar e não segue a onda, sobe pra cima e fica pra trás"): conta a altura que VOCÊ
+  // pediu (Espaço), não a medida — a onda levantando o carro fazia parecer "voo" e soltava ele
   let wx = 0, wz = 0;
-  if (c.overWater && c.altitude < CAR.AIR_ALT && zsWaterPushAt(c.x, c.z, PUSH)) { const k = 1 - c.altitude / CAR.AIR_ALT; wx = PUSH.x * k; wz = PUSH.z * k; }
+  if (c.overWater && c.alt < CAR.AIR_ALT && zsWaterPushAt(c.x, c.z, PUSH, c.y - CAR.HOVER_WATER)) { const k = 1 - c.alt / CAR.AIR_ALT; wx = PUSH.x * k; wz = PUSH.z * k; }
   const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw);
   let vf = (c.vx - wx) * fx + (c.vz - wz) * fz;
   let vl = (c.vx - wx) * fz - (c.vz - wz) * fx;
@@ -101,6 +106,7 @@ export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now
   if (nz !== rawZ) c.vz = 0;
   const ok = (px: number, pz: number) => {
     const run = Math.hypot(px - c.x, pz - c.z); if (run < 1e-6) return true;
+    if (zsHeightAt(t, px, pz) < ZS_WATER_Y) return true; // ÁGUA nunca é parede (a face da onda é rampa: o carro sobe nela)
     return carSurface(t, px, pz).y <= c.y + run * CAR.CLIMB_WALL + 0.35;
   };
   if (!ok(nx, nz)) {
@@ -111,7 +117,7 @@ export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now
   c.x = nx; c.z = nz;
   c.speed = c.vx * Math.sin(c.yaw) + c.vz * Math.cos(c.yaw);
   // ── altura na MOLA (rente acompanha o chão firme; no ar flutua suave) ───────────────────────────────────────
-  const s = carSurface(t, c.x, c.z);
+  const s = carSurface(t, c.x, c.z, c.y - CAR.HOVER_WATER); // sente a água onde ESTÁ (bolso/tubo ou por cima)
   c.overWater = s.water;
   const target = s.y + c.alt;
   const low = c.alt < 0.2;
