@@ -8,7 +8,7 @@
  *
  * Regras duras:
  *  - qualquer WASD/seta devolve o controle ao jogador na hora (`manual`);
- *  - nunca manda o jogador para fora de `MAP_HALF`;
+ *  - nunca manda o jogador para fora da área andável (`isWalkable`; antes `MAP_HALF`);
  *  - para completamente com o jogo pausado ou o jogador morto.
  */
 import { useFrame } from '@react-three/fiber';
@@ -29,6 +29,7 @@ import { useAim } from './aim';
 import { noteHeroDamage, requestDodge, shouldAutoDodge, sidestepFrom } from '@/game/systems/dodgeSystem';
 import { setPilotStatus } from './pilot-status';
 import { MAP_HALF } from './world-kit';
+import { isWalkable } from './map-walk';
 
 const TICK = 0.25;
 /** Ticks de recuo sem ganhar distância antes de desistir do kiting e lutar. */
@@ -107,8 +108,10 @@ export function AutoPilot({
 
     const hold = () => movement.current.copy(player.position);
     const goTo = (to: Position) => {
-      const x = THREE.MathUtils.clamp(to.x, -MAP_HALF + 0.5, MAP_HALF - 0.5);
-      const z = THREE.MathUtils.clamp(to.z, -MAP_HALF + 0.5, MAP_HALF - 0.5);
+      // Destino na área andável (28/10: dá pra ir lá fora); fora dela, volta pro quadrado de antes.
+      const free = isWalkable(to.x, to.z);
+      const x = free ? to.x : THREE.MathUtils.clamp(to.x, -MAP_HALF + 0.5, MAP_HALF - 0.5);
+      const z = free ? to.z : THREE.MathUtils.clamp(to.z, -MAP_HALF + 0.5, MAP_HALF - 0.5);
       // Y = altura ATUAL do corpo, não `terrainHeight` procedural. O mapa é um GLB:
       // o corpo assenta em `glbSurfaceY` (game-world.tsx), que diverge do procedural
       // em até ~2 m. Como o `Character` persegue o destino por `movement - body`

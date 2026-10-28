@@ -58,8 +58,11 @@ function PlacedObjectInner({ item }: { item: EditorObject }) {
   // salvo tenha vindo com 'none' (o usuário não precisa marcar nada). Respeita uma
   // escolha explícita diferente de 'none' (ex.: quis 'block').
   const isBridge = item.assetUrl.includes('scrap-bridge');
+  // Favela (28/10): com a parede invisível liberada o herói chega nela → casas SÓLIDAS ('block': a malha alta barra,
+  // a rua baixa passa — igual ao labirinto). Vale mesmo que o layout salvo no navegador tenha vindo com 'none'.
+  const isFavela = item.assetUrl.includes('/favela-');
   const explicit: EditorCollide | undefined = item.collide && item.collide !== 'none' ? item.collide : undefined;
-  const collide: EditorCollide = explicit ?? (isBridge ? 'floor' : 'none');
+  const collide: EditorCollide = explicit ?? (isBridge ? 'floor' : isFavela ? 'block' : 'none');
   useEffect(() => {
     if (!ref.current || collide === 'none') return;
     return collide === 'block' ? registerWall(ref.current) : registerTerrain(ref.current);

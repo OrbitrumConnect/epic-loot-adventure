@@ -38,7 +38,8 @@ import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { HeroNameplate } from './world/hero-nameplate';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { registerWall, wallHeightAt, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
+import { registerWall, blockedByWall, glbSurfaceY, useTerrainVersion } from './world/terrain-collision';
+import { walkStep } from './world/map-walk';
 import { MapFloor } from './world/map-floor';
 import { broadcastPose } from '@/net/multiplayer';
 import { Factory } from './world/factory';
@@ -696,7 +697,7 @@ function Character({
     // do chão + 0.8m) = parede → bloqueia. Testa por eixo pra DESLIZAR (não travar).
     {
       const ox = body.current.position.x, oz = body.current.position.z;
-      const inWall = (wx: number, wz: number) => wallHeightAt(wx, wz) > terrainHeight(wx, wz) + 0.8;
+      const inWall = (wx: number, wz: number) => blockedByWall(wx, wz, terrainHeight(wx, wz)); // chão REAL (28/10)
       if (inWall(nx, nz)) {
         if (!inWall(nx, oz)) nz = oz;
         else if (!inWall(ox, nz)) nx = ox;
@@ -704,8 +705,10 @@ function Character({
       }
     }
 
-    body.current.position.x = THREE.MathUtils.clamp(nx, -MAP_HALF, MAP_HALF);
-    body.current.position.z = THREE.MathUtils.clamp(nz, -MAP_HALF, MAP_HALF);
+    // Limite do mapa = ÁREA ANDÁVEL medida (28/10; antes quadrado de ±MAP_HALF): desliza rente à borda da ilha.
+    [nx, nz] = walkStep(body.current.position.x, body.current.position.z, nx, nz);
+    body.current.position.x = nx;
+    body.current.position.z = nz;
 
     if (moving) {
       targetRotY.current = Math.atan2(velocity.current.x, velocity.current.y);

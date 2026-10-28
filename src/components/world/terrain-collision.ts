@@ -314,6 +314,17 @@ export function registerWall(root: THREE.Object3D): () => void {
   return () => { walls.delete(root); };
 }
 
+/**
+ * (x,z) é PAREDE? Topo da malha de parede (favela/labirinto) mais de 0,8 m acima do CHÃO REAL (GLB; `fallbackGround`
+ * onde não há GLB). 28/10: antes comparava com o chão procedural, que lá fora vale ~0 enquanto o GLB está a +2–6 m →
+ * a RUA da favela virava parede (medido: 172 m²). Sem parede registrada: custo zero.
+ */
+export function blockedByWall(x: number, z: number, fallbackGround: number): boolean {
+  if (walls.size === 0) return false;
+  const top = wallHeightAt(x, z);
+  return top !== -Infinity && top > glbSurfaceY(x, z, fallbackGround) + 0.8;
+}
+
 /** Altura do topo da parede em (x,z) — raycast de cima. `-Infinity` se não há parede.
  *  No corredor o raio pega o chão (baixo) ou nada; na parede pega o topo (alto). */
 export function wallHeightAt(x: number, z: number): number {

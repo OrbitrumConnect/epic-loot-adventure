@@ -50,16 +50,16 @@ export const BAKED_EDITOR_OBJECTS: EditorObject[] = [
     source: 'editor', selectable: true, visible: true, collide: 'none', ground: true,
     transform: { position: [-10, 0, 22], rotation: [0, -1.2, 0], scale: [4, 4, 4] },
   },
-  // Favelas B (Pedro, 22/10): números EXATOS do painel do Editor no Vercel. Cenário VISUAL ao sul
-  // (z≈99–113, fora do limite ±90 onde o herói anda) → colisão 'none' (não gasta checagem).
+  // Favelas B (Pedro, 22/10): números EXATOS do painel do Editor no Vercel. Ficavam fora do limite ±90 (colisão
+  // 'none'); 28/10 a parede invisível saiu e o herói chega nelas → 'block' (casas sólidas, rua passa).
   {
     id: 'baked-favela-01', name: 'Favela B 1', assetUrl: '/models/map/favela-b.glb',
-    source: 'editor', selectable: true, visible: true, collide: 'none',
+    source: 'editor', selectable: true, visible: true, collide: 'block',
     transform: { position: [58.2, -2.5, 103.7], rotation: [0, 0.1, 0], scale: [12.9, 14.8, 12.2] },
   },
   {
     id: 'baked-favela-02', name: 'Favela B 2', assetUrl: '/models/map/favela-b.glb',
-    source: 'editor', selectable: true, visible: true, collide: 'none',
+    source: 'editor', selectable: true, visible: true, collide: 'block',
     transform: { position: [11.6, -2.4, 108.4], rotation: [0, -3, 0], scale: [12.4, 14.9, 13.1] },
   },
 ];
