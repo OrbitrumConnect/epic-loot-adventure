@@ -192,7 +192,7 @@ export default function ZonaSulWorld() {
           <hemisphereLight args={['#eef4f8', '#6b7a4a', 1.5]} />
           <ambientLight intensity={0.35} />
           <ZsTerrainMesh t={t} heroRef={focusRef} />
-          <ZsWater heroRef={focusRef} />
+          <ZsWater t={t} />
           <ZsVegetation t={t} heroRef={focusRef} />
           <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={setHud} />
           <Controls />

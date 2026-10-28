@@ -95,7 +95,7 @@ export function zsVegetationAround(t: ZsTerrain, hx: number, hz: number, near = 
     for (let k = 0; k < 7; k++) {
       const x = (cx + zsHash(cx, cz, k * 3 + 1)) * ZS_VEG_CELL, z = (cz + zsHash(cx, cz, k * 3 + 2)) * ZS_VEG_CELL;
       const s = zsSurfAt(t, x, z), y = zsHeightAt(t, x, z);
-      if (y < ZS_WATER_Y + 0.1 || s === ZS_SURF.sea || s === ZS_SURF.lagoon || s === ZS_SURF.out) continue;
+      if (y < ZS_WATER_Y + 0.1 || s === ZS_SURF.sea || s === ZS_SURF.lagoon || s === ZS_SURF.out || s === ZS_SURF.road) continue; // nada no meio da rua
       const slope = zsSlopeDeg(t, x, z), r = zsHash(cx, cz, k * 3 + 3), r2 = zsHash(cx, cz, k * 3 + 40);
       let kind: ZsVegKind | null = null;
       if (s === ZS_SURF.beach) { if (k < 1 && r < 0.35) kind = 'palm'; }

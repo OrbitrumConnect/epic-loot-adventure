@@ -67,6 +67,22 @@ describe('Zona Sul — terreno, movimento, água e mata', () => {
     // marcos famosos dentro da área
     for (const n of ['Corcovado', 'Pão de Açúcar', 'Irmão Maior']) expect(ZS_LANDMARKS.some((l) => l.name === n)).toBe(true);
   }, 30_000);
+  it('RUAS como TEXTURA do chão (não chapa): mapa de 1 m cobre o terreno inteiro; barro mais escuro que a praia', async () => {
+    const { ZS_ROAD_MASK } = await import('@/components/zona-sul/zona-sul-meta');
+    const png = fs.readFileSync('public' + ZS_ROAD_MASK.url);
+    expect(png.readUInt32BE(16)).toBe(ZS_TERRAIN.w * ZS_TERRAIN.cell);
+    expect(png.readUInt32BE(20)).toBe(ZS_TERRAIN.h * ZS_TERRAIN.cell);
+    expect(ZS_ROAD_MASK.w).toBe(ZS_TERRAIN.w * ZS_TERRAIN.cell);
+    expect(fs.existsSync('src/components/zona-sul/zs-roads.tsx')).toBe(false); // a "chapa" saiu
+    const mesh = src('src/components/zona-sul/zs-terrain-mesh.tsx');
+    expect(mesh).toMatch(/texture2D\(uRoadMask, ruv\)/);
+    expect(mesh).toMatch(/vec3 dirt = vec3\(0\.33, 0\.21, 0\.10\)/); // barro (linear) mais escuro que a areia da praia
+    const roads = src('tools/zona-sul/roads.mjs');
+    expect(roads).toMatch(/MAIN_ROADS\.has\(e\.tags\?\.name\)/);              // só avenidas que ligam a cidade
+    expect(roads).toMatch(/'Rua Francisco Otaviano': 5/);                     // trilha Arpoador ↔ Copa
+    expect(roads).toMatch(/if \(surf\[p\] === SURF\.sea \|\| surf\[p\] === SURF\.lagoon \|\| surf\[p\] === SURF\.beach\) continue;/);
+    expect(roads).toMatch(/export const MAX_GRADE = 1\.0;/);
+  });
   it('ISOLADA: a rota /zona-sul não importa o mundo do jogo; crédito ODbL na tela; tecla K = vista de cima', () => {
     const w = src('src/components/zona-sul/zona-sul-world.tsx');
     expect(w).not.toMatch(/from '@\/components\/game-world'/);

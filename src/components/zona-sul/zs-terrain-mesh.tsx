@@ -7,7 +7,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { ZS_SURF } from './zona-sul-meta';
+import { ZS_ROAD_MASK, ZS_SURF } from './zona-sul-meta';
 import { type ZsTerrain, zsHash, ZS_WATER_Y } from './zs-terrain-data';
 
 export const ZS_CHUNK = 64;
@@ -20,6 +20,7 @@ const C = {
   granite: new THREE.Color('#8e8a82'), graniteDark: new THREE.Color('#6d6a64'),
   low: new THREE.Color('#5d7836'), lowDry: new THREE.Color('#77743f'),
   mata: new THREE.Color('#2f5a2b'), mataDark: new THREE.Color('#244a24'), mataLight: new THREE.Color('#3e6c33'),
+  asphalt: new THREE.Color('#9c7b52'), // estrada de barro (de longe, pela cor do chão) — mais escura que a praia
 };
 const tmp = new THREE.Color();
 
@@ -35,6 +36,7 @@ export function zsGroundColor(t: ZsTerrain, i: number, j: number, out: THREE.Col
   const n = zsHash(i, j, 7), n2 = zsHash(i >> 3, j >> 3, 11);
   if (s === ZS_SURF.sea || s === ZS_SURF.lagoon) return out.copy(C.wetSand).lerp(C.deep, Math.min(1, (ZS_WATER_Y - h) / 5));
   if (s === ZS_SURF.beach) return out.copy(C.sand).lerp(C.wetSand, h < 0.5 ? 0.5 : n * 0.25);
+  if (s === ZS_SURF.road) return out.copy(C.asphalt).lerp(C.low, n * 0.35); // de longe a rua aparece pela cor do chão
   if (slope > 36) return out.copy(C.granite).lerp(C.graniteDark, n).lerp(C.mata, Math.max(0, (44 - slope) / 8) * 0.6);
   if (h < 6 && s !== ZS_SURF.forest) return out.copy(C.low).lerp(C.lowDry, n2 * 0.6).multiplyScalar(0.9 + n * 0.15);
   return out.copy(C.mata).lerp(n2 > 0.5 ? C.mataLight : C.mataDark, Math.abs(n2 - 0.5) * 1.4).multiplyScalar(0.9 + n * 0.15);
@@ -92,12 +94,34 @@ export function zsChunkStep(dist: number): number | null {
 
 type ChunkView = { key: string; geo: THREE.BufferGeometry };
 
+/** Ruas como TEXTURA do chão (/zona-sul/roads-mask.png): carregada 1×; até chegar, o chão fica sem rua. */
+const roadUniforms = {
+  uRoadMask: { value: null as THREE.Texture | null },
+  uRoadRect: { value: new THREE.Vector4(ZS_ROAD_MASK.x0, ZS_ROAD_MASK.z0, ZS_ROAD_MASK.w, ZS_ROAD_MASK.h) },
+  uRoadOn: { value: 0 },
+};
+let roadRequested = false;
+function requestRoadMask(): void {
+  if (roadRequested || typeof window === 'undefined') return;
+  roadRequested = true;
+  new THREE.TextureLoader().load(ZS_ROAD_MASK.url, (tex) => {
+    tex.colorSpace = THREE.NoColorSpace; // os bytes são DADOS (cobertura / posição na pista), não cor
+    tex.flipY = false;                    // linha 0 = norte (z0), igual a ferramenta grava
+    tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    roadUniforms.uRoadMask.value = tex; roadUniforms.uRoadOn.value = 1;
+  });
+}
+
 /**
  * TEXTURA sem imagem (leve): ruído calculado no shader pela posição no mundo — grão fino (terra/folha), manchas médias
- * e variação grande de tom. Na pedra (íngreme) faixas horizontais leves (estrato do granito). Zero download.
+ * e variação grande de tom. Na pedra (íngreme) faixas horizontais leves (estrato do granito).
+ * RUAS (Pedro: "o correto é ser textura do mapa, não uma chapa em cima"; "outro tom, não asfalto"): ESTRADA DE BARRO cor
+ * de areia pintada AQUI pelo mapa das ruas — colada no relevo, borda suave, marcas de pneu, capim só na beirinha.
  */
 function withGroundDetail(m: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (s) => {
+    Object.assign(s.uniforms, roadUniforms);
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vZsW;\nvarying float vZsUp;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvZsW = (modelMatrix * vec4(position, 1.0)).xyz;\nvZsUp = normal.y;');
@@ -105,6 +129,9 @@ function withGroundDetail(m: THREE.MeshStandardMaterial): THREE.MeshStandardMate
       .replace('#include <common>', `#include <common>
 varying vec3 vZsW;
 varying float vZsUp;
+uniform sampler2D uRoadMask;
+uniform vec4 uRoadRect;
+uniform float uRoadOn;
 float zsH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float zsN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(zsH(i), zsH(i + vec2(1.0, 0.0)), f.x), mix(zsH(i + vec2(0.0, 1.0)), zsH(i + vec2(1.0, 1.0)), f.x), f.y); }`)
@@ -114,14 +141,28 @@ float zsN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
   diffuseColor.rgb *= 0.84 + zg * 0.28;
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.9, 1.04, 0.86), zp * 0.4);
   float zrock = 1.0 - smoothstep(0.62, 0.8, vZsUp);
-  diffuseColor.rgb *= 1.0 - zrock * 0.12 * step(0.5, fract(vZsW.y * 0.45 + zsN(vZsW.xz * 0.2) * 0.6));`);
+  diffuseColor.rgb *= 1.0 - zrock * 0.12 * step(0.5, fract(vZsW.y * 0.45 + zsN(vZsW.xz * 0.2) * 0.6));
+  if (uRoadOn > 0.5) {
+    vec2 ruv = (vZsW.xz - uRoadRect.xy) / uRoadRect.zw;
+    vec4 rm = texture2D(uRoadMask, ruv);
+    if (rm.r > 0.004) {
+      vec3 dirt = vec3(0.33, 0.21, 0.10) * (0.9 + zsN(vZsW.xz * 3.1) * 0.12 + zsN(vZsW.xz * 0.8) * 0.06);
+      float u = rm.g + (zsN(vZsW.xz * 0.09) - 0.5) * 0.04;
+      float ruts = 0.0;
+      for (int k = 0; k < 4; k++) { float c = 0.22 + float(k) * 0.19; ruts = max(ruts, 1.0 - smoothstep(0.012, 0.035, abs(u - c))); }
+      dirt *= 1.0 - ruts * 0.12;
+      dirt *= 1.0 - smoothstep(0.68, 0.86, zsN(vZsW.xz * 0.15 + 5.0)) * 0.1;
+      float edgeGrass = smoothstep(0.55, 0.0, rm.r) * 0.5;
+      diffuseColor.rgb = mix(diffuseColor.rgb, mix(dirt, diffuseColor.rgb, edgeGrass), smoothstep(0.0, 0.6, rm.r));
+    }
+  }`);
   };
-  m.customProgramCacheKey = () => 'zs-ground-v1';
+  m.customProgramCacheKey = () => 'zs-ground-v3';
   return m;
 }
 
 export function ZsTerrainMesh({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3> }) {
-  const material = useMemo(() => withGroundDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 })), []);
+  const material = useMemo(() => { requestRoadMask(); return withGroundDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 })); }, []);
   const far = useMemo(() => buildTerrainPatch(t, 0, 0, t.w - 1, t.h - 1, FAR_STEP, FAR_DROP, false), [t]);
   const cache = useRef(new Map<string, THREE.BufferGeometry>());
   const [chunks, setChunks] = useState<ChunkView[]>([]);
