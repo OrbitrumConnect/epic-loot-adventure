@@ -79,19 +79,43 @@ const tmpQuat = new THREE.Quaternion();
 const tmpEuler = new THREE.Euler();
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
-function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
+function rotateMeasuredPoint(point: THREE.Vector3, giroX: number, origin: THREE.Vector3, quat: THREE.Quaternion): THREE.Vector3 {
+  if (giroX) point.sub(origin).applyQuaternion(quat).add(origin);
+  return point;
+}
+
+function expandMeasuredBox(box: THREE.Box3, source: THREE.Box3, giroX: number, origin: THREE.Vector3, quat: THREE.Quaternion): void {
+  for (const x of [source.min.x, source.max.x]) {
+    for (const y of [source.min.y, source.max.y]) {
+      for (const z of [source.min.z, source.max.z]) {
+        box.expandByPoint(rotateMeasuredPoint(new THREE.Vector3(x, y, z), giroX, origin, quat));
+      }
+    }
+  }
+}
+
+// GLB dos bichos vem deitado: eixo alto em Z (spiked.glb tem Y=0.43 m e Z=1.65 m); mede apos o giro.
+function measureGeoBox(root: THREE.Object3D, giroX = 0): THREE.Box3 {
   const box = new THREE.Box3();
   const tmp = new THREE.Box3();
   root.updateMatrixWorld(true);
+  const origin = root.getWorldPosition(new THREE.Vector3());
+  const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(giroX, 0, 0));
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     if (m.isMesh && m.geometry) {
       if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-      if (m.geometry.boundingBox) { tmp.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld); box.union(tmp); }
+      if (m.geometry.boundingBox) { tmp.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld); expandMeasuredBox(box, tmp, giroX, origin, quat); }
     }
   });
   if (box.isEmpty()) box.set(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5));
   return box;
+}
+
+/** Altura exportada para teste: mede modelo no eixo vertical apos giro opcional. */
+export function medirAlturaGeometria(root: THREE.Object3D, giroX = 0): number {
+  const box = measureGeoBox(root, giroX);
+  return box.max.y - box.min.y || 1;
 }
 
 /** Bounding box REAL pós-esqueleto (o que de fato renderiza). Ao contrário da caixa
@@ -99,10 +123,12 @@ function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
  *  esqueleto sob um nó em escala 0.01 que o SKINNING ignora na tela mas a caixa de
  *  geometria NÃO — então a bind reporta ~0.016 m para um herói de 1.63 m. Amostra os
  *  vértices já posicionados pelos ossos. */
-function measureSkinnedBox(root: THREE.Object3D): THREE.Box3 {
+function measureSkinnedBox(root: THREE.Object3D, giroX = 0): THREE.Box3 {
   const box = new THREE.Box3();
   const v = new THREE.Vector3();
   root.updateMatrixWorld(true);
+  const origin = root.getWorldPosition(new THREE.Vector3());
+  const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(giroX, 0, 0));
   root.traverse((o) => {
     const sm = o as THREE.SkinnedMesh;
     const pos = sm.geometry?.attributes?.['position'] as THREE.BufferAttribute | undefined;
@@ -112,7 +138,7 @@ function measureSkinnedBox(root: THREE.Object3D): THREE.Box3 {
         v.fromBufferAttribute(pos, i);
         sm.applyBoneTransform(i, v);
         v.applyMatrix4(sm.matrixWorld);
-        box.expandByPoint(v);
+        box.expandByPoint(rotateMeasuredPoint(v, giroX, origin, quat));
       }
     }
   });
@@ -250,14 +276,15 @@ export function GlbHeroMixamo({
       // quando a bind está claramente mentindo (razão de altura muito fora de 1);
       // para modelos normais (escala ~1: raiders FBX, red.glb) as duas batem e
       // mantemos a bind → comportamento idêntico ao original (zero regressão).
-      const bindBox = measureGeoBox(c);
+      const bindBox = measureGeoBox(c, standFixX);
       const bindH = bindBox.max.y - bindBox.min.y || 1;
-      const skBox = measureSkinnedBox(c);
+      const skBox = measureSkinnedBox(c, standFixX);
       const skH = skBox.max.y - skBox.min.y;
       const fooled = skH > 1e-4 && Math.abs(Math.log(skH / bindH)) > 0.5;
       const h = fooled ? skH : bindH;
       c.scale.setScalar(autoHeight / h);
       c.updateMatrixWorld(true);
+      // Reassenta no espaco local do clone; wrapper aplica standFixX depois, entao c.position segue sem giro.
       const b2 = fooled ? measureSkinnedBox(c) : measureGeoBox(c);
       c.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
       // Modelos "fooled" (export Blender) usam clips feitos p/ OUTRO esqueleto; a
