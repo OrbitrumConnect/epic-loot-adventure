@@ -182,6 +182,7 @@ export function GlbHeroMixamo({
   bindFix = false,
   autoGround = false,
   strideSync = false,
+  customClips,
 }: {
   /** Vida de OUTRO jogador (online) p/ a reação de golpe; sem ela, a vida do jogador local. */
   hpOf?: () => number;
@@ -200,6 +201,10 @@ export function GlbHeroMixamo({
   autoGround?: boolean;
   /** A caminhada acompanha a velocidade REAL e o tamanho do corpo (sem patinar). Couraça/Fúngico (Pedro 25/10). */
   strideSync?: boolean;
+  /** CLIPS EXTRAS por nome de ação → URL do GLB do Mixamo (Zona Sul, 28/10: dirigir, abrir a porta, nadar, boiar).
+   *  Tocam em loop quando `actionRef` = o nome, com o quadril LIVRE (sentado/deitado na água). Sem isto (o jogo de
+   *  sempre): nada muda. */
+  customClips?: Record<string, string>;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -238,6 +243,10 @@ export function GlbHeroMixamo({
   const dodgeG = useGLTF(CLIP_URL['dodge']!);
   // Extras do jogador (strafe/costas, golpe, gesto de poder, combo de espada) — ~700 KB, 1 vez.
   const extraG = useGLTF(EXTRA_URLS) as unknown as { animations: THREE.AnimationClip[]; scene: THREE.Object3D }[];
+  // clips extras (opcional): sempre 1 chamada (a 1ª URL é o idle já carregado — sem extras não baixa nada a mais)
+  const customKeys = useMemo(() => Object.keys(customClips ?? {}), [customClips]);
+  const customUrls = useMemo(() => [CLIP_URL['idle']!, ...customKeys.map((k) => customClips![k]!)], [customKeys, customClips]);
+  const customG = useGLTF(customUrls) as unknown as { animations: THREE.AnimationClip[]; scene: THREE.Object3D }[];
 
   const cloned = useMemo(() => {
     const c = skeletonClone(scene);
@@ -321,8 +330,9 @@ export function GlbHeroMixamo({
           return c && (k === 'cast' || (HIT_CLIPS as string[]).includes(k)) ? upperBodyOnly(c) : c;
         })
       : [];
-    return [...base, ...extra].filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, dodgeG, extraG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
+    const custom = customKeys.map((k, i) => mk(customG[i + 1]!, k, true)); // quadril livre (sentado / nadando)
+    return [...base, ...extra, ...custom].filter((c): c is THREE.AnimationClip => c != null);
+  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, dodgeG, extraG, customKeys, customG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
 
   // 26/10: animação por distância (anim-lod.ts) — herói/perto todo quadro (igual), inimigo longe com menos atualizações.
   const animEveryRef = useRef(1);

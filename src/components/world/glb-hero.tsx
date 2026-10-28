@@ -12,7 +12,9 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 const CHAR_URL = '/models/ranger/Male_Ranger.gltf';
 const ANIM_URL = '/models/ranger/UAL2_Standard.glb';
 
-export type HeroAction = 'idle' | 'walk' | 'run' | 'attack' | 'jump' | 'death' | 'dodge';
+export type HeroAction = 'idle' | 'walk' | 'run' | 'attack' | 'jump' | 'death' | 'dodge'
+  // Zona Sul (28/10, `customClips` do GlbHeroMixamo): o jogo de sempre nunca usa estes
+  | 'drive' | 'open_door' | 'swim' | 'tread';
 
 function pickClip(names: string[], kind: HeroAction): string | undefined {
   const find = (sub: string) => names.find((n) => n.toLowerCase().includes(sub));

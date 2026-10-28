@@ -17,16 +17,24 @@ import { ZsTerrainMesh } from './zs-terrain-mesh';
 import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
 import { zsStep, ZS_RUN, ZS_SWIM_K, ZS_SWIM_SINK, ZS_WALK, zsWaterState } from './zs-move';
+import { CAR, CAR_SEATS, carStep, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
+import { type CarDims, ZsCarView } from './zs-car-view';
+
+/** Clips extras do herói só na Zona Sul (Mixamo do Pedro): dirigir, abrir a porta, nadar, boiar. */
+const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/anim/open_door.glb', swim: '/zona-sul/anim/swim.glb', tread: '/zona-sul/anim/tread.glb' };
+/** a pé → abrindo a porta (ENTER_MS) → dirigindo. E entra/sai. */
+const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving', enterAt: 0 };
+const ENTER_MS = 1100;
 
 const SUN = new THREE.Vector3(-0.55, 0.62, -0.45).normalize();
 const FOG = '#bcd0dc';
 
-type Hud = { x: number; z: number; y: number; state: string; near: string; overview: boolean };
+type Hud = { x: number; z: number; y: number; state: string; near: string; overview: boolean; car?: string | undefined };
 /** Entrada + câmera. `overview` (tecla K): câmera de CIMA solta do boneco — WASD move a vista, Shift acelera,
  *  arrastar gira, roda sobe/desce; K de novo volta pro herói (o herói fica parado onde estava). */
-const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch: 0.32, dist: 9, overview: false, ov: { x: 0, z: 0, alt: 420, pitch: 1.05 } };
+const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch: 0.32, dist: 9, overview: false, ov: { x: 0, z: 0, alt: 420, pitch: 1.05 }, eTap: false, lookAt: 0 };
 
-function Hero({ t, heroRef, focusRef, onHud }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void }) {
+function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null> }) {
   const group = useRef<THREE.Group>(null);
   const action = useRef<HeroAction>('idle');
   const speed = useRef(0);
@@ -64,6 +72,53 @@ function Hero({ t, heroRef, focusRef, onHud }: { t: ZsTerrain; heroRef: React.Mu
       return;
     }
     if (wasOverview.current) { wasOverview.current = false; fog.near = 200; fog.far = 2200; }
+    const car = carRef.current, now = performance.now();
+    // E: entra (perto do carro) / sai (parado e rente ao chão)
+    if (input.eTap) {
+      input.eTap = false;
+      if (drive.mode === 'foot' && car && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST) {
+        drive.mode = 'entering'; drive.enterAt = now; facing.current = Math.atan2(car.x - p.x, car.z - p.z);
+      } else if (drive.mode === 'driving' && car && Math.abs(car.speed) < CAR.EXIT_MAX_SPEED && car.altitude < CAR.EXIT_MAX_ALT) {
+        drive.mode = 'foot';
+        const side = (dimsRef.current?.width ?? 2.2) / 2 + 1.1; // desce pelo lado do motorista (esquerda)
+        p.x = car.x + Math.cos(car.yaw) * side; p.z = car.z - Math.sin(car.yaw) * side; p.y = zsHeightAt(t, p.x, p.z);
+        facing.current = car.yaw; grounded.current = true; vy.current = 0;
+      }
+    }
+    if (drive.mode === 'entering' && now - drive.enterAt >= ENTER_MS) { drive.mode = 'driving'; input.dist = Math.max(input.dist, 12); }
+    if (drive.mode === 'driving' && car) {
+      const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z;
+      const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x;
+      carStep(t, car, { throttle: Math.max(-1, Math.min(1, throttle)), steer: Math.max(-1, Math.min(1, steer)), boost: k.has('Space'), turbo: k.has('ShiftLeft') || k.has('ShiftRight'), descend: k.has('KeyC') }, dt, now);
+      p.set(car.x, car.y, car.z);
+      focusRef.current.copy(p);
+      // herói SENTADO no banco do motorista, olhando pra frente
+      const dims = dimsRef.current, seat = CAR_SEATS[0]!;
+      const wv = dims?.width ?? 2.2, lv = dims?.length ?? CAR.LENGTH;
+      const sx = seat.x * wv, sz = seat.z * lv;
+      if (group.current) {
+        group.current.position.set(car.x + Math.cos(car.yaw) * sx + Math.sin(car.yaw) * sz, car.y + (dims?.height ?? 1.4) * SEAT_FOOT_K, car.z - Math.sin(car.yaw) * sx + Math.cos(car.yaw) * sz);
+        group.current.rotation.y = car.yaw;
+      }
+      action.current = 'drive'; speed.current = 0;
+      // câmera atrás do carro (gira junto; arrastar ainda ajusta)
+      if (now - input.lookAt > 1500) { let d = car.yaw + Math.PI - input.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; input.yaw += d * Math.min(1, dt * 2.2); }
+      const tx = car.x, ty = car.y + 1.8, tz = car.z, cp = Math.cos(input.pitch);
+      const cx = tx + Math.sin(input.yaw) * cp * input.dist, cz = tz + Math.cos(input.yaw) * cp * input.dist;
+      let cyy = ty + Math.sin(input.pitch) * input.dist;
+      const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6; if (cyy < gcam) cyy = gcam;
+      camera.position.set(cx, cyy, cz); camera.lookAt(tx, ty, tz);
+      if (sun.current) { sun.current.position.set(p.x + SUN.x * 120, p.y + SUN.y * 120, p.z + SUN.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); }
+      hudAcc.current += dt;
+      if (hudAcc.current > 0.25) {
+        hudAcc.current = 0;
+        const flyLeft = Math.max(0, Math.ceil((car.flyUntil - now) / 1000)), cd = Math.max(0, Math.ceil((car.cooldownUntil - now) / 1000));
+        const voo = car.flying ? 'voando · ' + flyLeft + ' s · C desce' : cd > 0 ? 'recarga do voo ' + cd + ' s' : 'Espaço = voar · Shift = turbo';
+        onHud({ x: car.x, z: car.z, y: car.y, state: 'dirigindo · ' + Math.round(Math.abs(car.speed) * 3.6) + ' km/h · altura ' + car.altitude.toFixed(1) + ' m' + (car.overWater ? ' · sobre a água' : ''), near: '', overview: false, car: voo + ' · E sai (parado e baixo)' });
+      }
+      return;
+    }
+    if (drive.mode === 'entering') { action.current = 'open_door'; speed.current = 0; }
     focusRef.current.copy(p);
     // direção relativa à câmera
     let ix = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x;
@@ -74,16 +129,16 @@ function Hero({ t, heroRef, focusRef, onHud }: { t: ZsTerrain; heroRef: React.Mu
     const water0 = zsWaterState(zsHeightAt(t, p.x, p.z));
     const run = (k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92) && !water0.swimming;
     const v = (run ? ZS_RUN : ZS_WALK) * (water0.swimming ? ZS_SWIM_K : water0.wading ? 0.75 : 1);
-    const moving = Math.hypot(wx, wz) > 0.05;
+    const moving = Math.hypot(wx, wz) > 0.05 && drive.mode === 'foot';
     const st = moving ? zsStep(t, p.x, p.z, wx * v * dt, wz * v * dt) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
     p.x = st.x; p.z = st.z;
     if (moving) facing.current = Math.atan2(wx, wz);
     // vertical: pulo (só fora d'água funda) + chão / nado
-    if (k.has('Space') && grounded.current && !st.swimming) { vy.current = 6.2; grounded.current = false; }
+    if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot') { vy.current = 6.2; grounded.current = false; }
     const floor = st.swimming ? ZS_WATER_Y - ZS_SWIM_SINK : st.ground;
     if (!grounded.current) { vy.current -= 15 * dt; p.y += vy.current * dt; if (p.y <= floor) { p.y = floor; grounded.current = true; vy.current = 0; } }
     else p.y += (floor - p.y) * Math.min(1, dt * (st.swimming ? 6 : 30));
-    action.current = !grounded.current ? 'jump' : moving ? (run ? 'run' : 'walk') : 'idle';
+    if (drive.mode === 'foot') action.current = st.swimming ? (moving ? 'swim' : 'tread') : !grounded.current ? 'jump' : moving ? (run ? 'run' : 'walk') : 'idle';
     speed.current = moving ? v : 0;
     if (group.current) {
       group.current.position.set(p.x, p.y, p.z);
@@ -107,7 +162,8 @@ function Hero({ t, heroRef, focusRef, onHud }: { t: ZsTerrain; heroRef: React.Mu
       hudAcc.current = 0;
       let best = '', bd = 700;
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
-      onHud({ x: p.x, z: p.z, y: p.y, state: st.swimming ? 'nadando' : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false });
+      const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
+      onHud({ x: p.x, z: p.z, y: p.y, state: drive.mode === 'entering' ? 'entrando no carro' : st.swimming ? 'nadando' : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : undefined });
     }
   });
 
@@ -117,7 +173,7 @@ function Hero({ t, heroRef, focusRef, onHud }: { t: ZsTerrain; heroRef: React.Mu
         shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={45} shadow-camera-bottom={-45} shadow-camera-far={300} shadow-bias={-0.0004} />
       <group ref={group}>
         <Suspense fallback={null}>
-          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} />
+          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} />
         </Suspense>
       </group>
     </>
@@ -130,6 +186,7 @@ function Controls() {
     const el = gl.domElement;
     const kd = (e: KeyboardEvent) => {
       if (e.code === 'KeyK' && !e.repeat) input.overview = !input.overview;
+      if (e.code === 'KeyE' && !e.repeat) input.eTap = true;
       input.keys.add(e.code); if (e.code === 'Space') e.preventDefault();
     };
     const ku = (e: KeyboardEvent) => input.keys.delete(e.code);
@@ -143,7 +200,7 @@ function Controls() {
     const move = (e: PointerEvent) => {
       const l = look.get(e.pointerId);
       if (l) {
-        input.yaw -= (e.clientX - l.x) * 0.006;
+        input.yaw -= (e.clientX - l.x) * 0.006; input.lookAt = performance.now();
         if (input.overview) input.ov.pitch = Math.max(0.35, Math.min(1.5, input.ov.pitch + (e.clientY - l.y) * 0.004));
         else input.pitch = Math.max(-0.15, Math.min(1.35, input.pitch + (e.clientY - l.y) * 0.005));
         l.x = e.clientX; l.y = e.clientY;
@@ -177,9 +234,12 @@ export default function ZonaSulWorld() {
   const heroRef = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
   /** Onde o detalhe (chão, árvores, água) é montado: o herói, ou o centro da vista de cima (tecla K). */
   const focusRef = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
+  /** Carro voador: nasce do lado da partida, no Arpoador (Pedro: "joga lá perto do Arpoador onde eu testo"). */
+  const carRef = useRef<ZsCar | null>(null);
+  const dimsRef = useRef<CarDims | null>(null);
   useEffect(() => {
     let alive = true;
-    loadZsTerrain().then((tt) => { if (!alive) return; heroRef.current.y = zsHeightAt(tt, ZS_SPAWN.x, ZS_SPAWN.z); setT(tt); }).catch((e) => alive && setErr(String(e)));
+    loadZsTerrain().then((tt) => { if (!alive) return; heroRef.current.y = zsHeightAt(tt, ZS_SPAWN.x, ZS_SPAWN.z); carRef.current = newCar(ZS_SPAWN.x + 3, ZS_SPAWN.z - 2, 0, tt); setT(tt); }).catch((e) => alive && setErr(String(e)));
     return () => { alive = false; };
   }, []);
   const sunPos = useMemo(() => SUN.clone().multiplyScalar(1000).toArray() as [number, number, number], []);
@@ -194,13 +254,15 @@ export default function ZonaSulWorld() {
           <ZsTerrainMesh t={t} heroRef={focusRef} />
           <ZsWater t={t} />
           <ZsVegetation t={t} heroRef={focusRef} />
-          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={setHud} />
+          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={setHud} carRef={carRef} dimsRef={dimsRef} />
+          <Suspense fallback={null}><ZsCarView carRef={carRef} dimsRef={dimsRef} /></Suspense>
           <Controls />
         </Canvas>
       )}
       <div style={{ position: 'absolute', top: 10, left: 12, color: '#10202c', font: '600 13px system-ui', background: 'rgba(255,255,255,.72)', padding: '6px 10px', borderRadius: 8, pointerEvents: 'none', maxWidth: 'calc(100% - 24px)' }}>
         TRIBOS · Zona Sul (teste isolado — não é o mapa do jogo)
-        {hud && <div style={{ font: '400 12px system-ui', marginTop: 3 }}>{hud.state} · altura {hud.y.toFixed(0)} m{hud.near ? ` · perto de ${hud.near}` : ''}</div>}
+        {hud && <div style={{ font: '400 12px system-ui', marginTop: 3 }}>{hud.state}{hud.car && hud.state.startsWith('dirigindo') ? '' : ` · altura ${hud.y.toFixed(0)} m`}{hud.near ? ` · perto de ${hud.near}` : ''}</div>}
+        {hud?.car && <div style={{ font: '700 12px system-ui', marginTop: 3, color: '#0b5c7a' }}>{hud.car}</div>}
         <div style={{ font: '400 11px system-ui', marginTop: 2, opacity: 0.8 }}>
           {hud?.overview ? 'VISTA DE CIMA · WASD move · Shift rápido · arraste gira · roda sobe/desce · K volta pro herói'
             : 'WASD anda · Shift corre · Espaço pula · arraste gira · roda = zoom · K = vista de cima'}
