@@ -14,6 +14,15 @@ export const ZS_SWIM = 2.4, ZS_SWIM_FAST = 4.2, ZS_SWIM_GLIDE = 2.2;
 export const ZS_SWIM_DEPTH = 1.2;    // água mais funda que isso = nada
 export const ZS_SWIM_SINK = 0.35;    // BOIANDO parado (em pé na água): o pé fica isto abaixo da superfície (cabeça e ombros pra fora — conferido na foto)
 export const ZS_SWIM_SINK_MOVE = 0.1;  // NADANDO (corpo deitado na braçada): rente à superfície — 0,55 ainda afundava (foto)
+/** MERGULHO (Pedro: "se eu quiser afundar, por que não afunda?"): segurar C desce (m/s); soltou, sobe flutuando.
+ *  Nunca encosta no fundo (fica ZS_DIVE_FLOOR acima dele). */
+export const ZS_DIVE_DOWN = 1.8, ZS_DIVE_UP = 1.3, ZS_DIVE_FLOOR = 0.5;
+
+/** Profundidade do mergulho no próximo passo (puro): C desce até perto do fundo; soltou sobe até a superfície. */
+export function zsDiveStep(dive: number, holdDown: boolean, waterDepth: number, dt: number): number {
+  const max = Math.max(0, waterDepth - ZS_DIVE_FLOOR - 0.6);
+  return holdDown ? Math.min(max, dive + ZS_DIVE_DOWN * dt) : Math.max(0, Math.min(max, dive - ZS_DIVE_UP * dt));
+}
 /** Subida máxima por metro andado (1 = 45°). Mais íngreme = paredão de pedra: não sobe, desliza. */
 export const ZS_MAX_CLIMB = 1.0;
 const EDGE = 6;

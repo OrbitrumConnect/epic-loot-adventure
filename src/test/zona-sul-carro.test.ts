@@ -98,3 +98,14 @@ describe('carro voador (Zona Sul)', () => {
     expect(tri).toBeLessThanOrEqual(30_000);
   });
 });
+
+describe('mergulho do herói (Zona Sul)', () => {
+  it('segurar C desce até perto do fundo (nunca encosta); soltou sobe até a superfície', async () => {
+    const { zsDiveStep, ZS_DIVE_FLOOR } = await import('@/components/zona-sul/zs-move');
+    let d = 0;
+    for (let k = 0; k < 100; k++) d = zsDiveStep(d, true, 6, 0.05);   // 5 s segurando, água de 6 m
+    expect(d).toBeCloseTo(6 - ZS_DIVE_FLOOR - 0.6, 5);                   // parou acima do fundo
+    for (let k = 0; k < 200; k++) d = zsDiveStep(d, false, 6, 0.05);  // soltou
+    expect(d).toBe(0);
+  });
+});
