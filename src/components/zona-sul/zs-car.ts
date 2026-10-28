@@ -110,9 +110,9 @@ export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now
 }
 
 /** Bancos (5): posição relativa ao carro (x = ESQUERDA de quem está sentado olhando pra frente (+z), z = frente), em
- *  frações de largura/comprimento. 0 = motorista (esquerda — conferido nas fotos de trás). */
+ *  frações de largura/comprimento. 0 = motorista: o VOLANTE deste modelo fica à DIREITA (visto na câmera de dentro). */
 export const CAR_SEATS: { x: number; z: number }[] = [
-  { x: 0.12, z: -0.02 }, { x: -0.12, z: -0.02 }, { x: 0.13, z: -0.2 }, { x: 0, z: -0.2 }, { x: -0.13, z: -0.2 }, // largura medida inclui as turbinas: a cabine é ~metade
+  { x: -0.12, z: -0.02 }, { x: 0.12, z: -0.02 }, { x: 0.13, z: -0.2 }, { x: 0, z: -0.2 }, { x: -0.13, z: -0.2 }, // largura medida inclui as turbinas: a cabine é ~metade
 ];
 /** Altura do pé do herói sentado, em fração da altura do carro (conferido nas fotos de lado e de trás). */
 export const SEAT_FOOT_K = 0.21; // 0,13–0,16 as pernas apareciam embaixo do carro (Pedro); conferido em foto de lado

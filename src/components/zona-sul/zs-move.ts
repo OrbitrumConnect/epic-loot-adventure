@@ -7,9 +7,13 @@ import { type ZsTerrain, zsBounds, zsHeightAt, zsSurfAt, ZS_WATER_Y } from './zs
 
 export const ZS_WALK = 1.8;          // m/s (igual ao jogo)
 export const ZS_RUN = 4.32;          // m/s (igual ao jogo)
-export const ZS_SWIM_K = 0.55;       // nadando: 55% da velocidade de andar
+export const ZS_SWIM_K = 0.55;       // (antigo) nadando: 55% da velocidade de andar — trocado pelo nado com embalo abaixo
+/** NADO (Pedro 28/10: "afundei e fiquei lento demais; Shift nada mais rápido; não agarrar tanto na água, mais fluido"):
+ *  velocidade própria com EMBALO (acelera/freia suave, desliza ao soltar), mais rápido que andar; Shift = braçada forte. */
+export const ZS_SWIM = 2.4, ZS_SWIM_FAST = 4.2, ZS_SWIM_GLIDE = 2.2;
 export const ZS_SWIM_DEPTH = 1.2;    // água mais funda que isso = nada
-export const ZS_SWIM_SINK = 1.25;    // nadando, o pé fica isto abaixo da superfície (cabeça pra fora)
+export const ZS_SWIM_SINK = 0.35;    // BOIANDO parado (em pé na água): o pé fica isto abaixo da superfície (cabeça e ombros pra fora — conferido na foto)
+export const ZS_SWIM_SINK_MOVE = 0.1;  // NADANDO (corpo deitado na braçada): rente à superfície — 0,55 ainda afundava (foto)
 /** Subida máxima por metro andado (1 = 45°). Mais íngreme = paredão de pedra: não sobe, desliza. */
 export const ZS_MAX_CLIMB = 1.0;
 const EDGE = 6;

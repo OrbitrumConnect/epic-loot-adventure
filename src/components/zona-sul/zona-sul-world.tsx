@@ -16,7 +16,7 @@ import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y } from './zs-terr
 import { ZsTerrainMesh } from './zs-terrain-mesh';
 import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
-import { zsStep, ZS_RUN, ZS_SWIM_K, ZS_SWIM_SINK, ZS_WALK, zsWaterState } from './zs-move';
+import { zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
 import { CAR, CAR_SEATS, carStep, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
 import { type CarDims, ZsCarView } from './zs-car-view';
 
@@ -32,13 +32,19 @@ const FOG = '#bcd0dc';
 type Hud = { x: number; z: number; y: number; state: string; near: string; overview: boolean; car?: string | undefined };
 /** Entrada + câmera. `overview` (tecla K): câmera de CIMA solta do boneco — WASD move a vista, Shift acelera,
  *  arrastar gira, roda sobe/desce; K de novo volta pro herói (o herói fica parado onde estava). */
-const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch: 0.32, dist: 9, overview: false, ov: { x: 0, z: 0, alt: 420, pitch: 1.05 }, eTap: false, lookAt: 0 };
+const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch: 0.32, dist: 9, overview: false, ov: { x: 0, z: 0, alt: 420, pitch: 1.05 }, eTap: false, lookAt: 0,
+  /** câmera no carro (tecla V): 3ª pessoa atrás ou DE DENTRO (cabeça do motorista); olhar em volta de dentro */
+  carCam: 'chase' as 'chase' | 'cockpit', cockYaw: 0, cockPitch: 0 };
+/** Altura do OLHO do motorista sentado acima do pé (m) e campo de visão de dentro (mais aberto). */
+const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
 function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null> }) {
   const group = useRef<THREE.Group>(null);
   const action = useRef<HeroAction>('idle');
   const speed = useRef(0);
   const vy = useRef(0);
+  /** velocidade NA ÁGUA (embalo do nado) */
+  const swimVel = useRef(new THREE.Vector2());
   const grounded = useRef(true);
   const facing = useRef(0);
   const hudAcc = useRef(0);
@@ -81,8 +87,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
         drive.mode = 'entering'; drive.enterAt = now; facing.current = Math.atan2(car.x - p.x, car.z - p.z);
       } else if (drive.mode === 'driving' && car && Math.abs(car.speed) < CAR.EXIT_MAX_SPEED && car.altitude < CAR.EXIT_MAX_ALT) {
         drive.mode = 'foot';
-        const side = (dimsRef.current?.width ?? 2.2) / 2 + 1.1; // desce pelo lado do motorista (esquerda)
-        p.x = car.x + Math.cos(car.yaw) * side; p.z = car.z - Math.sin(car.yaw) * side; p.y = zsHeightAt(t, p.x, p.z);
+        if (group.current) group.current.visible = true;
+        const pc = camera as THREE.PerspectiveCamera; if (pc.fov !== CHASE_FOV) { pc.fov = CHASE_FOV; pc.updateProjectionMatrix(); }
+        const side = (dimsRef.current?.width ?? 2.2) / 2 + 1.1; // desce pelo lado do motorista (direita: o volante do modelo é desse lado)
+        p.x = car.x - Math.cos(car.yaw) * side; p.z = car.z + Math.sin(car.yaw) * side; p.y = zsHeightAt(t, p.x, p.z);
         facing.current = car.yaw; grounded.current = true; vy.current = 0;
       }
     }
@@ -97,11 +105,27 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
       const dims = dimsRef.current, seat = CAR_SEATS[0]!;
       const wv = dims?.width ?? 2.2, lv = dims?.length ?? CAR.LENGTH;
       const sx = seat.x * wv, sz = seat.z * lv;
+      const seatX = car.x + Math.cos(car.yaw) * sx + Math.sin(car.yaw) * sz, seatZ = car.z - Math.sin(car.yaw) * sx + Math.cos(car.yaw) * sz;
+      const feetY = car.y + (dims?.height ?? 1.4) * SEAT_FOOT_K;
+      const inside = input.carCam === 'cockpit';
       if (group.current) {
-        group.current.position.set(car.x + Math.cos(car.yaw) * sx + Math.sin(car.yaw) * sz, car.y + (dims?.height ?? 1.4) * SEAT_FOOT_K, car.z - Math.sin(car.yaw) * sx + Math.cos(car.yaw) * sz);
+        group.current.position.set(seatX, feetY, seatZ);
         group.current.rotation.y = car.yaw;
+        group.current.visible = !inside; // de dentro o herói some (a cabeça dele não entra na frente)
       }
       action.current = 'drive'; speed.current = 0;
+      const persp = camera as THREE.PerspectiveCamera;
+      const wantFov = inside ? COCKPIT_FOV : CHASE_FOV;
+      if (persp.fov !== wantFov) { persp.fov = wantFov; persp.updateProjectionMatrix(); }
+      if (inside) {
+        // DE DENTRO: olho do motorista; olha pra frente do carro (+ arrastar olha em volta; volta ao centro sozinho)
+        if (now - input.lookAt > 2000) { input.cockYaw *= Math.exp(-2.5 * dt); input.cockPitch *= Math.exp(-2.5 * dt); }
+        const ly = car.yaw + input.cockYaw, lp = input.cockPitch - Math.max(-0.12, Math.min(0.12, car.vy * 0.02));
+        const ex = seatX + Math.sin(car.yaw) * 0.2, ey = feetY + EYE_SEATED, ez = seatZ + Math.cos(car.yaw) * 0.2;
+        camera.position.set(ex, ey, ez);
+        camera.lookAt(ex + Math.sin(ly) * Math.cos(lp) * 10, ey + Math.sin(lp) * 10, ez + Math.cos(ly) * Math.cos(lp) * 10);
+        camTarget.current.set(car.x, car.y + 1.8, car.z); // voltar pra fora sem "voo" da câmera
+      } else {
       // câmera atrás do carro, com ATRASO suave (fluido): segue o alvo amortecido, gira junto com a direção e se
       // afasta com a velocidade; arrastar ainda ajusta
       if (now - input.lookAt > 1500) { let d = car.yaw + Math.PI - input.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; input.yaw += d * Math.min(1, dt * 3); }
@@ -113,13 +137,14 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
       let cyy = ty + Math.sin(input.pitch) * dist;
       const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6; if (cyy < gcam) cyy = gcam;
       camera.position.set(cx, cyy, cz); camera.lookAt(tx, ty, tz);
+      }
       if (sun.current) { sun.current.position.set(p.x + SUN.x * 120, p.y + SUN.y * 120, p.z + SUN.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); }
       hudAcc.current += dt;
       if (hudAcc.current > 0.25) {
         hudAcc.current = 0;
         const cd = Math.max(0, Math.ceil((car.cooldownUntil - now) / 1000)), en = Math.ceil(car.energy);
         const voo = cd > 0 ? 'recarga do voo ' + cd + ' s' : 'Espaço sobe · C desce · energia ' + en + ' s · Shift turbo';
-        onHud({ x: car.x, z: car.z, y: car.y, state: 'dirigindo · ' + Math.round(Math.abs(car.speed) * 3.6) + ' km/h · altura ' + car.altitude.toFixed(1) + ' m' + (car.overWater ? ' · sobre a água' : ''), near: '', overview: false, car: voo + ' · E sai (parado e baixo)' });
+        onHud({ x: car.x, z: car.z, y: car.y, state: 'dirigindo · ' + Math.round(Math.abs(car.speed) * 3.6) + ' km/h · altura ' + car.altitude.toFixed(1) + ' m' + (car.overWater ? ' · sobre a água' : ''), near: '', overview: false, car: voo + ' · V câmera ' + (inside ? 'de fora' : 'de dentro') + ' · E sai (parado e baixo)' });
       }
       return;
     }
@@ -132,17 +157,31 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
     const sy = Math.sin(input.yaw), cy = Math.cos(input.yaw);
     const wx = ix * cy + iz * sy, wz = -ix * sy + iz * cy; // gira o input pelo yaw da câmera
     const water0 = zsWaterState(zsHeightAt(t, p.x, p.z));
-    const run = (k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92) && !water0.swimming;
-    const v = (run ? ZS_RUN : ZS_WALK) * (water0.swimming ? ZS_SWIM_K : water0.wading ? 0.75 : 1);
-    const moving = Math.hypot(wx, wz) > 0.05 && drive.mode === 'foot';
-    const st = moving ? zsStep(t, p.x, p.z, wx * v * dt, wz * v * dt) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
+    const shift = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92;
+    const run = shift && !water0.swimming;
+    const wantMove = Math.hypot(wx, wz) > 0.05 && drive.mode === 'foot';
+    let v = (run ? ZS_RUN : ZS_WALK) * (water0.wading ? 0.75 : 1);
+    let moving = wantMove;
+    let st;
+    if ((water0.swimming || water0.wading) && drive.mode === 'foot') {
+      // NA ÁGUA (nadando ou no raso) com embalo: a velocidade vai suave até a desejada (e desliza ao soltar)
+      const sv = swimVel.current, target = !wantMove ? 0 : water0.swimming ? (shift ? ZS_SWIM_FAST : ZS_SWIM) : v;
+      const kk = 1 - Math.exp(-ZS_SWIM_GLIDE * dt);
+      sv.x += (wx * target - sv.x) * kk; sv.y += (wz * target - sv.y) * kk;
+      v = sv.length(); moving = v > 0.35;
+      st = zsStep(t, p.x, p.z, sv.x * dt, sv.y * dt);
+      if (moving) facing.current = Math.atan2(sv.x, sv.y);
+    } else {
+      st = wantMove ? zsStep(t, p.x, p.z, wx * v * dt, wz * v * dt) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
+      swimVel.current.set(wantMove ? wx * v : 0, wantMove ? wz * v : 0); // entra na água com o embalo de quem vinha
+      if (wantMove) facing.current = Math.atan2(wx, wz);
+    }
     p.x = st.x; p.z = st.z;
-    if (moving) facing.current = Math.atan2(wx, wz);
     // vertical: pulo (só fora d'água funda) + chão / nado
     if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot') { vy.current = 6.2; grounded.current = false; }
-    const floor = st.swimming ? ZS_WATER_Y - ZS_SWIM_SINK : st.ground;
+    const floor = st.swimming ? ZS_WATER_Y - (moving ? ZS_SWIM_SINK_MOVE : ZS_SWIM_SINK) : st.ground;
     if (!grounded.current) { vy.current -= 15 * dt; p.y += vy.current * dt; if (p.y <= floor) { p.y = floor; grounded.current = true; vy.current = 0; } }
-    else p.y += (floor - p.y) * Math.min(1, dt * (st.swimming ? 6 : 30));
+    else p.y += (floor - p.y) * Math.min(1, dt * (st.swimming ? 3 : 30)); // na água sobe/desce macio (braçada ↔ boiar)
     if (drive.mode === 'foot') action.current = st.swimming ? (moving ? 'swim' : 'tread') : !grounded.current ? 'jump' : moving ? (run ? 'run' : 'walk') : 'idle';
     speed.current = moving ? v : 0;
     if (group.current) {
@@ -168,7 +207,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
       let best = '', bd = 700;
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
       const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
-      onHud({ x: p.x, z: p.z, y: p.y, state: drive.mode === 'entering' ? 'entrando no carro' : st.swimming ? 'nadando' : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : undefined });
+      onHud({ x: p.x, z: p.z, y: p.y, state: drive.mode === 'entering' ? 'entrando no carro' : st.swimming ? (moving ? 'nadando' : 'boiando') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : undefined });
     }
   });
 
@@ -192,6 +231,7 @@ function Controls() {
     const kd = (e: KeyboardEvent) => {
       if (e.code === 'KeyK' && !e.repeat) input.overview = !input.overview;
       if (e.code === 'KeyE' && !e.repeat) input.eTap = true;
+      if (e.code === 'KeyV' && !e.repeat && drive.mode === 'driving') { input.carCam = input.carCam === 'chase' ? 'cockpit' : 'chase'; input.cockYaw = 0; input.cockPitch = 0; }
       input.keys.add(e.code); if (e.code === 'Space') e.preventDefault();
     };
     const ku = (e: KeyboardEvent) => input.keys.delete(e.code);
@@ -205,7 +245,14 @@ function Controls() {
     const move = (e: PointerEvent) => {
       const l = look.get(e.pointerId);
       if (l) {
-        input.yaw -= (e.clientX - l.x) * 0.006; input.lookAt = performance.now();
+        input.lookAt = performance.now();
+        if (drive.mode === 'driving' && input.carCam === 'cockpit') {
+          input.cockYaw = Math.max(-2.3, Math.min(2.3, input.cockYaw - (e.clientX - l.x) * 0.005));
+          input.cockPitch = Math.max(-0.7, Math.min(0.8, input.cockPitch - (e.clientY - l.y) * 0.004));
+          l.x = e.clientX; l.y = e.clientY;
+          return;
+        }
+        input.yaw -= (e.clientX - l.x) * 0.006;
         if (input.overview) input.ov.pitch = Math.max(0.35, Math.min(1.5, input.ov.pitch + (e.clientY - l.y) * 0.004));
         else input.pitch = Math.max(-0.15, Math.min(1.35, input.pitch + (e.clientY - l.y) * 0.005));
         l.x = e.clientX; l.y = e.clientY;
@@ -242,6 +289,8 @@ export default function ZonaSulWorld() {
   /** Carro voador: nasce do lado da partida, no Arpoador (Pedro: "joga lá perto do Arpoador onde eu testo"). */
   const carRef = useRef<ZsCar | null>(null);
   const dimsRef = useRef<CarDims | null>(null);
+  // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t };
   useEffect(() => {
     let alive = true;
     loadZsTerrain().then((tt) => { if (!alive) return; heroRef.current.y = zsHeightAt(tt, ZS_SPAWN.x, ZS_SPAWN.z); carRef.current = newCar(ZS_SPAWN.x + 3, ZS_SPAWN.z - 2, 0, tt); setT(tt); }).catch((e) => alive && setErr(String(e)));

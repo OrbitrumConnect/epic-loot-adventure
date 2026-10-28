@@ -122,8 +122,9 @@ const lagoaMask = new Uint8Array(W * H);
 const dLagoa = distTo((p) => lagoaMask[p] === 1);
 for (let p = 0; p < W * H; p++) {
   const dm = dLand[p] * CELL; // m (jogo) água adentro
-  if (sea[p]) { hg[p] = -Math.min(12, 0.35 + dm * 0.06); surf[p] = SURF.sea; continue; }
-  if (water[p]) { hg[p] = -Math.min(3, 0.3 + dm * 0.05); surf[p] = SURF.lagoon; continue; }
+  // fundo desce 12 cm/m (era 6): nada a ~7 m da areia (Pedro: "fiquei lento na água" — 40 m adentro ainda dava pé)
+  if (sea[p]) { hg[p] = -Math.min(12, 0.35 + dm * 0.12); surf[p] = SURF.sea; continue; }
+  if (water[p]) { hg[p] = -Math.min(3, 0.3 + dm * 0.1); surf[p] = SURF.lagoon; continue; }
   let h = e[p] / SCALE * RELIEF;
   const dw = dWater[p] * CELL; // m (jogo) até a água
   // praia: terra baixa perto da água desce suave até 0,15 m acima da água (costão alto fica como está)
