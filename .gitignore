@@ -58,3 +58,6 @@ public/models/map/*
 !public/models/map/desert-palm-cluster.glb
 !public/models/map/favela-a.glb
 !public/models/map/favela-b.glb
+
+# Zona Sul: dados brutos baixados (relevo + OSM) — regerar com node tools/zona-sul/fetch-data.mjs
+tools/zona-sul/raw/
