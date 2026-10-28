@@ -8,6 +8,21 @@ import { ZS_SURF, ZS_TERRAIN } from './zona-sul-meta';
 
 export const ZS_WATER_Y = 0;
 
+/** Altura EXTRA da água num ponto (ondas do surf). Sem surf: 0 — o mar é exatamente o de antes. */
+let waterExtra: ((x: number, z: number, yRef: number) => number) | null = null;
+export function setZsWaterExtra(fn: ((x: number, z: number, yRef: number) => number) | null): void { waterExtra = fn; }
+/**
+ * Nível da água em (x, z): ZS_WATER_Y + onda (se houver). Sem `yRef`: o topo (por cima do tubo). Com `yRef` (altura de
+ * quem está ali): dentro da cavidade do tubo vale o chão dele — dá pra entrar no tubo.
+ */
+export function zsWaterYAt(x: number, z: number, yRef = Infinity): number { return ZS_WATER_Y + (waterExtra ? waterExtra(x, z, yRef - ZS_WATER_Y) : 0); }
+
+/** Correnteza da onda (m/s no mundo) em (x, z), escrita em `out`. Sem surf: nenhuma. */
+let waterPush: ((x: number, z: number, out: { x: number; z: number }) => boolean) | null = null;
+export function setZsWaterPush(fn: ((x: number, z: number, out: { x: number; z: number }) => boolean) | null): void { waterPush = fn; }
+/** true se a água empurra em (x, z) (velocidade em `out`). */
+export function zsWaterPushAt(x: number, z: number, out: { x: number; z: number }): boolean { return waterPush ? waterPush(x, z, out) : false; }
+
 export type ZsTerrain = {
   w: number; h: number; cell: number;
   /** canto noroeste (centro da 1ª célula) em coordenadas do jogo */

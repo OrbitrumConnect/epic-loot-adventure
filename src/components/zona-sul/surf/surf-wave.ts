@@ -1,0 +1,222 @@
+/**
+ * ZONA SUL — MOTOR DE SURF, fase B (onda A-frame com 2 tubos). Matemática ÚNICA da onda (CPU); o shader da malha repete
+ * EXATAMENTE estas contas (surf-break.tsx) — os testes conferem a forma aqui.
+ *
+ * Coordenadas locais da zona: q = mar → praia (cresce indo pra areia; q = 0 no PICO), s = ao longo da praia, y = altura.
+ * CONVENÇÃO (testada): o eixo +s aponta pra DIREITA do surfista de frente pra praia (+q). Logo, quebra pra DIREITA = s > 0.
+ *
+ * Uma onda: nasce longe (q = Q_MIN), vem pra praia a C m/s crescendo (empinamento), no PICO (q = BREAK_Q) QUEBRA: a
+ * abertura corre pros dois lados (peeling, V_PEEL com variação por lado); onde abriu, o lip se projeta pra frente e curva
+ * por cima da cavidade (TUBO OCO); CLOSE_LAG metros atrás da frente de abertura o tubo fecha e vira ESPUMA, que segue até
+ * perto da areia e some. Vida ~60 s. A seção do tubo é uma CURVA (face → teto → lip → lado de fora → costas), não um
+ * mapa de altura — a malha DOBRA (cada vértice tem um parâmetro de repouso (s, q0)).
+ */
+export const SURF = {
+  ZONE_S: 90,             // meia-largura da zona (m) ao longo da praia (Pedro 28/10: "quebra meio curta" → 70 → 90)
+  // Pedro 28/10: "durar mais, quebrar mais atrás e vir até mais a beira da areia". No Arpoador a areia fica a 45–100 m
+  // à frente do pico (medido no terreno): a espuma corre até +70 m (onde já é raso/areia, ela sobe um pouco = espraiado;
+  // a areia opaca cobre o resto). Só o trecho onde o TUBO existe (até Q_OPEN) precisa ser água aberta.
+  Q_MIN: -150, Q_MAX: 70, // nasce longe, morre na beira da areia
+  Q_OPEN: 25,             // até aqui a zona tem que ser água aberta (o tubo fecha antes)
+  C: 3.2,                 // m/s rumo à praia → (70 + 6 + 150) / 3,2 ≈ 71 s de vida
+  BREAK_Q: -25,           // quebra 25 m antes do pico (mais atrás)
+  H_START: 0.35, H_MAX: 4.2,
+  V_PEEL: 6.5,            // abertura pros lados (m/s)
+  CLOSE_LAG: 22,          // a quantos metros atrás da frente de abertura o tubo fecha (tubo aberto mais comprido)
+  OPEN_EDGE: 5, CLOSE_EDGE: 7,
+  EDGE_S: 22, EDGE_Q0: 18, EDGE_Q1: 10, // apagar nas bordas da zona (sem degrau com o mar em volta; nas laterais, suave)
+} as const;
+
+/**
+ * Crista em C NA PLANTA (Pedro 28/10: "a onda não vem 100% reta numa bancada, faz uma curva leve nas pontas"): a onda
+ * "abraça" a bancada — as pontas adiantam BEND metros rumo à praia (parábola em s).
+ */
+export const BEND = 8;
+export function crestQ(w: WaveState, s: number): number { const k = s / SURF.ZONE_S; return w.qc + BEND * k * k; }
+
+/** Lado da quebra pro surfista de frente pra praia: +s = direita. */
+export function branchOf(s: number): 'direita' | 'esquerda' { return s >= 0 ? 'direita' : 'esquerda'; }
+
+/** Estado de UMA onda num instante (o shader recebe exatamente isto, por onda). */
+export type WaveState = { qc: number; h: number; peelR: number; peelL: number; active: boolean };
+/** Variação por onda (semente): altura e velocidade de abertura levemente diferentes por lado (nada espelhado perfeito). */
+export type WaveVar = { hR: number; hL: number; vR: number; vL: number };
+
+export function smooth(a: number, b: number, x: number): number { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+
+export function waveStateAt(age: number, v: WaveVar): WaveState {
+  const qc = SURF.Q_MIN + SURF.C * age;
+  if (age < 0 || qc > SURF.Q_MAX + 6) return { qc, h: 0, peelR: 0, peelL: 0, active: false };
+  const grow = smooth(SURF.Q_MIN, SURF.BREAK_Q - 4, qc);
+  const after = qc > SURF.BREAK_Q ? smooth(SURF.BREAK_Q + 4, SURF.Q_MAX, qc) : 0;
+  const h = (SURF.H_START + (SURF.H_MAX - SURF.H_START) * grow) * (1 - 0.75 * after);
+  const tb = age - (SURF.BREAK_Q - SURF.Q_MIN) / SURF.C;
+  const peel = Math.max(0, tb) * SURF.V_PEEL;
+  return { qc, h, peelR: peel * v.vR, peelL: peel * v.vL, active: true };
+}
+
+/** Corpo da onda sem dobra: costas longas (mar), face mais íngreme (praia); `steep` 0..1 empina a face. */
+export function bump(x: number, h: number, steep: number): number {
+  const w = x > 0 ? 3.4 - 1.4 * steep : 7;
+  return h * Math.exp(-(x / w) * (x / w));
+}
+
+/** Meia-largura (m) da transição entre o lado esquerdo e o direito no pico. */
+export const PEAK_BLEND = 6;
+/** Nesta coluna s: quanto o tubo abriu, quanto já fechou, quanto o ombro empinou e a altura do lado. */
+export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; closed: number; steep: number; hSide: number } {
+  // lado direito/esquerdo levemente diferentes (sem espelho), mas a troca no pico é SUAVE (±PEAK_BLEND m): o degrau
+  // seco em s = 0 abria uma fenda vertical bem onde a onda começa a quebrar
+  const k = smooth(-PEAK_BLEND, PEAK_BLEND, s), d = st.peelL + (st.peelR - st.peelL) * k, a = Math.abs(s);
+  return {
+    open: smooth(0, SURF.OPEN_EDGE, d - a),
+    closed: smooth(0, SURF.CLOSE_EDGE, d - SURF.CLOSE_LAG - a),
+    steep: smooth(-18, 0, d - a),
+    hSide: st.h * (v.hL + (v.hR - v.hL) * k),
+  };
+}
+
+/**
+ * Proporção do tubo (o shader lê ESTAS constantes). Referência real (Mead & Black, "vortex ratio"): tubo surfável é
+ * AMENDOADO — mais largo que alto (~1,5–2 : 1); redondo (1 : 1) é o tubo "pesado". E o lip é uma lâmina FINA.
+ * Pedro 28/10: "o tubo está meio gordo… quebra cheia, fez parede… cai gorda fechando embolado" → cavidade mais larga
+ * que alta, lip com 0,14R (era 0,32R, redondo). E "onda mais alta → o lip joga mais pra frente, o tubo ganha espaço
+ * proporcional à jogada": a largura (AX, em alturas) cresce com o raio — AX = AX0 + AXK·R (R 1 m → 1,5; R 2,1 m → 1,72).
+ * O tubo CABE na onda: topo = R·(CY + 1 + LIP) ≈ 2,09R ≈ h. Onda de 4,2 m → R = 2,1 m: vão de ~4 m de altura por
+ * ~7 m de largura. Costas longas (WB) como as do corpo da onda.
+ */
+export const TUBE = { K: 0.5, MIN: 0.5, MAX: 2.4, WF: 2.6, WB: 5.5, AX0: 1.3, AXK: 0.2, LIP: 0.14, CQ: 0.2, CY: 0.95 } as const;
+/** Largura da cavidade em alturas (o lip arremessa mais longe na onda maior). */
+export function tubeAx(R: number): number { return TUBE.AX0 + TUBE.AXK * R; }
+/** Raio do tubo pra esta altura e a faixa da dobra (frente wf, costas wb). */
+export function tubeR(h: number): number { return Math.max(TUBE.MIN, Math.min(TUBE.MAX, h * TUBE.K)); }
+export function barrelBand(h: number): { wf: number; wb: number; r: number } { const r = tubeR(h); return { wf: TUBE.WF * r, wb: TUBE.WB * r, r }; }
+
+/**
+ * Como o tubo está nesta coluna (a partir de open/closed): `curl` 0..1 = quanto o lip já se projetou (face → crista →
+ * lança → cai na água: ENROLA aos poucos, não "vira bolo"); `blend` = quanto a forma é a do tubo (entra rápido ao abrir,
+ * sai no fim do fechamento); `rs` = a cavidade DESABA ao fechar (encolhe) em vez de o lip cair cheio embolando.
+ */
+export function curlOf(open: number, closed: number): { curl: number; blend: number; rs: number } {
+  return { curl: open, blend: smooth(0, 0.25, open) * (1 - smooth(0.5, 1, closed)), rs: 1 - 0.5 * closed };
+}
+
+/**
+ * Seção do TUBO em torno da crista (x = q − qc) pelo parâmetro t ∈ [0, 1] da PRAIA (t = 0) até o MAR (t = 1):
+ * água da frente → fundo do tubo → face → teto → LIP fino caindo na água → volta por fora → costas.
+ * A ponta do lip vai de 150° (crista ainda não lançou) a −60° (caiu na água da frente); fechando, afunda mais.
+ * As pontas batem com o corpo sem dobra (y0, y1): sem rachadura.
+ */
+export function barrelCurve(t: number, R: number, curl: number, close: number, rs: number, y0: number, y1: number): [number, number] {
+  const wf = TUBE.WF * R, wb = TUBE.WB * R, Re = R * rs, T = Re * TUBE.LIP;
+  const cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAx(R);
+  const end = (150 + (-60 - 25 * close - 150) * curl) * Math.PI / 180, start = 260 * Math.PI / 180;
+  const P = (ang: number, r: number): [number, number] => [cq + AX * r * Math.cos(ang), cy + r * Math.sin(ang)];
+  // trechos proporcionais ao comprimento de cada parte (frente ~2,6R, arco ~6,8R, volta por fora ~3,4R, costas ~6,1R):
+  // a malha estica POR IGUAL (~2,3×) — sem trecho esticado demais abrindo espaço entre vértices
+  const A = BARREL_T[0], B = BARREL_T[1], Cc = BARREL_T[2];
+  if (t <= A) { const k = t / A, [bq, by] = P(start, Re); return [wf + (bq - wf) * k, y0 + (by - y0) * smooth(0, 1, k)]; }
+  if (t <= B) return P(start + (end - start) * ((t - A) / (B - A)), Re);
+  if (t <= Cc) { const k = (t - B) / (Cc - B); return P(end + (Math.PI / 2 - end) * k, Re + T * smooth(0, 1, Math.min(1, k * 3))); }
+  const k = (t - Cc) / (1 - Cc), [tq, ty] = P(Math.PI / 2, Re + T);
+  return [tq + (-wb - tq) * k, ty + (y1 - ty) * smooth(0, 1, k)];
+}
+
+/** Onde cada trecho da seção começa/termina no parâmetro t (o shader usa os mesmos). */
+// (com AX ≈ 1,7: frente ~2,7R, arco ~7,9R, volta por fora ~3,9R, costas ~6,1R → total ~20,6R sobre 8,1R de repouso)
+export const BARREL_T = [0.131, 0.513, 0.704] as const;
+/** Espuma da ponta do lip: centro e largura (em raios) no x de repouso (ponta do lip ≈ t 0,513 → x ≈ −1,56R). */
+export const LIP_FOAM_X = 1.56, LIP_FOAM_W = 0.25;
+
+/** Até onde a onda vai de cada lado (m em s): [direita, esquerda]. */
+export type Lim = readonly [number, number];
+export const FULL: Lim = [SURF.ZONE_S, SURF.ZONE_S];
+/**
+ * Apagar nas bordas da zona (sem degrau com o mar em volta). De cada lado a onda vai até `lim` (a zona acha onde tem
+ * pedra — Pedra do Arpoador — e a onda MORRE ali, em vez de passar por dentro dela).
+ */
+export function zoneFade(s: number, q: number, lim: Lim = FULL): number {
+  const L = s >= 0 ? lim[0] : lim[1];
+  return smooth(L, L - SURF.EDGE_S, Math.abs(s)) * smooth(SURF.Q_MIN, SURF.Q_MIN + SURF.EDGE_Q0, q) * smooth(SURF.Q_MAX, SURF.Q_MAX - SURF.EDGE_Q1, q);
+}
+
+/**
+ * Ponto da SUPERFÍCIE (local) pro vértice em repouso (s, q0), com todas as ondas: out = [s, y, q, espuma].
+ * Igual ao shader. As faixas de dobra de ondas diferentes não se encostam (ondas a 10+ m uma da outra).
+ */
+export function surfPoint(s: number, q0: number, waves: WaveState[], vars: WaveVar[], out: number[] = [0, 0, 0, 0], lim: Lim = FULL): number[] {
+  const fade = zoneFade(s, q0, lim);
+  let y = 0, q = q0, foam = 0, fi = -1, fx = 0;
+  for (let i = 0; i < waves.length; i++) {
+    const w = waves[i]!; if (!w.active || w.h <= 0) continue;
+    const b = barrelAt(s, w, vars[i]!), x = q0 - crestQ(w, s), band = barrelBand(b.hSide);
+    y += bump(x, b.hSide * (1 - 0.65 * b.closed), b.steep);
+    if (curlOf(b.open, b.closed).blend > 0.001 && x <= band.wf && x >= -band.wb) { fi = i; fx = x; }
+    // espuma: branco depois de fechar (na crista) + ponta do lip enquanto o tubo está aberto
+    foam = Math.max(foam, b.closed * Math.exp(-(((x + 1) / 5) ** 2)), b.open * (1 - b.closed) * Math.exp(-(((x + LIP_FOAM_X * band.r) / (LIP_FOAM_W * band.r)) ** 2)) * 0.7);
+  }
+  if (fi >= 0) {
+    const w = waves[fi]!, b = barrelAt(s, w, vars[fi]!), band = barrelBand(b.hSide), c = curlOf(b.open, b.closed);
+    const hh = b.hSide * (1 - 0.65 * b.closed);
+    const t = (band.wf - fx) / (band.wf + band.wb);
+    const [cq, cy] = barrelCurve(t, band.r, c.curl, b.closed, c.rs, bump(band.wf, hh, b.steep), bump(-band.wb, hh, b.steep));
+    q = crestQ(w, s) + fx + (cq - fx) * c.blend;
+    y = y + (cy - y) * c.blend;
+  }
+  out[0] = s; out[1] = y * fade; out[2] = q0 + (q - q0) * fade; out[3] = foam * fade;
+  return out;
+}
+
+/**
+ * Altura da água (y local) num ponto (s, q). Por padrão o TOPO (por cima do tubo — o carro passa por cima). Com `yRef`
+ * (altura de quem está ali): se estiver DENTRO da cavidade (abaixo do teto), vale o CHÃO do tubo — dá pra entrar nele.
+ */
+export function surfHeightAt(s: number, q: number, waves: WaveState[], vars: WaveVar[], yRef = Infinity, lim: Lim = FULL): number {
+  let y = 0;
+  for (let i = 0; i < waves.length; i++) {
+    const w = waves[i]!; if (!w.active || w.h <= 0) continue;
+    const b = barrelAt(s, w, vars[i]!), x = q - crestQ(w, s), band = barrelBand(b.hSide), c = curlOf(b.open, b.closed);
+    const hb = b.hSide * (1 - 0.65 * b.closed);
+    let hh = bump(x, hb, b.steep);
+    if (c.blend > 0 && x <= band.wf && x >= -band.wb) {
+      const R = band.r, Re = R * c.rs, cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAx(R), ax = AX * Re, u = (x - cq) / ax;
+      let shape: number;
+      if (c.curl > 0.6 && Math.abs(u) < 1 && yRef < cy + Re * Math.sqrt(1 - u * u) - 0.3) {
+        // DENTRO: chão da cavidade (do lado do mar é a face subindo; embaixo do lip, a água da frente)
+        shape = x < cq - 0.17 * ax ? cy - Re * Math.sqrt(1 - u * u) : 0;
+      } else {
+        // POR FORA: casca do lip (até onde ele já se projetou) e, atrás do topo, as costas descendo
+        const ro = Re * (1 + TUBE.LIP), axo = AX * ro * (0.3 + 0.7 * c.curl), uo = (x - cq) / axo;
+        shape = x >= cq ? (uo < 1 ? cy + ro * Math.sqrt(1 - uo * uo) : 0) : cy + ro + (bump(-band.wb, hb, b.steep) - cy - ro) * smooth(0, 1, (cq - x) / (cq + band.wb));
+      }
+      hh += (shape - hh) * c.blend;
+    }
+    y += hh;
+  }
+  return y * zoneFade(s, q, lim);
+}
+
+/**
+ * Correnteza da onda em (s, q): velocidade (m/s, ao longo de +q = rumo à praia) que a água impõe a quem está boiando.
+ * Pedro 28/10: "a onda ainda não leva nem eu nem o carro, só passou por mim" — o empurrão antigo era mais lento que a
+ * onda (ela passava por baixo). Agora é um BOLSO: quem está na frente da crista de uma onda quebrando/espuma vai NA
+ * velocidade dela; ficou pra trás → empurra mais, adiantou → empurra menos (equilíbrio ~1R à frente da crista). Assim
+ * ela LEVA até perto da areia. Ondulação sem quebrar: só um leve embalo.
+ */
+export function surfPushAt(s: number, q: number, waves: WaveState[], vars: WaveVar[], lim: Lim = FULL): number {
+  let p = 0;
+  for (let i = 0; i < waves.length; i++) {
+    const w = waves[i]!; if (!w.active || w.h <= 0) continue;
+    const b = barrelAt(s, w, vars[i]!), x = q - crestQ(w, s), R = barrelBand(b.hSide).r;
+    const win = smooth(-2.5 * R, -R, x) * smooth(5 * R, 3 * R, x);            // bolso: da crista até ~4R à frente
+    if (win <= 0) continue;
+    // segura: espuma/quebrando (forte — Pedro: "pode me levar mais, ainda tô pesado"), face empinada prestes a quebrar
+    // (médio), ondulação (leve). A espuma pequena perto da areia ainda leva bem (mínimo de 60% pela altura).
+    // (2ª — "ainda tô pesado"): onda grande chegando na quebra já segura forte ao longo da crista inteira, não só onde a
+    // abertura passou (quem estava na crista ficava pra trás no 1–2 s antes de quebrar ali)
+    const grip = (0.6 + 0.4 * Math.sqrt(Math.min(1, b.hSide / SURF.H_MAX))) * (0.15 + 0.85 * Math.max(b.closed, b.open, 0.85 * smooth(-40, -8, w.qc - SURF.BREAK_Q)));
+    const hold = 1 + 0.6 * Math.max(-1, Math.min(1, (R - x) / (2 * R)));      // pra trás empurra mais, adiantado menos
+    p = Math.max(p, SURF.C * hold * grip * win);
+  }
+  return p * zoneFade(s, q, lim);
+}

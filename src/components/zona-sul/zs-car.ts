@@ -11,7 +11,7 @@
  *  - 5 lugares (motorista agora; os outros prontos pro multiplayer).
  * Frente do carro = (sin yaw, cos yaw), igual ao herói.
  */
-import { type ZsTerrain, zsBounds, zsHeightAt, ZS_WATER_Y } from './zs-terrain-data';
+import { type ZsTerrain, zsBounds, zsHeightAt, ZS_WATER_Y, zsWaterPushAt, zsWaterYAt } from './zs-terrain-data';
 
 export const CAR = {
   HOVER: 0.5, HOVER_WATER: 0.25,
@@ -25,7 +25,9 @@ export const CAR = {
   CLIMB_WALL: 0.9,                                   // rampa máx. que dá pra subir rente (≈ 42°)
   ENTER_DIST: 4.5, EXIT_MAX_SPEED: 3, EXIT_MAX_ALT: 2,
   LENGTH: 5.5,                                       // m — Pedro: "uns 20% maior" (4,6 → 5,5); 5 lugares
+  WAVE_GRAB: 5,                                      // quão rápido a onda agarra o carro rente à água (1/s)
 } as const;
+const PUSH = { x: 0, z: 0 };
 
 export type ZsCar = {
   x: number; z: number; y: number; yaw: number;
@@ -47,7 +49,7 @@ export function newCar(x: number, z: number, yaw: number, t: ZsTerrain): ZsCar {
 /** Altura de flutuar em (x, z): chão + 0,5 m, ou água + 0,25 m. */
 export function carSurface(t: ZsTerrain, x: number, z: number): { y: number; water: boolean } {
   const g = zsHeightAt(t, x, z);
-  return g < ZS_WATER_Y ? { y: ZS_WATER_Y + CAR.HOVER_WATER, water: true } : { y: g + CAR.HOVER, water: false };
+  return g < ZS_WATER_Y ? { y: zsWaterYAt(x, z) + CAR.HOVER_WATER, water: true } : { y: g + CAR.HOVER, water: false }; // na água: acima da ONDA
 }
 
 /** Um passo do carro (mexe em `c`). `now` em ms. */
@@ -63,9 +65,14 @@ export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now
     if (c.energy === 0 && now >= c.cooldownUntil) c.cooldownUntil = now + CAR.COOLDOWN_MS; // acabou: recarga
   } else if (now >= c.cooldownUntil) c.energy = Math.min(CAR.FLY_S, c.energy + dt * (CAR.FLY_S / 20)); // no chão enche em 20 s
   // ── velocidade (vetor): pra frente + de lado ────────────────────────────────────────────────────────────────
+  // ONDA EMPURRA (Pedro 28/10: "se o hover car estiver parado a onda empurra ele"): rente à água o carro boia NA água
+  // que anda — atrito e aderência valem em relação à correnteza (parado, vai junto com ela); subindo, sente cada vez
+  // menos; voando alto, nada
+  let wx = 0, wz = 0;
+  if (c.overWater && c.altitude < CAR.AIR_ALT && zsWaterPushAt(c.x, c.z, PUSH)) { const k = 1 - c.altitude / CAR.AIR_ALT; wx = PUSH.x * k; wz = PUSH.z * k; }
   const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw);
-  let vf = c.vx * fx + c.vz * fz;
-  let vl = c.vx * fz - c.vz * fx;
+  let vf = (c.vx - wx) * fx + (c.vz - wz) * fz;
+  let vl = (c.vx - wx) * fz - (c.vz - wz) * fx;
   const max = CAR.MAX * (inp.turbo ? CAR.TURBO : 1) * (c.flying ? CAR.AIR_BOOST : 1);
   if (inp.throttle > 0) vf += CAR.ACCEL * inp.throttle * Math.max(0, 1 - vf / max) * dt;
   else if (inp.throttle < 0) vf = vf > 0.2 ? Math.max(0, vf - CAR.BRAKE * -inp.throttle * dt) : Math.max(-CAR.REVERSE, vf + CAR.ACCEL * 0.6 * inp.throttle * dt);
@@ -78,7 +85,13 @@ export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now
   c.yawRate += (wantRate - c.yawRate) * Math.min(1, CAR.STEER_RESP * dt);
   c.yaw += c.yawRate * dt;
   const nfx = Math.sin(c.yaw), nfz = Math.cos(c.yaw);
-  c.vx = nfx * vf + nfz * vl; c.vz = nfz * vf - nfx * vl;
+  c.vx = nfx * vf + nfz * vl + wx; c.vz = nfz * vf - nfx * vl + wz;
+  // ...e a onda AGARRA: na direção da correnteza o carro chega na velocidade dela em ~0,3 s (o arrasto de frente sozinho
+  // levava ~5 s e a onda passava por baixo); nunca freia quem já vai mais rápido que ela
+  if (wx !== 0 || wz !== 0) {
+    const m = Math.hypot(wx, wz), ux = wx / m, uz = wz / m, along = c.vx * ux + c.vz * uz;
+    if (along < m) { const dv = (m - along) * Math.min(1, CAR.WAVE_GRAB * dt); c.vx += ux * dv; c.vz += uz * dv; }
+  }
   c.steerVis += (inp.steer * Math.min(1, sp / 10) - c.steerVis) * Math.min(1, dt * 5);
   // ── movimento: borda do mapa e paredão (desliza; perde a velocidade CONTRA a parede) ─────────────────────────
   const b = zsBounds(t), E = 8;

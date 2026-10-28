@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { decodeTerrain } from '@/components/zona-sul/zs-terrain-data';
+import { decodeTerrain, setZsWaterPush } from '@/components/zona-sul/zs-terrain-data';
 import { CAR, CAR_SEATS, carStep, carSurface, newCar } from '@/components/zona-sul/zs-car';
 import { ZS_SURF } from '@/components/zona-sul/zona-sul-meta';
 
@@ -32,6 +32,21 @@ describe('carro voador (Zona Sul)', () => {
     expect(carSurface(t, X(t, 5), 0).y).toBeCloseTo(1 + 0.5, 3);
     expect(carSurface(t, X(t, 32), 0)).toEqual({ y: 0.25, water: true });
     expect(CAR.HOVER).toBe(0.5); expect(CAR.HOVER_WATER).toBe(0.25);
+  });
+  it('ONDA EMPURRA o carro parado rente à água até a velocidade da correnteza (não além); voando alto, não', () => {
+    const t = fake();
+    setZsWaterPush((_x, _z, o) => { o.x = -3; o.z = 0; return true; });
+    try {
+      const c = newCar(X(t, 33), 0, 0, t), x0 = c.x;
+      for (let k = 0; k < 180; k++) carStep(t, c, { throttle: 0, steer: 0 }, 1 / 60, 0);
+      expect(x0 - c.x).toBeGreaterThan(3);                       // foi arrastado rumo à praia
+      expect(c.vx).toBeGreaterThan(-3.05); expect(c.vx).toBeLessThan(-2);
+      const f = newCar(X(t, 33), 0, 0, t);
+      for (let k = 0; k < 240; k++) carStep(t, f, { throttle: 0, steer: 0, up: true }, 1 / 60, 0); // subiu (~25 m)
+      const fx = f.x, fvx = f.vx;
+      for (let k = 0; k < 60; k++) carStep(t, f, { throttle: 0, steer: 0 }, 1 / 60, 0);
+      expect(Math.abs(f.x - fx)).toBeLessThanOrEqual(Math.abs(fvx) + 0.01); // lá no alto a onda não puxa mais
+    } finally { setZsWaterPush(null); }
   });
   it('segurar ESPAÇO sobe até o limite; soltou fica; segurar C desce rápido', () => {
     const t = fake();

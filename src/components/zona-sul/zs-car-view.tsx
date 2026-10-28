@@ -9,7 +9,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { CAR, type ZsCar } from './zs-car';
-import { ZS_WATER_Y } from './zs-terrain-data';
+import { zsWaterYAt } from './zs-terrain-data';
 
 export const CAR_URL = '/zona-sul/car.glb';
 /** Se a frente do modelo ficar pra trás, girar 180° aqui (conferido na tela). */
@@ -69,7 +69,8 @@ export function ZsCarView({ carRef, dimsRef }: { carRef: React.MutableRefObject<
       emitAcc.current = 0;
       const r = rings[next.current]!; next.current = (next.current + 1) % RINGS;
       const back = (dimsRef.current?.length ?? CAR.LENGTH) * 0.42;
-      r.mesh.position.set(c.x - Math.sin(c.yaw) * back, ZS_WATER_Y + 0.03, c.z - Math.cos(c.yaw) * back);
+      const rx = c.x - Math.sin(c.yaw) * back, rz = c.z - Math.cos(c.yaw) * back;
+      r.mesh.position.set(rx, zsWaterYAt(rx, rz) + 0.03, rz);
       r.age = 0; r.mesh.visible = true;
     }
     for (const r of rings) {

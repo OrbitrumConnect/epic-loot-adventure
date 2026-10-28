@@ -146,6 +146,28 @@ for (const r of ROCK_LANDMARKS) {
   if (!el) { console.log('marco não achado:', r.name); continue; }
   const mask = new Uint8Array(W * H);
   for (const ring of joinRings(el.type === 'way' ? [el.geometry] : (el.members ?? []).filter((m) => m.role === 'outer' && m.geometry).map((m) => m.geometry))) fillPoly(mask, ring.map((g) => toPx(g.lat, g.lon)));
+  // MAR ADENTRO (Pedro 28/10: "a pedra do Arpoador deve ir mais pra dentro do mar"): alonga a pedra na direção em que
+  // ela já aponta — da terra em volta (fora da pedra) pro centro dela — afinando na ponta; só sobre o mar
+  if (r.extendSea) {
+    let cx = 0, cy = 0, n = 0;
+    for (let p = 0; p < W * H; p++) if (mask[p]) { cx += p % W; cy += Math.floor(p / W); n++; }
+    cx /= n; cy /= n;
+    let lx = 0, ly = 0, ln = 0; const R0 = Math.ceil(60 / CELL);
+    for (let j = Math.max(0, Math.floor(cy) - R0); j < Math.min(H, cy + R0); j++) for (let i = Math.max(0, Math.floor(cx) - R0); i < Math.min(W, cx + R0); i++) {
+      const p = j * W + i; if (!mask[p] && !sea[p] && !water[p] && Math.hypot(i - cx, j - cy) <= R0) { lx += i; ly += j; ln++; }
+    }
+    const dx = cx - lx / ln, dy = cy - ly / ln, dl = Math.hypot(dx, dy) || 1, ux = dx / dl, uy = dy / dl;
+    const steps = Math.round(r.extendSea / CELL), orig = mask.slice();
+    let added = 0;
+    for (let p = 0; p < W * H; p++) if (orig[p]) for (let k = 1; k <= steps; k++) {
+      // afina: na ponta só o miolo da pedra continua (distância ao eixo da pedra encolhe com k)
+      const i = p % W, j = Math.floor(p / W), off = Math.abs((i - cx) * -uy + (j - cy) * ux);
+      if (off > Math.max(1, (1 - k / (steps + 1)) * 4)) continue;
+      const ii = Math.round(i + ux * k), jj = Math.round(j + uy * k); if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue;
+      const q = jj * W + ii; if (!mask[q] && sea[q]) { mask[q] = 1; added++; }
+    }
+    console.log(JSON.stringify({ pedra: r.name, centro_jogo: [+gameX(cx).toFixed(0), +gameZ(cy).toFixed(0)], direcao: [+ux.toFixed(2), +uy.toFixed(2)], px_mar_adentro: added }));
+  }
   const din = distTo((p) => !mask[p]);
   let maxIn = 0; for (let p = 0; p < W * H; p++) if (mask[p]) maxIn = Math.max(maxIn, din[p]);
   for (let p = 0; p < W * H; p++) if (mask[p]) { hg[p] = Math.max(hg[p], 0.15) + r.height * (0.35 + 0.65 * sstep(0, Math.max(1, maxIn), din[p])); surf[p] = SURF.land; }

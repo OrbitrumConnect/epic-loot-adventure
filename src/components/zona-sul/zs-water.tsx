@@ -7,6 +7,9 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { type ZsTerrain, ZS_WATER_Y } from './zs-terrain-data';
+import { surfZone } from './surf/surf-break';
+import { SURF } from './surf/surf-wave';
+import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from './zs-water-look';
 
 /** Raio onde o mar começa a sumir e onde some de vez (m), a partir do centro do mapa. */
 export function zsSeaRadius(t: ZsTerrain): { r0: number; r1: number } {
@@ -33,10 +36,10 @@ function withSeaFade(m: THREE.MeshStandardMaterial, r0: number, r1: number, key:
 }
 
 export function ZsWater({ t }: { t: ZsTerrain }) {
-  const time = useMemo(() => ({ value: 0 }), []);
+  const time = zsWaterTime;
   const { r0, r1 } = useMemo(() => zsSeaRadius(t), [t]);
   const water = useMemo(() => {
-    const m = new THREE.MeshStandardMaterial({ color: '#2b6f8f', transparent: true, opacity: 0.78, roughness: 0.18, metalness: 0.05, depthWrite: false });
+    const m = new THREE.MeshStandardMaterial({ ...ZS_WATER_LOOK, transparent: true, depthWrite: false });
     m.onBeforeCompile = (s) => {
       s.uniforms['uTime'] = time;
       s.vertexShader = s.vertexShader
@@ -44,18 +47,31 @@ export function ZsWater({ t }: { t: ZsTerrain }) {
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWaveXZ = (modelMatrix * vec4(position, 1.0)).xz;');
       s.fragmentShader = s.fragmentShader
         .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vWaveXZ;')
-        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-  vec2 wq = vWaveXZ * 0.18;
-  float w1 = sin(wq.x * 1.7 + uTime * 0.9) + sin(wq.y * 2.3 - uTime * 0.7);
-  float w2 = sin((wq.x + wq.y) * 3.1 + uTime * 1.3);
-  // some com a distância: longe a ondulação "tremia" em listras (vista de cima, 28/10)
-  float wfade = clamp(1.0 - length(vViewPosition) / 180.0, 0.0, 1.0);
-  normal = normalize(normal + wfade * vec3(cos(wq.x * 1.7 + uTime * 0.9) * 0.06 + w2 * 0.03, 0.0, cos(wq.y * 2.3 - uTime * 0.7) * 0.06 - w1 * 0.01));`);
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>' + ZS_RIPPLE_GLSL);
     };
-    return withSeaFade(m, r0, r1, 'zs-water-v3');
+    // dentro da zona de surf quem desenha a água é a malha da onda (sem duas águas uma em cima da outra)
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, r) => {
+      prev.call(m, sh, r);
+      sh.uniforms['uSurf'] = surfU.uSurf; sh.uniforms['uSurfQ'] = surfU.uSurfQ;
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform vec4 uSurf;\nuniform vec4 uSurfQ;')
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+  if (uSurfQ.w > 0.5) { vec2 d = vWaveXZ - uSurf.xy; float qq = dot(d, uSurf.zw), ss = dot(d, vec2(-uSurf.w, uSurf.z));
+    if (abs(ss) < uSurfQ.x && qq > uSurfQ.y && qq < uSurfQ.z) discard; }`);
+    };
+    return withSeaFade(m, r0, r1, 'zs-water-v4');
   }, [time, r0, r1]);
   const floor = useMemo(() => withSeaFade(new THREE.MeshStandardMaterial({ color: '#2d5a66', roughness: 1, depthWrite: true }), r0, r1, 'zs-seafloor-v1'), [r0, r1]);
-  useFrame((_, dt) => { time.value += dt; });
+  const surfU = useMemo(() => ({ uSurf: { value: new THREE.Vector4() }, uSurfQ: { value: new THREE.Vector4() } }), []);
+  useFrame((_, dt) => {
+    time.value += dt;
+    const f = surfZone.frame;
+    // 5 cm pra dentro da borda da malha da onda: com 0,5 m as duas águas transparentes se sobrepunham (linha escura);
+    // com 0 sobrava fresta de pixel (linha pontilhada)
+    if (surfZone.on && f) { surfU.uSurf.value.set(f.px, f.pz, f.qx, f.qz); surfU.uSurfQ.value.set(SURF.ZONE_S - 0.05, SURF.Q_MIN + 0.05, SURF.Q_MAX - 0.05, 1); }
+    else surfU.uSurfQ.value.w = 0;
+  });
   return (
     <>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, ZS_WATER_Y, 0]} material={water} renderOrder={2}>

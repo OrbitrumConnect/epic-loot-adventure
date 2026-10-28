@@ -16,7 +16,8 @@ export const ISLAND_BEACH = 10;
 /** Ajustes de MARCO (altura do jogo): o Cristo um pouco mais alto (Pedro: "subir mais um pouco sem perder o formato");
  *  a Pedra do Arpoador (16 m reais → 3 m no jogo) vira uma pedra que se vê (~7 m). */
 export const PEAK_BOOST = { Corcovado: 1.12 };
-export const ROCK_LANDMARKS = [{ name: 'Pedra do Arpoador', height: 7 }];
+// Pedro 28/10: "a pedra do Arpoador um pouco mais alta e mais pra dentro do mar" → 7 → 10 m e +30 m mar adentro
+export const ROCK_LANDMARKS = [{ name: 'Pedra do Arpoador', height: 10, extendSea: 30 }];
 /** Relevo: tiles terrarium z14 (~9,6 m por pixel aqui; a origem SRTM é ~30 m). */
 export const DEM_Z = 14;
 /** Escala horizontal do jogo: 1 m no jogo = SCALE m reais. Pedro 28/10: 1º "15 min pra atravessar" → 1:3; depois de
