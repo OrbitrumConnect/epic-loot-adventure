@@ -14,6 +14,7 @@
 import { useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+import { MAP_CAVES } from './map-caves';
 
 // Patch único: geometrias COM boundsTree usam BVH; as sem caem no raycast padrão.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -134,6 +135,43 @@ export function groundUnder(x: number, z: number, feetY: number, fallback: numbe
 }
 /** No AR (pulo dentro do túnel o pé sobe ~1,6 m): tolerância maior pra não "subir pro topo" no meio do pulo. */
 export const CAVE_DROP_AIR = 2.5;
+
+/** Dentro da caixa de alguma caverna medida (`map-caves.ts`)? Conta barata: só lá a parede de caverna é checada. */
+export function nearCave(x: number, z: number): boolean {
+  for (const [x0, z0, x1, z1] of MAP_CAVES) if (x >= x0 && x <= x1 && z >= z0 && z <= z1) return true;
+  return false;
+}
+
+const CAVE_HEADROOM = 1.7; // cabeça do herói: teto mais baixo que isso = parede
+const CAVE_ROOF_NEAR = 8;  // rocha até 8 m acima = está DEBAIXO de teto (caverna)
+const CAVE_WALL_SLOPE = 0.7; // debaixo de teto, chão subindo mais que ~35° = PAREDE curva ("cilindro")
+/**
+ * PAREDE de caverna (28/10, Pedro: "entrei na cave, mas ao bater na parede vou parar lá em cima no topo"). Na parede
+ * do túnel não há piso embaixo → `groundUnder` dava o TOPO (regra do morro) e o herói "subia" a montanha; e a parede
+ * é CURVA (as grutas do norte/leste terminam num fundo em cilindro): passinho a passinho ele subia a curva até ~4,5 m.
+ * Perto das cavernas é PAREDE (desliza no eixo livre, igual muro; senão fica) quando o passo:
+ *  - subiria mais que STEP_UP de uma vez (face vertical/entrada na rocha); ou, DEBAIXO de teto,
+ *  - deixa o teto abaixo da cabeça, ou sobe mais que ~35° (a curva da parede).
+ * Fora de teto os morros seguem escaláveis como antes. Vale pra andar, rolar e empurrão. Longe das cavernas: nada muda.
+ */
+export function caveStep(ox: number, oz: number, nx: number, nz: number, feetY: number, maxDrop = CAVE_DROP): [number, number] {
+  if (!nearCave(nx, nz) && !nearCave(ox, oz)) return [nx, nz];
+  const hereRoofed = ceilingAbove(ox, oz, feetY + 1) < feetY + CAVE_ROOF_NEAR;
+  const blocked = (x: number, z: number): boolean => {
+    const g = groundUnder(x, z, feetY, -Infinity, maxDrop);
+    if (g === -Infinity) return false;
+    const rise = g - feetY;
+    if (rise > STEP_UP) return true;
+    const roof = ceilingAbove(x, z, g + 0.3);
+    if (!hereRoofed && roof >= g + CAVE_ROOF_NEAR) return false;
+    if (roof < g + CAVE_HEADROOM) return true;
+    return rise > 0.05 && rise > CAVE_WALL_SLOPE * Math.hypot(x - ox, z - oz);
+  };
+  if (!blocked(nx, nz)) return [nx, nz];
+  if (!blocked(nx, oz)) return [nx, oz];
+  if (!blocked(ox, nz)) return [ox, nz];
+  return [ox, oz];
+}
 
 /** Corte do MAPA acima da cabeça quando o herói está no túnel com a câmera de cima (iso). 1e9 = sem corte. */
 export const mapCaveClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e9);

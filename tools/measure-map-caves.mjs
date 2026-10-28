@@ -2,6 +2,8 @@
 // Por célula de 0,5 m: raio vertical com TODOS os acertos; onde há chão com ESPAÇO LIVRE ≥ ALTURA_LIVRE m até a
 // próxima superfície de cima (teto de rocha), é piso de caverna. Saída: totais, grupos (onde ficam) e imagem.
 // Uso: node tools/measure-map-caves.mjs [saida.png]
+// Grava também src/components/world/map-caves.ts (caixa de cada caverna + folga): onde o jogo trata parede de caverna.
+import fs from 'node:fs';
 import sharp from 'sharp';
 import * as THREE from 'three';
 import { loadMapGround } from './map-glb.mjs';
@@ -29,17 +31,25 @@ const seen = new Uint8Array(W * H), groups = [];
 for (let p = 0; p < W * H; p++) {
   if (!cave[p] || seen[p]) continue;
   const st = [p]; seen[p] = 1; let n = 0, sx = 0, sz = 0, fmin = Infinity, fmax = -Infinity, cmin = Infinity;
+  let bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
   while (st.length) {
     const q = st.pop(), i = q % W, j = (q - i) / W; n++; sx += x0 + (i + .5) * CELL; sz += z0 + (j + .5) * CELL;
+    bx0 = Math.min(bx0, x0 + i * CELL); bx1 = Math.max(bx1, x0 + (i + 1) * CELL);
+    bz0 = Math.min(bz0, z0 + j * CELL); bz1 = Math.max(bz1, z0 + (j + 1) * CELL);
     fmin = Math.min(fmin, floorY[q]); fmax = Math.max(fmax, floorY[q]); cmin = Math.min(cmin, ceilY[q] - floorY[q]);
     for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) {
       if (a < 0 || b < 0 || a >= W || b >= H) continue; const r = b * W + a;
       if (cave[r] && !seen[r]) { seen[r] = 1; st.push(r); }
     }
   }
-  if (n * CELL * CELL >= 4) groups.push({ m2: Math.round(n * CELL * CELL), x: +(sx / n).toFixed(1), z: +(sz / n).toFixed(1), piso: [+fmin.toFixed(1), +fmax.toFixed(1)], alturaLivreMin: +cmin.toFixed(1) });
+  if (n * CELL * CELL >= 4) groups.push({ m2: Math.round(n * CELL * CELL), x: +(sx / n).toFixed(1), z: +(sz / n).toFixed(1), piso: [+fmin.toFixed(1), +fmax.toFixed(1)], alturaLivreMin: +cmin.toFixed(1), box: [bx0, bz0, bx1, bz1] });
 }
 groups.sort((a, b) => b.m2 - a.m2);
+const PAD = 6; // folga em volta do piso: pega a boca e as paredes
+fs.writeFileSync('src/components/world/map-caves.ts', `// GERADO por tools/measure-map-caves.mjs — não editar à mão; rode a ferramenta de novo se o mapa GLB mudar.
+// Caixa [x0, z0, x1, z1] de cada caverna/túnel da malha do mapa (+${PAD} m de folga): onde parede de caverna é PAREDE.
+export const MAP_CAVES: [number, number, number, number][] = ${JSON.stringify(groups.map((g) => [g.box[0] - PAD, g.box[1] - PAD, g.box[2] + PAD, g.box[3] + PAD].map((v) => +v.toFixed(1))))};
+`);
 console.log(JSON.stringify({ pisoDeCaverna_m2: Math.round(cells * CELL * CELL), grupos: groups.slice(0, 15) }, null, 1));
 if (outPng) {
   const img = Buffer.alloc(W * H * 3);

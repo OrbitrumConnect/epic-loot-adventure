@@ -38,7 +38,7 @@ import { GlbHeroMixamo } from './world/glb-hero-mixamo';
 import { HeroNameplate } from './world/hero-nameplate';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
-import { registerWall, blockedByWall, glbSurfaceY, groundUnder, ceilingAbove, CAVE_DROP_AIR, mapCaveClip, useTerrainVersion } from './world/terrain-collision';
+import { registerWall, blockedByWall, glbSurfaceY, groundUnder, ceilingAbove, caveStep, CAVE_DROP_AIR, mapCaveClip, useTerrainVersion } from './world/terrain-collision';
 import { walkStep } from './world/map-walk';
 import { MapFloor } from './world/map-floor';
 import { broadcastPose } from '@/net/multiplayer';
@@ -707,6 +707,8 @@ function Character({
 
     // Limite do mapa = ÁREA ANDÁVEL medida (28/10; antes quadrado de ±MAP_HALF): desliza rente à borda da ilha.
     [nx, nz] = walkStep(body.current.position.x, body.current.position.z, nx, nz);
+    // Parede de CAVERNA (28/10): bateu na parede do túnel = para/desliza (antes "subia" pro topo da montanha).
+    [nx, nz] = caveStep(body.current.position.x, body.current.position.z, nx, nz, body.current.position.y, isGrounded.current ? undefined : CAVE_DROP_AIR);
     body.current.position.x = nx;
     body.current.position.z = nz;
 

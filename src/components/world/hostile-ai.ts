@@ -19,7 +19,7 @@ import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
-import { blockedByWall, glbSurfaceY, groundUnder } from './terrain-collision';
+import { blockedByWall, caveStep, glbSurfaceY, groundUnder } from './terrain-collision';
 import { walkStep } from './map-walk';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
@@ -744,6 +744,8 @@ export function useHostileAI(opts: HostileOptions) {
     if (activeGrab()?.creatureId === creatureId) { targetX = wx; targetZ = wz; moving = false; }
     // Mesmo limite do herói (área andável, 28/10): persegue lá fora, mas nunca passa da beirada da ilha.
     [targetX, targetZ] = walkStep(g.position.x, g.position.z, targetX, targetZ);
+    // Parede de caverna: igual ao herói — não "sobe" a montanha ao encostar na parede do túnel.
+    [targetX, targetZ] = caveStep(g.position.x, g.position.z, targetX, targetZ, g.position.y);
     g.position.x = targetX;
     g.position.z = targetZ;
     // Pisa no assoalho da casa quando dentro (não afunda); senão, no terreno — e
