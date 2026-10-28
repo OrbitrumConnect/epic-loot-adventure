@@ -19,7 +19,7 @@ describe('bicho com GLB: um corpo só + caixa de clique', () => {
       expect(h.cz - h.d / 2, id).toBeCloseTo(-bd / 2);                                    // traseira
       expect(h.cy - h.h / 2, id).toBeCloseTo(0);                                          // nasce no chão
     }
-  }, 20_000);
+  });
   it('com GLB monta só a caixa invisível; corpo procedural só sem GLB', () => {
     const src = fs.readFileSync('src/components/world/beast.tsx', 'utf8').replace(/\r\n/g, '\n');
     expect(src).not.toMatch(/visible=\{!glb\}/);

@@ -115,13 +115,13 @@ describe('morte: regras do jogo', () => {
     expect(takeCorpseSlot(4.17)).toBe(4.17);
     expect(takeCorpseSlot(0)).toBe(0); // bicho sem animação de morte: igual antes
     while (corpseCount() > 0) releaseCorpseSlot();
-  }, 20_000);
+  });
   it('rapidinho (Pedro 26/10): encosta no chão em 0,6 s (costas) / 1,15 s (Mutant) e some 0,3 s depois', async () => {
     const { deathGroundTime } = await import('@/components/world/glb-hero-mixamo');
     expect(deathGroundTime('back')).toBeCloseTo(0.6, 2);
     expect(deathGroundTime('mutant')).toBeCloseTo(1.15, 2);
     expect(deathGroundTime('mutant') + 0.45).toBeLessThan(1.65); // antes: 4,58 + 2 = 6,6 s caído
-  }, 20_000);
+  });
   it('clip de morte sem a posição do quadril; retarget não "levanta" no último quadro', () => {
     const t = new THREE.VectorKeyframeTrack('mixamorigHips.position', [0, 1], [0, 1, 0, 0, 0.2, 0]);
     const r = new THREE.QuaternionKeyframeTrack('mixamorigHips.quaternion', [0, 1], [0, 0, 0, 1, 0, 0, 0, 1]);

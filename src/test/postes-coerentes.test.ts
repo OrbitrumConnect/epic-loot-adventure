@@ -50,5 +50,5 @@ describe('poste no editor', () => {
     const ew = fs.readFileSync('src/components/editor/editor-world.tsx', 'utf8');
     expect(ew).toMatch(/\{isPost && <EditorPostLight /);
     expect(ew).toMatch(/l\.visible = lightAllowed\(lightId, nf > 0\.04 && d2 < POST_LIGHT_D2, d2\);/);
-  }, 20_000);
+  });
 });

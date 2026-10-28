@@ -596,3 +596,97 @@ Correlaciona com a duracao da execucao, nao com o patch: importar `game-world`
 custa caro e os limites (20 s e 30 s) sao apertados. Rodando os dois arquivos
 sozinhos, passam. Fica anotado para o Pedro decidir: um `testTimeout` maior
 nesses dois casos resolveria.
+
+## 6h. Testes intermitentes: um limite de tempo so, no lugar de 11 (27/10)
+
+### Nao eram dois testes, eram onze pontos com a mesma causa
+
+Na secao anterior ficaram anotados dois testes que estouravam o tempo de vez em
+quando (`game-world-memo` e `enfeites-no-seco`). Com o limite dos dois levantado,
+**um terceiro caiu na mesma execucao**: `lista-bichos-estavel`, que rodou
+**20.452,98 ms contra um limite de 20.000**. Timeout medido, nao falha de
+asserticao: o teste anda 20,45 s e e cortado em 20.
+
+Procurando o padrao, ele estava em 11 lugares, em 9 arquivos — todo teste que faz
+`await import()` de um modulo pesado tinha seu proprio limite escrito a mao:
+
+| arquivo | linha | limite |
+|---|---|---|
+| `bicho-corpo-unico` | 22 | 20 s |
+| `bichos-tamanho` | 41 | 20 s |
+| `enfeites-no-seco` | 22 | 20 s |
+| `esquiva` | 66 | 20 s |
+| `fauna-26-10` | 77 | 20 s |
+| `lista-bichos-estavel` | 23, 46 | 20 s |
+| `morte-cai-no-chao` | 118, 124 | 20 s |
+| `pirata-atira` | 20 | 20 s |
+| `postes-coerentes` | 53 | 20 s |
+| `sons-torre-morte` | 29 | 20 s |
+| `game-world-memo` | 10 | 30 s |
+
+O Pedro ja tinha diagnosticado a causa em dois deles, em comentario:
+"importa o raider inteiro: na suite cheia (paralela) passava dos 5 s padrao".
+
+### Por que o numero escrito a mao nao para de pé
+
+O custo nao e do teste, e da **compilacao do modulo importado**. Medido:
+
+| teste | rodando com poucos arquivos | na suite cheia | limite que tinha |
+|---|---|---|---|
+| `game-world-memo` | 14.534 ms | — | 30.000 |
+| `enfeites-no-seco` | 14.552 ms | — | 20.000 |
+| `lista-bichos-estavel` | 7.368 ms | **20.453 ms** | 20.000 |
+| `pirata-atira` | 6.914 ms | — | 20.000 |
+| `bicho-corpo-unico` | 5.090 ms | — | 20.000 |
+
+O unico caso com as duas leituras mostra a disputa de CPU multiplicando o tempo
+por **2,8x**. Com esse fator, `pirata-atira` (6,9 s sozinho) chega perto dos
+mesmos 20 s — estava a um passo de entrar na fila dos intermitentes. Cada numero
+escrito a mao e uma aposta de que a maquina nao vai estar ocupada naquele
+momento, e a aposta perde as vezes.
+
+### O conserto
+
+Um limite so, em `vitest.config.ts`, com a medicao escrita do lado:
+
+```ts
+testTimeout: 120_000,
+```
+
+e os 11 limites espalhados **removidos**, porque limite por teste vence o global
+e um `20_000` continuaria estourando. Onde o Pedro tinha deixado comentario
+explicando a causa, o comentario ficou, apontando para o lugar novo.
+
+120 s da folga de 5,9x sobre o pior caso medido (20,45 s). Teste rapido continua
+acabando em milissegundos: o limite so e alcancado por quem travou de verdade.
+
+### Provado
+
+Como a falha era intermitente, uma execucao verde nao prova nada. Duas:
+
+| execucao | resultado | duracao |
+|---|---|---|
+| `npx tsc --noEmit` | sem erro | — |
+| suite, rodada 1 | **937/937 verde** | — |
+| suite, rodada 2 | **937/937 verde** (132 arquivos, saida 0) | **231,57 s** |
+
+Antes: 936/937, com `lista-bichos-estavel` caindo por tempo.
+
+A duracao da rodada 2 e o detalhe que importa: **231,57 s contra os ~102 s das
+execucoes que falhavam**. Ela rodou sob disputa de CPU bem pior do que a que
+quebrava o teste antes — ou seja, a prova veio justo na condicao mais apertada,
+nao numa maquina folgada.
+
+### Nao tem o que conferir na tela
+
+Esta mudanca mexe em arquivo de teste e na configuracao do vitest. Nenhuma linha
+de codigo do jogo foi tocada, entao nao ha efeito possivel no que aparece na
+tela — abrir o jogo aqui nao provaria nada. O print que vale e o do item 7, logo
+acima.
+
+### Fica para o Pedro
+
+`casa-dois-andares.test.ts:121` tem um `60_000` num `beforeAll`. Hook nao usa
+`testTimeout` (usa `hookTimeout`), entao aquele numero continua valendo e nao foi
+mexido — ele nao estava falhando. Se um dia falhar, o lugar e `hookTimeout` na
+mesma configuracao.
