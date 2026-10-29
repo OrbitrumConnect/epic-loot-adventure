@@ -69,7 +69,11 @@ export function bump(x: number, h: number, steep: number): number {
 /** Meia-largura (m) da transição entre o lado esquerdo e o direito no pico. */
 export const PEAK_BLEND = 6;
 /** Nesta coluna s: quanto o tubo abriu, quanto já fechou, quanto o ombro empinou e a altura do lado. */
-export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; closed: number; steep: number; hSide: number } {
+/** MENOS CILÍNDRICO (Pedro 29/10: "ainda meio cilíndrico demais"): (1) a BOCA é um funil — atrás da frente de abertura o
+ *  lip vai lançando e o tubo crescendo ao longo de CURL_RAMP m (era tudo igual depois de 5 m); (2) a crista não é uma
+ *  régua — a altura ondula de leve ao longo da onda (±RIPPLE_A, fase por onda). */
+export const CURL_RAMP = 16, RIPPLE_A = 0.06, RIPPLE_K = 0.085;
+export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; closed: number; steep: number; hSide: number; ramp: number } {
   // lado direito/esquerdo levemente diferentes (sem espelho), mas a troca no pico é SUAVE (±PEAK_BLEND m): o degrau
   // seco em s = 0 abria uma fenda vertical bem onde a onda começa a quebrar
   const k = smooth(-PEAK_BLEND, PEAK_BLEND, s), d = st.peelL + (st.peelR - st.peelL) * k, a = Math.abs(s);
@@ -77,7 +81,8 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; 
     open: smooth(0, SURF.OPEN_EDGE, d - a),
     closed: smooth(0, SURF.CLOSE_EDGE, d - SURF.CLOSE_LAG - a),
     steep: smooth(-18, 0, d - a),
-    hSide: st.h * (v.hL + (v.hR - v.hL) * k),
+    hSide: st.h * (v.hL + (v.hR - v.hL) * k) * (1 + RIPPLE_A * Math.sin(RIPPLE_K * s + 7 * v.vR)),
+    ramp: smooth(0, CURL_RAMP, d - a),
   };
 }
 
@@ -103,8 +108,9 @@ export function barrelBand(h: number): { wf: number; wb: number; r: number } { c
  * lança → cai na água: ENROLA aos poucos, não "vira bolo"); `blend` = quanto a forma é a do tubo (entra rápido ao abrir,
  * sai no fim do fechamento); `rs` = a cavidade DESABA ao fechar (encolhe) em vez de o lip cair cheio embolando.
  */
-export function curlOf(open: number, closed: number): { curl: number; blend: number; rs: number } {
-  return { curl: open, blend: smooth(0, 0.25, open) * (1 - smooth(0.5, 1, closed)), rs: 1 - 0.5 * closed };
+export function curlOf(open: number, closed: number, ramp = open): { curl: number; blend: number; rs: number } {
+  // curl = quanto o lip já lançou (funil: cresce ao longo de CURL_RAMP); a cavidade nasce com 72% e cresce até 100%
+  return { curl: ramp, blend: smooth(0, 1, open) * (1 - smooth(0.5, 1, closed)), rs: (1 - 0.5 * closed) * (0.72 + 0.28 * ramp) };
 }
 
 /**
@@ -159,12 +165,12 @@ export function surfPoint(s: number, q0: number, waves: WaveState[], vars: WaveV
     const w = waves[i]!; if (!w.active || w.h <= 0) continue;
     const b = barrelAt(s, w, vars[i]!), x = q0 - crestQ(w, s), band = barrelBand(b.hSide);
     y += bump(x, b.hSide * (1 - 0.65 * b.closed), b.steep);
-    if (curlOf(b.open, b.closed).blend > 0.001 && x <= band.wf && x >= -band.wb) { fi = i; fx = x; }
+    if (curlOf(b.open, b.closed, b.ramp).blend > 0.001 && x <= band.wf && x >= -band.wb) { fi = i; fx = x; }
     // espuma: branco depois de fechar (na crista) + ponta do lip enquanto o tubo está aberto
     foam = Math.max(foam, b.closed * Math.exp(-(((x + 1) / 5) ** 2)), b.open * (1 - b.closed) * Math.exp(-(((x + LIP_FOAM_X * band.r) / (LIP_FOAM_W * band.r)) ** 2)) * 0.7);
   }
   if (fi >= 0) {
-    const w = waves[fi]!, b = barrelAt(s, w, vars[fi]!), band = barrelBand(b.hSide), c = curlOf(b.open, b.closed);
+    const w = waves[fi]!, b = barrelAt(s, w, vars[fi]!), band = barrelBand(b.hSide), c = curlOf(b.open, b.closed, b.ramp);
     const hh = b.hSide * (1 - 0.65 * b.closed);
     const t = (band.wf - fx) / (band.wf + band.wb);
     const [cq, cy] = barrelCurve(t, band.r, c.curl, b.closed, c.rs, bump(band.wf, hh, b.steep), bump(-band.wb, hh, b.steep));
@@ -195,7 +201,7 @@ export function surfHeightAt(s: number, q: number, waves: WaveState[], vars: Wav
   let y = 0;
   for (let i = 0; i < waves.length; i++) {
     const w = waves[i]!; if (!w.active || w.h <= 0) continue;
-    const b = barrelAt(s, w, vars[i]!), x = q - crestQ(w, s), band = barrelBand(b.hSide), c = curlOf(b.open, b.closed);
+    const b = barrelAt(s, w, vars[i]!), x = q - crestQ(w, s), band = barrelBand(b.hSide), c = curlOf(b.open, b.closed, b.ramp);
     const hb = b.hSide * (1 - 0.65 * b.closed);
     let hh = bump(x, hb, b.steep);
     if (c.blend > 0 && x <= band.wf && x >= -band.wb) {
@@ -232,7 +238,7 @@ export function surfPushAt(s: number, q: number, waves: WaveState[], vars: WaveV
     if (win <= 0) continue;
     // DENTRO do tubo aberto: a água anda JUNTO com a onda, sem empurrão a mais — você fica no lugar em relação ao tubo e
     // nada livre pra entrar/sair (pelo lado ou atravessando a cortina). O empurrão forte é da parede de fora e da espuma.
-    if (tubeInside(curlOf(b.open, b.closed), x, R, yRef)) { p = Math.max(p, SURF.C * win); continue; }
+    if (tubeInside(curlOf(b.open, b.closed, b.ramp), x, R, yRef)) { p = Math.max(p, SURF.C * win); continue; }
     // segura: espuma/quebrando (forte — Pedro: "pode me levar mais, ainda tô pesado"), face empinada prestes a quebrar
     // (médio), ondulação (leve). A espuma pequena perto da areia ainda leva bem (mínimo de 60% pela altura).
     // (2ª — "ainda tô pesado"): onda grande chegando na quebra já segura forte ao longo da crista inteira, não só onde a
@@ -257,7 +263,7 @@ export function surfInTubeAt(s: number, q: number, waves: WaveState[], vars: Wav
   for (let i = 0; i < waves.length; i++) {
     const w = waves[i]!; if (!w.active || w.h <= 0) continue;
     const b = barrelAt(s, w, vars[i]!);
-    if (tubeInside(curlOf(b.open, b.closed), q - crestQ(w, s), barrelBand(b.hSide).r, yRef)) return true;
+    if (tubeInside(curlOf(b.open, b.closed, b.ramp), q - crestQ(w, s), barrelBand(b.hSide).r, yRef)) return true;
   }
   return false;
 }

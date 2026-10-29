@@ -11,7 +11,7 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { type ZsTerrain, setZsWaterChurn, setZsWaterExtra, setZsWaterPush, setZsWaterTube } from '../zs-terrain-data';
 import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from '../zs-water-look';
-import { BARREL_T, BEND, BEND_S, FULL, type Lim, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, TUBE } from './surf-wave';
+import { BARREL_T, BEND, BEND_S, CURL_RAMP, FULL, type Lim, RIPPLE_A, RIPPLE_K, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, TUBE } from './surf-wave';
 import { SLOTS, SurfScheduler } from './surf-scheduler';
 import { findSurfFrame, type SurfFrame, toSurfLocal } from './surf-frame';
 
@@ -59,7 +59,8 @@ export function buildSurfGeometry(mobile: boolean, lim: Lim = FULL): THREE.Buffe
 
 const GLSL = /* glsl */ `
 uniform vec4 uWa[${SLOTS}];   // qc, h, peelR, peelL
-uniform vec4 uWb[${SLOTS}];   // hR, hL, ativa, 0
+uniform vec4 uWb[${SLOTS}];   // hR, hL, ativa, vR (fase da ondulação da crista)
+float gLipX, gLipK; // ponta do lip da onda que dobra (x em raios, peso) — a espuma do lip é feita por PIXEL
 uniform vec2 uPeak, uQ, uS;
 attribute vec2 aRest;
 varying float vFoam;
@@ -84,7 +85,7 @@ vec2 barrelCurve(float t, float R, float curl, float cl, float rs, float y0, flo
   return vec2(tp.x + (-wb - tp.x) * k, tp.y + (y1 - tp.y) * sm(0.0, 1.0, k));
 }
 // igual a curlOf (surf-wave.ts): x = curl, y = blend, z = rs
-vec3 curlOf(float op, float cl) { return vec3(op, sm(0.0, 0.25, op) * (1.0 - sm(0.5, 1.0, cl)), 1.0 - 0.5 * cl); }
+vec3 curlOf(float op, float cl, float rp) { return vec3(rp, sm(0.0, 1.0, op) * (1.0 - sm(0.5, 1.0, cl)), (1.0 - 0.5 * cl) * (0.72 + 0.28 * rp)); }
 uniform vec2 uLim; // até onde a onda vai: x = direita, y = esquerda (morre na pedra)
 float zoneFade(float s, float q) {
   float L = s >= 0.0 ? uLim.x : uLim.y;
@@ -92,28 +93,30 @@ float zoneFade(float s, float q) {
 }
 vec4 surfPoint(vec2 sq) {
   float s = sq.x, q0 = sq.y, fade = zoneFade(s, q0);
-  float y = 0.0, foam = 0.0, fx = 0.0, fOpen = 0.0, fClosed = 0.0, fSteep = 0.0, fH = 0.0, fQc = 0.0;
+  float y = 0.0, foam = 0.0, fx = 0.0, fOpen = 0.0, fClosed = 0.0, fSteep = 0.0, fH = 0.0, fQc = 0.0, fRamp = 0.0;
+  gLipX = 0.0; gLipK = 0.0;
   bool fold = false;
   for (int i = 0; i < ${SLOTS}; i++) {
     vec4 a = uWa[i]; vec4 b = uWb[i];
     if (b.z < 0.5 || a.y <= 0.0) continue;
     float pk = sm(-PB, PB, s), d = mix(a.w, a.z, pk), aa = abs(s);
-    float op = sm(0.0, ${SURF.OPEN_EDGE.toFixed(1)}, d - aa), cl = sm(0.0, ${SURF.CLOSE_EDGE.toFixed(1)}, d - ${SURF.CLOSE_LAG.toFixed(1)} - aa), stp = sm(-18.0, 0.0, d - aa);
-    float hs = a.y * mix(b.y, b.x, pk), x = q0 - a.x - bendQ(s), R = tubeR(hs), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R;
+    float op = sm(0.0, ${SURF.OPEN_EDGE.toFixed(1)}, d - aa), cl = sm(0.0, ${SURF.CLOSE_EDGE.toFixed(1)}, d - ${SURF.CLOSE_LAG.toFixed(1)} - aa), stp = sm(-18.0, 0.0, d - aa), rp = sm(0.0, ${CURL_RAMP.toFixed(1)}, d - aa);
+    float hs = a.y * mix(b.y, b.x, pk) * (1.0 + ${RIPPLE_A.toFixed(3)} * sin(${RIPPLE_K.toFixed(4)} * s + 7.0 * b.w)), x = q0 - a.x - bendQ(s), R = tubeR(hs), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R;
     y += bumpW(x, hs * (1.0 - 0.65 * cl), stp);
-    if (curlOf(op, cl).y > 0.001 && x <= wf && x >= -wb) { fold = true; fx = x; fOpen = op; fClosed = cl; fSteep = stp; fH = hs; fQc = a.x + bendQ(s); }
-    float r1 = (x + 1.0) / 5.0, r2 = (x + ${LIP_FOAM_X} * R) / (${LIP_FOAM_W} * R);
-    foam = max(foam, max(cl * exp(-r1 * r1), op * (1.0 - cl) * exp(-r2 * r2) * 0.7));
+    if (curlOf(op, cl, rp).y > 0.001 && x <= wf && x >= -wb) { fold = true; fx = x; fOpen = op; fClosed = cl; fSteep = stp; fH = hs; fQc = a.x + bendQ(s); fRamp = rp; gLipX = x / R; gLipK = op * (1.0 - cl); }
+    float r1 = (x + 1.0) / 5.0;
+    foam = max(foam, cl * exp(-r1 * r1)); // espuma de depois de fechar (larga, suave); a do lip vai pro pixel
   }
   float q = q0;
   if (fold) {
     float R = tubeR(fH), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R, hh = fH * (1.0 - 0.65 * fClosed);
-    vec3 cu = curlOf(fOpen, fClosed);
+    vec3 cu = curlOf(fOpen, fClosed, fRamp);
     float t = (wf - fx) / (wf + wb);
     vec2 c = barrelCurve(t, R, cu.x, fClosed, cu.z, bumpW(wf, hh, fSteep), bumpW(-wb, hh, fSteep));
     q = fQc + fx + (c.x - fx) * cu.y;
     y = y + (c.y - y) * cu.y;
   }
+  gLipK *= fade;
   return vec4(s, y * fade, q0 + (q - q0) * fade, foam * fade);
 }
 vec3 toWorld(vec4 p) { return vec3(uPeak.x + uS.x * p.x + uQ.x * p.z, p.y, uPeak.y + uS.y * p.x + uQ.y * p.z); }
@@ -126,25 +129,27 @@ function surfMaterial(uniforms: Record<string, THREE.IUniform>): THREE.MeshStand
     Object.assign(s.uniforms, uniforms);
     s.uniforms['uTime'] = zsWaterTime;
     s.vertexShader = s.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vWaveXZ;\n' + GLSL)
+      .replace('#include <common>', '#include <common>\nvarying vec2 vWaveXZ;\nvarying float vLipX;\nvarying float vLipK;\n' + GLSL)
       .replace('#include <beginnormal_vertex>', `vec4 sp0 = surfPoint(aRest);
+  vLipX = gLipX; vLipK = gLipK; // antes das outras 2 chamadas (que sobrescrevem gLip*)
   vec3 wp0 = toWorld(sp0), wps = toWorld(surfPoint(aRest + vec2(0.6, 0.0))), wpq = toWorld(surfPoint(aRest + vec2(0.0, 0.3)));
   vec3 objectNormal = normalize(cross(wps - wp0, wpq - wp0));
   vFoam = sp0.w; vCrest = clamp(sp0.y / 3.2, 0.0, 1.0); vWaveXZ = wp0.xz;`)
       .replace('#include <begin_vertex>', 'vec3 transformed = wp0;');
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vWaveXZ;\nvarying float vFoam;\nvarying float vCrest;')
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vWaveXZ;\nvarying float vFoam;\nvarying float vCrest;\nvarying float vLipX;\nvarying float vLipK;')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>' + ZS_RIPPLE_GLSL)
       .replace('#include <color_fragment>', `#include <color_fragment>
   // água fina no alto da onda: verde-água discreto (luz atravessando) — cores LINEARES, por isso valores baixos
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.30, 0.30), vCrest * 0.5);
   diffuseColor.a = mix(diffuseColor.a, 0.9, vCrest);
-  // espuma branca só na ponta do lip e depois de fechar
-  float fo = clamp(vFoam * 1.25, 0.0, 0.92);
+  // espuma branca só na ponta do lip (calculada POR PIXEL — borda lisa, sem "degraus" da malha) e depois de fechar
+  float lr = (vLipX + ${LIP_FOAM_X.toFixed(3)}) / ${LIP_FOAM_W.toFixed(3)};
+  float fo = clamp(max(vFoam, vLipK * exp(-lr * lr) * 0.7) * 1.25, 0.0, 0.92);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.96, 0.97), fo);
   diffuseColor.a = mix(diffuseColor.a, 1.0, fo);`);
   };
-  m.customProgramCacheKey = () => 'zs-surf-v2';
+  m.customProgramCacheKey = () => 'zs-surf-v3';
   return m;
 }
 
@@ -187,7 +192,7 @@ export function SurfBreak({ t, shoreX, shoreZ }: { t: ZsTerrain; shoreX: number;
     for (let i = 0; i < SLOTS; i++) {
       const s = scheduler.states[i]!, v = scheduler.vars[i]!;
       uniforms.uWa.value[i]!.set(s.qc, s.h, s.peelR, s.peelL);
-      uniforms.uWb.value[i]!.set(v.hR, v.hL, s.active ? 1 : 0, 0);
+      uniforms.uWb.value[i]!.set(v.hR, v.hL, s.active ? 1 : 0, v.vR);
     }
   });
   if (!frame) return null;
