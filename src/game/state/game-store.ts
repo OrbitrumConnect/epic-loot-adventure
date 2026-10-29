@@ -71,7 +71,7 @@ import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scal
 import { eliteLoot, eliteXp } from '../systems/difficultySystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
 import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, tornadoPositions, tornadoCount, tornadoDamage, TORNADO_HIT_RADIUS, TORNADO_PUSH, TORNADO_BASE_WAVES, TORNADO_EXTEND_WAVES, dist2, type Vec2 } from '../systems/powerSystem';
-import { SAVE_KEY } from '../systems/persistenceSystem';
+import { restoreWave, SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
   pushEvents, shotEvent, xpEvent,
@@ -2366,6 +2366,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const camps = createCamps(Date.now()); // CAMP_PLACEMENTS já é o do mapa ativo
     const wild = map === 'classic' ? [...createInitialCreatures(), ...createWildCreatures()] : zs?.creatures ?? [];
     set(s => ({
+      // VOLTA AO VALE: os bichos da horda não existem mais (o mundo foi recriado) → a onda segue a MESMA regra de quando
+      // o jogo reabre: combate vira a paz da mesma onda; paz que venceu enquanto você estava fora = 1 min de folga.
+      ...(map === 'classic' ? { wave: restoreWave(s.wave, !!s.playerBase, Date.now()) } : {}),
       creatures: [...wild, ...camps.creatures],
       camps: camps.camps,
       harvestNodes: map === 'classic' ? createHarvestNodes() : [],
@@ -2379,9 +2382,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   grantSurfboard: () => {
     const r = grantSurfboard(get().player.inventory);
     if (r.granted) set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: isUnlocked(SURFBOARD_ID, s.player.level)
-      ? '🏄 Você ganhou uma Prancha de surf — selecione na hotbar e entre no mar.'
+      ? '🏄 Você ganhou uma Prancha de surf' + (r.grewBag ? ' (a mochila ganhou um espaço pra ela)' : '') + ' — selecione na hotbar e entre no mar.'
       : `🏄 Você ganhou uma Prancha de surf — ela libera no nível ${unlockLevel(SURFBOARD_ID)}.` } }));
-    else if (r.full) set(s => ({ ui: { ...s.ui, message: 'Mochila cheia: libere espaço para receber a Prancha de surf.' } }));
   },
 
   drinkPotion: () => {

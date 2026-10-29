@@ -328,7 +328,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Prancha de surf',
     category: 'tool',
     rarity: 'uncommon',
-    weight: 3.5,
+    weight: 0, // veículo: não pesa (como a caixa de munição) — nunca trava a coleta (29/10)
     maxStack: 1,
     dropOnDeath: false,
     usable: false,

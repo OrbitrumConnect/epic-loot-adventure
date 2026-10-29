@@ -393,6 +393,18 @@ function Index() {
   if (!AUTH_ENABLED || authUser) worldUnlocked.current = true;
   const worldOn = ready && worldUnlocked.current;
   useCardWatchers(worldOn);
+  // PRANCHA no loot de TODO personagem (Pedro 29/10: "ela já tem que entrar dentro do loot"): ao entrar no jogo, em
+  // qualquer mapa — e de novo quando o save da CONTA chegar do servidor (ele troca o inventário). Só nos 1ºs 45 s:
+  // depois, descartar a prancha é escolha do jogador.
+  useEffect(() => {
+    if (!worldOn) return;
+    const until = Date.now() + 45_000;
+    useGameStore.getState().grantSurfboard();
+    return useGameStore.subscribe((s, prev) => {
+      if (Date.now() > until || s.player.inventory === prev.player.inventory) return;
+      if (!s.player.inventory.slots.some(sl => sl.itemId === 'surfboard')) s.grantSurfboard();
+    });
+  }, [worldOn]);
 
   // Novo personagem (zerar): apaga o save LOCAL e, se logado, o da CONTA (senão recarrega
   // o antigo), depois recarrega a página pro estado inicial.
@@ -591,8 +603,9 @@ function Index() {
             </Button>
           ))}
         </nav>
-        <div className="sidebar-label">MAPAS</div>
-        <nav className="sidebar-nav" aria-label="Escolher mapa">
+        {/* MAPAS: escondido desde 29/10 (Pedro: "a Zona Sul é o mapa verdadeiro") — só aparece na porta de teste ?mapa=vale */}
+        {worldMap === 'classic' && <div className="sidebar-label">MAPAS</div>}
+        {worldMap === 'classic' && <nav className="sidebar-nav" aria-label="Escolher mapa">
           {([['classic', 'Vale dos Ancestrais', Mountain], ['zona-sul', 'Zona Sul · Rio', Waves]] as const).map(([id, name, Icon]) => (
             <Button key={id} variant="ghost" className="nav-item" title={id === 'zona-sul' ? 'Zona Sul do Rio — mar, onda, prancha e carro voador (mesmo personagem)' : 'O vale de sempre — acampamentos, base e hordas'}
               data-active={worldMap === id && !inCity} aria-pressed={worldMap === id}
@@ -600,7 +613,7 @@ function Index() {
               <Icon strokeWidth={1.5} /><span>{name}</span>
             </Button>
           ))}
-        </nav>
+        </nav>}
         <div className="sidebar-label">COMUNIDADE</div>
         <nav className="sidebar-nav">
           <MultiplayerPanel placement="sidebar" />
@@ -719,7 +732,7 @@ function Index() {
                   ? <>Renascendo em <strong style={{ fontSize: 28, color: '#fbbf24' }}>{deathCountdown}s</strong></>
                   : 'Renascendo...'}
               </p>
-              <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>Você reaparecerá na sua base</p>
+              <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>{zs ? 'Você reaparecerá na praia do Arpoador (zona segura)' : 'Você reaparecerá na sua base'}</p>
             </div>
           )}
           {ui.baseFell && !inCity && (

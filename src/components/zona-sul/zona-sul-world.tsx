@@ -7,6 +7,7 @@
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
+import type { Sky as SkyImpl } from 'three-stdlib';
 import { memo, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
@@ -50,6 +51,8 @@ import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-pro
 import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
 import { zsQuery, zsWorldProfile } from './zs-world-profile';
 import { zsAttack, zsCtx } from './zs-context';
+import { ZsDayNight, ZsLamps, zsSun } from './zs-daynight';
+import { nightFactor, setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
 import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 
 /** Quanto da correnteza da onda leva o herói nadando (o carro tem a sua em CAR.WAVE_PUSH). */
@@ -151,7 +154,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   useEffect(() => { atkTick.current = useGameStore.getState().attackTick; specTick.current = useGameStore.getState().specialTick; }, []);
 
   // só em desenvolvimento: testes de tela leem/forçam o surf (o jogo publicado não expõe nada)
-  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action }; }, []);
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action, scene, camera }; }, [scene, camera]);
   const fog = useMemo(() => new THREE.Fog(FOG, 200, 2200), []); // névoa LEVE (custo ~zero: é uma conta no shader)
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
@@ -278,7 +281,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6; if (cyy < gcam) cyy = gcam;
       camera.position.set(cx, cyy, cz); camera.lookAt(tx, ty, tz);
       }
-      if (sun.current) { sun.current.position.set(p.x + SUN.x * 120, p.y + SUN.y * 120, p.z + SUN.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); }
+      if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
       hudAcc.current += dt;
       if (hudAcc.current > 0.25) {
         hudAcc.current = 0;
@@ -479,7 +482,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const shake = impactShake(); // soco de impacto quando um golpe acerta
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.3; camera.position.y += (Math.random() - 0.5) * shake * 0.3; camera.position.z += (Math.random() - 0.5) * shake * 0.3; }
     // sol + sombra seguem o herói
-    if (sun.current) { sun.current.position.set(p.x + SUN.x * 120, p.y + SUN.y * 120, p.z + SUN.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); }
+    if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
     hudAcc.current += dt;
     if (hudAcc.current > 0.25) {
       hudAcc.current = 0;
@@ -696,6 +699,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const playerRef = useRef<THREE.Group | null>(null);
   const movement = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
   const c = useMemo(() => palette(), []);
+  const hemiRef = useRef<THREE.HemisphereLight>(null), ambRef = useRef<THREE.AmbientLight>(null), skyRef = useRef<SkyImpl>(null);
   useEffect(() => { zsAttack.fn = onAttack ?? null; return () => { zsAttack.fn = null; }; }, [onAttack]);
   const [err, setErr] = useState('');
   const touch = useTouchScreen();
@@ -708,7 +712,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const boardRef = useRef<BoardPose>(newBoardPose());
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -752,9 +756,12 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       {t && (
         <Canvas shadows dpr={[1, 1.25]} camera={{ fov: 55, near: 0.3, far: 7000 }} gl={{ antialias: true }}>
           <color attach="background" args={[FOG]} />
-          <Sky sunPosition={sunPos} turbidity={5} rayleigh={1.4} mieCoefficient={0.006} distance={4500} />
-          <hemisphereLight args={['#eef4f8', '#6b7a4a', 1.5]} />
-          <ambientLight intensity={0.35} />
+          <Sky ref={skyRef} sunPosition={sunPos} turbidity={5} rayleigh={1.4} mieCoefficient={0.006} distance={4500} />
+          <hemisphereLight ref={hemiRef} args={['#eef4f8', '#6b7a4a', 1.5]} />
+          <ambientLight ref={ambRef} intensity={0.35} />
+          {/* DIA/NOITE (relógio do jogo) + lua + postes nas pistas */}
+          <ZsDayNight hemi={hemiRef} amb={ambRef} sky={skyRef} />
+          <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
           <ZsTerrainMesh t={t} heroRef={focusRef} />
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}

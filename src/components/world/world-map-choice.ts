@@ -1,7 +1,7 @@
 /**
- * QUAL MAPA o mundo 3D monta (29/10): 'classic' = Vale dos Ancestrais (o de sempre, padrão) · 'zona-sul' = Rio.
- * Mesmo personagem e save nos dois; a escolha fica NESTE aparelho. Store mínima (useSyncExternalStore), sem re-render
- * de ninguém além de quem lê.
+ * QUAL MAPA o mundo 3D monta. 29/10 (Pedro): "a Zona Sul vai ser o mapa VERDADEIRO — esconde o Vale e entra direto na
+ * Zona Sul". O Vale saiu do menu; o código dele fica só até as BASES virem pra Zona Sul (elas moram lá, salvas e
+ * paradas). Porta de teste interna (não aparece pro jogador): endereço com ?mapa=vale.
  */
 import { useSyncExternalStore } from 'react';
 import { resetWorldProfile, WORLD } from '@/game/data/world-profile';
@@ -12,12 +12,12 @@ const KEY = 'tribos.map';
 const listeners = new Set<() => void>();
 
 function read(): WorldMapId {
-  try { return localStorage.getItem(KEY) === 'zona-sul' ? 'zona-sul' : 'classic'; } catch { return 'classic'; }
+  try { return /[?&]mapa=vale/.test(window.location.search) ? 'classic' : 'zona-sul'; } catch { return 'zona-sul'; }
 }
 let current: WorldMapId | null = null;
 
 export function getWorldMap(): WorldMapId {
-  if (current === null) current = typeof window === 'undefined' ? 'classic' : read();
+  if (current === null) current = typeof window === 'undefined' ? 'zona-sul' : read();
   return current;
 }
 
@@ -34,6 +34,6 @@ export function useWorldMap(): WorldMapId {
   return useSyncExternalStore(
     (cb) => { listeners.add(cb); return () => { listeners.delete(cb); }; },
     getWorldMap,
-    () => 'classic',
+    () => 'zona-sul',
   );
 }

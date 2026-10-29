@@ -147,6 +147,26 @@ describe('prancha = item OFICIAL do jogo (29/10: a Zona Sul entrou na casa do jo
     expect(again.granted).toBe(false);
     expect(again.inventory).toBe(g.inventory);
   });
+  it('MOCHILA CHEIA (amigo do Pedro, onda 100+): a prancha entra mesmo assim — 1 espaço a mais só pra ela; não pesa', () => {
+    const full = createInventory(Array.from({ length: 74 }, () => ({ itemId: 'wood', quantity: 500 })));
+    const g = grantSurfboard({ ...full, maxWeight: 1 }); // cheia de espaço E de peso
+    expect(g.granted).toBe(true);
+    expect(g.grewBag).toBe(true);
+    expect(g.inventory.slots.length).toBe(full.slots.length + 1);
+    expect(g.inventory.maxSlots).toBe(g.inventory.slots.length);
+    expect(g.inventory.slots.at(-1)).toEqual({ itemId: SURFBOARD_ID, quantity: 1 });
+    expect(g.inventory.slots.slice(0, full.slots.length)).toEqual(full.slots); // nada saiu do lugar
+    expect(ITEMS[SURFBOARD_ID]!.weight).toBe(0);
+    // o save aceita a mochila com o espaço extra
+    const st = useGameStore.getState();
+    const back = parseLocalSave(JSON.stringify(createLocalSave({ ...st, player: { ...st.player, inventory: g.inventory } } as never)));
+    expect(back?.player.inventory.slots.some((sl) => sl.itemId === SURFBOARD_ID)).toBe(true);
+  });
+  it('a casa do jogo entrega a prancha ao ENTRAR NO JOGO (qualquer mapa) e de novo quando o save da conta chega', () => {
+    const idx = src('src/routes/index.tsx');
+    expect(idx).toContain('useGameStore.getState().grantSurfboard();');
+    expect(idx).toContain("if (!s.player.inventory.slots.some(sl => sl.itemId === 'surfboard')) s.grantSurfboard();");
+  });
   it('a Zona Sul lê a prancha DA HOTBAR do jogo (nada de inventário paralelo); o loot só-leitura saiu', () => {
     const w = src('src/components/zona-sul/zona-sul-world.tsx');
     expect(w).toContain('selectedItemId(useGameStore.getState()) === SURFBOARD_ID');
