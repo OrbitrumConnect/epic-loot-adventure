@@ -22,6 +22,34 @@ import { selectedItemId } from '@/components/world/held-weapon';
 import { SURFBOARD_ID } from '@/game/systems/zonaSulKit';
 import { isUnlocked, lockedMessage } from '@/game/systems/unlockSystem';
 import { useTouchScreen } from '@/hooks/use-mobile';
+// COMBATE (29/10, Pedro: "usar armas, tiro pro elite… ligar tudo 100%"): as MESMAS peças e regras do Vale
+import { HeldItem } from '@/components/world/held-weapon';
+import { palette, impactShake, type Palette } from '@/components/world/world-kit';
+import { aimFire, aimSensitivityScale, aimZoomStep, gunKick, setAimCamera, setAiming, useAim } from '@/components/world/aim';
+import { recentShotPoint } from '@/game/systems/shotFacing';
+import { weaponRangeFor } from '@/game/data/weapons';
+import { activeDodge, dodgeSpeed, startDodge, takeDodgeRequest } from '@/game/systems/dodgeSystem';
+import { takeKnockback } from '@/game/systems/knockbackSystem';
+import { isGrabbed } from '@/game/systems/grabSystem';
+import { effectiveAttributes } from '@/game/systems/attributesSystem';
+import { audioManager } from '@/game/audio/audio-manager';
+import { heroFacing } from '@/components/world/free-aim';
+import { takeVirtualLook, touchLayout, virtualMove } from '@/components/world/virtual-input';
+import { noteManualLook } from '@/components/world/pilot-aim';
+import { HeroNameplate } from '@/components/world/hero-nameplate';
+import { Camps, Enemies } from '@/components/world/world-entities';
+import { CombatFeedback } from '@/components/world/combat-feedback';
+import { Projectiles } from '@/components/world/projectiles';
+import { HeroPowers } from '@/components/world/hero-powers';
+import { BurstRuntime } from '@/components/world/burst-runtime';
+import { AutoPilot } from '@/components/world/auto-pilot';
+import { BackgroundSim } from '@/components/world/background-sim';
+import { AssetBoundary } from '@/components/world/asset-boundary';
+import { SAFE_ZONE } from '@/game/data/camps';
+import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
+import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
+import { zsQuery, zsWorldProfile } from './zs-world-profile';
+import { zsAttack, zsCtx } from './zs-context';
 import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 
 /** Quanto da correnteza da onda leva o herói nadando (o carro tem a sua em CAR.WAVE_PUSH). */
@@ -61,6 +89,10 @@ const LEAN_BODY = 0.8;
 const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving', enterAt: 0 };
 const ENTER_MS = 1100;
 
+/** Golpe/tiro: quanto dura a animação de ataque (s) — o herói PARA pra atacar (igual ao Vale). Giro do especial R. */
+const ATTACK_S = 0.45, SPIN_S = 0.45;
+/** Mira (botão direito): câmera no ombro a 1,7 m (celular 3,2), ombro 0,75 m pro lado, campo de visão 52°/zoom (celular 58°). */
+const AIM_DIST = 1.7, AIM_DIST_TOUCH = 3.2, AIM_SHOULDER = 0.75, AIM_FOV = 52, AIM_FOV_TOUCH = 58;
 const SUN = new THREE.Vector3(-0.55, 0.62, -0.45).normalize();
 const FOG = '#bcd0dc';
 
@@ -77,8 +109,26 @@ const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch:
 /** Altura do OLHO do motorista sentado acima do pé (m) e campo de visão de dentro (mais aberto). */
 const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
-function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose> }) {
+/** Pra onde virar ao atacar: o ponto do último tiro; senão o bicho vivo mais perto no alcance da arma (igual ao Vale). */
+function attackYaw(px: number, pz: number, fallback: number): number {
+  const shot = recentShotPoint();
+  if (shot && (shot.x - px) ** 2 + (shot.z - pz) ** 2 > 0.04) return Math.atan2(shot.x - px, shot.z - pz);
+  const st = useGameStore.getState();
+  const range = weaponRangeFor(selectedItemId(st), st.player.level) + 1;
+  let best: { x: number; z: number } | null = null, bd = range * range;
+  for (const c of st.creatures) {
+    if (c.behavior === 'dead') continue;
+    const d = (c.position.x - px) ** 2 + (c.position.z - pz) ** 2;
+    if (d < bd) { bd = d; best = c.position; }
+  }
+  return best ? Math.atan2(best.x - px, best.z - pz) : fallback;
+}
+
+function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRef, movement, c }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose>; playerRef: React.MutableRefObject<THREE.Group | null>; movement: React.MutableRefObject<THREE.Vector3>; c: Palette }) {
   const group = useRef<THREE.Group>(null);
+  /** combate: tique do último ataque visto, tempo de animação restante, especial, giro do R, coice, mira (0..1) */
+  const atkTick = useRef(-1), atkT = useRef(0), specTick = useRef(-1), spinT = useRef(0);
+  const recoil = useRef({ x: 0, y: 0 }), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0);
   /** surf na prancha (null = sem prancha na água) · vaca de quem nada sem prancha (s restantes) · giro da vaca */
   const ride = useRef<RideState | null>(null);
   const tumble = useRef(0), spin = useRef(0);
@@ -96,6 +146,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
   const hudAcc = useRef(0);
   const sun = useRef<THREE.DirectionalLight>(null);
   const { camera, scene } = useThree();
+  useEffect(() => { playerRef.current = group.current; return () => { playerRef.current = null; }; }, [playerRef]);
+  useEffect(() => { setAimCamera(camera); return () => { setAimCamera(null); setAiming(false); }; }, [camera]);
+  useEffect(() => { atkTick.current = useGameStore.getState().attackTick; specTick.current = useGameStore.getState().specialTick; }, []);
 
   // só em desenvolvimento: testes de tela leem/forçam o surf (o jogo publicado não expõe nada)
   useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action }; }, []);
@@ -128,6 +181,39 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
     }
     if (wasOverview.current) { wasOverview.current = false; fog.near = 200; fog.far = 2200; }
     const car = carRef.current, now = performance.now();
+    const gs = useGameStore.getState();
+    // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
+    if (gs.player.dead && gs.player.respawnAt > 0 && Date.now() >= gs.player.respawnAt) {
+      useGameStore.setState(s => ({ player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: SAFE_ZONE.x, z: SAFE_ZONE.z } }, ui: { ...s.ui, message: 'Você reviveu na zona segura.', deathBy: null } }));
+      drive.mode = 'foot'; ride.current = null; swimVel.current.set(0, 0); vy.current = 0; grounded.current = true; dive.current = 0;
+      p.set(SAFE_ZONE.x, zsHeightAt(t, SAFE_ZONE.x, SAFE_ZONE.z), SAFE_ZONE.z); movement.current.set(p.x, 0, p.z);
+      if (group.current) group.current.visible = true;
+    }
+    const dead = useGameStore.getState().player.dead;
+    if (dead && drive.mode !== 'foot') { drive.mode = 'foot'; if (group.current) group.current.visible = true; } // morreu no carro: cai do lado
+    // GOLPE/TIRO (attackTick do jogo): ~0,45 s de ataque, vira pro alvo; arma de fogo dá coice na câmera
+    if (gs.attackTick !== atkTick.current) {
+      atkTick.current = gs.attackTick;
+      if (drive.mode === 'foot' && !ride.current && !dead) { atkT.current = ATTACK_S; if (!useAim.getState().active) facing.current = attackYaw(p.x, p.z, facing.current); }
+      const kick = gunKick(selectedItemId(gs));
+      if (kick > 0) { recoil.current.x += kick; recoil.current.y += (Math.random() - 0.5) * kick * 0.5; }
+    }
+    atkT.current = Math.max(0, atkT.current - dt);
+    // ESPECIAIS (Q salto / R giro) — o dano sai no jogo; aqui é o corpo
+    if (gs.specialTick !== specTick.current) {
+      specTick.current = gs.specialTick;
+      if (gs.specialKind === 'jump' && grounded.current && !dead && drive.mode === 'foot') { vy.current = 7; grounded.current = false; }
+      else if (gs.specialKind === 'spin') spinT.current = SPIN_S;
+    }
+    spinT.current = Math.max(0, spinT.current - dt);
+    const rk = Math.exp(-dt * 14); recoil.current.x *= rk; recoil.current.y *= rk;
+    // CELULAR: o arrasto no botão de ATACAR (joystick de câmera do jogo) gira a câmera
+    const vl = takeVirtualLook();
+    if (vl.dx || vl.dy) { const sens = 0.005 * aimSensitivityScale(); input.yaw -= vl.dx * sens; input.pitch = Math.max(-0.5, Math.min(1.35, input.pitch + vl.dy * sens)); input.lookAt = now; noteManualLook(); }
+    // posição no JOGO (inimigos, tiro, piloto, coleta) — ~7×/s, como no Vale
+    posAcc.current += dt;
+    if (posAcc.current > 0.15) { posAcc.current = 0; const cur = gs.player.position; if (cur.x !== p.x || cur.z !== p.z) useGameStore.setState(s => ({ player: { ...s.player, position: { x: p.x, z: p.z } } })); }
+    zsCtx.driving = drive.mode === 'driving';
     // E: entra (perto do carro) / sai (parado e rente ao chão)
     if (input.eTap) {
       input.eTap = false;
@@ -143,15 +229,15 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
         const side = (dimsRef.current?.width ?? 2.2) / 2 + 1.1; // desce pelo lado do motorista (direita: o volante do modelo é desse lado)
         p.x = car.x - Math.cos(car.yaw) * side; p.z = car.z + Math.sin(car.yaw) * side; p.y = zsHeightAt(t, p.x, p.z);
         facing.current = car.yaw; grounded.current = true; vy.current = 0;
-      }
+      } else if (drive.mode === 'foot' && !dead) useGameStore.getState().collectNearest(); // longe do carro: E = pegar/colher (igual ao Vale)
     }
     if (drive.mode === 'entering' && now - drive.enterAt >= ENTER_MS) { drive.mode = 'driving'; input.dist = Math.max(input.dist, 12); if (car) camTarget.current.set(car.x, car.y + 1.8, car.z); }
     // carro ESTACIONADO também tem física (sem comando): boia na onda e é levado por ela (Pedro: "se o hover car estiver
     // parado a onda empurra ele") — antes ele só se mexia com alguém dirigindo
     if (drive.mode !== 'driving' && car) carStep(t, car, { throttle: 0, steer: 0 }, dt, now);
     if (drive.mode === 'driving' && car) {
-      const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z;
-      const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x;
+      const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
+      const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
       carStep(t, car, { throttle: Math.max(-1, Math.min(1, throttle)), steer: Math.max(-1, Math.min(1, steer)), up: k.has('Space'), down: k.has('KeyC'), turbo: k.has('ShiftLeft') || k.has('ShiftRight') }, dt, now);
       p.set(car.x, car.y, car.z);
       focusRef.current.copy(p);
@@ -205,16 +291,19 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
     if (drive.mode === 'entering') { action.current = 'open_door'; speed.current = 0; }
     focusRef.current.copy(p);
     // direção relativa à câmera
-    let ix = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x;
-    let iz = (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) + input.stick.z;
+    let ix = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
+    let iz = (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) + input.stick.z + virtualMove.z;
+    if (dead) { ix = 0; iz = 0; }
     const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
     const sy = Math.sin(input.yaw), cy = Math.cos(input.yaw);
     const wx = ix * cy + iz * sy, wz = -ix * sy + iz * cy; // gira o input pelo yaw da câmera
     const water0 = zsWaterState(zsHeightAt(t, p.x, p.z));
-    const shift = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92;
+    const shift = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92 || Math.hypot(virtualMove.x, virtualMove.z) > 0.92;
+    const moveBonus = 1 + effectiveAttributes(gs.player).moveSpeed / 100; // atributo Velocidade (igual ao Vale)
+    let autoRun = false, dodging = false;
     const run = shift && !water0.swimming;
     const wantMove = Math.hypot(wx, wz) > 0.05 && drive.mode === 'foot';
-    let v = (run ? ZS_RUN : ZS_WALK) * (water0.wading ? 0.75 : 1);
+    let v = (run ? ZS_RUN : ZS_WALK) * (water0.wading ? 0.75 : 1) * moveBonus;
     let moving = wantMove;
     let st;
     const onBoard = selectedItemId(useGameStore.getState()) === SURFBOARD_ID && water0.swimming && drive.mode === 'foot';
@@ -280,14 +369,34 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       } else st = zsStep(t, p.x, p.z, (sv.x + HERO_PUSH.x * pw) * dt, (sv.y + HERO_PUSH.z * pw) * dt);
       if (moving) facing.current = Math.atan2(sv.x, sv.y);
     } else {
-      st = wantMove ? zsStep(t, p.x, p.z, wx * v * dt, wz * v * dt) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
-      swimVel.current.set(wantMove ? wx * v : 0, wantMove ? wz * v : 0); // entra na água com o embalo de quem vinha
-      if (wantMove) facing.current = Math.atan2(wx, wz);
+      // EM TERRA (o mesmo do Vale): piloto automático/joystick, ataque PARA, esquiva rola, empurrão, agarrão do jacaré
+      let mx = wantMove ? wx : 0, mz = wantMove ? wz : 0, mv = v;
+      if (wantMove) movement.current.set(p.x, 0, p.z);
+      else if (!dead && drive.mode === 'foot') {
+        const ax = movement.current.x - p.x, az = movement.current.z - p.z, al = Math.hypot(ax, az);
+        if (al > 0.15) { mx = ax / al; mz = az / al; mv = ZS_RUN * moveBonus; autoRun = true; } // o piloto corre
+      }
+      if (atkT.current > 0 || isGrabbed() || dead || drive.mode !== 'foot') { mx = 0; mz = 0; }
+      const dreq = takeDodgeRequest();
+      if (dreq && !isGrabbed() && !dead && drive.mode === 'foot') {
+        const d = dreq.dir ?? (mx || mz ? { x: mx, z: mz } : { x: Math.sin(facing.current), z: Math.cos(facing.current) });
+        if (startDodge(d.x, d.z)) atkT.current = 0;
+      }
+      const dg = activeDodge(); dodging = !!dg;
+      let dx = mx * mv * dt, dz = mz * mv * dt;
+      if (dg) { const sp = dodgeSpeed(dg.t); dx = dg.dirX * sp * dt; dz = dg.dirZ * sp * dt; }
+      const shove = takeKnockback('player', dt); if (shove) { dx += shove.x; dz += shove.z; }
+      st = dx || dz ? zsStep(t, p.x, p.z, dx, dz) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
+      moving = Math.hypot(dx, dz) > 0.05 * dt; v = Math.hypot(dx, dz) / dt;
+      swimVel.current.set(dx / dt, dz / dt); // entra na água com o embalo de quem vinha
+      if (dg) facing.current = Math.atan2(dg.dirX, dg.dirZ);
+      else if (moving && (mx || mz)) facing.current = Math.atan2(mx, mz);
     }
+    zsCtx.inWater = st.swimming;
     shiftWas.current = shift;
     p.x = st.x; p.z = st.z;
     // vertical: pulo (só fora d'água funda) + chão / nado
-    if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot') { vy.current = 6.2; grounded.current = false; }
+    if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot' && !dead) { vy.current = 6.2; grounded.current = false; }
     dive.current = st.swimming && drive.mode === 'foot' ? zsDiveStep(dive.current, k.has('KeyC'), ZS_WATER_Y - st.ground, dt) : 0;
     // altura de quem nada vai junto: dentro do tubo o nível é o chão da cavidade (dá pra entrar), por fora é o topo
     const rm = ride.current?.mode, rolling = rm === 'wipe' || tumble.current > 0;
@@ -301,8 +410,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
     if (!grounded.current) { vy.current -= 15 * dt; p.y += vy.current * dt; if (p.y <= floor) { p.y = floor; grounded.current = true; vy.current = 0; } }
     else if (rm === 'ride' && ride.current?.air) p.y = ride.current.y + BOARD_DECK; // AÉREO: a altura é a do voo
     else p.y += (floor - p.y) * Math.min(1, dt * (rm === 'ride' || rm === 'popup' ? 12 : st.swimming ? 3 : 30)); // em pé gruda na face; nadando sobe/desce macio
-    if (drive.mode === 'foot') action.current = rm === 'paddle' ? 'paddle' : rm === 'popup' ? 'popup' : rm === 'ride' ? 'surf' : rolling ? 'swim'
-      : st.swimming ? (moving || dive.current > 0.3 ? 'swim' : 'tread') : !grounded.current ? 'jump' : moving ? (run ? 'run' : 'walk') : 'idle';
+    if (drive.mode === 'foot') action.current = dead ? 'death' : rm === 'paddle' ? 'paddle' : rm === 'popup' ? 'popup' : rm === 'ride' ? 'surf' : rolling ? 'swim'
+      : st.swimming ? (moving || dive.current > 0.3 ? 'swim' : 'tread') : dodging ? 'dodge' : atkT.current > 0 ? 'attack'
+      : !grounded.current ? 'jump' : moving ? (run || autoRun ? 'run' : 'walk') : 'idle';
+    audioManager.setFootsteps(drive.mode === 'foot' && !dead && !st.swimming && grounded.current && moving && !dodging, run || autoRun);
     // a prancha: deitado (embaixo do peito), em pé (embaixo dos pés), vaca (rodando solta perto)
     // inclinação do CARVING (suave): proporcional à taxa de curva da prancha
     const wantLean = rm === 'ride' && ride.current && !ride.current.air ? Math.max(-0.5, Math.min(0.5, -ride.current.carve * 0.16)) : 0;
@@ -321,9 +432,13 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       // em pé na prancha: sobe o corpo (pose do Zombie abaixa o quadril); levantando: sobe junto com a animação
       const lift = rm === 'ride' ? SURF_LIFT : rm === 'popup' ? SURF_LIFT * Math.min(1, (ride.current?.t ?? 0) / RIDE.POPUP_S) : 0;
       group.current.position.set(p.x, p.y + lift, p.z);
-      let d = facing.current - group.current.rotation.y;
+      // MIRANDO: o herói olha pra onde a câmera aponta (mesmo andando de lado) — igual ao Vale
+      if (useAim.getState().active && !rm && !dead && !dodging) facing.current = input.yaw + Math.PI;
+      let d = facing.current - yawNow.current;
       while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
-      group.current.rotation.y += d * Math.min(1, dt * 12);
+      yawNow.current += d * Math.min(1, dt * 12);
+      group.current.rotation.y = yawNow.current + (spinT.current > 0 ? (1 - spinT.current / SPIN_S) * Math.PI * 2 : 0);
+      heroFacing.yaw = yawNow.current; // tiro livre no celular: pra onde o herói olha
       group.current.rotation.order = 'YXZ';
       group.current.rotation.x = rolling ? spin.current : rm === 'ride' ? lean.current * LEAN_BODY : 0; // vaca gira; carving inclina o corpo
     }
@@ -339,16 +454,30 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
     // 1ª pessoa") — entra e sai suave; fora do tubo volta pro zoom de antes
     const inTube = rm === 'ride' && !ride.current?.air && zsWaterInTubeAt(p.x, p.z, p.y + 0.3);
     tubeCam.current += ((inTube ? 1 : 0) - tubeCam.current) * Math.min(1, dt * 2.5);
-    const tk = tubeCam.current, camDist = input.dist + (TUBE_CAM_DIST - input.dist) * tk, camPitch = input.pitch + (TUBE_CAM_PITCH - input.pitch) * tk;
-    // câmera em órbita, sem entrar no chão
-    const tx = p.x, ty = p.y + 1.6 + (rm === 'ride' ? SURF_LIFT * 0.6 : 0), tz = p.z;
+    // MIRA (botão direito / botão Mirar): câmera no OMBRO, perto, campo de visão fechando com o zoom — igual ao Vale
+    const aim = useAim.getState(), aiming = aim.active && !rm && !dead;
+    aimK.current += ((aiming ? 1 : 0) - aimK.current) * Math.min(1, dt * 10);
+    const ak = aimK.current, touchAim = touchLayout.on;
+    const tk = tubeCam.current;
+    let camDist = input.dist + (TUBE_CAM_DIST - input.dist) * tk;
+    camDist += ((touchAim ? AIM_DIST_TOUCH : AIM_DIST) - camDist) * ak;
+    const camPitch = input.pitch + (TUBE_CAM_PITCH - input.pitch) * tk - recoil.current.x; // coice levanta a mira
+    const yawC = input.yaw + recoil.current.y;
+    const persp = camera as THREE.PerspectiveCamera;
+    const wantFov = CHASE_FOV + ((touchAim ? AIM_FOV_TOUCH : AIM_FOV) / Math.max(1, aim.zoom) - CHASE_FOV) * ak;
+    if (Math.abs(persp.fov - wantFov) > 0.05) { persp.fov = wantFov; persp.updateProjectionMatrix(); }
+    // câmera em órbita, sem entrar no chão; mirando, o apoio vai pro ombro (celular: o OUTRO ombro, longe dos botões)
+    const sh = AIM_SHOULDER * ak * (touchAim ? -1 : 1);
+    const tx = p.x + Math.cos(yawC) * sh, ty = p.y + 1.6 - 0.05 * ak + (rm === 'ride' ? SURF_LIFT * 0.6 : 0), tz = p.z - Math.sin(yawC) * sh;
     const cp = Math.cos(camPitch);
-    const cx = tx + Math.sin(input.yaw) * cp * camDist, cz = tz + Math.cos(input.yaw) * cp * camDist;
+    const cx = tx + Math.sin(yawC) * cp * camDist, cz = tz + Math.cos(yawC) * cp * camDist;
     let cyy = ty + Math.sin(camPitch) * camDist;
     const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6;
     if (cyy < gcam) cyy = gcam;
     camera.position.set(cx, cyy, cz);
     camera.lookAt(tx, ty, tz);
+    const shake = impactShake(); // soco de impacto quando um golpe acerta
+    if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.3; camera.position.y += (Math.random() - 0.5) * shake * 0.3; camera.position.z += (Math.random() - 0.5) * shake * 0.3; }
     // sol + sombra seguem o herói
     if (sun.current) { sun.current.position.set(p.x + SUN.x * 120, p.y + SUN.y * 120, p.z + SUN.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); }
     hudAcc.current += dt;
@@ -369,8 +498,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       <directionalLight ref={sun} intensity={2.1} color="#fff4e0" castShadow shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={45} shadow-camera-bottom={-45} shadow-camera-far={300} shadow-bias={-0.0004} />
       <group ref={group}>
+        <HeroNameplate />
         <Suspense fallback={null}>
-          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} customClipCut={HERO_CUT} preview />
+          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} customClipCut={HERO_CUT} preview rangedAttack weapon={<HeldItem c={c} />} />
         </Suspense>
       </group>
     </>
@@ -399,6 +529,8 @@ function Controls() {
     const el = gl.domElement;
     const kd = (e: KeyboardEvent) => {
       if (zsPause.on || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // botão PULAR do celular (controles do jogo) manda só o "apertou": vira um toque curto
+      if (!e.isTrusted && e.code === 'Space') { input.keys.add('Space'); window.setTimeout(() => input.keys.delete('Space'), 160); return; }
       if (e.code === 'KeyK' && !e.repeat) input.overview = !input.overview;
       if (e.code === 'KeyP' && !e.repeat) input.perf = !input.perf;
       if (e.code === 'KeyE' && !e.repeat) input.eTap = true;
@@ -408,12 +540,46 @@ function Controls() {
     const ku = (e: KeyboardEvent) => input.keys.delete(e.code);
     const blur = () => input.keys.clear();
     const look = new Map<number, { x: number; y: number }>(), stick = new Map<number, { x: number; y: number }>();
+    /** clique ESQUERDO curto (sem arrastar) = atacar; arrastar = girar a câmera */
+    let press: { x: number; y: number; at: number } | null = null;
+    const locked = () => document.pointerLockElement === el;
+    const canFight = () => !zsPause.on && drive.mode === 'foot' && !input.overview;
+    const fire = () => { if (!canFight()) return; if (!(useAim.getState().active && aimFire())) zsAttack.fn?.(); };
+    // o MUNDO inteiro (canvas + plaquinhas de vida/nome em HTML por cima): clicar num bicho com plaquinha na frente
+    // também ataca (29/10: o clique caía na plaquinha e o golpe não saía). Botões/campos da tela ficam de fora.
+    const host = (el.parentElement ?? el) as HTMLElement;
+    const ui = (e: Event) => e.target instanceof Element && !!e.target.closest('button, input, textarea, select, a');
+    // BOTÕES DO MOUSE pelos eventos de MOUSE (igual ao Vale): com o direito segurado (mirando), o clique do esquerdo
+    // NÃO gera "pointerdown" (botões juntos viram só "pointermove" pela regra dos eventos de ponteiro) — o tiro mirando
+    // não saía. "mousedown" avisa cada botão.
+    const mdown = (e: MouseEvent) => {
+      if (ui(e)) return;
+      if (e.button === 2) { if (canFight()) { setAiming(true); el.requestPointerLock?.(); } return; } // MIRA: segura o direito
+      if (e.button !== 0) return;
+      if (locked() || useAim.getState().active) { fire(); return; } // mirando: clicou, atirou
+      press = { x: e.clientX, y: e.clientY, at: performance.now() };
+    };
+    const mup = (e: MouseEvent) => {
+      if (e.button === 2) { setAiming(false); if (locked()) document.exitPointerLock(); }
+      if (e.button === 0 && press && performance.now() - press.at < 350) fire(); // clique curto (sem arrastar) = ataque
+      if (e.button === 0) press = null;
+    };
     const down = (e: PointerEvent) => {
-      el.setPointerCapture(e.pointerId);
-      if (e.pointerType === 'touch' && e.clientX < el.clientWidth * 0.45) stick.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ui(e)) return;
+      host.setPointerCapture(e.pointerId);
+      if (e.pointerType === 'mouse' && e.button !== 0) return; // direito = mira (mdown); arrastar gira só com o esquerdo
+      // celular: com os controles do JOGO na tela (joystick/atacar/poderes), o dedo no mundo só gira a câmera
+      if (e.pointerType === 'touch' && !touchLayout.on && e.clientX < el.clientWidth * 0.45) stick.set(e.pointerId, { x: e.clientX, y: e.clientY });
       else look.set(e.pointerId, { x: e.clientX, y: e.clientY });
     };
     const move = (e: PointerEvent) => {
+      if (locked()) { // mira com o mouse preso: giro pelo movimento (sensibilidade cai com o zoom)
+        const sens = 0.0025 * aimSensitivityScale();
+        input.yaw -= e.movementX * sens; input.pitch = Math.max(-0.5, Math.min(1.35, input.pitch + e.movementY * sens));
+        input.lookAt = performance.now(); noteManualLook();
+        return;
+      }
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 6) press = null;
       const l = look.get(e.pointerId);
       if (l) {
         input.lookAt = performance.now();
@@ -431,19 +597,28 @@ function Controls() {
       const s = stick.get(e.pointerId);
       if (s) { input.stick.x = Math.max(-1, Math.min(1, (e.clientX - s.x) / 60)); input.stick.z = Math.max(-1, Math.min(1, (e.clientY - s.y) / 60)); }
     };
-    const up = (e: PointerEvent) => { look.delete(e.pointerId); if (stick.delete(e.pointerId)) { input.stick.x = 0; input.stick.z = 0; } };
+    const up = (e: PointerEvent) => {
+      look.delete(e.pointerId); if (stick.delete(e.pointerId)) { input.stick.x = 0; input.stick.z = 0; }
+    };
+    const menu = (e: MouseEvent) => e.preventDefault(); // botão direito é a mira, não o menu do navegador
     const wheel = (e: WheelEvent) => {
+      if (useAim.getState().active) { aimZoomStep(e.deltaY < 0 ? 1 : -1); e.preventDefault(); return; } // mirando: zoom da mira
       const f = e.deltaY > 0 ? 1.12 : 0.89;
       if (input.overview) input.ov.alt = Math.max(60, Math.min(2600, input.ov.alt * f));
       else input.dist = Math.max(3, Math.min(40, input.dist * f));
       e.preventDefault();
     };
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); window.addEventListener('blur', blur);
-    el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    host.addEventListener('pointerdown', down); host.addEventListener('pointermove', move); host.addEventListener('pointerup', up); host.addEventListener('pointercancel', up);
+    host.addEventListener('mousedown', mdown); window.addEventListener('mouseup', mup);
     el.addEventListener('wheel', wheel, { passive: false });
+    el.addEventListener('contextmenu', menu);
     return () => {
+      el.removeEventListener('contextmenu', menu);
+      setAiming(false); if (locked()) document.exitPointerLock();
       window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('blur', blur);
-      el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+      host.removeEventListener('mousedown', mdown); window.removeEventListener('mouseup', mup);
+      host.removeEventListener('pointerdown', down); host.removeEventListener('pointermove', move); host.removeEventListener('pointerup', up); host.removeEventListener('pointercancel', up);
       el.removeEventListener('wheel', wheel);
     };
   }, [gl]);
@@ -477,7 +652,7 @@ function ZsHudView({ touch }: { touch: boolean }) {
         {hud.car && <em>{hud.car}</em>}
         <small className="zs-hud__keys">{hud.overview
           ? 'VISTA DE CIMA · WASD move · Shift rápido · roda sobe/desce · K volta'
-          : touch ? 'dedo à esquerda anda · à direita gira a câmera' : 'WASD anda · Shift corre · Espaço pula · C mergulha · E carro · K vista de cima · P FPS'}</small>
+          : touch ? 'joystick anda · arraste a tela gira a câmera' : 'WASD anda · clique ataca · botão direito mira · Espaço pula · E carro/pegar · C mergulha · K vista de cima · P FPS'}</small>
       </div>
       {hud.canPop && (
         <button type="button" className="zs-btn zs-btn--pop" onPointerDown={() => { input.popTap = true; }}>LEVANTAR <small>(Espaço)</small></button>
@@ -513,8 +688,15 @@ function HoldKey({ code, label, title }: { code: string; label: string; title: s
   );
 }
 
-function ZonaSulWorld({ paused = false }: { paused?: boolean }) {
+function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack?: () => void }) {
   const [t, setT] = useState<ZsTerrain | null>(null);
+  /** fauna/acampamentos/perfil prontos (precisam do terreno) — só aí o combate entra na cena */
+  const [ready, setReady] = useState(false);
+  /** o herói pro combate (inimigos, poderes, piloto) e o destino do piloto automático */
+  const playerRef = useRef<THREE.Group | null>(null);
+  const movement = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
+  const c = useMemo(() => palette(), []);
+  useEffect(() => { zsAttack.fn = onAttack ?? null; return () => { zsAttack.fn = null; }; }, [onAttack]);
   const [err, setErr] = useState('');
   const touch = useTouchScreen();
   const heroRef = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
@@ -526,7 +708,7 @@ function ZonaSulWorld({ paused = false }: { paused?: boolean }) {
   const boardRef = useRef<BoardPose>(newBoardPose());
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -534,16 +716,35 @@ function ZonaSulWorld({ paused = false }: { paused?: boolean }) {
   useEffect(() => {
     // entrou no mapa: a pé, câmera no herói; 1ª vez = ganha a prancha
     drive.mode = 'foot'; input.overview = false; input.keys.clear(); hudNow = null;
+    // PRANCHA: entrega agora E de novo quando o save da CONTA chegar (Pedro 29/10: "ainda não vejo a prancha" — o save
+    // da conta chega do servidor depois e trocava o inventário, sumindo com a prancha). Só nos 1ºs 30 s (depois disso
+    // descartar a prancha é escolha sua: ela não volta sozinha).
+    const until = Date.now() + 30_000;
     useGameStore.getState().grantSurfboard();
+    const unGrant = useGameStore.subscribe((s, prev) => {
+      if (Date.now() > until) return;
+      if (s.player.inventory !== prev.player.inventory && !s.player.inventory.slots.some((sl) => sl.itemId === SURFBOARD_ID)) s.grantSurfboard();
+    });
     let alive = true;
     loadZsTerrain().then((tt) => {
       if (!alive) return;
       const at = readZsPos(tt);
       heroRef.current.set(at.x, zsHeightAt(tt, at.x, at.z), at.z); focusRef.current.copy(heroRef.current);
-      carRef.current = newCar(at.x + 3, at.z - 2, 0, tt); setT(tt);
+      movement.current.set(at.x, 0, at.z);
+      carRef.current = newCar(at.x + 3, at.z - 2, 0, tt);
+      // o JOGO passa a viver na Zona Sul: chão/terra/limites/zona segura/acampamentos dela + a fauna por região
+      const prof = zsWorldProfile(tt);
+      setWorldProfile(prof);
+      useGameStore.getState().enterWorld('zona-sul', { creatures: createZsWildlife(zsQuery(tt), undefined, ZS_FAUNA, prof.camps), position: { x: at.x, z: at.z } });
+      setT(tt); setReady(true);
     }).catch((e) => alive && setErr(String(e)));
     const keep = window.setInterval(() => { if (carRef.current) saveZsPos(heroRef.current); }, 2000);
-    return () => { alive = false; window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear(); };
+    return () => {
+      alive = false; unGrant(); window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
+      zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false);
+      // saiu da Zona Sul (trocou de mapa / cidade): o jogo volta pro Vale (se a troca já não fez isso)
+      if (WORLD.id === 'zona-sul') { resetWorldProfile(); useGameStore.getState().enterWorld('classic'); }
+    };
   }, []);
   const sunPos = useMemo(() => SUN.clone().multiplyScalar(1000).toArray() as [number, number, number], []);
   return (
@@ -558,7 +759,22 @@ function ZonaSulWorld({ paused = false }: { paused?: boolean }) {
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
           <ZsVegetation t={t} heroRef={focusRef} />
-          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} />
+          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} />
+          {/* COMBATE — as mesmas peças do Vale, no chão da Zona Sul (perfil do mapa) */}
+          {/* cada peça com a sua rede de carregamento (29/10: um bicho novo carregando o modelo ESCONDIA o mundo inteiro
+              por um instante — o React esconde até a rede mais próxima) e proteção contra modelo quebrado (igual ao Vale) */}
+          {ready && (
+            <AssetBoundary label="ZsCombate" fallback={null}>
+              <Suspense fallback={null}><Camps c={c} /></Suspense>
+              <Suspense fallback={null}><Enemies c={c} playerRef={playerRef} cameraMode="third" /></Suspense>
+              <Suspense fallback={null}><CombatFeedback /></Suspense>
+              <Suspense fallback={null}><Projectiles /></Suspense>
+              <Suspense fallback={null}><HeroPowers playerRef={playerRef} paused={paused} /></Suspense>
+              <BurstRuntime paused={paused} />
+              <AutoPilot playerRef={playerRef} movement={movement} paused={paused} />
+              <BackgroundSim paused={paused} />
+            </AssetBoundary>
+          )}
           <Suspense fallback={null}><ZsCarView carRef={carRef} dimsRef={dimsRef} /></Suspense>
           <Suspense fallback={null}><ZsBoardView poseRef={boardRef} /></Suspense>
           <Controls />
@@ -573,7 +789,6 @@ function ZonaSulWorld({ paused = false }: { paused?: boolean }) {
           <button type="button" className="zs-btn" title="Entrar / sair do carro" aria-label="Entrar / sair do carro" onPointerDown={() => { input.eTap = true; }}>Carro</button>
           <HoldKey code="ShiftLeft" label="Correr" title="Correr / remar forte / turbo" />
           <HoldKey code="KeyC" label="Descer" title="Mergulhar / descer o carro" />
-          <HoldKey code="Space" label="Pular" title="Pular / levantar na prancha / subir o carro" />
         </div>
       )}
       <div className="zs-credit">Relevo: AWS Terrain Tiles (SRTM) · Mapa: © OpenStreetMap contributors (ODbL)</div>

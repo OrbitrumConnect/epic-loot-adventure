@@ -4,6 +4,8 @@
  * de ninguém além de quem lê.
  */
 import { useSyncExternalStore } from 'react';
+import { resetWorldProfile, WORLD } from '@/game/data/world-profile';
+import { useGameStore } from '@/game/state/game-store';
 
 export type WorldMapId = 'classic' | 'zona-sul';
 const KEY = 'tribos.map';
@@ -21,6 +23,9 @@ export function getWorldMap(): WorldMapId {
 
 export function setWorldMap(id: WorldMapId): void {
   current = id;
+  // voltar pro Vale: o perfil e o mundo do Vale entram ANTES de ele desenhar (nada monta no chão da Zona Sul).
+  // Ir pra Zona Sul: quem troca é o mundo dela, ao carregar o terreno (precisa dele).
+  if (id === 'classic' && WORLD.id !== 'classic') { resetWorldProfile(); useGameStore.getState().enterWorld('classic'); }
   try { localStorage.setItem(KEY, id); } catch { /* sem storage: vale só nesta sessão */ }
   for (const l of listeners) l();
 }

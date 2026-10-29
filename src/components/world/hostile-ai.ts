@@ -18,7 +18,8 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
-import { MAP_HALF, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
+import { markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
+import { WORLD } from '@/game/data/world-profile';
 import { blockedByWall, caveStep, glbSurfaceY, groundUnder } from './terrain-collision';
 import { walkStep } from './map-walk';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
@@ -542,9 +543,10 @@ export function useHostileAI(opts: HostileOptions) {
       let az = wz - pz;
       const len = Math.sqrt(ax * ax + az * az) || 1;
       ax /= len; az /= len;
-      const edge = MAP_HALF - 4;
-      if (Math.abs(wx) > edge) ax -= Math.sign(wx) * 1.2;
-      if (Math.abs(wz) > edge) az -= Math.sign(wz) * 1.2;
+      // borda do mapa ATIVO (Vale: ±MAP_HALF; Zona Sul: o retângulo dela)
+      const b = WORLD.bounds;
+      if (wx > b.maxX - 4) ax -= 1.2; else if (wx < b.minX + 4) ax += 1.2;
+      if (wz > b.maxZ - 4) az -= 1.2; else if (wz < b.minZ + 4) az += 1.2;
       const l2 = Math.sqrt(ax * ax + az * az) || 1;
       targetX = wx + (ax / l2) * chaseSpeed * dt;
       targetZ = wz + (az / l2) * chaseSpeed * dt;

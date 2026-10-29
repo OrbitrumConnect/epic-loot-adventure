@@ -5,6 +5,7 @@
  * O chão em si já era a malha do GLB (`glbSurfaceY`): andar lá fora pisa na mesma malha que aparece na tela.
  */
 import { MAP_WALK, MAP_WALK_ROWS } from './map-walk-area';
+import { WORLD } from '@/game/data/world-profile';
 
 const { cell, x0, z0, w, h, inner } = MAP_WALK;
 const grid = new Uint8Array(w * h);
@@ -14,6 +15,7 @@ MAP_WALK_ROWS.forEach((runs, j) => {
 
 /** Pode pisar em (x, z)? Dentro de ±90 m sempre (como antes); fora, só na área medida. */
 export function isWalkable(x: number, z: number): boolean {
+  if (WORLD.walkable) return WORLD.walkable(x, z); // mapa ativo com área própria (Zona Sul: terra firme)
   if (Math.abs(x) <= inner && Math.abs(z) <= inner) return true;
   const i = Math.floor((x - x0) / cell), j = Math.floor((z - z0) / cell);
   if (i < 0 || j < 0 || i >= w || j >= h) return false;

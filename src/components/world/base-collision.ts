@@ -4,6 +4,7 @@
  * parâmetro (player ~0.5, criatura ~0.5). Lê `houseCollider` (publicado pela
  * casa) e `playerBase.pieces` (a cerca) do store.
  */
+import { isClassicWorld } from '@/game/data/world-profile';
 import { useGameStore } from '@/game/state/game-store';
 import { useNet } from '@/net/multiplayer';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
@@ -28,6 +29,7 @@ function pushCircle(x: number, z: number, ox: number, oz: number, r: number, sel
 
 /** Altura do assoalho da casa quando (px,pz) está dentro do footprint (senão -∞). */
 export function houseFloorSurfaceY(px: number, pz: number): number {
+  if (!isClassicWorld()) return -Infinity; // a base mora no Vale (Zona Sul: Fase 4)
   const h = houseCollider.current;
   if (!h) return -Infinity;
   if (Math.abs(px - h.cx) <= h.halfX && Math.abs(pz - h.cz) <= h.halfZ) return h.floorY;
@@ -57,6 +59,7 @@ export function houseWalkFloorY(px: number, pz: number, feetY: number): number {
 export const HOUSE_BODY = 0.38;
 
 export function pushOutHouseWalls(x: number, z: number, self: number, feetY?: number): [number, number] {
+  if (!isClassicWorld()) return [x, z];
   const h = houseCollider.current;
   if (!h || !HOUSE_WALLS_SOLID) return [x, z];
   const byFloor = !!h.levels && h.baseY !== undefined && feetY !== undefined && Number.isFinite(feetY);
@@ -144,6 +147,7 @@ export function bigWallBetween(ax: number, az: number, bx: number, bz: number): 
 
 /** Muro, torre e centro bloqueiam; portão/core/telhado passam. */
 export function pushOutBasePieces(x: number, z: number, self: number): [number, number] {
+  if (!isClassicWorld()) return [x, z];
   const base = useGameStore.getState().playerBase;
   if (!base) return pushOutRemoteBases(x, z, self);
   let rx = x, rz = z;

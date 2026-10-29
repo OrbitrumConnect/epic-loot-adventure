@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { LAKE_CENTERS, RIVER_POINTS, RIVER_HALF_WIDTH, riverDistance, SAFE_ZONE } from '@/game/data/camps';
+import { WORLD } from '@/game/data/world-profile';
 
 const names = [
   'ground', 'ground-light', 'grass', 'pine', 'leaf', 'leaf-light', 'trunk',
@@ -221,6 +222,7 @@ export function snowMountainBump(x: number, z: number): number {
 }
 
 export function terrainHeight(x: number, z: number): number {
+  if (WORLD.height) return WORLD.height(x, z); // mapa ativo com chão próprio (Zona Sul: mapa de altura real)
   let h = terrainHeightRaw(x, z);
 
   for (const lake of LAKE_CENTERS) {

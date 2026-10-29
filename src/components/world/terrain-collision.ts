@@ -15,6 +15,7 @@ import { useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 import { MAP_CAVES } from './map-caves';
+import { isClassicWorld, WORLD } from '@/game/data/world-profile';
 
 // Patch único: geometrias COM boundsTree usam BVH; as sem caem no raycast padrão.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -138,6 +139,7 @@ export const CAVE_DROP_AIR = 2.5;
 
 /** Dentro da caixa de alguma caverna medida (`map-caves.ts`)? Conta barata: só lá a parede de caverna é checada. */
 export function nearCave(x: number, z: number): boolean {
+  if (!isClassicWorld()) return false; // cavernas são do Vale
   for (const [x0, z0, x1, z1] of MAP_CAVES) if (x >= x0 && x <= x1 && z >= z0 && z <= z1) return true;
   return false;
 }
@@ -358,7 +360,18 @@ export function worldBlocksShot(from: THREE.Vector3, to: THREE.Vector3, skipNear
   for (const set of [terrains, walls]) {
     for (const root of set) if (shotRay.intersectObject(root, true).length > 0) return true;
   }
-  return false;
+  return heightHit(from, _shotDir, skipNear, Math.max(skipNear, len - 0.6)) !== null;
+}
+
+/** MAPA DE ALTURA (Zona Sul, 29/10): o chão não é malha registrada — anda no raio de 1 em 1 m e acha onde ele
+ *  entra no morro. Sem chão próprio (Vale) = null (lá quem bloqueia são as malhas acima). Até ~60 consultas. */
+function heightHit(from: THREE.Vector3, dir: THREE.Vector3, near: number, far: number): number | null {
+  const h = WORLD.height;
+  if (!h) return null;
+  for (let d = Math.max(near, 0.5); d <= far; d += 1) {
+    if (from.y + dir.y * d < h(from.x + dir.x * d, from.z + dir.z * d)) return d;
+  }
+  return null;
 }
 
 /** Distância até a 1ª coisa GRANDE (mapa/morro/labirinto) no raio `from`+`dir` (dir unitário),
@@ -374,6 +387,8 @@ export function worldShotHitDistance(from: THREE.Vector3, dir: THREE.Vector3, fa
       if (h && (best === null || h.distance < best)) best = h.distance;
     }
   }
+  const hm = heightHit(from, dir, skipNear, best ?? far);
+  if (hm !== null && (best === null || hm < best)) best = hm;
   return best;
 }
 

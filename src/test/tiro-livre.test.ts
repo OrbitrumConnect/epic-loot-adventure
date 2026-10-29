@@ -46,7 +46,7 @@ describe('tiro livre', () => {
 
   it('ligado: ATACAR sem alvo atira livre; celular na 3ª pessoa atira no centro da mira; bicho ferido reage de 30 m', () => {
     const idx = fs.readFileSync('src/routes/index.tsx', 'utf8');
-    expect(idx).toMatch(/else if \(weaponFor\(heldId\)\.ranged\) useGameStore\.getState\(\)\.fireMiss\(freeShotPoint\(p, range, cameraMode === 'iso'\)\);/);
+    expect(idx).toMatch(/else if \(weaponFor\(heldId\)\.ranged\) useGameStore\.getState\(\)\.fireMiss\(freeShotPoint\(p, range, cameraMode === 'iso' && !zs\)\);/); // Zona Sul: sem câmera de cima (29/10)
     const mc = fs.readFileSync('src/components/world/mobile-controls.tsx', 'utf8');
     expect(mc).toMatch(/if \(!\(\(useAim\.getState\(\)\.active \|\| canAim\) && aimFire\(\)\)\) onAttack\(\);/);
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');

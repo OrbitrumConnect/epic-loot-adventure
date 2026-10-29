@@ -54,9 +54,11 @@ const GameWorld = lazy(() => import('@/components/game-world'));
 // ZONA SUL (29/10): o 2º mapa do jogo — mesmo personagem/save/HUD; só o mundo 3D muda (chave no menu "MAPAS").
 const ZonaSulWorld = lazy(() => import('@/components/zona-sul/zona-sul-world'));
 import { setWorldMap, useWorldMap } from '@/components/world/world-map-choice';
-/** Teclas que na Zona Sul são DELA (carro E/V, mergulho C, FPS P) ou do combate/mapa velho que ainda não existe lá
- *  (Fase 1+: Q/R/F/Z/X/T/Y, piloto G, mapa M, detalhe L, câmera livre). Hotbar 1–0, I, B e Esc valem nos dois. */
-const ZS_SKIP_KEYS = new Set(['KeyE', 'KeyQ', 'KeyR', 'KeyF', 'KeyZ', 'KeyX', 'KeyC', 'KeyT', 'KeyY', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyG', 'KeyM']);
+/** Teclas que na Zona Sul são DELA: E (carro/pegar — ela decide), V (câmera do carro), P (FPS dela), K (vista de cima)
+ *  e as do mapa velho (M mapa do vale, L detalhe do chão, crase câmera livre). Combate (Q/R/F/Z/X/T/Y), piloto (G),
+ *  hotbar, I, B e Esc valem igual. C: na água/dirigindo é dela (mergulhar/descer); em terra é o Raio do jogo. */
+const ZS_SKIP_KEYS = new Set(['KeyE', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyM', 'KeyK']);
+import { zsCtx } from '@/components/zona-sul/zs-context';
 /** Itens do menu que são do mapa velho (fila do piloto, mapa do vale) — somem na Zona Sul até ganharem a versão dela. */
 const ZS_HIDE_NAV = new Set(['objectives', 'map']);
 import { BossSpawner } from '@/components/world/boss-spawner';
@@ -373,10 +375,10 @@ function Index() {
     if (nearest && bestDist <= range) attack(nearest);
     // TIRO LIVRE (Pedro 26/10: "só consigo atirar perto de inimigo"): arma de longe sem alvo no alcance → atira
     // mesmo assim, no cursor (PC, câmera de cima) ou pra onde o herói olha (celular). Gasta munição normal.
-    else if (weaponFor(heldId).ranged) useGameStore.getState().fireMiss(freeShotPoint(p, range, cameraMode === 'iso'));
-    // Câmera de ombro com espada: ninguém no alcance → golpe no AR (animação/som), como jogo de ação.
-    else if (!(cameraMode === 'third' && useGameStore.getState().swingAir())) useGameStore.getState().setMessage('Nenhum inimigo próximo.');
-  }, [attack, cameraMode]);
+    else if (weaponFor(heldId).ranged) useGameStore.getState().fireMiss(freeShotPoint(p, range, cameraMode === 'iso' && !zs));
+    // Câmera de ombro com espada: ninguém no alcance → golpe no AR (animação/som), como jogo de ação. Zona Sul = sempre ombro.
+    else if (!((zs || cameraMode === 'third') && useGameStore.getState().swingAir())) useGameStore.getState().setMessage('Nenhum inimigo próximo.');
+  }, [attack, cameraMode, zs]);
 
   const inCity = ui.mode === 'city';
   // Controles de toque: tela estreita OU tela de toque (celular DEITADO também — 26/10).
@@ -437,7 +439,7 @@ function Index() {
       if (editorActive) return;
       // 1–9 → slots 0–8; 0 → slot 9. Demais slots (ex.: rifle) por clique.
       if (/^[0-9]$/.test(e.key)) useHotbarSlot(e.key === '0' ? 9 : Number(e.key) - 1);
-      if (zs && ZS_SKIP_KEYS.has(e.code)) return;
+      if (zs && (ZS_SKIP_KEYS.has(e.code) || (e.code === 'KeyC' && (zsCtx.inWater || zsCtx.driving)))) return;
       // Na câmera livre, E/Q/R/Espaço pilotam a câmera (no game-world), não o
       // herói — então as ações de jogo ficam suspensas enquanto ela está ligada.
       const freeCam = cameraMode === 'free';
@@ -549,16 +551,16 @@ function Index() {
       {player.level >= BOOST_UNLOCK_LEVEL && (
         <Button variant="ghost" className="world-action" data-combat data-cooldown={boostLeft > 0} aria-label="Boost Fire" title="Boost Fire — pistola e rifle 2× mais rápidos por 4 s · T" onClick={() => useGameStore.getState().boostFire()}><Flame />{boostLeft > 0 && <span className="cd">{boostLeft}</span>}</Button>
       )}
-      <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>
+      {!zs && <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>}
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
-      {!playerBase && (
+      {!playerBase && !zs && (
         <Button variant="ghost" className="world-action" data-on="true" aria-label="Reivindicar base"
           title="Reivindicar base — clique aqui e depois no quadrado VERDE no chão"
           onClick={() => { setBuildActive(true); useGameStore.getState().setMessage('🔨 Modo construção ligado — clique no quadrado VERDE no chão para reivindicar a base.'); }}>
           <Hammer />
         </Button>
       )}
-      {baseProg && baseProg.pct < 100 && (
+      {baseProg && baseProg.pct < 100 && !zs && (
         <Button variant="ghost" className="world-action" data-on="true" aria-label="Construir base" title={`Construir base — entregar recursos (${baseProg.pct}%)`} onClick={deliverToBase}><Hammer /></Button>
       )}
     </>
@@ -686,10 +688,10 @@ function Index() {
           )}
           {worldOn && !inCity && zs && (
             <Suspense fallback={<div className="world-loading">Chegando na Zona Sul…</div>}>
-              <ZonaSulWorld paused={Boolean(panel) || editorActive} />
+              <ZonaSulWorld paused={Boolean(panel) || editorActive} onAttack={hitNearest} />
             </Suspense>
           )}
-          {worldOn && !inCity && !zs && <AimCrosshair shoulder={cameraMode === 'third'} />}
+          {worldOn && !inCity && <AimCrosshair shoulder={zs || cameraMode === 'third'} />}
           {worldOn && perfOn && !zs && <PerfHud />}
           {/* Cartas de um toque + lateral UPAR (Pedro 25/10: sem precisar ir à cidade). */}
           {worldOn && !inCity && !player.dead && <CardHost />}
@@ -860,7 +862,7 @@ function Index() {
           </div>}
 
           {/* Faixa compacta: deixa o modo idle legível sem abrir painel */}
-          {!zs && <div className="pilot-strip" data-idle={idleMode}>
+          {<div className="pilot-strip" data-idle={idleMode}>
             <span className="pilot-mode">
               {idleMode ? <Bot /> : <Hand />}
               {idleMode ? 'IDLE' : 'MANUAL'}
@@ -901,9 +903,9 @@ function Index() {
               <div><time>08:42</time><strong>Mundo</strong> · {ui.message}</div>
               {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
             </div>
-            {!zs && <div className="world-actions world-actions--overlay">{actionButtons}</div>}
+            <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}
-          {isMobile && !panel && !player.dead && !zs && <MobileControls onAttack={hitNearest} canAim={cameraMode === 'third'} powers={mobilePowers} />}
+          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={zs || cameraMode === 'third'} powers={mobilePowers} />}
           </>)}
 
           {!inCity && !panel && !zs && <PiecePicker />}
@@ -1150,7 +1152,7 @@ function Index() {
                   disabled={!DEV_INFINITE_POTIONS && potionCount <= 0} onClick={drinkPotion}>
                   Beber agora
                 </Button>
-                {!panel && !zs && <div className="world-actions world-actions--footer">{actionButtons}</div>}
+                {!panel && <div className="world-actions world-actions--footer">{actionButtons}</div>}
               </div>
             </div>
             <div className="hotbar-note-row">

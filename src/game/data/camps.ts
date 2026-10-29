@@ -23,7 +23,7 @@ export const PLAYER_SPAWN: Position = { x: 7, z: -26 };
  * entra (`pushOutSafeZone` empurra todo corpo inimigo pra borda). Mora aqui, e
  * não no mundo 3D, porque a decisão do piloto (`objectiveSystem`) precisa dela.
  */
-export const SAFE_ZONE = { x: 2, z: -28, radius: 11 } as const;
+export const SAFE_ZONE: { x: number; z: number; radius: number } = { x: 2, z: -28, radius: 11 }; // mutável: o mapa ativo troca (world-profile.ts)
 
 export const LAKE_CENTERS: { x: number; z: number; r: number }[] = [
   { x: 55, z: 55, r: 16 },

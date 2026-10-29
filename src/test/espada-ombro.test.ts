@@ -35,6 +35,7 @@ describe('espada na câmera de ombro', () => {
     const aim = fs.readFileSync('src/components/world/aim.ts', 'utf8');
     expect(aim).toMatch(/if \(meleeOutOfReach\(t\.id\)\) return false;/);
     const idx = fs.readFileSync('src/routes/index.tsx', 'utf8');
-    expect(idx).toMatch(/else if \(!\(cameraMode === 'third' && useGameStore\.getState\(\)\.swingAir\(\)\)\)/);
+    // 29/10: na Zona Sul a câmera é SEMPRE de ombro (`zs ||`) — no Vale segue a câmera escolhida
+    expect(idx).toMatch(/else if \(!\(\(zs \|\| cameraMode === 'third'\) && useGameStore\.getState\(\)\.swingAir\(\)\)\)/);
   });
 });

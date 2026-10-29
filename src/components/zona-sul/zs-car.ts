@@ -23,8 +23,8 @@ export const CAR = {
   SPRING: 16, DAMP: 8,                               // mola da altura (firme e sem quicar: amortecimento crítico)
   AIR_ALT: 1.5, FLY_S: 60, COOLDOWN_MS: 15_000,      // energia de voo (s no ar) e recarga
   CLIMB_WALL: 0.9,                                   // rampa máx. que dá pra subir rente (≈ 42°)
-  ENTER_DIST: 4.5, EXIT_MAX_SPEED: 3, EXIT_MAX_ALT: 2,
-  LENGTH: 5.5,                                       // m — Pedro: "uns 20% maior" (4,6 → 5,5); 5 lugares
+  ENTER_DIST: 6, EXIT_MAX_SPEED: 3, EXIT_MAX_ALT: 2,
+  LENGTH: 7.4,                                       // m — Pedro: "uns 20% maior" (4,6 → 5,5); 29/10 "+35%" (5,5 → 7,4); 5 lugares
   WAVE_GRAB: 5,                                      // quão rápido a onda agarra o carro rente à água (1/s)
 } as const;
 const PUSH = { x: 0, z: 0 };

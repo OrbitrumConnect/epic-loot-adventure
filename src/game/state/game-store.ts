@@ -60,6 +60,7 @@ import {
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { grantSurfboard, SURFBOARD_ID } from '../systems/zonaSulKit';
 import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
+import { clampX, clampZ, isClassicWorld, type MapId } from '../data/world-profile';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
@@ -273,6 +274,9 @@ type GameActions = {
   drinkPotion: () => void;
   /** Zona Sul: entrega a prancha (1ª entrada) — mochila + espaço livre da hotbar. */
   grantSurfboard: () => void;
+  /** TROCA DE MAPA (o perfil já foi trocado em world-profile): bichos, acampamentos, recursos e posição do mapa novo.
+   *  Zona Sul: a fauna vem pronta (precisa do terreno) e a posição é a do herói de lá. */
+  enterWorld: (map: MapId, zs?: { creatures: CreatureState[]; position: Position }) => void;
   tickWorld: () => void;
   /** O mundo 3D chama quando uma criatura acerta o jogador (ou outro dano que só ele vê). */
   reportDamage: (targetId: string, amount: number, position: Position, onPlayer: boolean) => void;
@@ -1717,7 +1721,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const p = state.player.position;
     const margin = WORLD_HALF - 6;
     // Nasce 22–34 m do jogador, direção aleatória, dentro do mundo.
-    let x = Math.max(-margin, Math.min(margin, p.x + 20));
+    let x = isClassicWorld() ? Math.max(-margin, Math.min(margin, p.x + 20)) : clampX(p.x + 20, 6);
     let z = p.z;
     // Nasce 16–26 m do jogador: longe o bastante pra ser um susto, perto o
     // bastante pra já entrar no aggro (30) e vir caçar imediatamente.
@@ -2358,6 +2362,20 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     set({ pilotLastIntent: intent });
   },
 
+  enterWorld: (map, zs) => {
+    const camps = createCamps(Date.now()); // CAMP_PLACEMENTS já é o do mapa ativo
+    const wild = map === 'classic' ? [...createInitialCreatures(), ...createWildCreatures()] : zs?.creatures ?? [];
+    set(s => ({
+      creatures: [...wild, ...camps.creatures],
+      camps: camps.camps,
+      harvestNodes: map === 'classic' ? createHarvestNodes() : [],
+      resources: map === 'classic' ? createInitialResources() : [],
+      deathBags: [],
+      objectives: createQueue(),
+      player: { ...s.player, position: zs?.position ?? { x: SAFE_ZONE.x, z: SAFE_ZONE.z } },
+    }));
+  },
+
   grantSurfboard: () => {
     const r = grantSurfboard(get().player.inventory);
     if (r.granted) set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: isUnlocked(SURFBOARD_ID, s.player.level)
@@ -2429,8 +2447,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   addHuntArea: (x, z) => {
     const state = get();
-    const cx = Math.round(Math.max(-WORLD_HALF, Math.min(WORLD_HALF, x)));
-    const cz = Math.round(Math.max(-WORLD_HALF, Math.min(WORLD_HALF, z)));
+    const cx = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, x)) : clampX(x));
+    const cz = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, z)) : clampZ(z));
     const targetId = `area_${cx}_${cz}`;
     const label = `Caçar na região ${describeRegion(cx, cz)} (${cx}, ${cz})`;
     if (hasPendingObjective(state.objectives, 'hunt_area', targetId)) {
@@ -2525,7 +2543,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let waveCreatures = ticked.creatures;
     let upgradeChoices = state.upgradeChoices;
     let waveSummary: { wave: number; kills: number; seconds: number } | null = null;
-    {
+    // a base (e a horda dela) mora no VALE: na Zona Sul o relógio da horda fica parado (Fase 4 traz a base pra cá)
+    if (isClassicWorld()) {
       const center = baseCenter(state.playerBase);
       // Só conta a horda da MINHA base (online cada jogador tem a sua no mesmo mundo).
       const aliveWave = ticked.creatures.filter(

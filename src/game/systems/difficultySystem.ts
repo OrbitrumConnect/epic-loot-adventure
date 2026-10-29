@@ -13,6 +13,7 @@
 import type { CreatureDefinition, CreatureState, Position } from '../types';
 import { scaleEnemyHp } from '../data/creatures';
 import { CAMP_PLACEMENTS, PLAYER_SPAWN } from '../data/camps';
+import { WORLD } from '../data/world-profile';
 
 /** Raios (m, a partir do nascedouro) que separam as zonas 1→2→3→4→5. */
 export const ZONE_RADII = [30, 55, 80, 105] as const;
@@ -24,7 +25,7 @@ export const NIGHT_ELITE_BONUS = 0.1;
 export function zoneAt(p: Pick<Position, 'x' | 'z'>): number {
   const d = Math.hypot(p.x - PLAYER_SPAWN.x, p.z - PLAYER_SPAWN.z);
   let z = 1;
-  for (const r of ZONE_RADII) if (d >= r) z++;
+  for (const r of WORLD.zoneRadii) if (d >= r) z++; // faixas do mapa ATIVO (Vale = ZONE_RADII)
   return z;
 }
 export function zoneLevel(p: Pick<Position, 'x' | 'z'>): number {

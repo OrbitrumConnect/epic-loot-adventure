@@ -100,6 +100,18 @@ hordas com intervalo maior, cartas, cidade (Clash), armazém, tropas
 
 **Virada** — Zona Sul vira padrão; Clássico fica no menu ou sai — só com OK do Pedro
 
+## LISTA VIVA dos pedidos do Pedro (29/10: "tudo que falo é pra ir somando")
+Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele).
+- [x] Inventário nível MIR4 (herói 3D, 9 espaços, status, abas) · [x] prancha item oficial · [x] Zona Sul dentro do jogo
+- [x] Liberação por nível: prancha 5 · carro 25 · fuzil 35 · (asa-delta 8 e skate voador 15 quando entrarem)
+- [ ] Armas/tiro completos na Zona Sul (mira, coice, poderes, morte/renascer) — nível AAA
+- [ ] Celular: TODOS os gatilhos e o joystick do jogo (arco de poderes, atacar, mira) também na Zona Sul
+- [ ] Postes nas pistas de barro · dia/noite
+- [ ] Fauna por região: jacaré na Lagoa, leão no campo aberto, bichos na mata; PRAIA mais vazia (zona segura)
+- [ ] Acampamentos inimigos no mato, em locais adequados, com fogueira
+- [ ] Skate voador (nv 15) · asa-delta (nv 8) — novos veículos
+- [ ] Mixamo: pasta do Pedro disponível pra animações que faltarem
+
 ## Decisões do Pedro antes de começar
 1. **Um personagem só nos dois mapas?** (recomendado: sim — mesmo save)
 2. **Quando a Zona Sul vira o mapa principal** (e o velho sai do menu)? (recomendado: ao fechar a Fase 4)

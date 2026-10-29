@@ -1,5 +1,6 @@
 import type { CampDefinition, CampState, CreatureState, Position } from '../types';
 import { CAMPS, CAMP_PLACEMENTS, WORLD_HALF, type CampPlacement } from '../data/camps';
+import { clampX, clampZ, WORLD } from '../data/world-profile';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { getDistance } from './combatSystem';
 
@@ -34,8 +35,8 @@ function clampToWorld(value: number): number {
 /** Posto de guarda em coordenadas do mundo, preso dentro do mapa. */
 export function getSpawnPosition(campPosition: Position, offset: Position): Position {
   return {
-    x: clampToWorld(campPosition.x + offset.x),
-    z: clampToWorld(campPosition.z + offset.z),
+    x: WORLD.id === 'classic' ? clampToWorld(campPosition.x + offset.x) : clampX(campPosition.x + offset.x),
+    z: WORLD.id === 'classic' ? clampToWorld(campPosition.z + offset.z) : clampZ(campPosition.z + offset.z),
   };
 }
 
