@@ -1,12 +1,13 @@
 /**
- * ZONA SUL (rota isolada /zona-sul) — o Rio pós-colapso tomado pela mata: relevo real (escala 1:3), mar e Lagoa com
- * NADO, mata atlântica instanciada, herói do jogo andando com colisão no chão. NÃO mexe no mapa do jogo.
+ * ZONA SUL — o Rio pós-colapso tomado pela mata: relevo real, mar e Lagoa com NADO, onda com SURF, carro voador.
+ * Desde 29/10 é um MAPA DO JOGO (chave "Zona Sul" na casa do jogo, `routes/index.tsx`): mesmo personagem, mesmo save,
+ * a hotbar/I/HUD são os do jogo (a prancha é item oficial — `surfboard`). Este arquivo só desenha o mundo e o herói.
  * Controles: WASD/setas anda · Shift corre · Espaço pula · arrastar gira a câmera · roda = zoom.
- * Celular: dedo à esquerda anda (joystick), à direita gira a câmera.
+ * Celular: dedo à esquerda anda (joystick), à direita gira a câmera; botões de carro/mergulho/correr na tela.
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
@@ -16,7 +17,10 @@ import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterChurnAt, 
 import { SurfBreak, surfZone } from './surf/surf-break';
 import { SURF } from './surf/surf-wave';
 import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from './surf/surf-ride';
-import { ZsLootHud, zsGear } from './zs-loot-hud';
+import { useGameStore } from '@/game/state/game-store';
+import { selectedItemId } from '@/components/world/held-weapon';
+import { SURFBOARD_ID } from '@/game/systems/zonaSulKit';
+import { useTouchScreen } from '@/hooks/use-mobile';
 import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 
 /** Quanto da correnteza da onda leva o herói nadando (o carro tem a sua em CAR.WAVE_PUSH). */
@@ -93,7 +97,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
   const { camera, scene } = useThree();
 
   // só em desenvolvimento: testes de tela leem/forçam o surf (o jogo publicado não expõe nada)
-  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, gear: zsGear, action }; }, []);
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action }; }, []);
   const fog = useMemo(() => new THREE.Fog(FOG, 200, 2200), []); // névoa LEVE (custo ~zero: é uma conta no shader)
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
@@ -209,7 +213,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
     let v = (run ? ZS_RUN : ZS_WALK) * (water0.wading ? 0.75 : 1);
     let moving = wantMove;
     let st;
-    const onBoard = zsGear.board && water0.swimming && drive.mode === 'foot';
+    const onBoard = selectedItemId(useGameStore.getState()) === SURFBOARD_ID && water0.swimming && drive.mode === 'foot';
     if (!onBoard) ride.current = null;
     if (onBoard) {
       // PRANCHA (fase C): remar → ESPAÇO levanta quando a onda pegar → em pé corre a parede → vaca se fechar em cima
@@ -362,7 +366,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
         shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={45} shadow-camera-bottom={-45} shadow-camera-far={300} shadow-bias={-0.0004} />
       <group ref={group}>
         <Suspense fallback={null}>
-          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} customClipCut={HERO_CUT} />
+          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} customClipCut={HERO_CUT} preview />
         </Suspense>
       </group>
     </>
@@ -390,6 +394,7 @@ function Controls() {
   useEffect(() => {
     const el = gl.domElement;
     const kd = (e: KeyboardEvent) => {
+      if (zsPause.on || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === 'KeyK' && !e.repeat) input.overview = !input.overview;
       if (e.code === 'KeyP' && !e.repeat) input.perf = !input.perf;
       if (e.code === 'KeyE' && !e.repeat) input.eTap = true;
@@ -441,14 +446,77 @@ function Controls() {
   return null;
 }
 
-export default function ZonaSulWorld() {
+/** STATUS fora do React do mundo (29/10, Pedro: "tá lagando"): o herói escreve aqui 4×/s e SÓ o painel de status
+ *  re-renderiza — antes o `setHud` re-renderizava a árvore 3D inteira (terreno, água, mata, onda) a cada 0,25 s, o mesmo
+ *  erro que travou o mapa velho em 26/10. Igual ao anterior não avisa ninguém. */
+let hudNow: Hud | null = null;
+const hudSubs = new Set<() => void>();
+function pushHud(h: Hud) {
+  const o = hudNow;
+  if (o && o.state === h.state && o.near === h.near && o.car === h.car && o.canPop === h.canPop && o.overview === h.overview) return;
+  hudNow = h;
+  for (const f of hudSubs) f();
+}
+function useZsHud(): Hud | null {
+  return useSyncExternalStore((cb) => { hudSubs.add(cb); return () => { hudSubs.delete(cb); }; }, () => hudNow, () => null);
+}
+
+/** Status no canto + botão LEVANTAR (o único pedaço da tela que muda com o herói). */
+function ZsHudView({ touch }: { touch: boolean }) {
+  const hud = useZsHud();
+  if (!hud) return null;
+  return (
+    <>
+      <div className="zs-hud">
+        <strong>{hud.state}</strong>
+        {hud.near && !hud.overview && <small>perto de {hud.near}</small>}
+        {hud.car && <em>{hud.car}</em>}
+        <small className="zs-hud__keys">{hud.overview
+          ? 'VISTA DE CIMA · WASD move · Shift rápido · roda sobe/desce · K volta'
+          : touch ? 'dedo à esquerda anda · à direita gira a câmera' : 'WASD anda · Shift corre · Espaço pula · C mergulha · E carro · K vista de cima · P FPS'}</small>
+      </div>
+      {hud.canPop && (
+        <button type="button" className="zs-btn zs-btn--pop" onPointerDown={() => { input.popTap = true; }}>LEVANTAR <small>(Espaço)</small></button>
+      )}
+    </>
+  );
+}
+
+/** Painel do jogo aberto (inventário, mapa, base…): as teclas não mexem o herói (o mar segue vivo). */
+const zsPause = { on: false };
+/** Onde você parou na Zona Sul (neste aparelho) — o mapa velho sempre nasce no ponto de partida; aqui volta onde estava. */
+const POS_KEY = 'tribos.zs.pos';
+function readZsPos(t: ZsTerrain): { x: number; z: number } {
+  try {
+    const v = JSON.parse(localStorage.getItem(POS_KEY) ?? 'null') as { x?: unknown; z?: unknown } | null;
+    const x = Number(v?.x), z = Number(v?.z);
+    if (Number.isFinite(x) && Number.isFinite(z) && x > t.x0 && x < t.x0 + t.w * t.cell && z > t.z0 && z < t.z0 + t.h * t.cell) return { x, z };
+  } catch { /* sem storage / lixo: nasce no ponto de partida */ }
+  return { x: ZS_SPAWN.x, z: ZS_SPAWN.z };
+}
+function saveZsPos(p: THREE.Vector3) {
+  try { localStorage.setItem(POS_KEY, JSON.stringify({ x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10 })); } catch { /* sem storage */ }
+}
+
+/** Botão de SEGURAR (celular): enquanto o dedo está nele, a tecla fica apertada. */
+function HoldKey({ code, label, title }: { code: string; label: string; title: string }) {
+  const up = () => input.keys.delete(code);
+  return (
+    <button type="button" className="zs-btn" title={title} aria-label={title}
+      onPointerDown={(e) => { e.preventDefault(); input.keys.add(code); }} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}>
+      {label}
+    </button>
+  );
+}
+
+function ZonaSulWorld({ paused = false }: { paused?: boolean }) {
   const [t, setT] = useState<ZsTerrain | null>(null);
   const [err, setErr] = useState('');
-  const [hud, setHud] = useState<Hud | null>(null);
+  const touch = useTouchScreen();
   const heroRef = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
   /** Onde o detalhe (chão, árvores, água) é montado: o herói, ou o centro da vista de cima (tecla K). */
   const focusRef = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
-  /** Carro voador: nasce do lado da partida, no Arpoador (Pedro: "joga lá perto do Arpoador onde eu testo"). */
+  /** Carro voador: nasce do seu lado (Pedro: "joga lá perto do Arpoador onde eu testo"). */
   const carRef = useRef<ZsCar | null>(null);
   const dimsRef = useRef<CarDims | null>(null);
   const boardRef = useRef<BoardPose>(newBoardPose());
@@ -456,13 +524,26 @@ export default function ZonaSulWorld() {
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
   if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t };
   useEffect(() => {
+    zsPause.on = paused;
+    if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
+  }, [paused]);
+  useEffect(() => {
+    // entrou no mapa: a pé, câmera no herói; 1ª vez = ganha a prancha
+    drive.mode = 'foot'; input.overview = false; input.keys.clear(); hudNow = null;
+    useGameStore.getState().grantSurfboard();
     let alive = true;
-    loadZsTerrain().then((tt) => { if (!alive) return; heroRef.current.y = zsHeightAt(tt, ZS_SPAWN.x, ZS_SPAWN.z); carRef.current = newCar(ZS_SPAWN.x + 3, ZS_SPAWN.z - 2, 0, tt); setT(tt); }).catch((e) => alive && setErr(String(e)));
-    return () => { alive = false; };
+    loadZsTerrain().then((tt) => {
+      if (!alive) return;
+      const at = readZsPos(tt);
+      heroRef.current.set(at.x, zsHeightAt(tt, at.x, at.z), at.z); focusRef.current.copy(heroRef.current);
+      carRef.current = newCar(at.x + 3, at.z - 2, 0, tt); setT(tt);
+    }).catch((e) => alive && setErr(String(e)));
+    const keep = window.setInterval(() => { if (carRef.current) saveZsPos(heroRef.current); }, 2000);
+    return () => { alive = false; window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear(); };
   }, []);
   const sunPos = useMemo(() => SUN.clone().multiplyScalar(1000).toArray() as [number, number, number], []);
   return (
-    <div style={{ position: 'fixed', inset: 0, background: FOG, touchAction: 'none' }}>
+    <div className="zs-world" style={{ background: FOG }}>
       {t && (
         <Canvas shadows dpr={[1, 1.25]} camera={{ fov: 55, near: 0.3, far: 7000 }} gl={{ antialias: true }}>
           <color attach="background" args={[FOG]} />
@@ -473,35 +554,30 @@ export default function ZonaSulWorld() {
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
           <ZsVegetation t={t} heroRef={focusRef} />
-          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={setHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} />
+          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} />
           <Suspense fallback={null}><ZsCarView carRef={carRef} dimsRef={dimsRef} /></Suspense>
           <Suspense fallback={null}><ZsBoardView poseRef={boardRef} /></Suspense>
           <Controls />
           <ZsPerf elRef={perfRef} />
         </Canvas>
       )}
-      <div style={{ position: 'absolute', top: 10, left: 12, color: '#10202c', font: '600 13px system-ui', background: 'rgba(255,255,255,.72)', padding: '6px 10px', borderRadius: 8, pointerEvents: 'none', maxWidth: 'calc(100% - 24px)' }}>
-        TRIBOS · Zona Sul (teste isolado — não é o mapa do jogo)
-        {hud && <div style={{ font: '400 12px system-ui', marginTop: 3 }}>{hud.state}{hud.car && hud.state.startsWith('dirigindo') ? '' : ` · altura ${hud.y.toFixed(0)} m`}{hud.near ? ` · perto de ${hud.near}` : ''}</div>}
-        {hud?.car && <div style={{ font: '700 12px system-ui', marginTop: 3, color: '#0b5c7a' }}>{hud.car}</div>}
-        <div style={{ font: '400 11px system-ui', marginTop: 2, opacity: 0.8 }}>
-          {hud?.overview ? 'VISTA DE CIMA · WASD move · Shift rápido · arraste gira · roda sobe/desce · K volta pro herói'
-            : 'WASD anda · Shift corre · Espaço pula · arraste gira · roda = zoom · K = vista de cima · 1–0 hotbar · I inventário · P = FPS'}
+      {/* STATUS (canto direito, onde no mapa velho fica o minimapa) + LEVANTAR — componente próprio, o mundo não re-renderiza */}
+      <ZsHudView touch={touch} />
+      <div ref={perfRef} className="zs-perf" style={{ display: 'none' }} />
+      {touch && t && !paused && (
+        <div className="zs-touch">
+          <button type="button" className="zs-btn" title="Entrar / sair do carro" aria-label="Entrar / sair do carro" onPointerDown={() => { input.eTap = true; }}>Carro</button>
+          <HoldKey code="ShiftLeft" label="Correr" title="Correr / remar forte / turbo" />
+          <HoldKey code="KeyC" label="Descer" title="Mergulhar / descer o carro" />
+          <HoldKey code="Space" label="Pular" title="Pular / levantar na prancha / subir o carro" />
         </div>
-      </div>
-      {t && <ZsLootHud />}
-      <div ref={perfRef} style={{ display: 'none', position: 'absolute', top: 10, right: 12, color: '#fff', font: '700 13px system-ui', background: 'rgba(10,22,32,.7)', padding: '5px 9px', borderRadius: 7, pointerEvents: 'none' }} />
-      {hud?.canPop && (
-        <button type="button" onPointerDown={() => { input.popTap = true; }}
-          style={{ position: 'absolute', right: 18, bottom: 110, padding: '14px 18px', borderRadius: 12, border: '2px solid #ffd27a', background: 'rgba(12,24,34,.8)', color: '#ffd27a', font: '800 15px system-ui', cursor: 'pointer' }}>
-          LEVANTAR (Espaço)
-        </button>
       )}
-      <div style={{ position: 'absolute', bottom: 6, right: 8, color: '#10202c', font: '400 10px system-ui', background: 'rgba(255,255,255,.6)', padding: '2px 6px', borderRadius: 5, pointerEvents: 'none' }}>
-        Relevo: AWS Terrain Tiles (SRTM) · Mapa: © OpenStreetMap contributors (ODbL)
-      </div>
-      {!t && !err && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', font: '600 18px system-ui', color: '#10202c' }}>Carregando a Zona Sul…</div>}
-      {err && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', font: '600 16px system-ui', color: '#8a1c1c' }}>Erro: {err}</div>}
+      <div className="zs-credit">Relevo: AWS Terrain Tiles (SRTM) · Mapa: © OpenStreetMap contributors (ODbL)</div>
+      {!t && !err && <div className="world-loading">Chegando na Zona Sul…</div>}
+      {err && <div className="world-loading" style={{ color: '#ef4444' }}>Erro: {err}</div>}
     </div>
   );
 }
+
+/** memo: a casa do jogo re-renderiza (relógio 1×/s, vida, XP…) e o mundo 3D NÃO vai junto — só muda com `paused`. */
+export default memo(ZonaSulWorld);

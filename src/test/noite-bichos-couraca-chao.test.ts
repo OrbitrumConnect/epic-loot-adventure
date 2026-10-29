@@ -46,7 +46,8 @@ describe('noite: bando de +25 pombos', () => {
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
     expect(store).toMatch(/tickNightFlock: \(night\) => \{\s*if \(!canSimulateSharedWorld\(\)\) return;/);
     const idx = fs.readFileSync('src/routes/index.tsx', 'utf8');
-    expect(idx).toMatch(/\{worldOn && ui\.mode === 'world' && <NightFlock \/>\}/);
+    // 29/10: só no Vale (`!zs`) — a revoada é do mapa velho; na Zona Sul vem com a fauna dela
+    expect(idx).toMatch(/\{worldOn && ui\.mode === 'world' && !zs && <NightFlock \/>\}/);
   });
   it('pombo +30% de tamanho', () => {
     const b = fs.readFileSync('src/components/world/beast.tsx', 'utf8');

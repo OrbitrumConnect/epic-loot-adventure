@@ -58,6 +58,7 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
+import { grantSurfboard } from '../systems/zonaSulKit';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
@@ -269,6 +270,8 @@ type GameActions = {
   recordPilotIntent: (intent: AutoIntent | null) => void;
   addHuntArea: (x: number, z: number) => void;
   drinkPotion: () => void;
+  /** Zona Sul: entrega a prancha (1ª entrada) — mochila + espaço livre da hotbar. */
+  grantSurfboard: () => void;
   tickWorld: () => void;
   /** O mundo 3D chama quando uma criatura acerta o jogador (ou outro dano que só ele vê). */
   reportDamage: (targetId: string, amount: number, position: Position, onPlayer: boolean) => void;
@@ -2340,6 +2343,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // Só grava se mudou a referência, pra não disparar re-render à toa.
     if (get().pilotLastIntent === intent) return;
     set({ pilotLastIntent: intent });
+  },
+
+  grantSurfboard: () => {
+    const r = grantSurfboard(get().player.inventory);
+    if (r.granted) set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: '🏄 Você ganhou uma Prancha de surf — selecione na hotbar e entre no mar.' } }));
+    else if (r.full) set(s => ({ ui: { ...s.ui, message: 'Mochila cheia: libere espaço para receber a Prancha de surf.' } }));
   },
 
   drinkPotion: () => {

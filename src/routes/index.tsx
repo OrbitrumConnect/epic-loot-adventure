@@ -5,7 +5,7 @@ import {
   Circle, CircleDot, CloudRain, Coins, Compass, Crosshair, Flame, FlaskConical, Hammer, Hand,
   Heart, Home, Landmark, Leaf, ListChecks, Lock, LogOut, Map, Menu, MessageSquare, Mountain, Package,
   Download, PanelLeftClose, Pickaxe, Repeat, RotateCcw, RotateCw, Settings, Shield, ShieldCheck, Skull,
-  Tornado, CloudLightning,
+  Tornado, CloudLightning, Waves,
   Sparkles, Swords, Target, Tent, Trash2, TreePine, Trophy, Users, Utensils, Wind, X, Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,14 @@ import {
 import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/world/pilot-status';
 
 const GameWorld = lazy(() => import('@/components/game-world'));
+// ZONA SUL (29/10): o 2º mapa do jogo — mesmo personagem/save/HUD; só o mundo 3D muda (chave no menu "MAPAS").
+const ZonaSulWorld = lazy(() => import('@/components/zona-sul/zona-sul-world'));
+import { setWorldMap, useWorldMap } from '@/components/world/world-map-choice';
+/** Teclas que na Zona Sul são DELA (carro E/V, mergulho C, FPS P) ou do combate/mapa velho que ainda não existe lá
+ *  (Fase 1+: Q/R/F/Z/X/T/Y, piloto G, mapa M, detalhe L, câmera livre). Hotbar 1–0, I, B e Esc valem nos dois. */
+const ZS_SKIP_KEYS = new Set(['KeyE', 'KeyQ', 'KeyR', 'KeyF', 'KeyZ', 'KeyX', 'KeyC', 'KeyT', 'KeyY', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyG', 'KeyM']);
+/** Itens do menu que são do mapa velho (fila do piloto, mapa do vale) — somem na Zona Sul até ganharem a versão dela. */
+const ZS_HIDE_NAV = new Set(['objectives', 'map']);
 import { BossSpawner } from '@/components/world/boss-spawner';
 import { NightFlock } from '@/components/world/night-flock';
 import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
@@ -168,6 +176,8 @@ const navigation = [
 function Index() {
   const [ready, setReady] = useState(false);
   const editorActive = useEditorStore(s => s.active);
+  const worldMap = useWorldMap();
+  const zs = worldMap === 'zona-sul';
   const setEditorActive = useEditorStore(s => s.setActive);
   const [cameraMode, setCameraMode] = useState<'iso' | 'third' | 'free'>('iso');
   const [deathCountdown, setDeathCountdown] = useState(0);
@@ -426,6 +436,7 @@ function Index() {
       if (editorActive) return;
       // 1–9 → slots 0–8; 0 → slot 9. Demais slots (ex.: rifle) por clique.
       if (/^[0-9]$/.test(e.key)) useHotbarSlot(e.key === '0' ? 9 : Number(e.key) - 1);
+      if (zs && ZS_SKIP_KEYS.has(e.code)) return;
       // Na câmera livre, E/Q/R/Espaço pilotam a câmera (no game-world), não o
       // herói — então as ações de jogo ficam suspensas enquanto ela está ligada.
       const freeCam = cameraMode === 'free';
@@ -468,7 +479,7 @@ function Index() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [collectNearest, specialAttack, arrowRain, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, togglePerf, cameraMode, ui.panel, inCity, editorActive, setEditorActive]);
+  }, [collectNearest, specialAttack, arrowRain, hitNearest, useHotbarSlot, setPanel, setMode, setPanelMessage, toggleCamera, toggleFreeCam, togglePerf, cameraMode, ui.panel, inCity, editorActive, setEditorActive, zs]);
 
   function open(id: string) {
     setPanelMessage('');
@@ -565,7 +576,7 @@ function Index() {
         <div className="brand"><ShieldCheck strokeWidth={1.3} /><span className="brand-name">TRIBOS</span></div>
         <div className="sidebar-label">SEU MUNDO</div>
         <nav className="sidebar-nav">
-          {navigation.map(item => (
+          {navigation.filter(item => !(zs && ZS_HIDE_NAV.has(item.id))).map(item => (
             <Button key={item.id} variant="ghost" className="nav-item"
               title={item.id === 'city' && !cityUnlocked ? (cityLockReason(useGameStore.getState().playerBase) ?? item.name) : item.name}
               aria-label={item.id === 'city' && !cityUnlocked ? 'Cidade (trancada) — clique para ver o que falta' : undefined}
@@ -574,6 +585,16 @@ function Index() {
               <item.icon strokeWidth={1.5} /><span>{item.name}</span>
               {item.id === 'city' && !cityUnlocked && <Lock className="nav-lock" aria-hidden="true" />}
               {item.id === 'loot' && <span className="nav-count">{totalResources}</span>}
+            </Button>
+          ))}
+        </nav>
+        <div className="sidebar-label">MAPAS</div>
+        <nav className="sidebar-nav" aria-label="Escolher mapa">
+          {([['classic', 'Vale dos Ancestrais', Mountain], ['zona-sul', 'Zona Sul · Rio', Waves]] as const).map(([id, name, Icon]) => (
+            <Button key={id} variant="ghost" className="nav-item" title={id === 'zona-sul' ? 'Zona Sul do Rio — mar, onda, prancha e carro voador (mesmo personagem)' : 'O vale de sempre — acampamentos, base e hordas'}
+              data-active={worldMap === id && !inCity} aria-pressed={worldMap === id}
+              onClick={() => { setPanel(null); setMode('world'); if (worldMap !== id) setWorldMap(id); }}>
+              <Icon strokeWidth={1.5} /><span>{name}</span>
             </Button>
           ))}
         </nav>
@@ -657,18 +678,23 @@ function Index() {
               <CityView />
             </Suspense>
           )}
-          {worldOn && !inCity && (
+          {worldOn && !inCity && !zs && (
             <Suspense fallback={<div className="world-loading">Entrando no vale…</div>}>
               <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel) || editorActive} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
-          {worldOn && !inCity && <AimCrosshair shoulder={cameraMode === 'third'} />}
-          {worldOn && perfOn && <PerfHud />}
+          {worldOn && !inCity && zs && (
+            <Suspense fallback={<div className="world-loading">Chegando na Zona Sul…</div>}>
+              <ZonaSulWorld paused={Boolean(panel) || editorActive} />
+            </Suspense>
+          )}
+          {worldOn && !inCity && !zs && <AimCrosshair shoulder={cameraMode === 'third'} />}
+          {worldOn && perfOn && !zs && <PerfHud />}
           {/* Cartas de um toque + lateral UPAR (Pedro 25/10: sem precisar ir à cidade). */}
           {worldOn && !inCity && !player.dead && <CardHost />}
           {worldOn && !inCity && !player.dead && <UpgradeSide />}
-          {worldOn && ui.mode === 'world' && <BossSpawner />}
-          {worldOn && ui.mode === 'world' && <NightFlock />}
+          {worldOn && ui.mode === 'world' && !zs && <BossSpawner />}
+          {worldOn && ui.mode === 'world' && !zs && <NightFlock />}
           {player.dead && !inCity && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 50,
@@ -803,13 +829,21 @@ function Index() {
             </div>
           )}
           {!inCity && (<>
+          {zs ? (
+            <div className="zone-heading">
+              <small><i className="status-dot" />Território livre</small>
+              <h1>Zona Sul · Rio</h1>
+              <div className="zone-meta"><span><Waves />Mar, onda e Lagoa</span><span><TreePine />Mata atlântica</span></div>
+            </div>
+          ) : (
           <div className="zone-heading">
             <small><i className="status-dot" />{ui.mode === 'raid' ? 'Zona de conflito' : 'Território livre'}</small>
             <h1>{ui.mode === 'raid' ? 'Fortaleza Esquecida' : 'Vale dos Ancestrais'}</h1>
             <div className="zone-meta"><span><TreePine />Floresta temperada</span><span><Shield />Nv. 1 — 10</span></div>
           </div>
+          )}
 
-          <div className="world-right">
+          {!zs && <div className="world-right">
             <div className="minimap"><WorldMap size="mini" /><span className="minimap-north">N</span></div>
             <div className="map-coordinate">
               <span>{Math.round((position[0] ?? 0) + 124)}, {Math.round((position[1] ?? 0) + 86)}</span>
@@ -822,10 +856,10 @@ function Index() {
               <div className="quest-step">{essenceCount >= 2 ? <Check /> : <Circle />}<ItemSprite itemId="arcane_essence" size={16} />Essências Arcanas <strong>{Math.min(essenceCount, 2)}/2</strong></div>
               <div className="quest-step">{hasCraftedSword ? <Check /> : <Circle />}<ItemSprite itemId="iron_sword" size={16} />Forjar equipamento <strong>{hasCraftedSword ? 1 : 0}/1</strong></div>
             </div>
-          </div>
+          </div>}
 
           {/* Faixa compacta: deixa o modo idle legível sem abrir painel */}
-          <div className="pilot-strip" data-idle={idleMode}>
+          {!zs && <div className="pilot-strip" data-idle={idleMode}>
             <span className="pilot-mode">
               {idleMode ? <Bot /> : <Hand />}
               {idleMode ? 'IDLE' : 'MANUAL'}
@@ -855,7 +889,7 @@ function Index() {
               onClick={() => setAutoMode(idleMode ? 'manual' : 'idle')}>
               {idleMode ? 'Assumir' : 'Piloto'}
             </Button>
-          </div>
+          </div>}
 
           <HuntBanner />
           <LevelUpBanner />
@@ -866,12 +900,12 @@ function Index() {
               <div><time>08:42</time><strong>Mundo</strong> · {ui.message}</div>
               {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
             </div>
-            <div className="world-actions world-actions--overlay">{actionButtons}</div>
+            {!zs && <div className="world-actions world-actions--overlay">{actionButtons}</div>}
           </div>)}
-          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={cameraMode === 'third'} powers={mobilePowers} />}
+          {isMobile && !panel && !player.dead && !zs && <MobileControls onAttack={hitNearest} canAim={cameraMode === 'third'} powers={mobilePowers} />}
           </>)}
 
-          {!inCity && !panel && <PiecePicker />}
+          {!inCity && !panel && !zs && <PiecePicker />}
 
           {panel && (
             <div className="modal-backdrop">
@@ -1113,7 +1147,7 @@ function Index() {
                   disabled={!DEV_INFINITE_POTIONS && potionCount <= 0} onClick={drinkPotion}>
                   Beber agora
                 </Button>
-                {!panel && <div className="world-actions world-actions--footer">{actionButtons}</div>}
+                {!panel && !zs && <div className="world-actions world-actions--footer">{actionButtons}</div>}
               </div>
             </div>
             <div className="hotbar-note-row">

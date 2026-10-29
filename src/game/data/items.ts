@@ -321,6 +321,20 @@ export const ITEMS: Record<string, Item> = {
     attackPower: 20,
     icon: 'Axe',
   },
+  // PRANCHA DE SURF (Zona Sul, 29/10): item oficial — na mão (hotbar) + no mar = rema, levanta na onda e surfa.
+  // Não é arma (sem ataque) nem se equipa num espaço: é ferramenta de MOBILIDADE, como a tocha é de luz.
+  surfboard: {
+    id: 'surfboard',
+    name: 'Prancha de surf',
+    category: 'tool',
+    rarity: 'uncommon',
+    weight: 3.5,
+    maxStack: 1,
+    dropOnDeath: false,
+    usable: false,
+    equippable: false,
+    icon: 'Surfboard',
+  },
   iron_pickaxe: {
     id: 'iron_pickaxe',
     name: 'Picareta de Ferro',

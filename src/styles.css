@@ -1053,3 +1053,30 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .cs-attr { grid-template-columns: 82px minmax(0, 1fr) 38px 24px 24px; }
   .cs-grid { grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); }
 }
+
+/* ===== ZONA SUL dentro do jogo (29/10) ===== */
+.zs-world { position: absolute; inset: 0; touch-action: none; overflow: hidden; }
+.zs-hud { position: absolute; top: 17px; right: 18px; z-index: 3; max-width: min(380px, calc(100% - 36px)); display: flex; flex-direction: column; gap: 3px; padding: 9px 12px;
+  border: 1px solid color-mix(in oklch, var(--primary) 28%, var(--border)); border-radius: 8px; pointer-events: none;
+  background: color-mix(in oklch, var(--background) 78%, transparent); backdrop-filter: blur(6px); color: var(--foreground); text-align: right; }
+.zs-hud strong { font-size: 13px; font-weight: 700; color: var(--primary); }
+.zs-hud small { font-size: 11px; color: var(--muted-foreground); }
+.zs-hud em { font-style: normal; font-size: 11px; font-weight: 700; color: #7dd3fc; }
+.zs-hud .zs-hud__keys { font-size: 10px; opacity: .8; margin-top: 2px; }
+.zs-perf { position: absolute; top: 17px; left: 50%; transform: translateX(-50%); z-index: 3; padding: 4px 9px; border-radius: 6px; pointer-events: none;
+  font: 700 12px var(--font-sans); color: #fff; background: rgba(10, 22, 32, .72); }
+.zs-btn { min-width: 64px; height: 52px; padding: 0 14px; border-radius: 12px; touch-action: none; user-select: none; -webkit-user-select: none;
+  font: 800 13px var(--font-sans); letter-spacing: .5px; color: var(--primary); cursor: pointer;
+  border: 2px solid color-mix(in oklch, var(--primary) 70%, transparent); background: color-mix(in oklch, var(--background) 72%, transparent); backdrop-filter: blur(4px); }
+.zs-btn:active { background: color-mix(in oklch, var(--primary) 30%, var(--background)); }
+.zs-btn--pop { position: absolute; right: 18px; bottom: 96px; z-index: 4; height: 58px; font-size: 16px; box-shadow: 0 0 18px color-mix(in oklch, var(--primary) 45%, transparent); animation: cs-pulse 1s ease-in-out infinite; }
+.zs-btn--pop small { font-size: 10px; opacity: .75; }
+.zs-touch { position: absolute; right: 14px; bottom: 26px; z-index: 3; display: grid; grid-template-columns: repeat(2, auto); gap: 8px; }
+.zs-credit { position: absolute; right: 10px; bottom: 4px; z-index: 2; font-size: 9px; color: rgba(16, 32, 44, .85); background: rgba(255, 255, 255, .55); padding: 1px 6px; border-radius: 4px; pointer-events: none; }
+.game-shell[data-touch] .zs-btn--pop { bottom: 140px; }
+@media (max-width: 700px) {
+  .zs-hud { top: 70px; right: 10px; padding: 6px 9px; }
+  .zs-hud strong { font-size: 11px; }
+  .zs-hud .zs-hud__keys { display: none; }
+  .zs-btn { min-width: 58px; height: 48px; font-size: 12px; }
+}

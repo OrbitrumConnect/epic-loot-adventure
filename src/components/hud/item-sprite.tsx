@@ -31,15 +31,28 @@ function RifleIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Prancha de surf (Zona Sul): deck creme, longarina laranja, quilha azul — inclinada como no hotbar. */
+function SurfboardIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" {...props}>
+      <g transform="rotate(-35 12 12)">
+        <ellipse cx="12" cy="12" rx="3.6" ry="10.5" fill="#f4efe2" stroke="#1b4c63" strokeWidth="1.2" />
+        <line x1="12" y1="2.2" x2="12" y2="21.8" stroke="#e0672f" strokeWidth="1.1" />
+        <path d="M10.6 19.5 L12 22.3 L13.4 19.5 Z" fill="#1b4c63" />
+      </g>
+    </svg>
+  );
+}
+
 /** Ícones lucide de reserva, indexados por `Item.icon`. Usados quando o sprite não carrega. */
 export const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   Swords, Axe, Pickaxe, FlaskConical, Crosshair, Utensils, Flame, Sparkles,
   TreePine, Mountain, Gem, Shield, Skull, Package, ArrowUpRight, Target,
-  Bow: BowIcon, Pistol: PistolIcon, Rifle: RifleIcon,
+  Bow: BowIcon, Pistol: PistolIcon, Rifle: RifleIcon, Surfboard: SurfboardIcon,
 };
 
 /** Itens que não têm sprite webp: renderizam o ícone direto (sem 404). */
-const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor']);
+const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor', 'surfboard']);
 
 export type ItemSpriteProps = {
   itemId: string | null | undefined;

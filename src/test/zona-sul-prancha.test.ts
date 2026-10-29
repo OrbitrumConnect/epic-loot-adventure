@@ -1,9 +1,12 @@
 import fs from 'node:fs';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { canPop, newRide, RIDE, rideStep } from '@/components/zona-sul/surf/surf-ride';
 import { barrelAt, barrelBand, crestQ, SPIT_ACC, SURF, surfChurnAt, surfSpitAt, TUBE, type WaveVar, waveStateAt } from '@/components/zona-sul/surf/surf-wave';
-import { readZsLoot, zsAssignHotbar, ZS_BOARD_ID, zsLootFrom, zsSelectedItem } from '@/components/zona-sul/zs-loot';
-import { SAVE_KEY } from '@/game/systems/persistenceSystem';
+import { grantSurfboard, SURFBOARD_ID } from '@/game/systems/zonaSulKit';
+import { createLocalSave, parseLocalSave } from '@/game/systems/persistenceSystem';
+import { createInventory } from '@/game/systems/inventorySystem';
+import { ITEMS } from '@/game/data/items';
+import { useGameStore } from '@/game/state/game-store';
 
 /* 28/10 — SURF fase C (Pedro): hotbar + I com o mesmo loot do jogo + PRANCHA num slot; remada → levantar (Zombie Stand
    Up de 30%) → em pé surfando; "caso eu caia dentro do tubo, giro junto e vou sendo levado". */
@@ -121,29 +124,34 @@ describe('prancha — remar, levantar, surfar, vaca', () => {
   });
 });
 
-describe('hotbar + I na Zona Sul: o MESMO loot, só leitura', () => {
-  const inv = { slots: [{ itemId: 'stone_axe', quantity: 1 }, { itemId: null, quantity: 0 }, { itemId: 'wood', quantity: 12 }], hotbar: { slots: [0, 2, null] } };
-  it('copia o inventário (hotbar remapeado) e põe a PRANCHA no fim; pôr no hotbar e selecionar', () => {
-    const l = zsLootFrom(inv);
-    expect(l.slots.map((s) => s.itemId)).toEqual(['stone_axe', 'wood', ZS_BOARD_ID]);
-    expect(l.hotbar.slice(0, 3)).toEqual([0, 1, null]);
-    expect(l.hotbar).toHaveLength(10);
-    const l2 = zsAssignHotbar(l, 2, 2);
-    expect(zsSelectedItem(l2, 2)).toBe(ZS_BOARD_ID);
-    expect(zsSelectedItem(zsAssignHotbar(l2, 5, 2), 2)).toBe(null); // mesmo item não fica em 2 espaços
+describe('prancha = item OFICIAL do jogo (29/10: a Zona Sul entrou na casa do jogo)', () => {
+  it('existe no catálogo, não é arma nem se equipa, e o SAVE aceita (antes era cópia só-leitura porque o save recusava)', () => {
+    const it = ITEMS[SURFBOARD_ID]!;
+    expect(it.name).toBe('Prancha de surf');
+    expect(it.equippable).toBe(false);
+    expect(it.attackPower ?? 0).toBe(0);
+    const g = grantSurfboard(useGameStore.getState().player.inventory);
+    const save = createLocalSave({ ...useGameStore.getState(), player: { ...useGameStore.getState().player, inventory: g.inventory } } as never);
+    const back = parseLocalSave(JSON.stringify(save));
+    expect(back).not.toBeNull();
+    expect(back!.player.inventory.slots.some((sl) => sl.itemId === SURFBOARD_ID)).toBe(true);
   });
-  it('NUNCA grava no save do jogo (a prancha faria o save ser recusado)', () => {
-    const storage = { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn() };
-    const l = readZsLoot(storage, inv);
-    expect(storage.getItem).toHaveBeenCalledWith(SAVE_KEY);
-    expect(storage.setItem).not.toHaveBeenCalled(); expect(storage.removeItem).not.toHaveBeenCalled();
-    expect(l.slots.at(-1)!.itemId).toBe(ZS_BOARD_ID);               // sem save: usa o inventário da memória
-    const code = src('src/components/zona-sul/zs-loot.ts') + src('src/components/zona-sul/zs-loot-hud.tsx');
-    expect(code).not.toMatch(/setItem|startLocalPersistence|startAccountPersistence|useGameStore\.setState/);
+  it('1ª entrada: vai pra mochila e pro 1º espaço LIVRE da hotbar; quem já tem não ganha outra', () => {
+    const inv = createInventory();
+    const g = grantSurfboard(inv);
+    expect(g.granted).toBe(true);
+    const idx = g.inventory.slots.findIndex((sl) => sl.itemId === SURFBOARD_ID);
+    expect(g.inventory.hotbar.slots).toContain(idx);
+    expect(g.inventory.hotbar.slots.slice(0, inv.hotbar.slots.length).filter((v, i) => v !== inv.hotbar.slots[i]).length).toBeLessThanOrEqual(1); // não mexe nos outros
+    const again = grantSurfboard(g.inventory);
+    expect(again.granted).toBe(false);
+    expect(again.inventory).toBe(g.inventory);
   });
-  it('o jogo de sempre não usa nada disso (corte de clip é opcional; prancha só existe na Zona Sul)', () => {
-    expect(src('src/routes/index.tsx')).not.toMatch(/customClipCut|zs_surfboard/);
-    expect(src('src/game/data/items.ts')).not.toMatch(/zs_surfboard/);
+  it('a Zona Sul lê a prancha DA HOTBAR do jogo (nada de inventário paralelo); o loot só-leitura saiu', () => {
+    const w = src('src/components/zona-sul/zona-sul-world.tsx');
+    expect(w).toContain('selectedItemId(useGameStore.getState()) === SURFBOARD_ID');
+    expect(w).not.toMatch(/zs-loot|ZsLootHud|zs_surfboard/);
+    expect(fs.existsSync('src/components/zona-sul/zs-loot.ts')).toBe(false);
   });
 });
 

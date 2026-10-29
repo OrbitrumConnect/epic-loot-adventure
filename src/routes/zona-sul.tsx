@@ -1,15 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { lazy, Suspense } from 'react';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useEffect } from 'react';
+import { setWorldMap } from '@/components/world/world-map-choice';
 
-/** Rota ISOLADA /zona-sul — Zona Sul do RJ (relevo real, mata, água). Não toca no mundo do jogo. */
-const ZonaSulWorld = lazy(() => import('@/components/zona-sul/zona-sul-world'));
-
+/** /zona-sul (link antigo, 29/10): a Zona Sul agora é um MAPA DO JOGO — este endereço escolhe ela e abre o jogo. */
 function ZonaSulPage() {
-  return (
-    <Suspense fallback={<div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', font: '600 18px system-ui' }}>Carregando a Zona Sul…</div>}>
-      <ZonaSulWorld />
-    </Suspense>
-  );
+  const navigate = useNavigate();
+  useEffect(() => { setWorldMap('zona-sul'); void navigate({ to: '/', replace: true }); }, [navigate]);
+  return <div style={{ position: 'fixed', inset: 0, display: 'grid', placeItems: 'center', font: '600 18px system-ui' }}>Abrindo a Zona Sul…</div>;
 }
 
 export const Route = createFileRoute('/zona-sul')({ component: ZonaSulPage });
