@@ -9,9 +9,9 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { type ZsTerrain, setZsWaterChurn, setZsWaterExtra, setZsWaterPush } from '../zs-terrain-data';
+import { type ZsTerrain, setZsWaterChurn, setZsWaterExtra, setZsWaterPush, setZsWaterTube } from '../zs-terrain-data';
 import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from '../zs-water-look';
-import { BARREL_T, BEND, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfPushAt, TUBE } from './surf-wave';
+import { BARREL_T, BEND, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, TUBE } from './surf-wave';
 import { SLOTS, SurfScheduler } from './surf-scheduler';
 import { findSurfFrame, type SurfFrame, toSurfLocal } from './surf-frame';
 
@@ -67,15 +67,17 @@ float sm(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.
 float bumpW(float x, float h, float st) { float w = x > 0.0 ? 3.4 - 1.4 * st : 7.0; float r = x / w; return h * exp(-r * r); }
 float tubeR(float h) { return clamp(h * ${TUBE.K.toFixed(3)}, ${TUBE.MIN.toFixed(3)}, ${TUBE.MAX.toFixed(3)}); }
 const float BEND = ${BEND.toFixed(3)}, ZS = ${SURF.ZONE_S.toFixed(3)}, PB = ${PEAK_BLEND.toFixed(3)};
+// ponto da elipse do tubo com o ângulo corrigido (pontos por igual na curva) — igual ao P de barrelCurve (surf-wave.ts)
+vec2 ellP(float ang, float r, float cq, float cy, float AX) { float a = ang + (AX - 1.0) / (2.0 * (AX + 1.0)) * sin(2.0 * ang); return vec2(cq + AX * r * cos(a), cy + r * sin(a)); }
 float tubeAx(float R) { return ${TUBE.AX0.toFixed(3)} + ${TUBE.AXK.toFixed(3)} * R; }
 vec2 barrelCurve(float t, float R, float curl, float cl, float rs, float y0, float y1) {
   float wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R, Re = R * rs, T = Re * ${TUBE.LIP.toFixed(3)}, AX = tubeAx(R);
   float cq = ${TUBE.CQ.toFixed(3)} * R, cy = ${TUBE.CY.toFixed(3)} * Re;
   float en = radians(150.0 + (-60.0 - 25.0 * cl - 150.0) * curl), st = radians(260.0);
   float A = ${BARREL_T[0].toFixed(4)}, B = ${BARREL_T[1].toFixed(4)}, C = ${BARREL_T[2].toFixed(4)};
-  if (t <= A) { float k = t / A; vec2 b = vec2(cq + AX * Re * cos(st), cy + Re * sin(st)); return vec2(wf + (b.x - wf) * k, y0 + (b.y - y0) * sm(0.0, 1.0, k)); }
-  if (t <= B) { float a = st + (en - st) * ((t - A) / (B - A)); return vec2(cq + AX * Re * cos(a), cy + Re * sin(a)); }
-  if (t <= C) { float k = (t - B) / (C - B); float a = en + (1.5707963 - en) * k; float r = Re + T * sm(0.0, 1.0, min(1.0, k * 3.0)); return vec2(cq + AX * r * cos(a), cy + r * sin(a)); }
+  if (t <= A) { float k = t / A; vec2 b = ellP(st, Re, cq, cy, AX); return vec2(wf + (b.x - wf) * k, y0 + (b.y - y0) * sm(0.0, 1.0, k)); }
+  if (t <= B) { float a = st + (en - st) * ((t - A) / (B - A)); return ellP(a, Re, cq, cy, AX); }
+  if (t <= C) { float k = (t - B) / (C - B); float a = en + (1.5707963 - en) * k; float r = Re + T * sm(0.0, 1.0, min(1.0, k * 3.0)); return ellP(a, r, cq, cy, AX); }
   float k = (t - C) / (1.0 - C); vec2 tp = vec2(cq, cy + Re + T);
   return vec2(tp.x + (-wb - tp.x) * k, tp.y + (y1 - tp.y) * sm(0.0, 1.0, k));
 }
@@ -172,8 +174,9 @@ export function SurfBreak({ t, shoreX, shoreZ }: { t: ZsTerrain; shoreX: number;
     });
     const key = (e: KeyboardEvent) => { if (e.code === 'KeyJ' && !e.repeat) scheduler.trigger(); };
     window.addEventListener('keydown', key);
+    setZsWaterTube((x, z, yRef) => { const [s, q] = toSurfLocal(frame, x, z); return inZone(s, q) && surfInTubeAt(s, q, scheduler.states, scheduler.vars, yRef, frame.lim); });
     setZsWaterChurn((x, z) => { const [s, q] = toSurfLocal(frame, x, z); return inZone(s, q) ? surfChurnAt(s, q, scheduler.states, scheduler.vars, frame.lim) : 0; });
-    return () => { surfZone.on = false; surfZone.frame = null; setZsWaterExtra(null); setZsWaterPush(null); setZsWaterChurn(null); window.removeEventListener('keydown', key); };
+    return () => { surfZone.on = false; surfZone.frame = null; setZsWaterExtra(null); setZsWaterPush(null); setZsWaterChurn(null); setZsWaterTube(null); window.removeEventListener('keydown', key); };
   }, [frame, uniforms, scheduler]);
   useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
 

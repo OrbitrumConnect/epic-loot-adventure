@@ -33,13 +33,60 @@ describe('prancha — remar, levantar, surfar, vaca', () => {
     expect(st.mode).toBe('ride');
     expect(m.z).toBeGreaterThan(C * RIDE.POPUP_S * 0.9);           // levantando, a onda leva
   });
-  it('em pé: corre a parede pro lado que apertar (até LAT_MAX) e a onda leva rumo à praia', () => {
-    const st = newRide(); st.mode = 'ride';
-    const m = run(st, 3, { dirX: -1 }, { pushZ: C });
-    const lat = st.vx;
-    expect(lat).toBeLessThan(-RIDE.LAT_MAX * 0.9);                 // correndo pra esquerda da onda
-    expect(m.z).toBeGreaterThan(C * 3 * 0.9);                       // e indo com a onda
-    expect(SURF.V_PEEL).toBeLessThan(RIDE.LAT_MAX);                // dá pra acompanhar a abertura do tubo
+  it('CARVING com comandos DA PRANCHA: D vira à DIREITA de quem está nela, A à esquerda, com raio; a onda leva no bolso', () => {
+    const st = newRide(); st.mode = 'ride'; st.yaw = 0; st.speed = RIDE.S_CRUISE; // indo pra +z: a direita dele é −x
+    run(st, 0.2, { steer: 1 }, { pushZ: C, surfY: 0 });
+    expect(st.yaw).toBeLessThan(-0.3); expect(st.yaw).toBeGreaterThan(-Math.PI / 2 + 0.2); // virando, ainda não chegou
+    expect(st.carve).toBeLessThan(-1);                              // taxa de curva (inclina o corpo)
+    run(st, (Math.PI / 2 - 0.52) / RIDE.TURN, { steer: 1 }, { pushZ: C, surfY: 0 });
+    const m = run(st, 3, {}, { pushZ: C, surfY: 0 });                // soltou: segue reto
+    expect(st.yaw).toBeCloseTo(-Math.PI / 2, 1);
+    expect(m.x).toBeLessThan(-RIDE.S_CRUISE * 2);                    // foi pra DIREITA dele (−x)
+    expect(m.z).toBeGreaterThan(C * 3 * 0.9);                       // e a onda segura no bolso
+    const a = newRide(); a.mode = 'ride'; a.yaw = 0; a.speed = RIDE.S_CRUISE;
+    run(a, 0.3, { steer: -1 }, { pushZ: C, surfY: 0 });
+    expect(a.yaw).toBeGreaterThan(0.3);                              // A = esquerda (+x)
+    // nada disso depende da câmera: dirX/dirZ (câmera) não mexem na prancha em pé
+    const cam = newRide(); cam.mode = 'ride'; cam.yaw = 0; cam.speed = RIDE.S_CRUISE;
+    run(cam, 0.5, { dirX: 1, dirZ: 0 }, { pushZ: C, surfY: 0 });
+    expect(cam.yaw).toBe(0);
+  });
+  it('W acelera (pump), S freia (stall)', () => {
+    const w = newRide(); w.mode = 'ride'; w.speed = RIDE.S_CRUISE;
+    run(w, 1.5, { throttle: 1 }, { pushZ: C, surfY: 0 });
+    const s2 = newRide(); s2.mode = 'ride'; s2.speed = 8;
+    run(s2, 1, { throttle: -1 }, { pushZ: C, surfY: 0 });
+    expect(w.speed).toBeGreaterThan(RIDE.S_CRUISE + 1); expect(s2.speed).toBeLessThan(5);
+  });
+  it('a face é RAMPA: descendo ganha velocidade (dá pra passar da abertura do tubo), subindo perde; Shift = pump', () => {
+    const down = newRide(); down.mode = 'ride'; down.yaw = 0; down.speed = RIDE.S_CRUISE;
+    run(down, 1.5, { dirZ: 1 }, { pushZ: C, surfY: 0, gradZ: -0.8 });  // face desce rumo à praia (+z)
+    expect(down.speed).toBeGreaterThan(SURF.V_PEEL);                // mais rápido que a abertura (6,5 m/s)
+    const up = newRide(); up.mode = 'ride'; up.yaw = Math.PI; up.speed = 8;
+    run(up, 0.6, { dirZ: -1 }, { pushZ: C, surfY: 0, gradZ: -0.8 }); // subindo a face
+    expect(up.speed).toBeLessThan(6);
+    const pump = newRide(); pump.mode = 'ride'; pump.speed = RIDE.S_CRUISE;
+    run(pump, 2, { fast: true }, { pushZ: C, surfY: 0 });
+    expect(pump.speed).toBeGreaterThan(RIDE.S_CRUISE + 1);
+  });
+  it('AÉREO: subindo rápido e passando o lip decola; no ar A/D gira; pousa limpo (aéreo 360!) ou torto (vaca)', () => {
+    const fly = (spinS: number) => {
+      const st = newRide(); st.mode = 'ride'; st.yaw = Math.PI; st.speed = 9; // rumo à crista (pro mar = −z)
+      let y = 0;
+      for (let k = 0; k < 24; k++) { y += 3.5 * dt; rideStep(st, { dirX: 0, dirZ: -1, pop: false, fast: false }, { pushX: 0, pushZ: C, churn: 0, surfY: y, gradZ: 0.9 }, AX, C, dt); }
+      rideStep(st, { dirX: 0, dirZ: -1, pop: false, fast: false }, { pushX: 0, pushZ: C, churn: 0, surfY: y - 0.2, gradZ: -0.5 }, AX, C, dt); // passou o lip
+      expect(st.air).toBe(true);
+      let maxY = 0, k = 0;
+      for (; k < 200 && st.air; k++) { rideStep(st, { dirX: 0, dirZ: 0, pop: false, fast: false, steer: k * dt < spinS ? 1 : 0 }, { pushX: 0, pushZ: C, churn: 0, surfY: 0.5 }, AX, C, dt); maxY = Math.max(maxY, st.y); }
+      expect(maxY).toBeGreaterThan(y + 0.8);                          // voou de verdade
+      return st;
+    };
+    const straight = fly(0);
+    expect(straight.mode).toBe('ride'); expect(straight.trick).toBe('aéreo!'); expect(straight.airs).toBe(1);
+    const spun = fly((2 * Math.PI) / RIDE.AIR_SPIN);                 // gira 360°
+    expect(spun.mode).toBe('ride'); expect(spun.trick).toBe('aéreo 360!');
+    const bad = fly((Math.PI / 2) / RIDE.AIR_SPIN);                  // 90°: pousa de lado
+    expect(bad.mode).toBe('wipe');
   });
   it('perdeu a onda (sem correnteza) → deita e volta a remar', () => {
     const st = newRide(); st.mode = 'ride';

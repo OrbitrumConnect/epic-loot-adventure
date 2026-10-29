@@ -12,10 +12,10 @@ import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
 import { ZS_LANDMARKS, ZS_SPAWN } from './zona-sul-meta';
-import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterPushAt, zsWaterYAt } from './zs-terrain-data';
+import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterYAt } from './zs-terrain-data';
 import { SurfBreak, surfZone } from './surf/surf-break';
 import { SURF } from './surf/surf-wave';
-import { canPop, newRide, RIDE, rideStep, type RideState } from './surf/surf-ride';
+import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from './surf/surf-ride';
 import { ZsLootHud, zsGear } from './zs-loot-hud';
 import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 
@@ -46,6 +46,10 @@ const BOARD_DECK = 0.12, STANCE = -Math.PI / 2;
  *  abaixo d'água como se estivesse sentado"); no levantar sobe aos poucos junto com a animação. Medido em foto. */
 const SURF_LIFT = 0.8;
 const NO_AXES = { qx: 0, qz: -1, sx: 1, sz: 0 };
+/** Câmera dentro do tubo: distância (m) e inclinação — no ombro, quase 1ª pessoa. */
+const TUBE_CAM_DIST = 1.7, TUBE_CAM_PITCH = 0.06;
+/** Quanto o corpo acompanha a inclinação da prancha no carving. */
+const LEAN_BODY = 0.8;
 /** a pé → abrindo a porta (ENTER_MS) → dirigindo. E entra/sai. */
 const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving', enterAt: 0 };
 const ENTER_MS = 1100;
@@ -69,7 +73,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
   /** surf na prancha (null = sem prancha na água) · vaca de quem nada sem prancha (s restantes) · giro da vaca */
   const ride = useRef<RideState | null>(null);
   const tumble = useRef(0), spin = useRef(0);
-  const boardYaw = useRef(0), popOk = useRef(false);
+  const boardYaw = useRef(0), popOk = useRef(false), lean = useRef(0), tubeCam = useRef(0);
   const action = useRef<HeroAction>('idle');
   const speed = useRef(0);
   const vy = useRef(0);
@@ -208,14 +212,27 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       const r = ride.current ?? (ride.current = newRide());
       const fr = surfZone.frame, ax = fr ? { qx: fr.qx, qz: fr.qz, sx: fr.sx, sz: fr.sz } : NO_AXES;
       const pushing = zsWaterPushAt(p.x, p.z, HERO_PUSH, p.y + 0.3);
-      const w = { pushX: pushing ? HERO_PUSH.x : 0, pushZ: pushing ? HERO_PUSH.z : 0, churn: zsWaterChurnAt(p.x, p.z) };
+      const w: RideWater = { pushX: pushing ? HERO_PUSH.x : 0, pushZ: pushing ? HERO_PUSH.z : 0, churn: zsWaterChurnAt(p.x, p.z) };
+      if (fr) { const ddx = p.x - fr.px, ddz = p.z - fr.pz; w.side = ddx * fr.sx + ddz * fr.sz >= 0 ? 1 : -1; }
+      if (r.mode === 'ride') {
+        // em pé: a água EMBAIXO (altura e inclinação) — dá a velocidade na face (rampa) e o aéreo no lip
+        const yr = (r.air ? r.y : p.y) + 0.3, e = 0.5;
+        w.surfY = zsWaterYAt(p.x, p.z, yr);
+        w.gradX = (zsWaterYAt(p.x + e, p.z, yr) - zsWaterYAt(p.x - e, p.z, yr)) / (2 * e);
+        w.gradZ = (zsWaterYAt(p.x, p.z + e, yr) - zsWaterYAt(p.x, p.z - e, yr)) / (2 * e);
+      }
       const pop = k.has('Space') || input.popTap; input.popTap = false;
       popOk.current = canPop(r, w, SURF.C);
-      const d = rideStep(r, { dirX: wantMove ? wx : 0, dirZ: wantMove ? wz : 0, pop, fast: shift }, w, ax, SURF.C, dt);
+      // em pé: comandos DA PRANCHA (A/D vira, W acelera, S freia) — não dependem da câmera (Pedro: "em cima da prancha os
+      // comandos trocam"); remando: como nadar (relativo à câmera)
+      const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x;
+      const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z;
+      const d = rideStep(r, { dirX: wantMove ? wx : 0, dirZ: wantMove ? wz : 0, pop, fast: shift, steer, throttle }, w, ax, SURF.C, dt);
       st = zsStep(t, p.x, p.z, d.dx, d.dz);
       const sp = Math.hypot(r.vx, r.vz);
       v = sp; moving = sp > 0.3;
-      if (sp > 0.3 && r.mode !== 'wipe') {
+      if (r.mode === 'ride') boardYaw.current = r.yaw; // em pé: o rumo É o da prancha (carving)
+      else if (sp > 0.3 && r.mode !== 'wipe') {
         let dy = Math.atan2(r.vx, r.vz) - boardYaw.current;
         while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
         boardYaw.current += dy * Math.min(1, dt * 6);
@@ -266,10 +283,14 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       : rolling ? waterY - 0.6                                               // vaca: embaixo da espuma
       : waterY - (moving || dive.current > 0.3 ? ZS_SWIM_SINK_MOVE : ZS_SWIM_SINK) - dive.current; // boia NA onda
     if (!grounded.current) { vy.current -= 15 * dt; p.y += vy.current * dt; if (p.y <= floor) { p.y = floor; grounded.current = true; vy.current = 0; } }
+    else if (rm === 'ride' && ride.current?.air) p.y = ride.current.y + BOARD_DECK; // AÉREO: a altura é a do voo
     else p.y += (floor - p.y) * Math.min(1, dt * (rm === 'ride' || rm === 'popup' ? 12 : st.swimming ? 3 : 30)); // em pé gruda na face; nadando sobe/desce macio
     if (drive.mode === 'foot') action.current = rm === 'paddle' ? 'paddle' : rm === 'popup' ? 'popup' : rm === 'ride' ? 'surf' : rolling ? 'swim'
       : st.swimming ? (moving || dive.current > 0.3 ? 'swim' : 'tread') : !grounded.current ? 'jump' : moving ? (run ? 'run' : 'walk') : 'idle';
     // a prancha: deitado (embaixo do peito), em pé (embaixo dos pés), vaca (rodando solta perto)
+    // inclinação do CARVING (suave): proporcional à taxa de curva da prancha
+    const wantLean = rm === 'ride' && ride.current && !ride.current.air ? Math.max(-0.5, Math.min(0.5, -ride.current.carve * 0.16)) : 0;
+    lean.current += (wantLean - lean.current) * Math.min(1, dt * 8);
     const bp = boardRef.current;
     bp.visible = !!rm;
     if (rm) {
@@ -277,7 +298,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       bp.x = p.x + fx * off; bp.z = p.z + fz * off;
       bp.y = rm === 'ride' || rm === 'popup' ? p.y : rm === 'paddle' ? waterY + BOARD_DECK : waterY + 0.05;
       bp.yaw = boardYaw.current;
-      bp.roll = rm === 'wipe' ? spin.current * 0.7 : 0;
+      bp.roll = rm === 'wipe' ? spin.current * 0.7 : rm === 'ride' ? lean.current : 0; // carving: a prancha deita na curva
     }
     speed.current = moving ? v : 0;
     if (group.current) {
@@ -288,13 +309,26 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
       group.current.rotation.y += d * Math.min(1, dt * 12);
       group.current.rotation.order = 'YXZ';
-      group.current.rotation.x = rolling ? spin.current : 0; // vaca: gira junto com a onda
+      group.current.rotation.x = rolling ? spin.current : rm === 'ride' ? lean.current * LEAN_BODY : 0; // vaca gira; carving inclina o corpo
     }
+    // EM PÉ NA PRANCHA: a câmera vai sozinha pro OMBRO, atrás da prancha, na direção em que você está indo (Pedro: "quando
+    // na onda, câmera no ombro já na direção") — arrastou pra olhar em volta, espera 1,5 s e volta
+    if (ride.current?.mode === 'ride' && performance.now() - input.lookAt > 1500) {
+      let dyaw = boardYaw.current + Math.PI - input.yaw;
+      while (dyaw > Math.PI) dyaw -= Math.PI * 2; while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      input.yaw += dyaw * Math.min(1, dt * 3);
+      input.pitch += (0.3 - input.pitch) * Math.min(1, dt * 2);
+    }
+    // DENTRO DO TUBO em pé: a câmera chega no OMBRO, quase 1ª pessoa (Pedro: "se eu entrar no tubo a câmera fica quase
+    // 1ª pessoa") — entra e sai suave; fora do tubo volta pro zoom de antes
+    const inTube = rm === 'ride' && !ride.current?.air && zsWaterInTubeAt(p.x, p.z, p.y + 0.3);
+    tubeCam.current += ((inTube ? 1 : 0) - tubeCam.current) * Math.min(1, dt * 2.5);
+    const tk = tubeCam.current, camDist = input.dist + (TUBE_CAM_DIST - input.dist) * tk, camPitch = input.pitch + (TUBE_CAM_PITCH - input.pitch) * tk;
     // câmera em órbita, sem entrar no chão
-    const tx = p.x, ty = p.y + 1.6, tz = p.z;
-    const cp = Math.cos(input.pitch);
-    const cx = tx + Math.sin(input.yaw) * cp * input.dist, cz = tz + Math.cos(input.yaw) * cp * input.dist;
-    let cyy = ty + Math.sin(input.pitch) * input.dist;
+    const tx = p.x, ty = p.y + 1.6 + (rm === 'ride' ? SURF_LIFT * 0.6 : 0), tz = p.z;
+    const cp = Math.cos(camPitch);
+    const cx = tx + Math.sin(input.yaw) * cp * camDist, cz = tz + Math.cos(input.yaw) * cp * camDist;
+    let cyy = ty + Math.sin(camPitch) * camDist;
     const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6;
     if (cyy < gcam) cyy = gcam;
     camera.position.set(cx, cyy, cz);
@@ -308,7 +342,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
       const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
       const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
-        : rm === 'popup' ? 'levantando…' : rm === 'ride' ? 'SURFANDO · aperte pro lado que quer correr a parede · fuja da espuma'
+        : rm === 'popup' ? 'levantando…' : rm === 'ride' && ride.current ? (ride.current.trickT > 0 ? ride.current.trick.toUpperCase() + ' · ' : '') + (ride.current.air ? 'NO AR! segure A ou D pra girar' : 'SURFANDO ' + Math.round(ride.current.speed * 3.6) + ' km/h · A/D vira (carving) · W acelera · S freia · desça a face = ganha velocidade · suba rápido no lip = aéreo') + (ride.current.airs ? ' · aéreos: ' + ride.current.airs : '')
         : rolling ? 'tomou a vaca! girando com a espuma…' : '';
       onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : undefined });
     }

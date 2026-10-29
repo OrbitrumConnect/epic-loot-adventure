@@ -81,11 +81,12 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; 
  * AMENDOADO — mais largo que alto (~1,5–2 : 1); redondo (1 : 1) é o tubo "pesado". E o lip é uma lâmina FINA.
  * Pedro 28/10: "o tubo está meio gordo… quebra cheia, fez parede… cai gorda fechando embolado" → cavidade mais larga
  * que alta, lip com 0,14R (era 0,32R, redondo). E "onda mais alta → o lip joga mais pra frente, o tubo ganha espaço
- * proporcional à jogada": a largura (AX, em alturas) cresce com o raio — AX = AX0 + AXK·R (R 1 m → 1,5; R 2,1 m → 1,72).
+ * proporcional à jogada": a largura (AX, em alturas) cresce com o raio — AX = AX0 + AXK·R. 2ª (Pedro: "o C que quebra, a
+ * área do tubo, é um pouco pequena; dá pra quebrar mais pra frente"): R 1 m → 1,8; R 2,4 m → 2,15 (~10 m de boca).
  * O tubo CABE na onda: topo = R·(CY + 1 + LIP) ≈ 2,09R ≈ h. Onda de 4,2 m → R = 2,1 m: vão de ~4 m de altura por
  * ~7 m de largura. Costas longas (WB) como as do corpo da onda.
  */
-export const TUBE = { K: 0.5, MIN: 0.5, MAX: 2.7, WF: 2.6, WB: 5.5, AX0: 1.3, AXK: 0.2, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
+export const TUBE = { K: 0.5, MIN: 0.5, MAX: 2.7, WF: 3.0, WB: 6.0, AX0: 1.55, AXK: 0.25, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
 /** Largura da cavidade em alturas (o lip arremessa mais longe na onda maior). */
 export function tubeAx(R: number): number { return TUBE.AX0 + TUBE.AXK * R; }
 /** Raio do tubo pra esta altura e a faixa da dobra (frente wf, costas wb). */
@@ -111,7 +112,9 @@ export function barrelCurve(t: number, R: number, curl: number, close: number, r
   const wf = TUBE.WF * R, wb = TUBE.WB * R, Re = R * rs, T = Re * TUBE.LIP;
   const cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAx(R);
   const end = (150 + (-60 - 25 * close - 150) * curl) * Math.PI / 180, start = 260 * Math.PI / 180;
-  const P = (ang: number, r: number): [number, number] => [cq + AX * r * Math.cos(ang), cy + r * Math.sin(ang)];
+  // elipse com pontos espalhados POR IGUAL na curva (sem isso a boca larga esticava a malha nas laterais): ângulo corrigido
+  const ce = (AX - 1) / (2 * (AX + 1));
+  const P = (ang: number, r: number): [number, number] => { const a = ang + ce * Math.sin(2 * ang); return [cq + AX * r * Math.cos(a), cy + r * Math.sin(a)]; };
   // trechos proporcionais ao comprimento de cada parte (frente ~2,6R, arco ~6,8R, volta por fora ~3,4R, costas ~6,1R):
   // a malha estica POR IGUAL (~2,3×) — sem trecho esticado demais abrindo espaço entre vértices
   const A = BARREL_T[0], B = BARREL_T[1], Cc = BARREL_T[2];
@@ -123,10 +126,10 @@ export function barrelCurve(t: number, R: number, curl: number, close: number, r
 }
 
 /** Onde cada trecho da seção começa/termina no parâmetro t (o shader usa os mesmos). */
-// (com AX ≈ 1,7: frente ~2,7R, arco ~7,9R, volta por fora ~3,9R, costas ~6,1R → total ~20,6R sobre 8,1R de repouso)
-export const BARREL_T = [0.131, 0.513, 0.704] as const;
+// (com AX ≈ 2,15: frente ~3,2R, arco ~9,4R, volta por fora ~4,6R, costas ~6,6R → total ~23,7R sobre 9,0R de repouso)
+export const BARREL_T = [0.134, 0.528, 0.721] as const;
 /** Espuma da ponta do lip: centro e largura (em raios) no x de repouso (ponta do lip ≈ t 0,513 → x ≈ −1,56R). */
-export const LIP_FOAM_X = 1.56, LIP_FOAM_W = 0.25;
+export const LIP_FOAM_X = 1.75, LIP_FOAM_W = 0.25;
 
 /** Até onde a onda vai de cada lado (m em s): [direita, esquerda]. */
 export type Lim = readonly [number, number];
@@ -242,6 +245,17 @@ export function surfPushAt(s: number, q: number, waves: WaveState[], vars: WaveV
 }
 /** Quanto a face da onda (rampa) acelera quem boia nela, em m/s por unidade de inclinação (face a 45° → +2 m/s). */
 export const FACE_SLIDE = 2;
+
+/** Quem está em (s, q) na altura `yRef` está DENTRO do tubo aberto? (a câmera chega no ombro — quase 1ª pessoa) */
+export function surfInTubeAt(s: number, q: number, waves: WaveState[], vars: WaveVar[], yRef: number, lim: Lim = FULL): boolean {
+  if (zoneFade(s, q, lim) < 0.5) return false;
+  for (let i = 0; i < waves.length; i++) {
+    const w = waves[i]!; if (!w.active || w.h <= 0) continue;
+    const b = barrelAt(s, w, vars[i]!);
+    if (tubeInside(curlOf(b.open, b.closed), q - crestQ(w, s), barrelBand(b.hSide).r, yRef)) return true;
+  }
+  return false;
+}
 
 /**
  * ESPUMA BATENDO em (s, q) — 0..1: a onda já FECHOU ali e a massa de espuma está em cima (da crista até ~2,5R à frente).

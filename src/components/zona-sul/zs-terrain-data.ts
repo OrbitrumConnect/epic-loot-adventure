@@ -20,6 +20,11 @@ export function zsWaterYAt(x: number, z: number, yRef = Infinity): number { retu
 /** Correnteza da onda (m/s no mundo) em (x, z), escrita em `out`. Sem surf: nenhuma. */
 let waterPush: ((x: number, z: number, out: { x: number; z: number }, yRef: number) => boolean) | null = null;
 export function setZsWaterPush(fn: ((x: number, z: number, out: { x: number; z: number }, yRef: number) => boolean) | null): void { waterPush = fn; }
+/** Está DENTRO do tubo da onda em (x, z) na altura yRef? Sem surf: não. */
+let waterTube: ((x: number, z: number, yRef: number) => boolean) | null = null;
+export function setZsWaterTube(fn: ((x: number, z: number, yRef: number) => boolean) | null): void { waterTube = fn; }
+export function zsWaterInTubeAt(x: number, z: number, yRef: number): boolean { return waterTube ? waterTube(x, z, yRef - ZS_WATER_Y) : false; }
+
 /** Espuma da onda batendo em (x, z), 0..1 (quem está ali toma a "vaca"). Sem surf: 0. */
 let waterChurn: ((x: number, z: number) => number) | null = null;
 export function setZsWaterChurn(fn: ((x: number, z: number) => number) | null): void { waterChurn = fn; }
