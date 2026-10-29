@@ -184,7 +184,10 @@ export function GlbHeroMixamo({
   strideSync = false,
   customClips,
   customClipCut,
+  preview = false,
 }: {
+  /** VITRINE (ficha do personagem, 29/10): sempre "perto" — animação cheia, sem LOD pela distância do jogador. */
+  preview?: boolean;
   /** Vida de OUTRO jogador (online) p/ a reação de golpe; sem ela, a vida do jogador local. */
   hpOf?: () => number;
   actionRef: React.MutableRefObject<HeroAction>;
@@ -434,7 +437,7 @@ export function GlbHeroMixamo({
     if (g) {
       g.getWorldPosition(tmpHeroV);
       const p = useGameStore.getState().player.position;
-      const d2 = (p.x - tmpHeroV.x) * (p.x - tmpHeroV.x) + (p.z - tmpHeroV.z) * (p.z - tmpHeroV.z);
+      const d2 = preview ? 0 : (p.x - tmpHeroV.x) * (p.x - tmpHeroV.x) + (p.z - tmpHeroV.z) * (p.z - tmpHeroV.z);
       animEveryRef.current = animEvery(d2);
       const near = d2 < ACTIVE_D2;
       if (near !== active.current) {

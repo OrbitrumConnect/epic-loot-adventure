@@ -1780,7 +1780,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           hotbar = { ...hotbar, slots };
         }
       }
-      const withReturned = previous && previous !== itemId ? addItem(inv, previous, 1) : inv;
+      // O equipado CONTINUA na mochila (a hotbar aponta pra ele): só devolve o anterior se ele não estiver lá
+      // (29/10: equipar/tirar duplicava a peça a cada volta — 1→2→3).
+      const withReturned = previous && previous !== itemId && !inv.slots.some(sl => sl.itemId === previous) ? addItem(inv, previous, 1) : inv;
       const equipped = { ...s.player, inventory: { ...withReturned, hotbar, equipment: { ...withReturned.equipment, [slot]: itemId } } };
       return {
         // armadura/acessório mexem em carga% → peso máx acompanha.
@@ -1795,7 +1797,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const current = s.player.inventory.equipment[slot];
       if (!current) return {};
       const name = ITEMS[current]?.name ?? 'Item';
-      const inventory = addItem(s.player.inventory, current, 1);
+      // já está na mochila (o equipado nunca sai dela) → só limpa o slot; senão (save antigo) devolve 1
+      const inventory = s.player.inventory.slots.some(sl => sl.itemId === current) ? s.player.inventory : addItem(s.player.inventory, current, 1);
       return {
         player: (() => {
           const unequipped = { ...s.player, inventory: { ...inventory, equipment: { ...inventory.equipment, [slot]: null } } };

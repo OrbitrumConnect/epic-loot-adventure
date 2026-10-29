@@ -10,6 +10,11 @@ import {
 import type { EquipmentSlots } from '@/game/types/inventory';
 
 const routeSource = readFileSync(join(process.cwd(), 'src/routes/index.tsx'), 'utf8');
+// 29/10: a ficha/mochila saiu da rota pra `character-sheet.tsx` (+ números em `characterSheetSystem.ts`) — o contrato
+// vale pro conjunto (a rota monta a ficha e segue com a Vida efetiva no topo).
+const sheetSource = readFileSync(join(process.cwd(), 'src/components/hud/character-sheet.tsx'), 'utf8')
+  + readFileSync(join(process.cwd(), 'src/game/systems/characterSheetSystem.ts'), 'utf8');
+const uiSource = routeSource + sheetSource;
 const cssSource = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
 
 function equipment(overrides: Partial<EquipmentSlots> = {}): EquipmentSlots {
@@ -44,12 +49,13 @@ describe('equipment slots UI contract', () => {
 describe('routes/index.tsx UI integrity', () => {
   it('usa contrato central para renderizar equipamento, sprites, desequipar e vida efetiva', () => {
     for (const token of ['ARMOR_SLOTS', 'equipmentKeyForArmorSlot', 'isEquipped', 'ItemSprite', 'unequipSlot', 'effectiveMaxHp', 'RARITY_LABEL', 'equipmentStats', 'effectiveResistance', 'luckMultiplier']) {
-      expect(routeSource).toContain(token);
+      expect(uiSource).toContain(token);
     }
     for (const slot of ['head', 'chest', 'gloves', 'legs', 'boots', 'amulet', 'ring1', 'ring2']) {
-      expect(routeSource).toContain(slot);
+      expect(sheetSource).toContain(slot);
     }
-    expect(routeSource).toMatch(/equipment\.accessory\s*&&/);
+    expect(routeSource).toContain('<CharacterSheet');
+    expect(sheetSource).toMatch(/equipment\.accessory\s*&&/);
     expect(routeSource).toMatch(/const maxHp = effectiveMaxHp\(player\)/);
     expect(routeSource).toMatch(/name: 'Vida',[\s\S]*max: maxHp/);
   });

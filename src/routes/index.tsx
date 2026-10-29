@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDown, ArrowUp, Axe, Backpack, Bot, Camera, Castle, Check, ChevronRight,
-  Circle, CircleDot, CloudRain, Coins, Compass, Crosshair, Flame, FlaskConical, Gem, Hammer, Hand,
+  Circle, CircleDot, CloudRain, Coins, Compass, Crosshair, Flame, FlaskConical, Hammer, Hand,
   Heart, Home, Landmark, Leaf, ListChecks, Lock, LogOut, Map, Menu, MessageSquare, Mountain, Package,
   Download, PanelLeftClose, Pickaxe, Repeat, RotateCcw, RotateCw, Settings, Shield, ShieldCheck, Skull,
   Tornado, CloudLightning,
@@ -27,14 +27,13 @@ import { canOpenCityView } from '@/game/systems/playerBaseSystem';
 import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
 import { HuntBanner } from '@/components/hud/hunt-banner';
 import { PilotWeaponControl } from '@/components/hud/pilot-weapon-control';
+import { CharacterSheet } from '@/components/hud/character-sheet';
 import { ITEMS } from '@/game/data/items';
-import { getWeight, getUsedSlots, getItemCount } from '@/game/systems/inventorySystem';
+import { getWeight, getItemCount } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { gameClock, WORLD_EPOCH } from '@/game/systems/dayNightSystem';
 import { effectiveAttributes, effectiveSpecialCooldown } from '@/game/systems/attributesSystem';
-import { effectiveMaxHp, effectiveResistance, equipmentStats, luckMultiplier } from '@/game/systems/equipmentStatsSystem';
-import { ARMOR_SLOTS, equipmentKeyForArmorSlot, isEquipped } from '@/game/systems/equipmentSlots';
-import { RARITY_LABEL, type ArmorSlot, type Item } from '@/game/types/item';
+import { effectiveMaxHp } from '@/game/systems/equipmentStatsSystem';
 import { baseLv1Progress } from '@/game/systems/baseLv1';
 import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { freeShotPoint } from '@/components/world/free-aim';
@@ -72,15 +71,6 @@ import { AUTH_ENABLED, survivorName, useAuth } from '@/net/auth';
 import { supabase, setAway } from '@/net/multiplayer';
 import { SAVE_KEY } from '@/game/systems/persistenceSystem';
 const CityView = lazy(() => import('@/components/city-view'));
-
-const ARMOR_SLOT_LABEL: Record<ArmorSlot, string> = {
-  head: 'Cabeça', chest: 'Peitoral', gloves: 'Luvas', legs: 'Calças', boots: 'Botas',
-  amulet: 'Amuleto', ring1: 'Anel 1', ring2: 'Anel 2',
-};
-const ARMOR_SLOT_ICON: Record<ArmorSlot, typeof Shield> = {
-  head: Shield, chest: Shield, gloves: Shield, legs: Shield, boots: Shield,
-  amulet: Gem, ring1: Gem, ring2: Gem,
-};
 
 /** Preferências: instalar o jogo como app. Android/PC = botão; iPhone = instrução (não há convite). */
 function InstallAppRow() {
@@ -128,24 +118,6 @@ function AimCrosshair({ shoulder }: { shoulder: boolean }) {
       </div>
     </>
   );
-}
-
-function itemStatsLabel(item: Item): string {
-  const stats = item.stats ?? {};
-  const values = [
-    item.armor !== undefined ? `+${item.armor} DEF` : '',
-    stats.health ? `+${stats.health} VIDA` : '',
-    stats.damage ? `+${stats.damage} DANO` : '',
-    stats.resistance ? `+${stats.resistance} RES` : '',
-    stats.speed ? `+${stats.speed} VEL` : '',
-    stats.luck ? `+${stats.luck} SORTE` : '',
-  ].filter(Boolean);
-  return values.join(' ');
-}
-
-function itemTooltip(item: Item): string {
-  const stats = itemStatsLabel(item);
-  return `${item.name} · ${RARITY_LABEL[item.rarity]}${stats ? ` · ${stats}` : ''}`;
 }
 
 export const Route = createFileRoute('/')({
@@ -303,9 +275,6 @@ function Index() {
   const specialAttack = useGameStore(s => s.specialAttack);
   const allocateSkill = useGameStore(s => s.allocateSkill);
   const deallocateSkill = useGameStore(s => s.deallocateSkill);
-  const equipItem = useGameStore(s => s.equipItem);
-  const unequipSlot = useGameStore(s => s.unequipSlot);
-  const dropItem = useGameStore(s => s.dropItem);
   const playerBase = useGameStore(s => s.playerBase);
   const deliverToBase = useGameStore(s => s.deliverToBase);
   const baseProg = playerBase ? baseLv1Progress(playerBase) : null;
@@ -345,12 +314,8 @@ function Index() {
   }, [player.dead, player.respawnAt]);
 
   const weight = getWeight(player.inventory);
-  const usedSlots = getUsedSlots(player.inventory);
   const attrs = effectiveAttributes(player);
-  const equipment = equipmentStats(player);
   const maxHp = effectiveMaxHp(player);
-  const resistancePct = Math.round(effectiveResistance(equipment.resistance) * 100);
-  const luckPct = Math.round((luckMultiplier(equipment.luck) - 1) * 100);
 
   const woodCount = useGameStore(s => s.getItemCount)('wood');
   const stoneCount = useGameStore(s => s.getItemCount)('stone');
@@ -910,7 +875,7 @@ function Index() {
 
           {panel && (
             <div className="modal-backdrop">
-              <section className="game-panel" role="dialog" aria-modal="true" aria-label={title}>
+              <section className="game-panel" data-wide={panel === 'inventory' || panel === 'loot' || undefined} role="dialog" aria-modal="true" aria-label={title}>
                 <div className="panel-heading">
                   <div>
                     <small>{panel === 'map' ? 'Território livre' : panel === 'home' ? 'Os Guardiões' : panel === 'base' ? 'Terreno e muralhas' : panel === 'training' ? 'Tropas e muralhas' : 'TRIBOS'}</small>
@@ -919,146 +884,7 @@ function Index() {
                   <Button variant="ghost" size="icon" title="Fechar" aria-label="Fechar" onClick={() => setPanel(null)}><X /></Button>
                 </div>
 
-                {(panel === 'inventory' || panel === 'loot') && (
-                  <>
-                    <div className="char-sheet">
-                      <div className="char-doll">
-                        <svg className="char-figure" viewBox="0 0 24 40" aria-hidden="true">
-                          <circle cx="12" cy="6" r="4.5" />
-                          <path d="M5 15 Q12 11 19 15 L18 27 Q12 29 6 27 Z" />
-                          <rect x="3" y="15" width="3.2" height="11" rx="1.4" />
-                          <rect x="17.8" y="15" width="3.2" height="11" rx="1.4" />
-                          <rect x="7.5" y="28" width="3.4" height="11" rx="1.5" />
-                          <rect x="13.1" y="28" width="3.4" height="11" rx="1.5" />
-                        </svg>
-                        <div className="char-ident"><strong>{player.name}</strong><small>Guerreiro · Nível {player.level}</small></div>
-                      </div>
-                      <div className="char-slots">
-                        <div className="equip-slots-grid">
-                          <button className={`equip-slot rarity-${player.inventory.equipment.primary ? ITEMS[player.inventory.equipment.primary]?.rarity ?? 'common' : 'empty'}`} data-filled={!!player.inventory.equipment.primary}
-                            title={player.inventory.equipment.primary ? itemTooltip(ITEMS[player.inventory.equipment.primary]!) : 'Arma (vazio)'}
-                            aria-label={player.inventory.equipment.primary ? `Arma: ${ITEMS[player.inventory.equipment.primary]?.name}` : 'Arma vazia'}
-                            onClick={() => { if (player.inventory.equipment.primary) unequipSlot('primary'); }}>
-                            {player.inventory.equipment.primary ? <ItemSprite itemId={player.inventory.equipment.primary} size={34} /> : <Swords strokeWidth={1.4} />}
-                            <span>{player.inventory.equipment.primary ? ITEMS[player.inventory.equipment.primary]?.name : 'Arma'}</span>
-                          </button>
-                          {ARMOR_SLOTS.map(armorSlot => {
-                            const slot = equipmentKeyForArmorSlot(armorSlot);
-                            const id = player.inventory.equipment[slot];
-                            const it = id ? ITEMS[id] : null;
-                            const Icon = ARMOR_SLOT_ICON[armorSlot];
-                            return (
-                              <button key={armorSlot} className={`equip-slot rarity-${it?.rarity ?? 'empty'}`} data-filled={!!it}
-                                title={it ? itemTooltip(it) : `${ARMOR_SLOT_LABEL[armorSlot]} (vazio)`}
-                                aria-label={it ? `${ARMOR_SLOT_LABEL[armorSlot]}: ${it.name}` : `${ARMOR_SLOT_LABEL[armorSlot]} vazio`}
-                                onClick={() => { if (it) unequipSlot(slot); }}>
-                                {it ? <ItemSprite itemId={id!} size={34} /> : <Icon strokeWidth={1.4} />}
-                                <span>{it ? it.name : ARMOR_SLOT_LABEL[armorSlot]}</span>
-                              </button>
-                            );
-                          })}
-                          {player.inventory.equipment.accessory && (() => {
-                            const id = player.inventory.equipment.accessory;
-                            const it = ITEMS[id];
-                            if (!it) return null;
-                            return <button className={`equip-slot equip-slot--legacy rarity-${it.rarity}`} data-filled="true"
-                              title={itemTooltip(it)} aria-label={`Acessório legado: ${it.name}`} onClick={() => unequipSlot('accessory')}>
-                              <ItemSprite itemId={id} size={34} /><span>{it.name}</span>
-                            </button>;
-                          })()}
-                        </div>
-                        <div className="equipment-summary" aria-label="Bônus de equipamento">
-                          <strong>Equipamento:</strong> DEF {equipment.defense} · VIDA +{equipment.health} · DANO +{equipment.damage} · RES {resistancePct}% · VEL +{equipment.speed} · SORTE +{luckPct}%
-                        </div>
-                        {([
-                          { slot: 'primary', label: 'Arma', Icon: Swords },
-                          { slot: 'armor', label: 'Armadura', Icon: Shield },
-                          { slot: 'accessory', label: 'Acessório', Icon: Gem },
-                        ] as const).map(({ slot, label, Icon }) => {
-                          const id = player.inventory.equipment[slot];
-                          const it = id ? ITEMS[id] : null;
-                          return (
-                            <button key={slot} className="equip-slot" data-filled={!!it}
-                              title={it ? (slot === 'primary' ? it.name : `${it.name} · clique p/ tirar`) : `${label} (vazio)`}
-                              aria-label={it ? `${label}: ${it.name}` : `${label} vazio`}
-                              onClick={() => { if (slot !== 'primary' && it) unequipSlot(slot); }}>
-                              {it ? <ItemSprite itemId={id!} size={34} /> : <Icon strokeWidth={1.4} />}
-                              <span>{it ? it.name : label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="inventory-grid">
-                      {player.inventory.slots.map((slot, i) => {
-                        if (!slot.itemId) return (
-                          <div className="inventory-item" key={i} style={{ opacity: 0.3 }}>
-                            <Package /><strong>Vazio</strong><small>—</small>
-                          </div>
-                        );
-                        const item = ITEMS[slot.itemId];
-                        if (!item) return null;
-                        const equipped = item.equippable && isEquipped(player.inventory.equipment, slot.itemId);
-                        const detail = item.category === 'armor' ? `${RARITY_LABEL[item.rarity]}${itemStatsLabel(item) ? ` · ${itemStatsLabel(item)}` : ''}` : item.category === 'weapon' ? `Arma · ${RARITY_LABEL[item.rarity]}` : item.category;
-                        return (
-                          <div className="inventory-item" key={i} draggable
-                            data-equippable={item.equippable || undefined} data-equipped={equipped || undefined}
-                            title={item.equippable ? `${itemTooltip(item)} · clique p/ equipar` : `${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
-                            aria-label={`${item.name}${slot.quantity > 1 ? ` × ${slot.quantity}` : ''}`}
-                            onClick={() => { if (item.equippable && slot.itemId) equipItem(slot.itemId); }}
-                            onDragStart={e => e.dataTransfer.setData('text/plain', String(i))}>
-                            {item.category === 'armor' && <small className="item-tier-stats">{RARITY_LABEL[item.rarity]} · {itemStatsLabel(item) || 'Sem bônus'}</small>}
-                            <ItemSprite itemId={slot.itemId} size={44} /><strong>{item.name}</strong><small>{detail}</small>
-                            <em>{slot.quantity > 1 ? slot.quantity : ''}</em>
-                            {equipped && <i className="equipped-tag">equipado</i>}
-                            <button type="button" className="inventory-drop"
-                              onClick={(e) => { e.stopPropagation(); if (slot.itemId) dropItem(i); }}
-                              title={`Descartar ${item.name}`} aria-label={`Descartar ${item.name}`}>Descartar</button>
-                          </div>
-                        );
-                      })}
-                      {(() => {
-                        const slot = player.inventory.hotbar.slots[ui.selectedHotbar];
-                        const heldId = slot != null ? player.inventory.slots[slot]?.itemId ?? null : null;
-                        return <div className="attr-row" title="Alcance máximo da arma equipada neste nível"><span className="attr-name">⌁ Alcance</span><span className="attr-val">{weaponRangeFor(heldId, player.level).toFixed(1)} m</span></div>;
-                      })()}
-                    </div>
-                    <div className="panel-stats">
-                      <span>Peso: {weight.toFixed(1)} / {player.inventory.maxWeight} kg</span>
-                      <span>{usedSlots} / {player.inventory.maxSlots} slots</span>
-                      <span>{eraName}</span>
-                    </div>
-                    <div className="attr-panel" aria-label="Atributos">
-                      <div className="attr-head">
-                        <strong>Atributos</strong>
-                        <span className="attr-points" data-has={(player.skillPoints ?? 0) > 0}>
-                          {player.skillPoints ?? 0} ponto{(player.skillPoints ?? 0) === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                      {([ 
-                        { key: 'damage', icon: '⚔', label: 'Dano', hint: 'Multiplica o dano de ataque' },
-                        { key: 'dexterity', icon: '✦', label: 'Destreza', hint: 'Reduz a cadência do especial' },
-                        { key: 'carry', icon: '🎒', label: 'Capacidade', hint: 'Aumenta o peso que a bolsa carrega' },
-                        { key: 'moveSpeed', icon: '»', label: 'Velocidade', hint: 'Aumenta a velocidade de movimento' },
-                      ] as const).map(row => {
-                        const own = player.attributes?.[row.key] ?? 0;
-                        return (
-                          <div className="attr-row" key={row.key} title={row.hint}>
-                            <span className="attr-name">{row.icon} {row.label}</span>
-                            <span className="attr-val">+{attrs[row.key]}%</span>
-                            <Button variant="ghost" className="attr-btn" aria-label={`Diminuir ${row.label}`}
-                              disabled={own <= 0} onClick={() => deallocateSkill(row.key)}>−</Button>
-                            <Button variant="ghost" className="attr-btn" aria-label={`Aumentar ${row.label}`}
-                              disabled={(player.skillPoints ?? 0) <= 0 || own >= 60} onClick={() => allocateSkill(row.key)}>+</Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="panel-actions">
-                      <Button variant="outline" onClick={() => open('home')}><Home />Retornar à base</Button>
-                    </div>
-                  </>
-                )}
+                {(panel === 'inventory' || panel === 'loot') && <CharacterSheet onHome={() => open('home')} />}
 
                 {panel === 'objectives' && (
                   <>
