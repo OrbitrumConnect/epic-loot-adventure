@@ -20,6 +20,7 @@ import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from 
 import { useGameStore } from '@/game/state/game-store';
 import { selectedItemId } from '@/components/world/held-weapon';
 import { SURFBOARD_ID } from '@/game/systems/zonaSulKit';
+import { isUnlocked, lockedMessage } from '@/game/systems/unlockSystem';
 import { useTouchScreen } from '@/hooks/use-mobile';
 import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 
@@ -130,7 +131,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
     // E: entra (perto do carro) / sai (parado e rente ao chão)
     if (input.eTap) {
       input.eTap = false;
-      if (drive.mode === 'foot' && car && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST) {
+      const lvl = useGameStore.getState().player.level;
+      if (drive.mode === 'foot' && car && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST && !isUnlocked('flying_car', lvl)) {
+        useGameStore.getState().setMessage(lockedMessage('O carro voador', 'flying_car'));
+      } else if (drive.mode === 'foot' && car && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST) {
         drive.mode = 'entering'; drive.enterAt = now; facing.current = Math.atan2(car.x - p.x, car.z - p.z);
       } else if (drive.mode === 'driving' && car && Math.abs(car.speed) < CAR.EXIT_MAX_SPEED && car.altitude < CAR.EXIT_MAX_ALT) {
         drive.mode = 'foot';

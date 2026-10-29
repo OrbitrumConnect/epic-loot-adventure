@@ -51,7 +51,7 @@ describe('rajada do rifle', () => {
     const hotbar = st.player.inventory.hotbar.slots.slice();
     hotbar[0] = rifleSlot;
     useGameStore.setState({
-      player: { ...st.player, level: 1, dead: false, lastAttackAt: 0, inventory: { ...st.player.inventory, slots, hotbar: { ...st.player.inventory.hotbar, slots: hotbar } } },
+      player: { ...st.player, level: 35, dead: false, lastAttackAt: 0, inventory: { ...st.player.inventory, slots, hotbar: { ...st.player.inventory.hotbar, slots: hotbar } } },
       ui: { ...st.ui, selectedHotbar: 0 },
     });
     const ammo = () => useGameStore.getState().player.inventory.slots.reduce((a, s) => a + (s?.itemId === 'ammo' ? s.quantity : 0), 0);

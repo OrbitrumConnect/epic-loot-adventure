@@ -7,7 +7,8 @@ import { createInventory, getItemCount } from '@/game/systems/inventorySystem';
 const initial = useGameStore.getState();
 const hold = (itemId: string, ammo = 10) => useGameStore.setState(s => ({
   ui: { ...s.ui, selectedHotbar: 0 },
-  player: { ...s.player, dead: false, lastAttackAt: 0,
+  player: { ...s.player, dead: false, lastAttackAt: 0, level: 35, // fuzil libera no nível 35 (unlockSystem, 29/10)
+   
     inventory: createInventory([{ itemId, quantity: 1 }, { itemId: 'ammo', quantity: ammo }]) },
 }));
 

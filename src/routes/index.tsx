@@ -28,6 +28,7 @@ import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
 import { HuntBanner } from '@/components/hud/hunt-banner';
 import { PilotWeaponControl } from '@/components/hud/pilot-weapon-control';
 import { CharacterSheet } from '@/components/hud/character-sheet';
+import { isUnlocked, unlockLevel } from '@/game/systems/unlockSystem';
 import { ITEMS } from '@/game/data/items';
 import { getWeight, getItemCount } from '@/game/systems/inventorySystem';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
@@ -1117,9 +1118,10 @@ function Index() {
             <div className="hotbar-row">
             <div className="hotbar" aria-label="Hotbar">
                 {hotbarItems.map((item, i) => {
+                  const lockLv = item && !isUnlocked(item.id, player.level) ? unlockLevel(item.id) : 0;
                   return (
-                    <Button variant="ghost" key={i} className="hotbar-slot"
-                      title={`${i + 1} · ${item?.name ?? 'Vazio'}`}
+                    <Button variant="ghost" key={i} className="hotbar-slot" data-locked={lockLv > 0 || undefined}
+                      title={lockLv ? `${i + 1} · ${item?.name} — libera no nível ${lockLv}` : `${i + 1} · ${item?.name ?? 'Vazio'}`}
                       aria-label={`${i + 1} · ${item?.name ?? 'Vazio'}`}
                       data-active={ui.selectedHotbar === i}
                       onClick={() => useHotbarSlot(i)}
@@ -1128,6 +1130,7 @@ function Index() {
                       <span className="slot-key">{i + 1}</span>
                       {item ? <ItemSprite itemId={item.id} size={40} className="hotbar-sprite" /> : <Package strokeWidth={1.3} aria-hidden="true" />}
                       <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>
+                      {lockLv > 0 && <span className="slot-lock"><Lock aria-hidden="true" />{lockLv}</span>}
                     </Button>
                   );
                 })}

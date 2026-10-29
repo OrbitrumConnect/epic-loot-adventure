@@ -19,6 +19,7 @@ import { getUsedSlots, getWeight } from '@/game/systems/inventorySystem';
 import { bagTabOf, sheetStats, type BagTab } from '@/game/systems/characterSheetSystem';
 import { RARITY_LABEL, type ArmorSlot, type Item } from '@/game/types/item';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
+import { isUnlocked, unlockLevel } from '@/game/systems/unlockSystem';
 
 const HeroPreview = lazy(() => import('./hero-preview'));
 
@@ -199,6 +200,7 @@ export function CharacterSheet({ onHome }: { onHome: () => void }) {
                 <ItemSprite itemId={it.id} size={40} />
                 {slot.quantity > 1 && <em>{slot.quantity > 999 ? `${Math.floor(slot.quantity / 1000)}k` : slot.quantity}</em>}
                 {hotkey.has(i) && <kbd>{hotkey.get(i)}</kbd>}
+                {!isUnlocked(it.id, player.level) && <b className="cs-lock" title={`Libera no nível ${unlockLevel(it.id)}`}>Nv {unlockLevel(it.id)}</b>}
                 {equipped && <i className="cs-eq">E</i>}
               </button>
             );
@@ -219,9 +221,10 @@ export function CharacterSheet({ onHome }: { onHome: () => void }) {
                   <small><b className={`cs-rar rarity-${picked.rarity}`}>{RARITY_LABEL[picked.rarity]}</b> · {CATEGORY_LABEL[picked.category] ?? picked.category}{pickedQty > 1 ? ` · × ${pickedQty}` : ''}</small>
                 </div>
               </div>
+              {!isUnlocked(picked.id, player.level) && <p className="cs-locked">🔒 Libera no nível {unlockLevel(picked.id)} · você está no {player.level}</p>}
               <ul>{statLines(picked).map(l => <li key={l}>{l}</li>)}<li className="cs-muted">Peso {picked.weight} kg{picked.dropOnDeath ? ' · cai ao morrer' : ''}</li></ul>
               <div className="cs-actions">
-                {picked.equippable && !pickedEquipped && <Button size="sm" onClick={() => equipItem(picked.id)}><Hand />Equipar</Button>}
+                {picked.equippable && !pickedEquipped && <Button size="sm" disabled={!isUnlocked(picked.id, player.level)} onClick={() => equipItem(picked.id)}><Hand />Equipar</Button>}
                 {pickedEquipped && <Button size="sm" variant="outline" onClick={() => { const k = pick && 'equip' in pick ? pick.equip : equippedKey(picked.id); if (k) unequipSlot(k); setPick(null); }}>Tirar</Button>}
                 {picked.id === 'health_potion' || (picked.usable && (picked.healAmount ?? 0) > 0)
                   ? <Button size="sm" variant="outline" disabled={!DEV_INFINITE_POTIONS && player.hp >= st.maxHp} onClick={drinkPotion}><FlaskConical />Beber</Button> : null}

@@ -58,7 +58,8 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
-import { grantSurfboard } from '../systems/zonaSulKit';
+import { grantSurfboard, SURFBOARD_ID } from '../systems/zonaSulKit';
+import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
@@ -900,6 +901,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const heldItemId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
     const prof = weaponFor(heldItemId);
     if (!prof.ranged || !prof.projectile) return false;
+    if (!isUnlocked(heldItemId, state.player.level)) { set(s => ({ ui: { ...s.ui, message: lockedMessage(ITEMS[heldItemId!]?.name ?? 'Arma', heldItemId!) } })); return true; }
     const now = Date.now() / 1000;
     const burstN = burstSize(heldItemId, state.player.level);
     if (fromBurst && burstN <= 1) return false; // trocou de arma no meio da rajada
@@ -960,6 +962,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // piloto chamam este mesmo `attack`.
     const selSlot = state.player.inventory.hotbar.slots[state.ui.selectedHotbar];
     const heldItemId = selSlot != null ? state.player.inventory.slots[selSlot]?.itemId ?? null : null;
+    // Arma travada por nível na mão (ex.: save antigo com o fuzil selecionado): não atira — avisa o nível.
+    if (!isUnlocked(heldItemId, state.player.level)) {
+      if (!fromBurst) set(s => ({ ui: { ...s.ui, message: lockedMessage(ITEMS[heldItemId!]?.name ?? 'Arma', heldItemId!) } }));
+      return;
+    }
     const prof = weaponFor(heldItemId);
     const usingRanged = prof.ranged;
     const usingTorch = heldItemId === 'torch';
@@ -1586,6 +1593,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     const item = ITEMS[slot.itemId];
     if (!item) return;
+    // Travado por nível (unlockSystem): fica na mochila, não vai pra mão.
+    if (!isUnlocked(item.id, state.player.level)) {
+      set(s => ({ ui: { ...s.ui, message: lockedMessage(item.name, item.id) } }));
+      return;
+    }
 
     // Seleção MANUAL (jogador) de uma ARMA define o estilo do piloto idle: pegar
     // pistola/rifle/arco = 'ranged'; espada/machado/picareta = 'melee'. Assim a sua
@@ -1766,6 +1778,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   equipItem: (itemId) => {
     const item = ITEMS[itemId];
     if (!item || !item.equippable) return;
+    if (!isUnlocked(itemId, get().player.level)) { set(s => ({ ui: { ...s.ui, message: lockedMessage(item.name, itemId) } })); return; }
     const routed = slotForItem(item);
     if (!routed) return;
     set(s => {
@@ -2347,7 +2360,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   grantSurfboard: () => {
     const r = grantSurfboard(get().player.inventory);
-    if (r.granted) set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: '🏄 Você ganhou uma Prancha de surf — selecione na hotbar e entre no mar.' } }));
+    if (r.granted) set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: isUnlocked(SURFBOARD_ID, s.player.level)
+      ? '🏄 Você ganhou uma Prancha de surf — selecione na hotbar e entre no mar.'
+      : `🏄 Você ganhou uma Prancha de surf — ela libera no nível ${unlockLevel(SURFBOARD_ID)}.` } }));
     else if (r.full) set(s => ({ ui: { ...s.ui, message: 'Mochila cheia: libere espaço para receber a Prancha de surf.' } }));
   },
 
@@ -2684,6 +2699,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           // Armadura é equippable mas sem attackPower/ranged → também fica de fora.
           const isWeapon = item.equippable === true && (prof.ranged || (item.attackPower ?? 0) > 0);
           if (!isWeapon) return;
+          if (!isUnlocked(slot.itemId, level)) return; // travada por nível: o piloto nem considera
           // Melee = sempre usável; ranged de BALA precisa de munição; flecha é livre.
           const hasAmmo = !prof.ranged || prof.projectile !== 'bullet' || ammoCount > 0;
           weapons.push({

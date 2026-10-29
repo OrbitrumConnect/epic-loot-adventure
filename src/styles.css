@@ -1080,3 +1080,12 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .zs-hud .zs-hud__keys { display: none; }
   .zs-btn { min-width: 58px; height: 48px; font-size: 12px; }
 }
+
+/* itens travados por nível (unlockSystem, 29/10) */
+.hotbar-slot[data-locked] > img, .hotbar-slot[data-locked] > svg:not(.lucide-lock) { opacity: .35; filter: grayscale(1); }
+.slot-lock { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); display: flex; align-items: center; gap: 1px; padding: 0 3px; border-radius: 3px;
+  font: 800 8px var(--font-sans); color: #fde68a; background: rgba(0,0,0,.72); }
+.slot-lock svg { width: 8px !important; height: 8px !important; }
+.cs-lock { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); padding: 0 4px; border-radius: 3px; font: 800 8px var(--font-sans); color: #fde68a; background: rgba(0,0,0,.75); white-space: nowrap; }
+.cs-cell:has(.cs-lock) img, .cs-cell:has(.cs-lock) > svg { opacity: .4; filter: grayscale(1); }
+.cs-locked { margin: 8px 0 0; font-size: 11px; font-weight: 700; color: #fde68a; }
