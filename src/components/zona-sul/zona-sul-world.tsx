@@ -13,8 +13,8 @@ import * as THREE from 'three';
 import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
-import { ZS_LANDMARKS, ZS_SPAWN } from './zona-sul-meta';
-import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
+import { ZS_LANDMARKS, ZS_SPAWN, ZS_SURF } from './zona-sul-meta';
+import { loadZsTerrain, type ZsTerrain, zsHeightAt, zsSurfAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
 import { SurfBreak, surfZone } from './surf/surf-break';
 import { SURF } from './surf/surf-wave';
 import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from './surf/surf-ride';
@@ -51,6 +51,7 @@ import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-pro
 import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
 import { zsQuery, zsWorldProfile } from './zs-world-profile';
 import { zsAttack, zsCtx } from './zs-context';
+import { type AmbienceState, zsAmbience } from './zs-ambience';
 import { ZsDayNight, ZsLamps, zsSun } from './zs-daynight';
 import { nightFactor, setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
 import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
@@ -61,7 +62,7 @@ const ZS_SWIM_WAVE_CARRY = 1.15; // a espuma leva junto (o bolso da onda segura 
 const ZS_BODYSURF_EXTRA = 0.3;
 const HERO_PUSH = { x: 0, z: 0 }, HERO_SPIT = { x: 0, z: 0 };
 /** Motor de surf (fase B, só na Zona Sul). Chave: ?surf=0 na URL desliga (o mar volta exatamente ao de antes). */
-const SURF_ON = typeof window === 'undefined' || !/[?&]surf=0/.test(window.location.search);
+const SURF_ON = typeof window === 'undefined' || !/[?&]surf=0/.test(window.location.search);
 import { ZsTerrainMesh } from './zs-terrain-mesh';
 import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
@@ -112,6 +113,20 @@ const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch:
 /** Altura do OLHO do motorista sentado acima do pé (m) e campo de visão de dentro (mais aberto). */
 const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
+/** SOM do mundo em volta do herói (mar, arrebentação, carro, vento) — 10×/s. */
+const AMB: AmbienceState = { sea: 0, surf: 0, car: false, carSpeed: 0, carAlt: 0, wind: 0 };
+function ambienceAt(t: ZsTerrain, p: THREE.Vector3, car: ZsCar | null, rideSpeed: number): AmbienceState {
+  let sea = 0;
+  for (let a = 0; a < 8; a++) { const ang = (a / 8) * Math.PI * 2; if (zsSurfAt(t, p.x + Math.sin(ang) * 60, p.z + Math.cos(ang) * 60) === ZS_SURF.sea) sea++; }
+  AMB.sea = zsCtx.inWater ? 1 : (sea / 8) * Math.max(0, 1 - Math.max(0, p.y) / 45);
+  const f = surfZone.frame;
+  AMB.surf = surfZone.on && f ? Math.max(0, 1 - Math.hypot(p.x - f.px, p.z - f.pz) / 320) * (surfZone.drawn ? 1 : 0.4) : 0;
+  AMB.car = drive.mode === 'driving' && !!car;
+  AMB.carSpeed = car?.speed ?? 0; AMB.carAlt = car?.altitude ?? 0;
+  AMB.wind = AMB.car ? Math.min(1, AMB.carAlt / 25 + Math.abs(AMB.carSpeed) / 60) : Math.min(1, (rideSpeed / 14) * 0.6);
+  return AMB;
+}
+
 /** Pra onde virar ao atacar: o ponto do último tiro; senão o bicho vivo mais perto no alcance da arma (igual ao Vale). */
 function attackYaw(px: number, pz: number, fallback: number): number {
   const shot = recentShotPoint();
@@ -131,7 +146,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const group = useRef<THREE.Group>(null);
   /** combate: tique do último ataque visto, tempo de animação restante, especial, giro do R, coice, mira (0..1) */
   const atkTick = useRef(-1), atkT = useRef(0), specTick = useRef(-1), spinT = useRef(0);
-  const recoil = useRef({ x: 0, y: 0 }), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0);
+  const recoil = useRef({ x: 0, y: 0 }), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0), ambAcc = useRef(0);
   /** surf na prancha (null = sem prancha na água) · vaca de quem nada sem prancha (s restantes) · giro da vaca */
   const ride = useRef<RideState | null>(null);
   const tumble = useRef(0), spin = useRef(0);
@@ -217,6 +232,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     posAcc.current += dt;
     if (posAcc.current > 0.15) { posAcc.current = 0; const cur = gs.player.position; if (cur.x !== p.x || cur.z !== p.z) useGameStore.setState(s => ({ player: { ...s.player, position: { x: p.x, z: p.z } } })); }
     zsCtx.driving = drive.mode === 'driving';
+    ambAcc.current += dt;
+    if (ambAcc.current > 0.1) { ambAcc.current = 0; zsAmbience.update(ambienceAt(t, p, car, ride.current?.mode === 'ride' ? ride.current.speed : 0)); }
     // E: entra (perto do carro) / sai (parado e rente ao chão)
     if (input.eTap) {
       input.eTap = false;
@@ -712,7 +729,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const boardRef = useRef<BoardPose>(newBoardPose());
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }) };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -720,6 +737,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   useEffect(() => {
     // entrou no mapa: a pé, câmera no herói; 1ª vez = ganha a prancha
     drive.mode = 'foot'; input.overview = false; input.keys.clear(); hudNow = null;
+    zsAmbience.arm(); // som do mar/carro/vento (liga no 1º clique/tecla)
     // PRANCHA: entrega agora E de novo quando o save da CONTA chegar (Pedro 29/10: "ainda não vejo a prancha" — o save
     // da conta chega do servidor depois e trocava o inventário, sumindo com a prancha). Só nos 1ºs 30 s (depois disso
     // descartar a prancha é escolha sua: ela não volta sozinha).
@@ -745,7 +763,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     const keep = window.setInterval(() => { if (carRef.current) saveZsPos(heroRef.current); }, 2000);
     return () => {
       alive = false; unGrant(); window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
-      zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false);
+      zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false); zsAmbience.mute();
       // saiu da Zona Sul (trocou de mapa / cidade): o jogo volta pro Vale (se a troca já não fez isso)
       if (WORLD.id === 'zona-sul') { resetWorldProfile(); useGameStore.getState().enterWorld('classic'); }
     };

@@ -12,7 +12,7 @@ const KEY = 'tribos.map';
 const listeners = new Set<() => void>();
 
 function read(): WorldMapId {
-  try { return /[?&]mapa=vale/.test(window.location.search) ? 'classic' : 'zona-sul'; } catch { return 'zona-sul'; }
+  try { return /[?&]mapa=vale(&|$)/.test(window.location.search) ? 'classic' : 'zona-sul'; } catch { return 'zona-sul'; }
 }
 let current: WorldMapId | null = null;
 
