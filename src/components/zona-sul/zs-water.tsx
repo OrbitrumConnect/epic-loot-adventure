@@ -70,7 +70,7 @@ export function ZsWater({ t }: { t: ZsTerrain }) {
     const f = surfZone.frame;
     // 5 cm pra dentro da borda da malha da onda: com 0,5 m as duas águas transparentes se sobrepunham (linha escura);
     // com 0 sobrava fresta de pixel (linha pontilhada)
-    if (surfZone.on && f) { surfU.uSurf.value.set(f.px, f.pz, f.qx, f.qz); surfU.uSurfQ.value.set(f.lim[0] - 0.05, SURF.Q_MIN + 0.05, SURF.Q_MAX - 0.05, 1); surfU.uSurfL.value = f.lim[1] - 0.05; }
+    if (surfZone.on && surfZone.drawn && f) { surfU.uSurf.value.set(f.px, f.pz, f.qx, f.qz); surfU.uSurfQ.value.set(f.lim[0] - 0.05, SURF.Q_MIN + 0.05, SURF.Q_MAX - 0.05, 1); surfU.uSurfL.value = f.lim[1] - 0.05; }
     else surfU.uSurfQ.value.w = 0;
   });
   return (

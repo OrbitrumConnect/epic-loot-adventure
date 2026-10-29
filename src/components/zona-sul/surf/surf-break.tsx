@@ -7,16 +7,18 @@
  * Chave liga/desliga: `?surf=0` na URL tira tudo (o mar volta exatamente ao de antes).
  */
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { type ZsTerrain, setZsWaterChurn, setZsWaterExtra, setZsWaterPush, setZsWaterTube } from '../zs-terrain-data';
+import { type ZsTerrain, setZsWaterChurn, setZsWaterExtra, setZsWaterPush, setZsWaterSpit, setZsWaterTube } from '../zs-terrain-data';
 import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from '../zs-water-look';
-import { BARREL_T, BEND, BEND_S, CURL_RAMP, FULL, type Lim, RIPPLE_A, RIPPLE_K, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, TUBE } from './surf-wave';
+import { BARREL_T, BEND, BEND_S, CURL_RAMP, FULL, type Lim, RIPPLE_A, RIPPLE_K, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, surfSpitAt, TUBE } from './surf-wave';
 import { SLOTS, SurfScheduler } from './surf-scheduler';
 import { findSurfFrame, type SurfFrame, toSurfLocal } from './surf-frame';
 
 /** A zona de surf atual (a água em volta lê isto pra não desenhar dentro dela). */
-export const surfZone = { on: false, frame: null as SurfFrame | null };
+export const surfZone = { on: false, frame: null as SurfFrame | null, drawn: false };
+/** Até que distância (m) da câmera a malha da onda é desenhada. */
+const SURF_DRAW_DIST = 900;
 
 /**
  * Faixa (q) onde a onda DOBRA: do pico até onde a abertura mais lenta (−12%) chega na borda da zona e o tubo termina de
@@ -125,6 +127,9 @@ vec3 toWorld(vec4 p) { return vec3(uPeak.x + uS.x * p.x + uQ.x * p.z, p.y, uPeak
 function surfMaterial(uniforms: Record<string, THREE.IUniform>): THREE.MeshStandardMaterial {
   // MESMO visual do mar em volta (cor, transparência, ondulação, relógio): sem retângulo de outra cor na zona
   const m = new THREE.MeshStandardMaterial({ ...ZS_WATER_LOOK, transparent: true, side: THREE.DoubleSide });
+  // os dois lados numa passada SÓ (o three desenha transparente dos 2 lados em 2 passadas = a malha 2× por quadro).
+  // A frente dos triângulos é o lado do ar (a ordem interna quase não aparece) — metade do custo (Pedro: "fluido").
+  m.forceSinglePass = true;
   m.onBeforeCompile = (s) => {
     Object.assign(s.uniforms, uniforms);
     s.uniforms['uTime'] = zsWaterTime;
@@ -182,19 +187,34 @@ export function SurfBreak({ t, shoreX, shoreZ }: { t: ZsTerrain; shoreX: number;
     const key = (e: KeyboardEvent) => { if (e.code === 'KeyJ' && !e.repeat) scheduler.trigger(); };
     window.addEventListener('keydown', key);
     setZsWaterTube((x, z, yRef) => { const [s, q] = toSurfLocal(frame, x, z); return inZone(s, q) && surfInTubeAt(s, q, scheduler.states, scheduler.vars, yRef, frame.lim); });
+    setZsWaterSpit((x, z, yRef, out) => {
+      const [s, q] = toSurfLocal(frame, x, z); if (!inZone(s, q)) return false;
+      const a = surfSpitAt(s, q, scheduler.states, scheduler.vars, yRef, frame.lim); if (a === 0) return false;
+      out.x = frame.sx * a; out.z = frame.sz * a; return true;
+    });
     setZsWaterChurn((x, z) => { const [s, q] = toSurfLocal(frame, x, z); return inZone(s, q) ? surfChurnAt(s, q, scheduler.states, scheduler.vars, frame.lim) : 0; });
-    return () => { surfZone.on = false; surfZone.frame = null; setZsWaterExtra(null); setZsWaterPush(null); setZsWaterChurn(null); setZsWaterTube(null); window.removeEventListener('keydown', key); };
+    return () => { surfZone.on = false; surfZone.frame = null; setZsWaterExtra(null); setZsWaterPush(null); setZsWaterChurn(null); setZsWaterTube(null); setZsWaterSpit(null); window.removeEventListener('keydown', key); };
   }, [frame, uniforms, scheduler]);
   useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
 
-  useFrame((_, dt) => {
+  const meshRef = useRef<THREE.Mesh>(null), wasDrawn = useRef(false);
+  useFrame((state, dt) => {
     scheduler.advance(dt);
+    let any = false;
     for (let i = 0; i < SLOTS; i++) {
       const s = scheduler.states[i]!, v = scheduler.vars[i]!;
       uniforms.uWa.value[i]!.set(s.qc, s.h, s.peelR, s.peelL);
       uniforms.uWb.value[i]!.set(v.hR, v.hL, s.active ? 1 : 0, v.vR);
+      if (s.active) any = true;
     }
+    // só desenha a malha da onda PERTO e COM ONDA (calmaria = mar liso igual ao de volta; longe não se vê) — o mar em
+    // volta para de abrir o buraco junto (surfZone.drawn), então não aparece emenda. A física (CPU) segue igual.
+    const cam = state.camera.position, near = frame ? Math.hypot(cam.x - frame.px, cam.z - frame.pz) < SURF_DRAW_DIST : false;
+    surfZone.drawn = any && near;
+    // segura 1 quadro a mais ao esconder: o mar lê o aviso no quadro seguinte (sem piscar buraco)
+    if (meshRef.current) meshRef.current.visible = surfZone.drawn || wasDrawn.current;
+    wasDrawn.current = surfZone.drawn;
   });
   if (!frame) return null;
-  return <mesh geometry={geometry} material={material} frustumCulled={false} renderOrder={2} receiveShadow />;
+  return <mesh ref={meshRef} geometry={geometry} material={material} frustumCulled={false} renderOrder={2} receiveShadow />;
 }

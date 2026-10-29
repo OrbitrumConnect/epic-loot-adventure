@@ -25,6 +25,11 @@ let waterTube: ((x: number, z: number, yRef: number) => boolean) | null = null;
 export function setZsWaterTube(fn: ((x: number, z: number, yRef: number) => boolean) | null): void { waterTube = fn; }
 export function zsWaterInTubeAt(x: number, z: number, yRef: number): boolean { return waterTube ? waterTube(x, z, yRef - ZS_WATER_Y) : false; }
 
+/** BAFORADA do tubo em (x, z) na altura yRef: aceleração (m/s²) no mundo, escrita em `out`. Sem surf: nenhuma. */
+let waterSpit: ((x: number, z: number, yRef: number, out: { x: number; z: number }) => boolean) | null = null;
+export function setZsWaterSpit(fn: ((x: number, z: number, yRef: number, out: { x: number; z: number }) => boolean) | null): void { waterSpit = fn; }
+export function zsWaterSpitAt(x: number, z: number, yRef: number, out: { x: number; z: number }): boolean { return waterSpit ? waterSpit(x, z, yRef - ZS_WATER_Y, out) : false; }
+
 /** Espuma da onda batendo em (x, z), 0..1 (quem está ali toma a "vaca"). Sem surf: 0. */
 let waterChurn: ((x: number, z: number) => number) | null = null;
 export function setZsWaterChurn(fn: ((x: number, z: number) => number) | null): void { waterChurn = fn; }

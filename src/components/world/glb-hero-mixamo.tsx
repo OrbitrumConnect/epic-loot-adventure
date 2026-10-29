@@ -209,7 +209,10 @@ export function GlbHeroMixamo({
   /** CORTE de um clip extra (fração 0..1 do clip) e velocidade — Zona Sul, 28/10: "o Zombie Stand Up só levanta direito
    *  depois de 30%; a pose final é boa (meio surfista)". Ex.: { popup: { from: 0.3, speed: 2 }, surf: { from: 0.96 } }.
    *  Sem isto: o clip inteiro, como antes. */
-  customClipCut?: Record<string, { from?: number; to?: number; speed?: number }>;
+  customClipCut?: Record<string, { from?: number; to?: number; speed?: number;
+    /** RITMO pela velocidade real (Zona Sul 29/10: "remar parece câmera lenta"): timeScale = velocidade × sync,
+     *  entre syncMin e syncMax. Sem isto: velocidade fixa (`speed`). */
+    sync?: number; syncMin?: number; syncMax?: number }>;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -640,6 +643,12 @@ export function GlbHeroMixamo({
     }
     // Cadência do walk/run acompanha a velocidade real (anti foot-sliding).
     // Run usa um sync MENOR (passada maior → não "patina" o pé).
+    // clip extra (Zona Sul) com ritmo pela velocidade real (remar/nadar): só quem passa `sync` — o jogo de sempre não
+    const cutNow = current.current ? customClipCut?.[current.current] : undefined;
+    if (cutNow?.sync && speedRef) {
+      const a = actions[current.current!];
+      if (a) a.timeScale = THREE.MathUtils.clamp(speedRef.current * cutNow.sync, cutNow.syncMin ?? 0.5, cutNow.syncMax ?? 2);
+    }
     if ((current.current === 'walk' || current.current === 'run')) {
       const a = actions[clipOf(current.current) ?? current.current];
       const spd = speedRef ? speedRef.current : Math.hypot(vel.current.x, vel.current.z);

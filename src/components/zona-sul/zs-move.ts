@@ -6,7 +6,8 @@ import { ZS_SURF } from './zona-sul-meta';
 import { type ZsTerrain, zsBounds, zsHeightAt, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
 
 export const ZS_WALK = 1.8;          // m/s (igual ao jogo)
-export const ZS_RUN = 4.32;          // m/s (igual ao jogo)
+export const ZS_RUN = 5.2;           // m/s — era 4,32 (igual ao jogo), mas com a câmera perto e o mapa em escala real
+                                     // parecia câmera lenta (Pedro 29/10); a passada acompanha (runSync)
 export const ZS_SWIM_K = 0.55;       // (antigo) nadando: 55% da velocidade de andar — trocado pelo nado com embalo abaixo
 /** NADO (Pedro 28/10: "afundei e fiquei lento demais; Shift nada mais rápido; não agarrar tanto na água, mais fluido"):
  *  velocidade própria com EMBALO (acelera/freia suave, desliza ao soltar), mais rápido que andar; Shift = braçada forte. */

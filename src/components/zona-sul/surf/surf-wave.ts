@@ -73,7 +73,7 @@ export const PEAK_BLEND = 6;
  *  lip vai lançando e o tubo crescendo ao longo de CURL_RAMP m (era tudo igual depois de 5 m); (2) a crista não é uma
  *  régua — a altura ondula de leve ao longo da onda (±RIPPLE_A, fase por onda). */
 export const CURL_RAMP = 16, RIPPLE_A = 0.06, RIPPLE_K = 0.085;
-export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; closed: number; steep: number; hSide: number; ramp: number } {
+export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; closed: number; steep: number; hSide: number; ramp: number; behind: number } {
   // lado direito/esquerdo levemente diferentes (sem espelho), mas a troca no pico é SUAVE (±PEAK_BLEND m): o degrau
   // seco em s = 0 abria uma fenda vertical bem onde a onda começa a quebrar
   const k = smooth(-PEAK_BLEND, PEAK_BLEND, s), d = st.peelL + (st.peelR - st.peelL) * k, a = Math.abs(s);
@@ -83,6 +83,8 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; 
     steep: smooth(-18, 0, d - a),
     hSide: st.h * (v.hL + (v.hR - v.hL) * k) * (1 + RIPPLE_A * Math.sin(RIPPLE_K * s + 7 * v.vR)),
     ramp: smooth(0, CURL_RAMP, d - a),
+    /** quanto falta (m) pro fechamento chegar nesta coluna (negativo = ainda não fechou; 0 = fechando agora) */
+    behind: d - SURF.CLOSE_LAG - a,
   };
 }
 
@@ -266,6 +268,25 @@ export function surfInTubeAt(s: number, q: number, waves: WaveState[], vars: Wav
     if (tubeInside(curlOf(b.open, b.closed, b.ramp), q - crestQ(w, s), barrelBand(b.hSide).r, yRef)) return true;
   }
   return false;
+}
+
+/**
+ * BAFORADA (spit) — Pedro 29/10: "no tubo, lá no foam ball, deveria cuspir pra fora". O lip fechando atrás comprime o ar
+ * e a espuma dentro do tubo e sai tudo pela boca aberta; a espuma que vem fechando empurra quem está lá dentro pra fora.
+ * Devolve a aceleração (m/s²) AO LONGO da onda (+s ou −s = rumo à boca, pra longe do pico), crescendo quando o
+ * fechamento chega a menos de SPIT_NEAR m atrás de você. Fora do tubo: 0.
+ */
+export const SPIT_ACC = 4.5, SPIT_NEAR = 14;
+export function surfSpitAt(s: number, q: number, waves: WaveState[], vars: WaveVar[], yRef: number, lim: Lim = FULL): number {
+  let best = 0;
+  for (let i = 0; i < waves.length; i++) {
+    const w = waves[i]!; if (!w.active || w.h <= 0) continue;
+    const b = barrelAt(s, w, vars[i]!);
+    if (!tubeInside(curlOf(b.open, b.closed, b.ramp), q - crestQ(w, s), barrelBand(b.hSide).r, yRef)) continue;
+    const prox = smooth(-SPIT_NEAR, 0, b.behind) * (1 - b.closed);
+    if (prox > Math.abs(best) / SPIT_ACC) best = (s >= 0 ? 1 : -1) * SPIT_ACC * prox;
+  }
+  return best * zoneFade(s, q, lim);
 }
 
 /**

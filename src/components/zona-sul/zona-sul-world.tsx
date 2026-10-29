@@ -12,7 +12,7 @@ import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
 import { ZS_LANDMARKS, ZS_SPAWN } from './zona-sul-meta';
-import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterYAt } from './zs-terrain-data';
+import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
 import { SurfBreak, surfZone } from './surf/surf-break';
 import { SURF } from './surf/surf-wave';
 import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from './surf/surf-ride';
@@ -23,7 +23,7 @@ import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 const ZS_SWIM_WAVE_CARRY = 1.15; // a espuma leva junto (o bolso da onda segura quem está na frente dela) — "leva mais"
 /** Jacaré: nadando a favor, você "pega" a onda e vai um pouco à frente dela (até ~1,25×). */
 const ZS_BODYSURF_EXTRA = 0.3;
-const HERO_PUSH = { x: 0, z: 0 };
+const HERO_PUSH = { x: 0, z: 0 }, HERO_SPIT = { x: 0, z: 0 };
 /** Motor de surf (fase B, só na Zona Sul). Chave: ?surf=0 na URL desliga (o mar volta exatamente ao de antes). */
 const SURF_ON = typeof window === 'undefined' || !/[?&]surf=0/.test(window.location.search);
 import { ZsTerrainMesh } from './zs-terrain-mesh';
@@ -39,7 +39,9 @@ const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/an
   // de 30%; a pose final é boa, meio surfista")
   paddle: '/zona-sul/anim/swim.glb', popup: '/zona-sul/anim/zombie_stand_up.glb', surf: '/zona-sul/anim/zombie_stand_up.glb' };
 /** Cortes: levantar = 30%→100% a 2× (≈ RIDE.POPUP_S); base = só o finalzinho (a pose final, segurada). */
-const HERO_CUT = { popup: { from: 0.3, speed: 2 }, surf: { from: 0.97 }, paddle: { speed: 0.8 } };
+// remar/nadar: o RITMO dos braços segue a velocidade real (Pedro 29/10: "remar parece câmera lenta" — a remada tocava
+// fixa a 0,8×): remando 3,8 m/s = 1×, com Shift 6,1 = 1,6×; nadando 2,4 = 1×, rápido 4,2 = 1,75×
+const HERO_CUT = { popup: { from: 0.3, speed: 2 }, surf: { from: 0.97 }, paddle: { sync: 1 / 3.8, syncMin: 0.6, syncMax: 1.7 }, swim: { sync: 1 / 2.4, syncMin: 0.6, syncMax: 1.8 } };
 /** Pé na prancha: altura do DECK acima da água (m). Giro do corpo em relação ao bico (base de surfista, de lado). */
 const BOARD_DECK = 0.12, STANCE = -Math.PI / 2;
 /** A pose final do Zombie Stand Up abaixa o quadril: em pé o corpo sobe isto (m) pra os pés ficarem NO deck (Pedro: "corpo
@@ -64,7 +66,9 @@ const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch:
   /** câmera no carro (tecla V): 3ª pessoa atrás ou DE DENTRO (cabeça do motorista); olhar em volta de dentro */
   carCam: 'chase' as 'chase' | 'cockpit', cockYaw: 0, cockPitch: 0,
   /** botão LEVANTAR na tela (celular) */
-  popTap: false };
+  popTap: false,
+  /** tecla P: mostrador de FPS / desenhos / triângulos */
+  perf: false };
 /** Altura do OLHO do motorista sentado acima do pé (m) e campo de visão de dentro (mais aberto). */
 const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
@@ -214,6 +218,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       const pushing = zsWaterPushAt(p.x, p.z, HERO_PUSH, p.y + 0.3);
       const w: RideWater = { pushX: pushing ? HERO_PUSH.x : 0, pushZ: pushing ? HERO_PUSH.z : 0, churn: zsWaterChurnAt(p.x, p.z) };
       if (fr) { const ddx = p.x - fr.px, ddz = p.z - fr.pz; w.side = ddx * fr.sx + ddz * fr.sz >= 0 ? 1 : -1; }
+      if (r.mode === 'ride' && !r.air && zsWaterSpitAt(p.x, p.z, p.y + 0.3, HERO_SPIT)) { w.spitX = HERO_SPIT.x; w.spitZ = HERO_SPIT.z; }
       if (r.mode === 'ride') {
         // em pé: a água EMBAIXO (altura e inclinação) — dá a velocidade na face (rampa) e o aéreo no lip
         const yr = (r.air ? r.y : p.y) + 0.3, e = 0.5;
@@ -363,12 +368,29 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
   );
 }
 
+/** Tecla P: FPS (média de 0,5 s), chamadas de desenho e triângulos do quadro — escreve direto no texto (sem re-render). */
+function ZsPerf({ elRef }: { elRef: React.RefObject<HTMLDivElement | null> }) {
+  const acc = useRef({ t: 0, n: 0 });
+  useFrame((state, dt) => {
+    const el = elRef.current; if (!el) return;
+    if (!input.perf) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
+    const a = acc.current; a.t += dt; a.n++;
+    if (a.t < 0.5) return;
+    const r = state.gl.info.render;
+    el.style.display = 'block';
+    el.textContent = `${Math.round(a.n / a.t)} FPS · ${r.calls} desenhos · ${Math.round(r.triangles / 1000)} mil triângulos`;
+    a.t = 0; a.n = 0;
+  });
+  return null;
+}
+
 function Controls() {
   const { gl } = useThree();
   useEffect(() => {
     const el = gl.domElement;
     const kd = (e: KeyboardEvent) => {
       if (e.code === 'KeyK' && !e.repeat) input.overview = !input.overview;
+      if (e.code === 'KeyP' && !e.repeat) input.perf = !input.perf;
       if (e.code === 'KeyE' && !e.repeat) input.eTap = true;
       if (e.code === 'KeyV' && !e.repeat && drive.mode === 'driving') { input.carCam = input.carCam === 'chase' ? 'cockpit' : 'chase'; input.cockYaw = 0; input.cockPitch = 0; }
       input.keys.add(e.code); if (e.code === 'Space') e.preventDefault();
@@ -429,6 +451,7 @@ export default function ZonaSulWorld() {
   const carRef = useRef<ZsCar | null>(null);
   const dimsRef = useRef<CarDims | null>(null);
   const boardRef = useRef<BoardPose>(newBoardPose());
+  const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
   if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t };
   useEffect(() => {
@@ -453,6 +476,7 @@ export default function ZonaSulWorld() {
           <Suspense fallback={null}><ZsCarView carRef={carRef} dimsRef={dimsRef} /></Suspense>
           <Suspense fallback={null}><ZsBoardView poseRef={boardRef} /></Suspense>
           <Controls />
+          <ZsPerf elRef={perfRef} />
         </Canvas>
       )}
       <div style={{ position: 'absolute', top: 10, left: 12, color: '#10202c', font: '600 13px system-ui', background: 'rgba(255,255,255,.72)', padding: '6px 10px', borderRadius: 8, pointerEvents: 'none', maxWidth: 'calc(100% - 24px)' }}>
@@ -461,10 +485,11 @@ export default function ZonaSulWorld() {
         {hud?.car && <div style={{ font: '700 12px system-ui', marginTop: 3, color: '#0b5c7a' }}>{hud.car}</div>}
         <div style={{ font: '400 11px system-ui', marginTop: 2, opacity: 0.8 }}>
           {hud?.overview ? 'VISTA DE CIMA · WASD move · Shift rápido · arraste gira · roda sobe/desce · K volta pro herói'
-            : 'WASD anda · Shift corre · Espaço pula · arraste gira · roda = zoom · K = vista de cima · 1–0 hotbar · I inventário'}
+            : 'WASD anda · Shift corre · Espaço pula · arraste gira · roda = zoom · K = vista de cima · 1–0 hotbar · I inventário · P = FPS'}
         </div>
       </div>
       {t && <ZsLootHud />}
+      <div ref={perfRef} style={{ display: 'none', position: 'absolute', top: 10, right: 12, color: '#fff', font: '700 13px system-ui', background: 'rgba(10,22,32,.7)', padding: '5px 9px', borderRadius: 7, pointerEvents: 'none' }} />
       {hud?.canPop && (
         <button type="button" onPointerDown={() => { input.popTap = true; }}
           style={{ position: 'absolute', right: 18, bottom: 110, padding: '14px 18px', borderRadius: 12, border: '2px solid #ffd27a', background: 'rgba(12,24,34,.8)', color: '#ffd27a', font: '800 15px system-ui', cursor: 'pointer' }}>

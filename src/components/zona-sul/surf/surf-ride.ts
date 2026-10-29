@@ -25,6 +25,8 @@ export const RIDE = {
   // segura no bolso): vira com raio (carving), desce a face = ganha velocidade, sobe = perde (skate numa rampa que anda).
   TURN: 2.6,                                 // giro da prancha (rad/s) — carving
   G_FACE: 9, DRAG: 0.55, S_CRUISE: 4, S_MAX: 13, PUMP: 2.2, STALL: 4, // gravidade na face, arrasto, cruzeiro/máx, pump (W), freio (S)
+  PUMP_CARVE: 0.9,                           // ONDULAR na parede: cada curva rende velocidade (∝ taxa de curva × inclinação)
+  SPIT_BURST: 1.8, SPIT_CD: 3, SPIT_FULL: 4.5, // (SPIT_FULL = SPIT_ACC de surf-wave)               // baforada: tiro de velocidade (m/s) quando o fechamento chega em você; respiro (s)
   BOOST: 0.55, BOOST_CD: 0.8,                // toque no Shift em pé: +0,55 m/s (≈ 2 km/h) na hora, no máx. 1 a cada 0,8 s (Pedro)
   // AÉREO: subindo a face rápido e passando o lip → decola; no ar A/D gira; pousou alinhado = aéreo, torto = vaca
   AIR_RISE: 2.2, AIR_UP: 0.2, AIR_MIN_S: 4, GRAV: 13, AIR_SPIN: 7.5, LAND_TOL: 70 * Math.PI / 180,
@@ -39,8 +41,8 @@ export type RideState = {
   air: boolean; y: number; vy: number; airSpin: number; spinDir: number; rise: number; prevSurf: number;
   /** placar: aéreos limpos e a última manobra (pro HUD) */
   airs: number; trick: string; trickT: number;
-  /** respiro do boost (s) */
-  boostCd: number;
+  /** respiro do boost (s) e da baforada */
+  boostCd: number; spitCd: number;
 };
 /** remando: direção no mundo (relativa à câmera, como nadar). EM PÉ: comandos DA PRANCHA (Pedro 28/10: "em cima da
  *  prancha os comandos trocam") — steer +1 = vira à DIREITA (D), −1 = esquerda (A); throttle +1 = acelera/pump (W),
@@ -51,11 +53,13 @@ export type RideInput = { dirX: number; dirZ: number; pop: boolean; fast: boolea
 /** água em volta: correnteza, espuma, e (em pé) a altura da água embaixo e a inclinação dela (∂h/∂x, ∂h/∂z) */
 export type RideWater = { pushX: number; pushZ: number; churn: number; surfY?: number; gradX?: number; gradZ?: number;
   /** de que lado do pico você está (+1 direita, −1 esquerda, no eixo s): ao levantar, sai NA LINHA pra esse lado */
-  side?: number };
+  side?: number;
+  /** baforada do tubo (aceleração no mundo, m/s²) — empurra pra fora pela boca */
+  spitX?: number; spitZ?: number };
 export type RideAxes = { qx: number; qz: number; sx: number; sz: number };
 
 export function newRide(): RideState {
-  return { mode: 'paddle', t: 0, vx: 0, vz: 0, lost: 0, spin: 0, yaw: 0, speed: 0, carve: 0, air: false, y: 0, vy: 0, airSpin: 0, spinDir: 0, rise: 0, prevSurf: NaN, airs: 0, trick: '', trickT: 0, boostCd: 0 };
+  return { mode: 'paddle', t: 0, vx: 0, vz: 0, lost: 0, spin: 0, yaw: 0, speed: 0, carve: 0, air: false, y: 0, vy: 0, airSpin: 0, spinDir: 0, rise: 0, prevSurf: NaN, airs: 0, trick: '', trickT: 0, boostCd: 0, spitCd: 0 };
 }
 const wrap = (a: number) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 
@@ -131,6 +135,15 @@ export function rideStep(st: RideState, inp: RideInput, w: RideWater, ax: RideAx
       ux = Math.sin(st.yaw); uz = Math.cos(st.yaw);
       // ── VELOCIDADE: desce a face = ganha, sobe = perde (gravidade na rampa); arrasto puxa pro cruzeiro; Shift = pump
       const down = -((w.gradX ?? 0) * ux + (w.gradZ ?? 0) * uz);
+      // ONDULAR (sobe e desce na parede) rende velocidade: curva em cima da face inclinada = pump
+      st.speed += RIDE.PUMP_CARVE * Math.abs(st.carve) * Math.min(1, gm) * dt;
+      // BAFORADA: o fechamento chegando atrás empurra pra fora pela boca (ao longo da onda); quando aperta de vez = tiro
+      const spx = w.spitX ?? 0, spz = w.spitZ ?? 0, spm = Math.hypot(spx, spz);
+      st.spitCd = Math.max(0, st.spitCd - dt);
+      if (spm > 0) {
+        st.speed += Math.max(0.3 * spm, spx * ux + spz * uz) * dt; // quem aponta pra boca ganha mais
+        if (spm > 0.75 * RIDE.SPIT_FULL && st.spitCd <= 0) { st.speed += RIDE.SPIT_BURST; st.spitCd = RIDE.SPIT_CD; st.trick = 'baforada!'; st.trickT = 2.2; }
+      }
       const pump = Math.max(0, thr), stall = Math.max(0, -thr);
       // BOOST: toque no Shift = +2 km/h na hora (com respiro)
       st.boostCd = Math.max(0, st.boostCd - dt);

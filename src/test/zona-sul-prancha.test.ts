@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { canPop, newRide, RIDE, rideStep } from '@/components/zona-sul/surf/surf-ride';
-import { barrelAt, barrelBand, crestQ, SURF, surfChurnAt, type WaveVar, waveStateAt } from '@/components/zona-sul/surf/surf-wave';
+import { barrelAt, barrelBand, crestQ, SPIT_ACC, SURF, surfChurnAt, surfSpitAt, TUBE, type WaveVar, waveStateAt } from '@/components/zona-sul/surf/surf-wave';
 import { readZsLoot, zsAssignHotbar, ZS_BOARD_ID, zsLootFrom, zsSelectedItem } from '@/components/zona-sul/zs-loot';
 import { SAVE_KEY } from '@/game/systems/persistenceSystem';
 
@@ -144,5 +144,32 @@ describe('hotbar + I na Zona Sul: o MESMO loot, só leitura', () => {
   it('o jogo de sempre não usa nada disso (corte de clip é opcional; prancha só existe na Zona Sul)', () => {
     expect(src('src/routes/index.tsx')).not.toMatch(/customClipCut|zs_surfboard/);
     expect(src('src/game/data/items.ts')).not.toMatch(/zs_surfboard/);
+  });
+});
+
+describe('ondular e baforada (29/10)', () => {
+  it('ONDULAR na parede rende velocidade: zigue-zague em cima da face ganha mais que ir reto', () => {
+    const zig = newRide(); zig.mode = 'ride'; zig.yaw = -Math.PI / 2 + 0.68; zig.speed = 5; // ondula em volta da linha (±0,68 rad)
+    const reto = newRide(); reto.mode = 'ride'; reto.yaw = -Math.PI / 2; reto.speed = 5;
+    for (let k = 0; k < 90; k++) {
+      const s = Math.sin(k * dt * 6) > 0 ? 1 : -1;               // sobe e desce (curvas alternadas)
+      rideStep(zig, { dirX: 0, dirZ: 0, pop: false, fast: false, steer: s }, { pushX: 0, pushZ: C, churn: 0, surfY: 1, gradX: 0, gradZ: -0.7 }, AX, C, dt);
+      rideStep(reto, { dirX: 0, dirZ: 0, pop: false, fast: false }, { pushX: 0, pushZ: C, churn: 0, surfY: 1, gradX: 0, gradZ: -0.7 }, AX, C, dt);
+    }
+    expect(zig.speed).toBeGreaterThan(reto.speed + 0.5);
+  });
+  it('BAFORADA: dentro do tubo, com o fechamento chegando atrás, a onda cospe pra fora pela boca (velocidade + aviso)', () => {
+    expect(RIDE.SPIT_FULL).toBe(SPIT_ACC);
+    // ponto dentro do tubo, 2 m antes do fechamento chegar (lado esquerdo: a boca é pra −s)
+    const V: WaveVar = { hR: 1, hL: 1, vR: 1, vL: 1 };
+    const st = waveStateAt((SURF.BREAK_Q - SURF.Q_MIN) / SURF.C + 10, V);
+    const s = -(st.peelL - SURF.CLOSE_LAG + 2), R = barrelBand(barrelAt(s, st, V).hSide).r, q = crestQ(st, s) + TUBE.CQ * R;
+    const a = surfSpitAt(s, q, [st], [V], 0.2);
+    expect(a).toBeLessThan(-SPIT_ACC * 0.6);                        // rumo à boca (−s), forte
+    expect(surfSpitAt(-(st.peelL - 6), crestQ(st, -(st.peelL - 6)) + TUBE.CQ * R, [st], [V], 0.2)).toBe(0); // perto da boca: o fechamento está longe
+    const r = newRide(); r.mode = 'ride'; r.yaw = -Math.PI / 2; r.speed = 5; // apontando pra boca (−x = −s)
+    rideStep(r, { dirX: 0, dirZ: 0, pop: false, fast: false }, { pushX: 0, pushZ: C, churn: 0, surfY: 0, spitX: a, spitZ: 0 }, AX, C, dt);
+    expect(r.speed).toBeGreaterThan(5 + RIDE.SPIT_BURST * 0.9);    // tiro de velocidade
+    expect(r.trick).toBe('baforada!');
   });
 });
