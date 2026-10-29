@@ -53,6 +53,53 @@ Celular acompanha cada fase (botões do carro e da prancha incluídos), não fic
 ~140 mil triângulos e ~35 chamadas de desenho parado; ~350 mil com a onda; 55–60 FPS aqui (tecla **P** mostra). Cada fase
 diz quanto somou e não passa do teto combinado (proposta: ≤ 600 mil triângulos e ≤ 120 chamadas no PC; celular metade).
 
+## Caminho escolhido (29/10) — "levar o mapa pra casa do jogo", com chave liga/desliga
+Pedro: "passar o jogo pra cá ou o mapa pra lá — qual é mais seguro e fácil?". Medido no código:
+- A rota `/` (`routes/index.tsx`, ~1300 linhas) é a CASA do jogo: login, save, HUD, painéis, cidade (Clash), PvP,
+  multiplayer, store. O mundo 3D é UMA peça dela (`<GameWorld …/>`). A Zona Sul hoje é outra rota, sem nada disso.
+- As regras (`game/systems`, 38 sistemas) são puras e recebem a altura de fora (`heightAt`) → servem em qualquer mapa.
+- Todas as peças 3D do mundo velho (24 arquivos) perguntam o chão a UM balcão: `world/terrain-collision.ts`
+  (raio no GLB). Trocando o que esse balcão responde, elas pisam no chão da Zona Sul sem reescrever uma por uma.
+- As POSIÇÕES fixas (acampamentos, nós, zona segura, nascedouro, cavernas — `game/data/camps.ts` etc.) são do mapa
+  velho de 180×180 m; a Zona Sul tem 1600×1056 m. Precisam de um arquivo de posições novo — nas DUAS opções.
+
+Por isso nenhuma opção "pura":
+- ✗ Trazer tudo pra `/zona-sul` = duplicar login/save/HUD/painéis/cidade/PvP → dois jogos pra manter.
+- ✗ Arrancar o mapa velho e pôr a Zona Sul no lugar de uma vez = as 24 peças quebram juntas; jogo fora do ar pros outros.
+- ✓ A casa fica; o mundo vira uma CHAVE: "Clássico" | "Zona Sul" no mesmo jogo, mesmo save. Clássico é o padrão
+  até a Zona Sul ter paridade; aí vira o contrário (só com OK do Pedro). `/zona-sul` continua funcionando.
+
+## Checklist completa (cada caixa fecha com teste; cada fase com build + FPS + Pedro testa no ar + diário)
+**Fase 0 · Fundação**
+- [ ] Chave de mapa na casa do jogo (`/`), lembrada por conta; Clássico padrão
+- [ ] Mundo da Zona Sul recebe as mesmas entradas do `GameWorld` (modo, ataque, coletar, posição, pausa, câmera)
+- [ ] Ponte de chão: `terrain-collision` responde com o mapa de altura quando a Zona Sul está montada (Clássico intocado)
+- [ ] Arquivo de posições da Zona Sul (nascedouro, zona segura, acampamentos, nós, locais de base), validado pelo
+      mesmo checador do velho + "não cai na água / morro íngreme"
+- [ ] Prancha no catálogo oficial de itens; save aceita; validar com saves REAIS do banco (lição nv 38)
+- [ ] Hotbar/I da Zona Sul = inventário de verdade (sai a cópia só-leitura)
+- [ ] Posição salva POR MAPA (voltar pro Clássico não te joga no mar)
+- [ ] Herói único: andar/carro/prancha/nado da Zona Sul + armas/poderes/esquiva do jogo, no mesmo controle
+- [ ] Celular: botões do carro e da prancha
+
+**Fase 1 · Combate** — armas na mão, mira de ombro, Q/R/Z/X/C/F, munição, poções, tiro bate no morro (mapa de altura),
+morte/renascer na zona segura, vida/dano na tela, piloto de mira
+
+**Fase 2 · Fauna e farm** — bichos por região real, árvores/pedras farmáveis, perigo pela geografia, dia/noite,
+animação e sombra por distância (orçamento desde o 1º dia)
+
+**Fase 3 · Acampamentos + chefe + piloto** — ruínas reais com fogueira, chefe a cada 15 min, piloto com a regra selada,
+o piloto sabe que mar não é chão (anda/nada/desvia)
+
+**Fase 4 · Base, hordas e cidade** — reivindicar sobre o mapa de altura, locais escolhidos pelo Pedro, muros/torres/casas,
+hordas com intervalo maior, cartas, cidade (Clash), armazém, tropas
+
+**Fase 5 · Online** — salas, host, outros jogadores, carro/prancha/onda iguais pra todos (série da onda pelo relógio da sala), PvP
+
+**Fase 6 · Raid e cerco** — raid na base, tropas tank, bazuca −40% muro, saco de loot visível
+
+**Virada** — Zona Sul vira padrão; Clássico fica no menu ou sai — só com OK do Pedro
+
 ## Decisões do Pedro antes de começar
 1. **Um personagem só nos dois mapas?** (recomendado: sim — mesmo save)
 2. **Quando a Zona Sul vira o mapa principal** (e o velho sai do menu)? (recomendado: ao fechar a Fase 4)
