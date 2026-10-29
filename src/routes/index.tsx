@@ -50,16 +50,17 @@ import {
 import { INTENT_LABEL, readPilotStatus, type PilotStatus } from '@/components/world/pilot-status';
 
 const GameWorld = lazy(() => import('@/components/game-world'));
+const EditorPanel = lazy(() => import('@/components/editor/editor-panel'));
 import { BossSpawner } from '@/components/world/boss-spawner';
 import { NightFlock } from '@/components/world/night-flock';
 import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
 import { RoomsPanel } from '@/components/hud/rooms-panel';
-import { EditorPanel } from '@/components/editor/editor-panel';
 import { useEditorStore } from '@/components/editor/editor-store';
 import { LoginGate } from '@/components/LoginGate';
 import { PvpGate } from '@/components/PvpGate';
-import { MobileControls, type ArcButton } from '@/components/world/mobile-controls';
-import { useAim } from '@/components/world/aim';
+const MobileControls = lazy(() => import('@/components/world/mobile-controls'));
+import type { ArcButton } from '@/components/world/mobile-controls';
+import { useAim } from '@/components/world/aim-store';
 import { PerfHud } from '@/components/world/perf-hud';
 import { CardHost, UpgradeSide } from '@/components/hud/card-host';
 import { useCardWatchers } from '@/components/hud/card-watchers';
@@ -556,7 +557,7 @@ function Index() {
     <div className={`game-shell ${ui.sidebarCollapsed ? 'shell-collapsed' : ''}`} data-touch={isMobile || undefined}>
       <LoginGate />
       <PvpGate />
-      {editorActive && <EditorPanel />}
+      {editorActive && <Suspense fallback={null}><EditorPanel /></Suspense>}
       <aside className="game-sidebar" aria-label="Navegação do jogo">
         <Button variant="ghost" size="icon" className="sidebar-toggle"
           title="Esconder menu (mais espaço pro jogo)" aria-label="Esconder menu" onClick={toggleSidebar}>
@@ -868,7 +869,7 @@ function Index() {
             </div>
             <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}
-          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={cameraMode === 'third'} powers={mobilePowers} />}
+          {isMobile && !panel && !player.dead && <Suspense fallback={null}><MobileControls onAttack={hitNearest} canAim={cameraMode === 'third'} powers={mobilePowers} /></Suspense>}
           </>)}
 
           {!inCity && !panel && <PiecePicker />}

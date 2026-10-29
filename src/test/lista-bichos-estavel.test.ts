@@ -20,7 +20,7 @@ describe('lista de bichos estável', () => {
     expect(c.list[0]).not.toBe(b.list[0]);   // mudou de nome: só ele desenha de novo
     expect(c.list[1]).toBe(b.list[2]);
     expect(c.cache.has('b')).toBe(false);
-  }, 20_000);
+  });
   it('componentes dos bichos com memo; roster inclui o nome', () => {
     const src = fs.readFileSync('src/components/world/world-entities.tsx', 'utf8').replace(/\r\n/g, '\n'); // Windows (CRLF)
     expect(src).toMatch(/const RaiderM = memo\(Raider\);/);
@@ -43,7 +43,7 @@ describe('conversão toon só quando a cena muda', () => {
     expect(cel.peekSceneDirty()).toBe(false);
     expect(cel.CONVERT_DIRTY_S).toBe(0.25); // mesmo ritmo de antes quando há novidade
     expect(cel.CONVERT_IDLE_S).toBe(3);
-  }, 20_000);
+  });
 });
 
 /* 27/10 — sombra: interruptor GERAL junto com o do sol (15×/s); céu: cálculo reaproveitado por 0,1 s. */

@@ -26,7 +26,7 @@ describe('sons de torre e de morte', () => {
     const { deathVoice } = await import('@/components/world/combat-feedback');
     expect(deathVoice('raider_brute')).toBe('groan');
     expect(deathVoice('wolf_alpha')).toBe('growl');
-  }, 20_000); // importa o combat-feedback inteiro: na suíte cheia (paralela) passou dos 5 s
+  }); // importa o combat-feedback inteiro: passou dos 5 s padrão, e o limite agora vem do testTimeout (vitest.config.ts)
   it('ligado: as 3 formas da torre atirar tocam som (com limite); a morte toca no mesmo evento do sangue', () => {
     expect(TOWER_SFX_GAP_MS).toBeGreaterThanOrEqual(60);
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');

@@ -7,7 +7,7 @@ describe('GameWorld memo wiring', () => {
     const mod = await import('@/components/game-world');
 
     expect((mod.default as any).$$typeof).toBe(Symbol.for('react.memo'));
-  }, 30_000);
+  }); // importa o game-world inteiro (14,5 s só de compilação): o limite vem do testTimeout (vitest.config.ts)
 
   it('keeps Index wired through the default export', () => {
     const indexSource = readFileSync(resolve(process.cwd(), 'src/routes/index.tsx'), 'utf8');

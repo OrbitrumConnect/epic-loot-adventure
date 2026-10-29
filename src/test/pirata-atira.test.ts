@@ -17,7 +17,7 @@ describe('pirata de acampamento atira', () => {
     expect(t.shot!.height).toBeCloseTo(0.637, 3);
     expect({ ...t, attackRange: base.attackRange, aggroRange: base.aggroRange, hitVerb: base.hitVerb, shot: undefined }).toEqual({ ...base, shot: undefined });
     expect(base.attackRange).toBe(2.2); // não muta a tabela da espécie (horda segue na faca)
-  }, 20_000); // importa o raider inteiro: na suíte cheia (paralela) passava dos 5 s padrão
+  }); // importa o raider inteiro: passava dos 5 s padrão, e o limite agora vem do testTimeout (vitest.config.ts)
   it('ligado: só no acampamento; clip de tiro + pistola na mão; IA solta rastro + som nos 2 golpes', () => {
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
     expect(r).toMatch(/const gunner = isCampSpawn\(creatureId\) && CAMP_GUNNERS\.has\(speciesId\);/);

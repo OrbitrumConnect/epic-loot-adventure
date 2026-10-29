@@ -74,5 +74,5 @@ describe('ganso e faisão agressivos rápidos', () => {
       expect(t.leashRange).toBeLessThanOrEqual(12);
       expect(CREATURES[sp]!.attackPower).toBeLessThanOrEqual(2);
     }
-  }, 20_000);
+  });
 });

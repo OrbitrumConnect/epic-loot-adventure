@@ -5,7 +5,8 @@
  * usando o MESMO ataque/PvP de sempre (cadência, alcance, munição e regras do online).
  */
 import * as THREE from 'three';
-import { create } from 'zustand';
+import { AIM_ZOOM_MAX, useAim } from './aim-store';
+export { AIM_ZOOM_MAX, aimSensitivityScale, setAiming, useAim } from './aim-store';
 import { useGameStore } from '@/game/state/game-store';
 import { broadcastPlayerHit, useNet } from '@/net/multiplayer';
 import { creatureAnchors } from './hostile-ai';
@@ -40,20 +41,6 @@ export function gunKick(itemId: string | null): number {
   return itemId === 'rifle' ? 0.045 : 0.03;
 }
 
-export const AIM_ZOOM_MAX = 4;
-export const useAim = create<{ active: boolean; zoom: number }>(() => ({ active: false, zoom: 1 }));
-/** Sensibilidade do giro mirando: cai na mesma proporção do campo de visão (52°/zoom vs 65° sem mirar) →
- *  mirar longe não treme (Pedro 25/10, celular). Sem mirar = 1 (igual a antes). */
-export function aimSensitivityScale(): number {
-  const s = useAim.getState();
-  return s.active ? 52 / Math.max(1, s.zoom) / 65 : 1;
-}
-
-export function setAiming(on: boolean): void {
-  const s = useAim.getState();
-  if (s.active === on) return;
-  useAim.setState({ active: on, zoom: on ? s.zoom : 1 });
-}
 export function aimZoomStep(dir: 1 | -1): void {
   const s = useAim.getState();
   if (!s.active) return;

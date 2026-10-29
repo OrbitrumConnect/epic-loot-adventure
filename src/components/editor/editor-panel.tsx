@@ -33,3 +33,5 @@ export function EditorPanel() {
     <footer><button onClick={s.undo} disabled={!s.undoStack.length}><Undo2 /></button><button onClick={s.redo} disabled={!s.redoStack.length}><Redo2 /></button><button onClick={s.cancel}>Cancelar</button><button onClick={s.saveLocal}><Save /> Salvar local</button></footer>{s.saveNotice && <div className="editor-save-notice">{s.saveNotice}</div>}
   </aside>;
 }
+
+export default EditorPanel;

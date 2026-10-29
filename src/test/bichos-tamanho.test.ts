@@ -38,5 +38,5 @@ describe('luz dos bichos pintados', () => {
     expect(TINT_GLOW).toBe(0.18);
     const gc = fs.readFileSync('src/components/world/glb-creature.tsx', 'utf8');
     expect(gc).toMatch(/if \(tint\) \{[\s\S]{0,1200}sm\.emissive\.set\(tint\); sm\.emissiveIntensity = TINT_GLOW;/);
-  }, 20_000);
+  });
 });

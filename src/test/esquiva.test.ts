@@ -63,7 +63,7 @@ describe('esquiva / rolamento', () => {
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
     expect(hero.indexOf('// ESQUIVA (oneshot')).toBeLessThan(hero.indexOf('// ATAQUE NÃO É CORTADO'));
     expect(hero).toMatch(/ddg\.time = DODGE_CLIP_FROM;/);
-  }, 20_000);
+  });
   it('ligado: tecla Y, botão no rodapé, arco do celular (anel de dentro), piloto e invulnerável na IA', () => {
     const idx = fs.readFileSync('src/routes/index.tsx', 'utf8');
     expect(idx).toMatch(/e\.code === 'KeyY' && !inCity && !freeCam\) requestDodge\(\);/);
