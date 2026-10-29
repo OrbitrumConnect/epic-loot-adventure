@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { type ZsTerrain, setZsWaterChurn, setZsWaterExtra, setZsWaterPush, setZsWaterSpit, setZsWaterTube } from '../zs-terrain-data';
 import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from '../zs-water-look';
-import { BARREL_T, BEND, BEND_S, CURL_RAMP, FULL, type Lim, RIPPLE_A, RIPPLE_K, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, surfSpitAt, TUBE } from './surf-wave';
+import { BARREL_T, BEND, BEND_S, CURL_RAMP, FULL, type Lim, RIPPLE_A, RIPPLE_K, SHOULDER_DROP, SHOULDER_HOLD, SHOULDER_LEN, STEEP_AHEAD, FACE_W, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, surfSpitAt, TUBE } from './surf-wave';
 import { SLOTS, SurfScheduler } from './surf-scheduler';
 import { findSurfFrame, type SurfFrame, toSurfLocal } from './surf-frame';
 
@@ -42,7 +42,7 @@ function surfRows(dense: number, lim: Lim): number[] {
 export function buildSurfGeometry(mobile: boolean, lim: Lim = FULL): THREE.BufferGeometry {
   // desktop ~70 mil vértices (1 desenho; só o shader mexe), celular ~24 mil
   // ao longo da onda (s) 1 m basta (a forma muda devagar nesse sentido); só cobre de −limEsq a +limDir (onde há onda)
-  const ds = mobile ? 1.4 : 1.0, rows = surfRows(mobile ? 0.5 : 0.3, lim);
+  const ds = mobile ? 1.4 : 1.0, rows = surfRows(mobile ? 0.5 : 0.25, lim);
   const cols: number[] = []; for (let s = -lim[1]; s < lim[0] - 1e-6; s += ds) cols.push(s);
   cols.push(lim[0]); // borda EXATA (o mar em volta para exatamente aí — sem faixa de duas águas)
   const rest = new Float32Array(rows.length * cols.length * 2), pos = new Float32Array(rows.length * cols.length * 3);
@@ -68,15 +68,21 @@ attribute vec2 aRest;
 varying float vFoam;
 varying float vCrest;
 float sm(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
-float bumpW(float x, float h, float st) { float w = x > 0.0 ? 3.4 - 1.4 * st : 7.0; float r = x / w; return h * exp(-r * r); }
+float bumpW(float x, float h, float st) {
+  float w = x > 0.0 ? 3.4 - 1.4 * st : 7.0; float r = x / w; float g = h * exp(-r * r);
+  if (x <= 0.0 || st <= 0.0) return g;
+  float u = min(1.0, x / ${FACE_W.toFixed(3)}); float cc = h * (1.0 - u) * (1.0 - u); // face côncava (igual a bump)
+  return g + (cc - g) * st * 0.85;
+}
 float tubeR(float h) { return clamp(h * ${TUBE.K.toFixed(3)}, ${TUBE.MIN.toFixed(3)}, ${TUBE.MAX.toFixed(3)}); }
 const float BEND = ${BEND.toFixed(3)}, BS = ${BEND_S.toFixed(3)}, PB = ${PEAK_BLEND.toFixed(3)};
 float bendQ(float s) { float k = min(1.0, abs(s) / BS); return BEND * k * k; } // igual a crestQ (surf-wave.ts)
 // ponto da elipse do tubo com o ângulo corrigido (pontos por igual na curva) — igual ao P de barrelCurve (surf-wave.ts)
 vec2 ellP(float ang, float r, float cq, float cy, float AX) { float a = ang + (AX - 1.0) / (2.0 * (AX + 1.0)) * sin(2.0 * ang); return vec2(cq + AX * r * cos(a), cy + r * sin(a)); }
 float tubeAx(float R) { return ${TUBE.AX0.toFixed(3)} + ${TUBE.AXK.toFixed(3)} * R; }
+float tubeAxAt(float R, float curl) { return tubeAx(R) * (0.65 + 0.35 * curl); } // igual a tubeAxAt (surf-wave.ts)
 vec2 barrelCurve(float t, float R, float curl, float cl, float rs, float y0, float y1) {
-  float wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R, Re = R * rs, T = Re * ${TUBE.LIP.toFixed(3)}, AX = tubeAx(R);
+  float wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R, Re = R * rs, T = Re * ${TUBE.LIP.toFixed(3)}, AX = tubeAxAt(R, curl);
   float cq = ${TUBE.CQ.toFixed(3)} * R, cy = ${TUBE.CY.toFixed(3)} * Re;
   float en = radians(150.0 + (-60.0 - 25.0 * cl - 150.0) * curl), st = radians(260.0);
   float A = ${BARREL_T[0].toFixed(4)}, B = ${BARREL_T[1].toFixed(4)}, C = ${BARREL_T[2].toFixed(4)};
@@ -87,7 +93,7 @@ vec2 barrelCurve(float t, float R, float curl, float cl, float rs, float y0, flo
   return vec2(tp.x + (-wb - tp.x) * k, tp.y + (y1 - tp.y) * sm(0.0, 1.0, k));
 }
 // igual a curlOf (surf-wave.ts): x = curl, y = blend, z = rs
-vec3 curlOf(float op, float cl, float rp) { return vec3(rp, sm(0.0, 1.0, op) * (1.0 - sm(0.5, 1.0, cl)), (1.0 - 0.5 * cl) * (0.72 + 0.28 * rp)); }
+vec3 curlOf(float op, float cl, float rp) { return vec3(rp, sm(0.0, 1.0, op) * (1.0 - sm(0.5, 1.0, cl)), 1.0 - 0.5 * cl); }
 uniform vec2 uLim; // até onde a onda vai: x = direita, y = esquerda (morre na pedra)
 float zoneFade(float s, float q) {
   float L = s >= 0.0 ? uLim.x : uLim.y;
@@ -102,8 +108,8 @@ vec4 surfPoint(vec2 sq) {
     vec4 a = uWa[i]; vec4 b = uWb[i];
     if (b.z < 0.5 || a.y <= 0.0) continue;
     float pk = sm(-PB, PB, s), d = mix(a.w, a.z, pk), aa = abs(s);
-    float op = sm(0.0, ${SURF.OPEN_EDGE.toFixed(1)}, d - aa), cl = sm(0.0, ${SURF.CLOSE_EDGE.toFixed(1)}, d - ${SURF.CLOSE_LAG.toFixed(1)} - aa), stp = sm(-18.0, 0.0, d - aa), rp = sm(0.0, ${CURL_RAMP.toFixed(1)}, d - aa);
-    float hs = a.y * mix(b.y, b.x, pk) * (1.0 + ${RIPPLE_A.toFixed(3)} * sin(${RIPPLE_K.toFixed(4)} * s + 7.0 * b.w)), x = q0 - a.x - bendQ(s), R = tubeR(hs), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R;
+    float op = sm(0.0, ${SURF.OPEN_EDGE.toFixed(1)}, d - aa), cl = sm(0.0, ${SURF.CLOSE_EDGE.toFixed(1)}, d - ${SURF.CLOSE_LAG.toFixed(1)} - aa), stp = sm(-${STEEP_AHEAD.toFixed(1)}, 0.0, d - aa) * sm(${(SURF.BREAK_Q - 40).toFixed(1)}, ${(SURF.BREAK_Q - 5).toFixed(1)}, a.x), rp = sm(0.0, ${CURL_RAMP.toFixed(1)}, d - aa);
+    float hs = a.y * mix(b.y, b.x, pk) * (1.0 + ${RIPPLE_A.toFixed(3)} * sin(${RIPPLE_K.toFixed(4)} * s + 7.0 * b.w)) * (1.0 - ${SHOULDER_DROP.toFixed(3)} * sm(${SHOULDER_HOLD.toFixed(1)}, ${(SHOULDER_HOLD + SHOULDER_LEN).toFixed(1)}, aa - d)), x = q0 - a.x - bendQ(s), R = tubeR(hs), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R;
     y += bumpW(x, hs * (1.0 - 0.65 * cl), stp);
     if (curlOf(op, cl, rp).y > 0.001 && x <= wf && x >= -wb) { fold = true; fx = x; fOpen = op; fClosed = cl; fSteep = stp; fH = hs; fQc = a.x + bendQ(s); fRamp = rp; gLipX = x / R; gLipK = op * (1.0 - cl); }
     float r1 = (x + 1.0) / 5.0;
@@ -147,7 +153,7 @@ function surfMaterial(uniforms: Record<string, THREE.IUniform>): THREE.MeshStand
       .replace('#include <color_fragment>', `#include <color_fragment>
   // água fina no alto da onda: verde-água discreto (luz atravessando) — cores LINEARES, por isso valores baixos
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.30, 0.30), vCrest * 0.5);
-  diffuseColor.a = mix(diffuseColor.a, 0.9, vCrest);
+  diffuseColor.a = mix(diffuseColor.a, 0.97, smoothstep(0.0, 0.6, vCrest));
   // espuma branca só na ponta do lip (calculada POR PIXEL — borda lisa, sem "degraus" da malha) e depois de fechar
   float lr = (vLipX + ${LIP_FOAM_X.toFixed(3)}) / ${LIP_FOAM_W.toFixed(3)};
   float fo = clamp(max(vFoam, vLipK * exp(-lr * lr) * 0.7) * 1.25, 0.0, 0.92);

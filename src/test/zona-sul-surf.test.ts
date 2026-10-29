@@ -38,7 +38,7 @@ describe('surf — onda e tubo', () => {
   });
   it('fecha atrás da abertura e vira ESPUMA; nada de rachadura: vizinhos da malha nunca se separam muito', () => {
     const st = waveStateAt(ageAtBreak + 8, V);
-    const near = barrelAt(0, st, V), edge = barrelAt(st.peelR - 2, st, V);
+    const near = barrelAt(0, st, V), edge = barrelAt(st.peelR - 4, st, V); // boca: a forma de tubo entra ao longo de OPEN_EDGE (9 m)
     expect(near.closed).toBeGreaterThan(0.9);                    // perto do pico já fechou
     expect(edge.open).toBeGreaterThan(0.2); expect(edge.closed).toBe(0); // na frente da abertura ainda é tubo
     let foam = 0;

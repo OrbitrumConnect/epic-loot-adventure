@@ -27,7 +27,7 @@ export const SURF = {
   H_START: 0.35, H_MAX: 4.8,             // Pedro 28/10: "a onda pode ser um pouco mais alta" (4,2 → 4,8)
   V_PEEL: 6.5,            // abertura pros lados (m/s)
   CLOSE_LAG: 22,          // a quantos metros atrás da frente de abertura o tubo fecha (tubo aberto mais comprido)
-  OPEN_EDGE: 5, CLOSE_EDGE: 7,
+  OPEN_EDGE: 9, CLOSE_EDGE: 7,  // a forma de tubo entra ao longo de 9 m na boca (5 era curto = degrau)
   EDGE_S: 22, EDGE_Q0: 18, EDGE_Q1: 10, // apagar nas bordas da zona (sem degrau com o mar em volta; nas laterais, suave)
 } as const;
 
@@ -63,7 +63,12 @@ export function waveStateAt(age: number, v: WaveVar): WaveState {
 /** Corpo da onda sem dobra: costas longas (mar), face mais íngreme (praia); `steep` 0..1 empina a face. */
 export function bump(x: number, h: number, steep: number): number {
   const w = x > 0 ? 3.4 - 1.4 * steep : 7;
-  return h * Math.exp(-(x / w) * (x / w));
+  const g = h * Math.exp(-(x / w) * (x / w));
+  if (x <= 0 || steep <= 0) return g;
+  // PAREDE SURFÁVEL (Pedro 29/10: "a parte que começa a ter parede quebrando, mais curva, deve se estender mais, dando
+  // mais parede côncava"): perto de quebrar a face vira CÔNCAVA — sobe curvando do cavado até a crista (half-pipe)
+  const u = Math.min(1, x / FACE_W), cc = h * (1 - u) * (1 - u);
+  return g + (cc - g) * steep * 0.85;
 }
 
 /** Meia-largura (m) da transição entre o lado esquerdo e o direito no pico. */
@@ -73,6 +78,12 @@ export const PEAK_BLEND = 6;
  *  lip vai lançando e o tubo crescendo ao longo de CURL_RAMP m (era tudo igual depois de 5 m); (2) a crista não é uma
  *  régua — a altura ondula de leve ao longo da onda (±RIPPLE_A, fase por onda). */
 export const CURL_RAMP = 16, RIPPLE_A = 0.06, RIPPLE_K = 0.085;
+/** OMBRO (Pedro 29/10, desenho sobre a foto): à frente de onde está quebrando a onda vai BAIXANDO em rampa lisa (o pico é
+ *  o mais alto) — antes era um bloco da mesma altura até a ponta. Cai SHOULDER_DROP ao longo de SHOULDER_LEN m. */
+export const SHOULDER_DROP = 0.55, SHOULDER_LEN = 70;
+/** a parede cheia (côncava) segue por SHOULDER_HOLD m à frente da quebra antes de o ombro começar a baixar; a face
+ *  empina a partir de STEEP_AHEAD m antes de a abertura chegar; FACE_W = largura da face côncava (m) */
+export const SHOULDER_HOLD = 25, STEEP_AHEAD = 32, FACE_W = 4.6;
 export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; closed: number; steep: number; hSide: number; ramp: number; behind: number } {
   // lado direito/esquerdo levemente diferentes (sem espelho), mas a troca no pico é SUAVE (±PEAK_BLEND m): o degrau
   // seco em s = 0 abria uma fenda vertical bem onde a onda começa a quebrar
@@ -80,8 +91,9 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; 
   return {
     open: smooth(0, SURF.OPEN_EDGE, d - a),
     closed: smooth(0, SURF.CLOSE_EDGE, d - SURF.CLOSE_LAG - a),
-    steep: smooth(-18, 0, d - a),
-    hSide: st.h * (v.hL + (v.hR - v.hL) * k) * (1 + RIPPLE_A * Math.sin(RIPPLE_K * s + 7 * v.vR)),
+    // empina só quando a onda está CHEGANDO no ponto de quebra (a ondulação lá fora segue redonda)
+    steep: smooth(-STEEP_AHEAD, 0, d - a) * smooth(SURF.BREAK_Q - 40, SURF.BREAK_Q - 5, st.qc),
+    hSide: st.h * (v.hL + (v.hR - v.hL) * k) * (1 + RIPPLE_A * Math.sin(RIPPLE_K * s + 7 * v.vR)) * (1 - SHOULDER_DROP * smooth(SHOULDER_HOLD, SHOULDER_HOLD + SHOULDER_LEN, a - d)),
     ramp: smooth(0, CURL_RAMP, d - a),
     /** quanto falta (m) pro fechamento chegar nesta coluna (negativo = ainda não fechou; 0 = fechando agora) */
     behind: d - SURF.CLOSE_LAG - a,
@@ -98,9 +110,11 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; 
  * O tubo CABE na onda: topo = R·(CY + 1 + LIP) ≈ 2,09R ≈ h. Onda de 4,2 m → R = 2,1 m: vão de ~4 m de altura por
  * ~7 m de largura. Costas longas (WB) como as do corpo da onda.
  */
-export const TUBE = { K: 0.5, MIN: 0.5, MAX: 3.0, WF: 3.0, WB: 6.0, AX0: 1.55, AXK: 0.25, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
+export const TUBE = { K: 0.5, MIN: 0.5, MAX: 3.0, WF: 3.0, WB: 6.0, AX0: 1.5, AXK: 0.15, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
 /** Largura da cavidade em alturas (o lip arremessa mais longe na onda maior). */
 export function tubeAx(R: number): number { return TUBE.AX0 + TUBE.AXK * R; }
+/** Largura com o funil: na boca (curl 0) o lip ainda joga pouco (65%), lá dentro joga tudo. */
+export function tubeAxAt(R: number, curl: number): number { return tubeAx(R) * (0.65 + 0.35 * curl); }
 /** Raio do tubo pra esta altura e a faixa da dobra (frente wf, costas wb). */
 export function tubeR(h: number): number { return Math.max(TUBE.MIN, Math.min(TUBE.MAX, h * TUBE.K)); }
 export function barrelBand(h: number): { wf: number; wb: number; r: number } { const r = tubeR(h); return { wf: TUBE.WF * r, wb: TUBE.WB * r, r }; }
@@ -111,8 +125,9 @@ export function barrelBand(h: number): { wf: number; wb: number; r: number } { c
  * sai no fim do fechamento); `rs` = a cavidade DESABA ao fechar (encolhe) em vez de o lip cair cheio embolando.
  */
 export function curlOf(open: number, closed: number, ramp = open): { curl: number; blend: number; rs: number } {
-  // curl = quanto o lip já lançou (funil: cresce ao longo de CURL_RAMP); a cavidade nasce com 72% e cresce até 100%
-  return { curl: ramp, blend: smooth(0, 1, open) * (1 - smooth(0.5, 1, closed)), rs: (1 - 0.5 * closed) * (0.72 + 0.28 * ramp) };
+  // curl = quanto o lip já lançou (funil: cresce ao longo de CURL_RAMP). A ALTURA do tubo não encolhe na boca (era o
+  // degrau entre o tubo e o ombro — Pedro 29/10); o que cresce é a LARGURA (a jogada do lip): ver tubeAxAt
+  return { curl: ramp, blend: smooth(0, 1, open) * (1 - smooth(0.5, 1, closed)), rs: 1 - 0.5 * closed };
 }
 
 /**
@@ -123,7 +138,7 @@ export function curlOf(open: number, closed: number, ramp = open): { curl: numbe
  */
 export function barrelCurve(t: number, R: number, curl: number, close: number, rs: number, y0: number, y1: number): [number, number] {
   const wf = TUBE.WF * R, wb = TUBE.WB * R, Re = R * rs, T = Re * TUBE.LIP;
-  const cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAx(R);
+  const cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAxAt(R, curl);
   const end = (150 + (-60 - 25 * close - 150) * curl) * Math.PI / 180, start = 260 * Math.PI / 180;
   // elipse com pontos espalhados POR IGUAL na curva (sem isso a boca larga esticava a malha nas laterais): ângulo corrigido
   const ce = (AX - 1) / (2 * (AX + 1));
@@ -191,7 +206,7 @@ export function surfPoint(s: number, q0: number, waves: WaveState[], vars: WaveV
  */
 export function tubeInside(c: { curl: number; blend: number; rs: number }, x: number, R: number, yRef: number): boolean {
   if (c.curl < 0.6 || c.blend < 0.5) return false;
-  const Re = R * c.rs, cq = TUBE.CQ * R, cy = TUBE.CY * Re, ax = tubeAx(R) * Re;
+  const Re = R * c.rs, cq = TUBE.CQ * R, cy = TUBE.CY * Re, ax = tubeAxAt(R, c.curl) * Re;
   return yRef < cy + 0.5 * Re && x > cq - ax && x < cq + ax * (1 + TUBE.LIP) + 1.5;
 }
 
@@ -207,7 +222,7 @@ export function surfHeightAt(s: number, q: number, waves: WaveState[], vars: Wav
     const hb = b.hSide * (1 - 0.65 * b.closed);
     let hh = bump(x, hb, b.steep);
     if (c.blend > 0 && x <= band.wf && x >= -band.wb) {
-      const R = band.r, Re = R * c.rs, cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAx(R), ax = AX * Re, u = (x - cq) / ax;
+      const R = band.r, Re = R * c.rs, cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAxAt(R, c.curl), ax = AX * Re, u = (x - cq) / ax;
       let shape: number;
       if (tubeInside(c, x, R, yRef)) {
         // DENTRO: chão do tubo — liso; junto da face (lado do mar) vira RAMPA subindo pela parede (contínua)
