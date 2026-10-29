@@ -24,8 +24,11 @@ export const RIDE = {
   // Pro Surfer = virar esq/dir + acelerar + frear). A prancha tem RUMO e VELOCIDADE próprios em cima da onda (que te
   // segura no bolso): vira com raio (carving), desce a face = ganha velocidade, sobe = perde (skate numa rampa que anda).
   TURN: 2.6,                                 // giro da prancha (rad/s) — carving
-  G_FACE: 9, DRAG: 0.55, S_CRUISE: 4, S_MAX: 13, PUMP: 2.2, STALL: 4, // gravidade na face, arrasto, cruzeiro/máx, pump (W), freio (S)
-  PUMP_CARVE: 0.9,                           // ONDULAR na parede: cada curva rende velocidade (∝ taxa de curva × inclinação)
+  // 29/10 ("não pego velocidade com Shift, no tubo, nem subindo e descendo"): arrasto 0,55 → 0,3 (a velocidade ganha
+  // descendo sumia), Shift SEGURADO também acelera (pump), ondular rende ~2× mais e o tubo puxa até TUBE_SPEED
+  G_FACE: 10, DRAG: 0.3, S_CRUISE: 5, S_MAX: 14, PUMP: 2.6, STALL: 4, // gravidade na face, arrasto, cruzeiro/máx, pump (W/Shift), freio (S)
+  PUMP_CARVE: 1.7,                           // ONDULAR na parede: cada curva rende velocidade (∝ taxa de curva × inclinação)
+  TUBE_SPEED: 8, TUBE_ACC: 2.5,              // dentro do tubo a onda te puxa até 8 m/s (~29 km/h: acompanha a abertura)
   SPIT_BURST: 1.8, SPIT_CD: 3, SPIT_FULL: 4.5, // (SPIT_FULL = SPIT_ACC de surf-wave)               // baforada: tiro de velocidade (m/s) quando o fechamento chega em você; respiro (s)
   BOOST: 0.55, BOOST_CD: 0.8,                // toque no Shift em pé: +0,55 m/s (≈ 2 km/h) na hora, no máx. 1 a cada 0,8 s (Pedro)
   // AÉREO: subindo a face rápido e passando o lip → decola; no ar A/D gira; pousou alinhado = aéreo, torto = vaca
@@ -55,7 +58,9 @@ export type RideWater = { pushX: number; pushZ: number; churn: number; surfY?: n
   /** de que lado do pico você está (+1 direita, −1 esquerda, no eixo s): ao levantar, sai NA LINHA pra esse lado */
   side?: number;
   /** baforada do tubo (aceleração no mundo, m/s²) — empurra pra fora pela boca */
-  spitX?: number; spitZ?: number };
+  spitX?: number; spitZ?: number;
+  /** está dentro do tubo aberto? (a onda puxa até TUBE_SPEED) */
+  inTube?: boolean };
 export type RideAxes = { qx: number; qz: number; sx: number; sz: number };
 
 export function newRide(): RideState {
@@ -144,7 +149,9 @@ export function rideStep(st: RideState, inp: RideInput, w: RideWater, ax: RideAx
         st.speed += Math.max(0.3 * spm, spx * ux + spz * uz) * dt; // quem aponta pra boca ganha mais
         if (spm > 0.75 * RIDE.SPIT_FULL && st.spitCd <= 0) { st.speed += RIDE.SPIT_BURST; st.spitCd = RIDE.SPIT_CD; st.trick = 'baforada!'; st.trickT = 2.2; }
       }
-      const pump = Math.max(0, thr), stall = Math.max(0, -thr);
+      const pump = Math.min(1.6, Math.max(0, thr) + (inp.fast ? 1 : 0)), stall = Math.max(0, -thr);
+      // NO TUBO: encaixado, a onda te puxa até a velocidade de acompanhar a abertura
+      if (w.inTube && st.speed < RIDE.TUBE_SPEED) st.speed += RIDE.TUBE_ACC * (RIDE.TUBE_SPEED - st.speed) / RIDE.TUBE_SPEED * 2 * dt;
       // BOOST: toque no Shift = +2 km/h na hora (com respiro)
       st.boostCd = Math.max(0, st.boostCd - dt);
       if (inp.boost && st.boostCd <= 0) { st.speed += RIDE.BOOST; st.boostCd = RIDE.BOOST_CD; }

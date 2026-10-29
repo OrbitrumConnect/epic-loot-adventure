@@ -24,9 +24,9 @@ export const SURF = {
   Q_OPEN: 15,             // até aqui a zona tem que ser água aberta (o tubo fecha antes: quebra − 55 + ~66 m)
   C: 3.2,                 // m/s rumo à praia → (80 + 6 + 175) / 3,2 ≈ 82 s de vida (era ~71)
   BREAK_Q: -55,           // quebra 55 m antes do pico (era 25: "quebra muito à frente")
-  H_START: 0.35, H_MAX: 4.8,             // Pedro 28/10: "a onda pode ser um pouco mais alta" (4,2 → 4,8)
+  H_START: 0.35, H_MAX: 6.3,             // Pedro: "um pouco mais alta" (4,2 → 4,8) e 29/10 "+1,5 m" (4,8 → 6,3)
   V_PEEL: 6.5,            // abertura pros lados (m/s)
-  CLOSE_LAG: 22,          // a quantos metros atrás da frente de abertura o tubo fecha (tubo aberto mais comprido)
+  CLOSE_LAG: 30,          // a quantos metros atrás da frente de abertura o tubo fecha (22 → 30: parede curva mais extensa, 29/10)
   OPEN_EDGE: 9, CLOSE_EDGE: 7,  // a forma de tubo entra ao longo de 9 m na boca (5 era curto = degrau)
   EDGE_S: 22, EDGE_Q0: 18, EDGE_Q1: 10, // apagar nas bordas da zona (sem degrau com o mar em volta; nas laterais, suave)
 } as const;
@@ -68,7 +68,7 @@ export function bump(x: number, h: number, steep: number): number {
   // PAREDE SURFÁVEL (Pedro 29/10: "a parte que começa a ter parede quebrando, mais curva, deve se estender mais, dando
   // mais parede côncava"): perto de quebrar a face vira CÔNCAVA — sobe curvando do cavado até a crista (half-pipe)
   const u = Math.min(1, x / FACE_W), cc = h * (1 - u) * (1 - u);
-  return g + (cc - g) * steep * 0.85;
+  return g + (cc - g) * steep;
 }
 
 /** Meia-largura (m) da transição entre o lado esquerdo e o direito no pico. */
@@ -83,7 +83,7 @@ export const CURL_RAMP = 16, RIPPLE_A = 0.06, RIPPLE_K = 0.085;
 export const SHOULDER_DROP = 0.55, SHOULDER_LEN = 70;
 /** a parede cheia (côncava) segue por SHOULDER_HOLD m à frente da quebra antes de o ombro começar a baixar; a face
  *  empina a partir de STEEP_AHEAD m antes de a abertura chegar; FACE_W = largura da face côncava (m) */
-export const SHOULDER_HOLD = 25, STEEP_AHEAD = 32, FACE_W = 4.6;
+export const SHOULDER_HOLD = 35, STEEP_AHEAD = 45, FACE_W = 5.4; // 29/10: "a parede pode ser mais curva antes de quebrar"
 export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; closed: number; steep: number; hSide: number; ramp: number; behind: number } {
   // lado direito/esquerdo levemente diferentes (sem espelho), mas a troca no pico é SUAVE (±PEAK_BLEND m): o degrau
   // seco em s = 0 abria uma fenda vertical bem onde a onda começa a quebrar
@@ -110,7 +110,7 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; 
  * O tubo CABE na onda: topo = R·(CY + 1 + LIP) ≈ 2,09R ≈ h. Onda de 4,2 m → R = 2,1 m: vão de ~4 m de altura por
  * ~7 m de largura. Costas longas (WB) como as do corpo da onda.
  */
-export const TUBE = { K: 0.5, MIN: 0.5, MAX: 3.0, WF: 3.0, WB: 6.0, AX0: 1.5, AXK: 0.15, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
+export const TUBE = { K: 0.5, MIN: 0.5, MAX: 4.4, WF: 3.0, WB: 6.0, AX0: 1.5, AXK: 0.15, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
 /** Largura da cavidade em alturas (o lip arremessa mais longe na onda maior). */
 export function tubeAx(R: number): number { return TUBE.AX0 + TUBE.AXK * R; }
 /** Largura com o funil: na boca (curl 0) o lip ainda joga pouco (65%), lá dentro joga tudo. */

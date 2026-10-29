@@ -57,7 +57,7 @@ describe('prancha — remar, levantar, surfar, vaca', () => {
     expect((b.speed - RIDE.S_CRUISE) * 3.6).toBeGreaterThan(1.5); expect((b.speed - RIDE.S_CRUISE) * 3.6).toBeLessThan(2.5);
     const s1 = b.speed;
     rideStep(b, { dirX: 0, dirZ: 0, pop: false, fast: true, boost: true }, { pushX: 0, pushZ: C, churn: 0, surfY: 0 }, AX, C, dt);
-    expect(b.speed).toBeLessThanOrEqual(s1);                         // dentro do respiro: não soma de novo
+    expect(b.speed - s1).toBeLessThan(RIDE.BOOST * 0.5);              // dentro do respiro: o toque não soma de novo (só o pump do Shift segurado)
   });
   it('W acelera (pump), S freia (stall)', () => {
     const w = newRide(); w.mode = 'ride'; w.speed = RIDE.S_CRUISE;

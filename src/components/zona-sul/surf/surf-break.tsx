@@ -72,7 +72,7 @@ float bumpW(float x, float h, float st) {
   float w = x > 0.0 ? 3.4 - 1.4 * st : 7.0; float r = x / w; float g = h * exp(-r * r);
   if (x <= 0.0 || st <= 0.0) return g;
   float u = min(1.0, x / ${FACE_W.toFixed(3)}); float cc = h * (1.0 - u) * (1.0 - u); // face côncava (igual a bump)
-  return g + (cc - g) * st * 0.85;
+  return g + (cc - g) * st;
 }
 float tubeR(float h) { return clamp(h * ${TUBE.K.toFixed(3)}, ${TUBE.MIN.toFixed(3)}, ${TUBE.MAX.toFixed(3)}); }
 const float BEND = ${BEND.toFixed(3)}, BS = ${BEND_S.toFixed(3)}, PB = ${PEAK_BLEND.toFixed(3)};
