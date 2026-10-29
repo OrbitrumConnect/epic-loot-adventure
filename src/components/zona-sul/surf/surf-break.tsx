@@ -9,9 +9,9 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { type ZsTerrain, setZsWaterExtra, setZsWaterPush } from '../zs-terrain-data';
+import { type ZsTerrain, setZsWaterChurn, setZsWaterExtra, setZsWaterPush } from '../zs-terrain-data';
 import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from '../zs-water-look';
-import { BARREL_T, BEND, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfHeightAt, surfPushAt, TUBE } from './surf-wave';
+import { BARREL_T, BEND, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfPushAt, TUBE } from './surf-wave';
 import { SLOTS, SurfScheduler } from './surf-scheduler';
 import { findSurfFrame, type SurfFrame, toSurfLocal } from './surf-frame';
 
@@ -172,7 +172,8 @@ export function SurfBreak({ t, shoreX, shoreZ }: { t: ZsTerrain; shoreX: number;
     });
     const key = (e: KeyboardEvent) => { if (e.code === 'KeyJ' && !e.repeat) scheduler.trigger(); };
     window.addEventListener('keydown', key);
-    return () => { surfZone.on = false; surfZone.frame = null; setZsWaterExtra(null); setZsWaterPush(null); window.removeEventListener('keydown', key); };
+    setZsWaterChurn((x, z) => { const [s, q] = toSurfLocal(frame, x, z); return inZone(s, q) ? surfChurnAt(s, q, scheduler.states, scheduler.vars, frame.lim) : 0; });
+    return () => { surfZone.on = false; surfZone.frame = null; setZsWaterExtra(null); setZsWaterPush(null); setZsWaterChurn(null); window.removeEventListener('keydown', key); };
   }, [frame, uniforms, scheduler]);
   useEffect(() => () => { geometry.dispose(); material.dispose(); }, [geometry, material]);
 

@@ -1,0 +1,93 @@
+import fs from 'node:fs';
+import { describe, expect, it, vi } from 'vitest';
+import { canPop, newRide, RIDE, rideStep } from '@/components/zona-sul/surf/surf-ride';
+import { barrelAt, barrelBand, crestQ, SURF, surfChurnAt, type WaveVar, waveStateAt } from '@/components/zona-sul/surf/surf-wave';
+import { readZsLoot, zsAssignHotbar, ZS_BOARD_ID, zsLootFrom, zsSelectedItem } from '@/components/zona-sul/zs-loot';
+import { SAVE_KEY } from '@/game/systems/persistenceSystem';
+
+/* 28/10 — SURF fase C (Pedro): hotbar + I com o mesmo loot do jogo + PRANCHA num slot; remada → levantar (Zombie Stand
+   Up de 30%) → em pé surfando; "caso eu caia dentro do tubo, giro junto e vou sendo levado". */
+const src = (f: string) => fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+const AX = { qx: 0, qz: 1, sx: 1, sz: 0 };                     // q = +z (praia), s = +x
+const C = SURF.C, dt = 1 / 30;
+const run = (st: ReturnType<typeof newRide>, s: number, inp: Partial<Parameters<typeof rideStep>[1]>, w: Partial<Parameters<typeof rideStep>[2]>) => {
+  let x = 0, z = 0;
+  for (let k = 0; k < Math.round(s / dt); k++) { const d = rideStep(st, { dirX: 0, dirZ: 0, pop: false, fast: false, ...inp }, { pushX: 0, pushZ: 0, churn: 0, ...w }, AX, C, dt); x += d.dx; z += d.dz; }
+  return { x, z };
+};
+
+describe('prancha — remar, levantar, surfar, vaca', () => {
+  it('remando: mais rápido que nadar; sem onda o ESPAÇO não levanta', () => {
+    const st = newRide();
+    const m = run(st, 3, { dirZ: 1 }, {});
+    expect(m.z / 3).toBeGreaterThan(2.4);                          // nado normal: 2,4 m/s
+    expect(canPop(st, { pushX: 0, pushZ: 0.5, churn: 0 }, C)).toBe(false);
+    run(st, 0.2, { pop: true }, { pushZ: 0.5 });
+    expect(st.mode).toBe('paddle');
+  });
+  it('a onda pegou → ESPAÇO levanta (≈ 1 s, levado pela onda) → em pé', () => {
+    const st = newRide();
+    run(st, dt, { pop: true }, { pushZ: C });
+    expect(st.mode).toBe('popup');
+    const m = run(st, RIDE.POPUP_S + 0.05, {}, { pushZ: C });
+    expect(st.mode).toBe('ride');
+    expect(m.z).toBeGreaterThan(C * RIDE.POPUP_S * 0.9);           // levantando, a onda leva
+  });
+  it('em pé: corre a parede pro lado que apertar (até LAT_MAX) e a onda leva rumo à praia', () => {
+    const st = newRide(); st.mode = 'ride';
+    const m = run(st, 3, { dirX: -1 }, { pushZ: C });
+    const lat = st.vx;
+    expect(lat).toBeLessThan(-RIDE.LAT_MAX * 0.9);                 // correndo pra esquerda da onda
+    expect(m.z).toBeGreaterThan(C * 3 * 0.9);                       // e indo com a onda
+    expect(SURF.V_PEEL).toBeLessThan(RIDE.LAT_MAX);                // dá pra acompanhar a abertura do tubo
+  });
+  it('perdeu a onda (sem correnteza) → deita e volta a remar', () => {
+    const st = newRide(); st.mode = 'ride';
+    run(st, RIDE.LOSE_S + 0.1, {}, {});
+    expect(st.mode).toBe('paddle');
+  });
+  it('VACA: a onda fechou em cima → gira junto e é levado, sem controle; depois volta a remar', () => {
+    const st = newRide(); st.mode = 'ride';
+    const m = run(st, 1, { dirX: 1 }, { pushZ: C, churn: 0.9 });
+    expect(st.mode).toBe('wipe');
+    expect(st.spin).toBeGreaterThan(RIDE.WIPE_SPIN * 0.8);          // girando
+    expect(Math.abs(m.x)).toBeLessThan(0.5);                        // sem controle (o "pra direita" não vale)
+    expect(m.z).toBeGreaterThan(C * 0.9);                           // levado junto com a espuma
+    run(st, RIDE.WIPE_S, {}, { pushZ: C, churn: 0 });
+    expect(st.mode).toBe('paddle');
+  });
+  it('espuma só derruba onde a onda FECHOU: na frente da abertura (tubo aberto) não', () => {
+    const V: WaveVar = { hR: 1, hL: 1, vR: 1, vL: 1 };
+    const st = waveStateAt((SURF.BREAK_Q - SURF.Q_MIN) / SURF.C + 8, V), R = barrelBand(st.h).r;
+    expect(surfChurnAt(0, crestQ(st, 0) + R, [st], [V])).toBeGreaterThan(RIDE.WIPE_CHURN); // pico: já fechou
+    const sOpen = -(st.peelL - 3);                                   // perto da frente da abertura: tubo aberto
+    expect(barrelAt(sOpen, st, V).closed).toBe(0);
+    expect(surfChurnAt(sOpen, crestQ(st, sOpen) + R, [st], [V])).toBe(0);
+  });
+});
+
+describe('hotbar + I na Zona Sul: o MESMO loot, só leitura', () => {
+  const inv = { slots: [{ itemId: 'stone_axe', quantity: 1 }, { itemId: null, quantity: 0 }, { itemId: 'wood', quantity: 12 }], hotbar: { slots: [0, 2, null] } };
+  it('copia o inventário (hotbar remapeado) e põe a PRANCHA no fim; pôr no hotbar e selecionar', () => {
+    const l = zsLootFrom(inv);
+    expect(l.slots.map((s) => s.itemId)).toEqual(['stone_axe', 'wood', ZS_BOARD_ID]);
+    expect(l.hotbar.slice(0, 3)).toEqual([0, 1, null]);
+    expect(l.hotbar).toHaveLength(10);
+    const l2 = zsAssignHotbar(l, 2, 2);
+    expect(zsSelectedItem(l2, 2)).toBe(ZS_BOARD_ID);
+    expect(zsSelectedItem(zsAssignHotbar(l2, 5, 2), 2)).toBe(null); // mesmo item não fica em 2 espaços
+  });
+  it('NUNCA grava no save do jogo (a prancha faria o save ser recusado)', () => {
+    const storage = { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn() };
+    const l = readZsLoot(storage, inv);
+    expect(storage.getItem).toHaveBeenCalledWith(SAVE_KEY);
+    expect(storage.setItem).not.toHaveBeenCalled(); expect(storage.removeItem).not.toHaveBeenCalled();
+    expect(l.slots.at(-1)!.itemId).toBe(ZS_BOARD_ID);               // sem save: usa o inventário da memória
+    const code = src('src/components/zona-sul/zs-loot.ts') + src('src/components/zona-sul/zs-loot-hud.tsx');
+    expect(code).not.toMatch(/setItem|startLocalPersistence|startAccountPersistence|useGameStore\.setState/);
+  });
+  it('o jogo de sempre não usa nada disso (corte de clip é opcional; prancha só existe na Zona Sul)', () => {
+    expect(src('src/routes/index.tsx')).not.toMatch(/customClipCut|zs_surfboard/);
+    expect(src('src/game/data/items.ts')).not.toMatch(/zs_surfboard/);
+  });
+});

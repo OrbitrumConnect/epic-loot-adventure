@@ -12,8 +12,12 @@ import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
 import { ZS_LANDMARKS, ZS_SPAWN } from './zona-sul-meta';
-import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterPushAt, zsWaterYAt } from './zs-terrain-data';
-import { SurfBreak } from './surf/surf-break';
+import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterPushAt, zsWaterYAt } from './zs-terrain-data';
+import { SurfBreak, surfZone } from './surf/surf-break';
+import { SURF } from './surf/surf-wave';
+import { canPop, newRide, RIDE, rideStep, type RideState } from './surf/surf-ride';
+import { ZsLootHud, zsGear } from './zs-loot-hud';
+import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 
 /** Quanto da correnteza da onda leva o herói nadando (o carro tem a sua em CAR.WAVE_PUSH). */
 const ZS_SWIM_WAVE_CARRY = 1.15; // a espuma leva junto (o bolso da onda segura quem está na frente dela) — "leva mais"
@@ -30,7 +34,18 @@ import { CAR, CAR_SEATS, carStep, newCar, SEAT_FOOT_K, type ZsCar } from './zs-c
 import { type CarDims, ZsCarView } from './zs-car-view';
 
 /** Clips extras do herói só na Zona Sul (Mixamo do Pedro): dirigir, abrir a porta, nadar, boiar. */
-const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/anim/open_door.glb', swim: '/zona-sul/anim/swim.glb', tread: '/zona-sul/anim/tread.glb' };
+const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/anim/open_door.glb', swim: '/zona-sul/anim/swim.glb', tread: '/zona-sul/anim/tread.glb',
+  // SURF (28/10): remar = o nado deitado na prancha; levantar e base = Zombie Stand Up (Pedro: "só levanta direito depois
+  // de 30%; a pose final é boa, meio surfista")
+  paddle: '/zona-sul/anim/swim.glb', popup: '/zona-sul/anim/zombie_stand_up.glb', surf: '/zona-sul/anim/zombie_stand_up.glb' };
+/** Cortes: levantar = 30%→100% a 2× (≈ RIDE.POPUP_S); base = só o finalzinho (a pose final, segurada). */
+const HERO_CUT = { popup: { from: 0.3, speed: 2 }, surf: { from: 0.97 }, paddle: { speed: 0.8 } };
+/** Pé na prancha: altura do DECK acima da água (m). Giro do corpo em relação ao bico (base de surfista, de lado). */
+const BOARD_DECK = 0.12, STANCE = -Math.PI / 2;
+/** A pose final do Zombie Stand Up abaixa o quadril: em pé o corpo sobe isto (m) pra os pés ficarem NO deck (Pedro: "corpo
+ *  abaixo d'água como se estivesse sentado"); no levantar sobe aos poucos junto com a animação. Medido em foto. */
+const SURF_LIFT = 0.8;
+const NO_AXES = { qx: 0, qz: -1, sx: 1, sz: 0 };
 /** a pé → abrindo a porta (ENTER_MS) → dirigindo. E entra/sai. */
 const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving', enterAt: 0 };
 const ENTER_MS = 1100;
@@ -38,17 +53,23 @@ const ENTER_MS = 1100;
 const SUN = new THREE.Vector3(-0.55, 0.62, -0.45).normalize();
 const FOG = '#bcd0dc';
 
-type Hud = { x: number; z: number; y: number; state: string; near: string; overview: boolean; car?: string | undefined };
+type Hud = { x: number; z: number; y: number; state: string; near: string; overview: boolean; car?: string | undefined; canPop?: boolean };
 /** Entrada + câmera. `overview` (tecla K): câmera de CIMA solta do boneco — WASD move a vista, Shift acelera,
  *  arrastar gira, roda sobe/desce; K de novo volta pro herói (o herói fica parado onde estava). */
 const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch: 0.32, dist: 9, overview: false, ov: { x: 0, z: 0, alt: 420, pitch: 1.05 }, eTap: false, lookAt: 0,
   /** câmera no carro (tecla V): 3ª pessoa atrás ou DE DENTRO (cabeça do motorista); olhar em volta de dentro */
-  carCam: 'chase' as 'chase' | 'cockpit', cockYaw: 0, cockPitch: 0 };
+  carCam: 'chase' as 'chase' | 'cockpit', cockYaw: 0, cockPitch: 0,
+  /** botão LEVANTAR na tela (celular) */
+  popTap: false };
 /** Altura do OLHO do motorista sentado acima do pé (m) e campo de visão de dentro (mais aberto). */
 const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
-function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null> }) {
+function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose> }) {
   const group = useRef<THREE.Group>(null);
+  /** surf na prancha (null = sem prancha na água) · vaca de quem nada sem prancha (s restantes) · giro da vaca */
+  const ride = useRef<RideState | null>(null);
+  const tumble = useRef(0), spin = useRef(0);
+  const boardYaw = useRef(0), popOk = useRef(false);
   const action = useRef<HeroAction>('idle');
   const speed = useRef(0);
   const vy = useRef(0);
@@ -63,6 +84,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
   const sun = useRef<THREE.DirectionalLight>(null);
   const { camera, scene } = useThree();
 
+  // só em desenvolvimento: testes de tela leem/forçam o surf (o jogo publicado não expõe nada)
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, gear: zsGear, action }; }, []);
   const fog = useMemo(() => new THREE.Fog(FOG, 200, 2200), []); // névoa LEVE (custo ~zero: é uma conta no shader)
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
@@ -178,7 +201,30 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
     let v = (run ? ZS_RUN : ZS_WALK) * (water0.wading ? 0.75 : 1);
     let moving = wantMove;
     let st;
-    if ((water0.swimming || water0.wading) && drive.mode === 'foot') {
+    const onBoard = zsGear.board && water0.swimming && drive.mode === 'foot';
+    if (!onBoard) ride.current = null;
+    if (onBoard) {
+      // PRANCHA (fase C): remar → ESPAÇO levanta quando a onda pegar → em pé corre a parede → vaca se fechar em cima
+      const r = ride.current ?? (ride.current = newRide());
+      const fr = surfZone.frame, ax = fr ? { qx: fr.qx, qz: fr.qz, sx: fr.sx, sz: fr.sz } : NO_AXES;
+      const pushing = zsWaterPushAt(p.x, p.z, HERO_PUSH, p.y + 0.3);
+      const w = { pushX: pushing ? HERO_PUSH.x : 0, pushZ: pushing ? HERO_PUSH.z : 0, churn: zsWaterChurnAt(p.x, p.z) };
+      const pop = k.has('Space') || input.popTap; input.popTap = false;
+      popOk.current = canPop(r, w, SURF.C);
+      const d = rideStep(r, { dirX: wantMove ? wx : 0, dirZ: wantMove ? wz : 0, pop, fast: shift }, w, ax, SURF.C, dt);
+      st = zsStep(t, p.x, p.z, d.dx, d.dz);
+      const sp = Math.hypot(r.vx, r.vz);
+      v = sp; moving = sp > 0.3;
+      if (sp > 0.3 && r.mode !== 'wipe') {
+        let dy = Math.atan2(r.vx, r.vz) - boardYaw.current;
+        while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
+        boardYaw.current += dy * Math.min(1, dt * 6);
+      }
+      facing.current = r.mode === 'ride' || r.mode === 'popup' ? boardYaw.current + STANCE : boardYaw.current;
+      spin.current = r.spin;
+      swimVel.current.set(r.mode === 'paddle' ? r.vx : 0, r.mode === 'paddle' ? r.vz : 0);
+      bodysurf.current = false; tumble.current = 0;
+    } else if ((water0.swimming || water0.wading) && drive.mode === 'foot') {
       // NA ÁGUA (nadando ou no raso) com embalo: a velocidade vai suave até a desejada (e desliza ao soltar)
       const sv = swimVel.current, target = !wantMove ? 0 : water0.swimming ? (shift ? ZS_SWIM_FAST : ZS_SWIM) : v;
       const kk = 1 - Math.exp(-ZS_SWIM_GLIDE * dt);
@@ -192,7 +238,14 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
         pw = ZS_SWIM_WAVE_CARRY + ZS_BODYSURF_EXTRA * along;
         bodysurf.current = along > 0.5 && pm > 1.2;
       } else bodysurf.current = false;
-      st = zsStep(t, p.x, p.z, (sv.x + HERO_PUSH.x * pw) * dt, (sv.y + HERO_PUSH.z * pw) * dt);
+      // VACA (sem prancha): a onda fechou em cima → gira junto com a espuma e é levado, sem controle (Pedro 28/10)
+      if (water0.swimming && tumble.current <= 0 && zsWaterChurnAt(p.x, p.z) >= RIDE.WIPE_CHURN) tumble.current = RIDE.WIPE_S;
+      if (tumble.current > 0) {
+        tumble.current = Math.max(0, tumble.current - dt); spin.current = tumble.current > 0 ? spin.current + RIDE.WIPE_SPIN * dt : 0;
+        const c = pw > 0 ? RIDE.WIPE_CARRY : 0;
+        st = zsStep(t, p.x, p.z, HERO_PUSH.x * c * dt, HERO_PUSH.z * c * dt);
+        sv.set(0, 0); moving = false; bodysurf.current = false;
+      } else st = zsStep(t, p.x, p.z, (sv.x + HERO_PUSH.x * pw) * dt, (sv.y + HERO_PUSH.z * pw) * dt);
       if (moving) facing.current = Math.atan2(sv.x, sv.y);
     } else {
       st = wantMove ? zsStep(t, p.x, p.z, wx * v * dt, wz * v * dt) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
@@ -204,16 +257,38 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
     if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot') { vy.current = 6.2; grounded.current = false; }
     dive.current = st.swimming && drive.mode === 'foot' ? zsDiveStep(dive.current, k.has('KeyC'), ZS_WATER_Y - st.ground, dt) : 0;
     // altura de quem nada vai junto: dentro do tubo o nível é o chão da cavidade (dá pra entrar), por fora é o topo
-    const floor = st.swimming ? zsWaterYAt(p.x, p.z, p.y + 0.3) - (moving || dive.current > 0.3 ? ZS_SWIM_SINK_MOVE : ZS_SWIM_SINK) - dive.current : st.ground; // boia NA onda
+    const rm = ride.current?.mode, rolling = rm === 'wipe' || tumble.current > 0;
+    if (rm) dive.current = 0;
+    const waterY = st.swimming ? zsWaterYAt(p.x, p.z, p.y + 0.3) : 0;
+    const floor = !st.swimming ? st.ground
+      : rm === 'popup' || rm === 'ride' ? waterY + BOARD_DECK                 // em pé no deck
+      : rm === 'paddle' ? waterY + BOARD_DECK + 0.07                         // deitado EM CIMA do deck (acima da água)
+      : rolling ? waterY - 0.6                                               // vaca: embaixo da espuma
+      : waterY - (moving || dive.current > 0.3 ? ZS_SWIM_SINK_MOVE : ZS_SWIM_SINK) - dive.current; // boia NA onda
     if (!grounded.current) { vy.current -= 15 * dt; p.y += vy.current * dt; if (p.y <= floor) { p.y = floor; grounded.current = true; vy.current = 0; } }
-    else p.y += (floor - p.y) * Math.min(1, dt * (st.swimming ? 3 : 30)); // na água sobe/desce macio (braçada ↔ boiar)
-    if (drive.mode === 'foot') action.current = st.swimming ? (moving || dive.current > 0.3 ? 'swim' : 'tread') : !grounded.current ? 'jump' : moving ? (run ? 'run' : 'walk') : 'idle';
+    else p.y += (floor - p.y) * Math.min(1, dt * (rm === 'ride' || rm === 'popup' ? 12 : st.swimming ? 3 : 30)); // em pé gruda na face; nadando sobe/desce macio
+    if (drive.mode === 'foot') action.current = rm === 'paddle' ? 'paddle' : rm === 'popup' ? 'popup' : rm === 'ride' ? 'surf' : rolling ? 'swim'
+      : st.swimming ? (moving || dive.current > 0.3 ? 'swim' : 'tread') : !grounded.current ? 'jump' : moving ? (run ? 'run' : 'walk') : 'idle';
+    // a prancha: deitado (embaixo do peito), em pé (embaixo dos pés), vaca (rodando solta perto)
+    const bp = boardRef.current;
+    bp.visible = !!rm;
+    if (rm) {
+      const fx = Math.sin(boardYaw.current), fz = Math.cos(boardYaw.current), off = rm === 'paddle' ? 0.35 : 0;
+      bp.x = p.x + fx * off; bp.z = p.z + fz * off;
+      bp.y = rm === 'ride' || rm === 'popup' ? p.y : rm === 'paddle' ? waterY + BOARD_DECK : waterY + 0.05;
+      bp.yaw = boardYaw.current;
+      bp.roll = rm === 'wipe' ? spin.current * 0.7 : 0;
+    }
     speed.current = moving ? v : 0;
     if (group.current) {
-      group.current.position.set(p.x, p.y, p.z);
+      // em pé na prancha: sobe o corpo (pose do Zombie abaixa o quadril); levantando: sobe junto com a animação
+      const lift = rm === 'ride' ? SURF_LIFT : rm === 'popup' ? SURF_LIFT * Math.min(1, (ride.current?.t ?? 0) / RIDE.POPUP_S) : 0;
+      group.current.position.set(p.x, p.y + lift, p.z);
       let d = facing.current - group.current.rotation.y;
       while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
       group.current.rotation.y += d * Math.min(1, dt * 12);
+      group.current.rotation.order = 'YXZ';
+      group.current.rotation.x = rolling ? spin.current : 0; // vaca: gira junto com a onda
     }
     // câmera em órbita, sem entrar no chão
     const tx = p.x, ty = p.y + 1.6, tz = p.z;
@@ -232,7 +307,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
       let best = '', bd = 700;
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
       const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
-      onHud({ x: p.x, z: p.z, y: p.y, state: drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : undefined });
+      const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
+        : rm === 'popup' ? 'levantando…' : rm === 'ride' ? 'SURFANDO · aperte pro lado que quer correr a parede · fuja da espuma'
+        : rolling ? 'tomou a vaca! girando com a espuma…' : '';
+      onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : undefined });
     }
   });
 
@@ -242,7 +320,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef }: { t: ZsTerrain; 
         shadow-camera-left={-45} shadow-camera-right={45} shadow-camera-top={45} shadow-camera-bottom={-45} shadow-camera-far={300} shadow-bias={-0.0004} />
       <group ref={group}>
         <Suspense fallback={null}>
-          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} />
+          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} customClipCut={HERO_CUT} />
         </Suspense>
       </group>
     </>
@@ -314,6 +392,7 @@ export default function ZonaSulWorld() {
   /** Carro voador: nasce do lado da partida, no Arpoador (Pedro: "joga lá perto do Arpoador onde eu testo"). */
   const carRef = useRef<ZsCar | null>(null);
   const dimsRef = useRef<CarDims | null>(null);
+  const boardRef = useRef<BoardPose>(newBoardPose());
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
   if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t };
   useEffect(() => {
@@ -334,8 +413,9 @@ export default function ZonaSulWorld() {
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
           <ZsVegetation t={t} heroRef={focusRef} />
-          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={setHud} carRef={carRef} dimsRef={dimsRef} />
+          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={setHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} />
           <Suspense fallback={null}><ZsCarView carRef={carRef} dimsRef={dimsRef} /></Suspense>
+          <Suspense fallback={null}><ZsBoardView poseRef={boardRef} /></Suspense>
           <Controls />
         </Canvas>
       )}
@@ -345,9 +425,16 @@ export default function ZonaSulWorld() {
         {hud?.car && <div style={{ font: '700 12px system-ui', marginTop: 3, color: '#0b5c7a' }}>{hud.car}</div>}
         <div style={{ font: '400 11px system-ui', marginTop: 2, opacity: 0.8 }}>
           {hud?.overview ? 'VISTA DE CIMA · WASD move · Shift rápido · arraste gira · roda sobe/desce · K volta pro herói'
-            : 'WASD anda · Shift corre · Espaço pula · arraste gira · roda = zoom · K = vista de cima'}
+            : 'WASD anda · Shift corre · Espaço pula · arraste gira · roda = zoom · K = vista de cima · 1–0 hotbar · I inventário'}
         </div>
       </div>
+      {t && <ZsLootHud />}
+      {hud?.canPop && (
+        <button type="button" onPointerDown={() => { input.popTap = true; }}
+          style={{ position: 'absolute', right: 18, bottom: 110, padding: '14px 18px', borderRadius: 12, border: '2px solid #ffd27a', background: 'rgba(12,24,34,.8)', color: '#ffd27a', font: '800 15px system-ui', cursor: 'pointer' }}>
+          LEVANTAR (Espaço)
+        </button>
+      )}
       <div style={{ position: 'absolute', bottom: 6, right: 8, color: '#10202c', font: '400 10px system-ui', background: 'rgba(255,255,255,.6)', padding: '2px 6px', borderRadius: 5, pointerEvents: 'none' }}>
         Relevo: AWS Terrain Tiles (SRTM) · Mapa: © OpenStreetMap contributors (ODbL)
       </div>

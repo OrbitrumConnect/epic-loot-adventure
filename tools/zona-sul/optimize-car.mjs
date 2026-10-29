@@ -1,6 +1,7 @@
 // CARRO VOADOR (Pedro 28/10, GLB baixado: 500 mil triângulos + 3 PNG de 45 MB — sozinho pesaria 5× o mapa). Compacta:
 // solda vértices → SIMPLIFICA a malha (meshoptimizer) → texturas 1024 (cor) / 512 (normal, rugosidade) em JPEG → limpa.
-// Uso: node tools/zona-sul/optimize-car.mjs <entrada.glb> [alvoTriangulos=14000]
+// Uso: node tools/zona-sul/optimize-car.mjs <entrada.glb> [alvoTriangulos=14000] [saida=public/zona-sul/car.glb] [ladoCor=1024]
+// (28/10: também compacta a PRANCHA de surf: ... 4000 public/zona-sul/board.glb 512)
 import fs from 'node:fs';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
@@ -8,8 +9,8 @@ import { dedup, prune, simplify, textureCompress, weld } from '@gltf-transform/f
 import { MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 
-const [input, alvo = '14000'] = process.argv.slice(2);
-const OUT = 'public/zona-sul/car.glb';
+const [input, alvo = '14000', saida = 'public/zona-sul/car.glb', ladoCor = '1024'] = process.argv.slice(2);
+const OUT = saida, COR = Number(ladoCor), DADO = Math.max(256, COR / 2);
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const doc = await io.read(input);
 const tris = () => doc.getRoot().listMeshes().flatMap((m) => m.listPrimitives()).reduce((s, p) => s + (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3, 0);
@@ -22,8 +23,8 @@ await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error: 0.01
 const mat = doc.getRoot().listMaterials()[0];
 const colorTex = mat?.getBaseColorTexture();
 await doc.transform(
-  textureCompress({ encoder: sharp, targetFormat: 'jpeg', quality: 85, resize: [1024, 1024], pattern: /.*/, slots: /baseColor/ }),
-  textureCompress({ encoder: sharp, targetFormat: 'jpeg', quality: 85, resize: [512, 512], slots: /^(?!baseColor).*/ }),
+  textureCompress({ encoder: sharp, targetFormat: 'jpeg', quality: 85, resize: [COR, COR], pattern: /.*/, slots: /baseColor/ }),
+  textureCompress({ encoder: sharp, targetFormat: 'jpeg', quality: 85, resize: [DADO, DADO], slots: /^(?!baseColor).*/ }),
   dedup(), prune(),
 );
 await io.write(OUT, doc);

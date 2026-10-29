@@ -242,3 +242,18 @@ export function surfPushAt(s: number, q: number, waves: WaveState[], vars: WaveV
 }
 /** Quanto a face da onda (rampa) acelera quem boia nela, em m/s por unidade de inclinação (face a 45° → +2 m/s). */
 export const FACE_SLIDE = 2;
+
+/**
+ * ESPUMA BATENDO em (s, q) — 0..1: a onda já FECHOU ali e a massa de espuma está em cima (da crista até ~2,5R à frente).
+ * Quem está ali "toma a vaca": gira junto e é levado (surf-ride). Na frente da abertura (tubo aberto) é 0.
+ */
+export function surfChurnAt(s: number, q: number, waves: WaveState[], vars: WaveVar[], lim: Lim = FULL): number {
+  let c = 0;
+  for (let i = 0; i < waves.length; i++) {
+    const w = waves[i]!; if (!w.active || w.h <= 0) continue;
+    const b = barrelAt(s, w, vars[i]!), x = q - crestQ(w, s), R = barrelBand(b.hSide).r;
+    const win = smooth(-1.5 * R, -0.5 * R, x) * smooth(3 * R, 1.5 * R, x);
+    c = Math.max(c, b.closed * win * smooth(0.25, 0.6, b.hSide / SURF.H_MAX)); // espuma pequena perto da areia não derruba
+  }
+  return c * zoneFade(s, q, lim);
+}

@@ -183,6 +183,7 @@ export function GlbHeroMixamo({
   autoGround = false,
   strideSync = false,
   customClips,
+  customClipCut,
 }: {
   /** Vida de OUTRO jogador (online) p/ a reação de golpe; sem ela, a vida do jogador local. */
   hpOf?: () => number;
@@ -205,6 +206,10 @@ export function GlbHeroMixamo({
    *  Tocam em loop quando `actionRef` = o nome, com o quadril LIVRE (sentado/deitado na água). Sem isto (o jogo de
    *  sempre): nada muda. */
   customClips?: Record<string, string>;
+  /** CORTE de um clip extra (fração 0..1 do clip) e velocidade — Zona Sul, 28/10: "o Zombie Stand Up só levanta direito
+   *  depois de 30%; a pose final é boa (meio surfista)". Ex.: { popup: { from: 0.3, speed: 2 }, surf: { from: 0.96 } }.
+   *  Sem isto: o clip inteiro, como antes. */
+  customClipCut?: Record<string, { from?: number; to?: number; speed?: number }>;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -330,9 +335,17 @@ export function GlbHeroMixamo({
           return c && (k === 'cast' || (HIT_CLIPS as string[]).includes(k)) ? upperBodyOnly(c) : c;
         })
       : [];
-    const custom = customKeys.map((k, i) => mk(customG[i + 1]!, k, true)); // quadril livre (sentado / nadando)
+    const custom = customKeys.map((k, i) => {
+      const c = mk(customG[i + 1]!, k, true); // quadril livre (sentado / nadando)
+      const cut = customClipCut?.[k];
+      if (!c || !cut || (cut.from == null && cut.to == null)) return c;
+      const fps = 30, n = Math.round(c.duration * fps);
+      const from = Math.round((cut.from ?? 0) * n), to = Math.max(from + 1, Math.round((cut.to ?? 1) * n));
+      const sub = THREE.AnimationUtils.subclip(c, k, from, to, fps);
+      return sub;
+    });
     return [...base, ...extra, ...custom].filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, dodgeG, extraG, customKeys, customG, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
+  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, dodgeG, extraG, customKeys, customG, customClipCut, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
 
   // 26/10: animação por distância (anim-lod.ts) — herói/perto todo quadro (igual), inimigo longe com menos atualizações.
   const animEveryRef = useRef(1);
@@ -618,7 +631,7 @@ export function GlbHeroMixamo({
       if (curClipName && curClipName !== nextName && actions[curClipName]) actions[curClipName]!.fadeOut(0.18);
       const a = actions[nextName]!;
       a.reset();
-      a.timeScale = 1;
+      a.timeScale = customClipCut?.[nextName]?.speed ?? 1; // clip extra cortado pode ter velocidade própria (sem ela: 1, igual antes)
       a.setLoop(THREE.LoopRepeat, Infinity);
       a.clampWhenFinished = false;
       a.fadeIn(0.15).play();
