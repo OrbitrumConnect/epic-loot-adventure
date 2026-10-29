@@ -12,7 +12,10 @@
  * mapa de altura — a malha DOBRA (cada vértice tem um parâmetro de repouso (s, q0)).
  */
 export const SURF = {
-  ZONE_S: 90,             // meia-largura da zona (m) ao longo da praia (Pedro 28/10: "quebra meio curta" → 70 → 90)
+  ZONE_S: 160,            // até onde a onda pode ir de CADA lado (m) — cada lado para antes de pedra/areia (frame.lim).
+                          // 70 → 90 ("quebra meio curta") → 160 (Pedro 29/10: "a extensão pro lado do Leblon pode
+                          // aumentar, de acordo com ela indo quebrando até a beirada" — pro lado do Leblon é mar aberto)
+  CORE_S: 90,             // miolo da zona (m pra cada lado) que precisa ser mar aberto pra escolher o pico
   // Pedro 28/10: "durar mais, quebrar mais atrás e vir até mais a beira da areia". No Arpoador a areia fica a 45–100 m
   // à frente do pico (medido no terreno): a espuma corre até +70 m (onde já é raso/areia, ela sobe um pouco = espraiado;
   // a areia opaca cobre o resto). Só o trecho onde o TUBO existe (até Q_OPEN) precisa ser água aberta.
@@ -33,7 +36,8 @@ export const SURF = {
  * "abraça" a bancada — as pontas adiantam BEND metros rumo à praia (parábola em s).
  */
 export const BEND = 8;
-export function crestQ(w: WaveState, s: number): number { const k = s / SURF.ZONE_S; return w.qc + BEND * k * k; }
+export const BEND_S = 90; // a curva da crista se completa até 90 m do pico (depois segue reta, 8 m adiantada)
+export function crestQ(w: WaveState, s: number): number { const k = Math.min(1, Math.abs(s) / BEND_S); return w.qc + BEND * k * k; }
 
 /** Lado da quebra pro surfista de frente pra praia: +s = direita. */
 export function branchOf(s: number): 'direita' | 'esquerda' { return s >= 0 ? 'direita' : 'esquerda'; }

@@ -186,7 +186,7 @@ describe('surf — zona no Arpoador (terreno de verdade)', () => {
     expect(SURF.BREAK_Q).toBeLessThan(-45);                        // quebra bem mais atrás (2ª: "quebra muito à frente")
     // a Pedra do Arpoador fica à DIREITA de quem olha pra praia: desse lado a onda MORRE antes dela; o outro é mar aberto
     expect(f.lim[0]).toBeLessThan(SURF.ZONE_S); expect(f.lim[0]).toBeGreaterThanOrEqual(SURF.EDGE_S);
-    expect(f.lim[1]).toBe(SURF.ZONE_S);
+    expect(f.lim[1]).toBeGreaterThanOrEqual(150);                  // lado do Leblon: mar aberto — vai bem mais longe (29/10)
     const st = waveStateAt(ageAtBreak + 12, V);
     expect(surfPoint(f.lim[0] + 0.5, st.qc, [st], [V], [0, 0, 0, 0], f.lim)[1]).toBe(0); // passou do limite: mar liso
   }, 30_000);

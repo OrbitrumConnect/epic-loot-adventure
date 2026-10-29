@@ -11,7 +11,7 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { type ZsTerrain, setZsWaterChurn, setZsWaterExtra, setZsWaterPush, setZsWaterTube } from '../zs-terrain-data';
 import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from '../zs-water-look';
-import { BARREL_T, BEND, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, TUBE } from './surf-wave';
+import { BARREL_T, BEND, BEND_S, FULL, type Lim, LIP_FOAM_W, LIP_FOAM_X, PEAK_BLEND, SURF, surfChurnAt, surfHeightAt, surfInTubeAt, surfPushAt, TUBE } from './surf-wave';
 import { SLOTS, SurfScheduler } from './surf-scheduler';
 import { findSurfFrame, type SurfFrame, toSurfLocal } from './surf-frame';
 
@@ -22,14 +22,14 @@ export const surfZone = { on: false, frame: null as SurfFrame | null };
  * Faixa (q) onde a onda DOBRA: do pico até onde a abertura mais lenta (−12%) chega na borda da zona e o tubo termina de
  * fechar, mais a curva da crista (pontas adiantadas) e a largura da dobra. Sai das constantes (nada fixo à mão).
  */
-export function surfFoldRange(): [number, number] {
-  const vMin = SURF.V_PEEL * 0.88, tEnd = (SURF.ZONE_S + SURF.CLOSE_LAG + SURF.CLOSE_EDGE) / vMin;
+export function surfFoldRange(lim: Lim = FULL): [number, number] {
+  const vMin = SURF.V_PEEL * 0.88, tEnd = (Math.max(lim[0], lim[1]) + SURF.CLOSE_LAG + SURF.CLOSE_EDGE) / vMin;
   return [SURF.BREAK_Q - 14, SURF.BREAK_Q + SURF.C * tEnd + BEND + 8];
 }
 
 /** Linhas da malha (q): densas só onde a onda dobra. */
-function surfRows(dense: number): number[] {
-  const rows: number[] = [], [a, b] = surfFoldRange();
+function surfRows(dense: number, lim: Lim): number[] {
+  const rows: number[] = [], [a, b] = surfFoldRange(lim);
   for (let q = SURF.Q_MIN; q < a; q += 2.5) rows.push(q);
   for (let q = a; q < b; q += dense) rows.push(q);
   for (let q = b; q <= SURF.Q_MAX; q += 2) rows.push(q);
@@ -37,11 +37,12 @@ function surfRows(dense: number): number[] {
   return rows;
 }
 
-export function buildSurfGeometry(mobile: boolean): THREE.BufferGeometry {
+export function buildSurfGeometry(mobile: boolean, lim: Lim = FULL): THREE.BufferGeometry {
   // desktop ~70 mil vértices (1 desenho; só o shader mexe), celular ~24 mil
-  const ds = mobile ? 1.4 : 0.8, rows = surfRows(mobile ? 0.5 : 0.3);
-  const cols: number[] = []; for (let s = -SURF.ZONE_S; s < SURF.ZONE_S - 1e-6; s += ds) cols.push(s);
-  cols.push(SURF.ZONE_S); // borda EXATA (o mar em volta para exatamente aí — sem faixa de duas águas)
+  // ao longo da onda (s) 1 m basta (a forma muda devagar nesse sentido); só cobre de −limEsq a +limDir (onde há onda)
+  const ds = mobile ? 1.4 : 1.0, rows = surfRows(mobile ? 0.5 : 0.3, lim);
+  const cols: number[] = []; for (let s = -lim[1]; s < lim[0] - 1e-6; s += ds) cols.push(s);
+  cols.push(lim[0]); // borda EXATA (o mar em volta para exatamente aí — sem faixa de duas águas)
   const rest = new Float32Array(rows.length * cols.length * 2), pos = new Float32Array(rows.length * cols.length * 3);
   let k = 0;
   for (const q of rows) for (const s of cols) { rest[k * 2] = s; rest[k * 2 + 1] = q; k++; }
@@ -66,7 +67,8 @@ varying float vCrest;
 float sm(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
 float bumpW(float x, float h, float st) { float w = x > 0.0 ? 3.4 - 1.4 * st : 7.0; float r = x / w; return h * exp(-r * r); }
 float tubeR(float h) { return clamp(h * ${TUBE.K.toFixed(3)}, ${TUBE.MIN.toFixed(3)}, ${TUBE.MAX.toFixed(3)}); }
-const float BEND = ${BEND.toFixed(3)}, ZS = ${SURF.ZONE_S.toFixed(3)}, PB = ${PEAK_BLEND.toFixed(3)};
+const float BEND = ${BEND.toFixed(3)}, BS = ${BEND_S.toFixed(3)}, PB = ${PEAK_BLEND.toFixed(3)};
+float bendQ(float s) { float k = min(1.0, abs(s) / BS); return BEND * k * k; } // igual a crestQ (surf-wave.ts)
 // ponto da elipse do tubo com o ângulo corrigido (pontos por igual na curva) — igual ao P de barrelCurve (surf-wave.ts)
 vec2 ellP(float ang, float r, float cq, float cy, float AX) { float a = ang + (AX - 1.0) / (2.0 * (AX + 1.0)) * sin(2.0 * ang); return vec2(cq + AX * r * cos(a), cy + r * sin(a)); }
 float tubeAx(float R) { return ${TUBE.AX0.toFixed(3)} + ${TUBE.AXK.toFixed(3)} * R; }
@@ -97,9 +99,9 @@ vec4 surfPoint(vec2 sq) {
     if (b.z < 0.5 || a.y <= 0.0) continue;
     float pk = sm(-PB, PB, s), d = mix(a.w, a.z, pk), aa = abs(s);
     float op = sm(0.0, ${SURF.OPEN_EDGE.toFixed(1)}, d - aa), cl = sm(0.0, ${SURF.CLOSE_EDGE.toFixed(1)}, d - ${SURF.CLOSE_LAG.toFixed(1)} - aa), stp = sm(-18.0, 0.0, d - aa);
-    float hs = a.y * mix(b.y, b.x, pk), x = q0 - a.x - BEND * (s / ZS) * (s / ZS), R = tubeR(hs), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R;
+    float hs = a.y * mix(b.y, b.x, pk), x = q0 - a.x - bendQ(s), R = tubeR(hs), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R;
     y += bumpW(x, hs * (1.0 - 0.65 * cl), stp);
-    if (curlOf(op, cl).y > 0.001 && x <= wf && x >= -wb) { fold = true; fx = x; fOpen = op; fClosed = cl; fSteep = stp; fH = hs; fQc = a.x + BEND * (s / ZS) * (s / ZS); }
+    if (curlOf(op, cl).y > 0.001 && x <= wf && x >= -wb) { fold = true; fx = x; fOpen = op; fClosed = cl; fSteep = stp; fH = hs; fQc = a.x + bendQ(s); }
     float r1 = (x + 1.0) / 5.0, r2 = (x + ${LIP_FOAM_X} * R) / (${LIP_FOAM_W} * R);
     foam = max(foam, max(cl * exp(-r1 * r1), op * (1.0 - cl) * exp(-r2 * r2) * 0.7));
   }
@@ -150,7 +152,7 @@ export function SurfBreak({ t, shoreX, shoreZ }: { t: ZsTerrain; shoreX: number;
   const frame = useMemo(() => findSurfFrame(t, shoreX, shoreZ), [t, shoreX, shoreZ]);
   const scheduler = useMemo(() => new SurfScheduler(), []);
   const mobile = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
-  const geometry = useMemo(() => buildSurfGeometry(mobile), [mobile]);
+  const geometry = useMemo(() => buildSurfGeometry(mobile, frame?.lim ?? FULL), [mobile, frame]);
   const uniforms = useMemo(() => ({
     uWa: { value: Array.from({ length: SLOTS }, () => new THREE.Vector4()) },
     uWb: { value: Array.from({ length: SLOTS }, () => new THREE.Vector4()) },
@@ -164,7 +166,7 @@ export function SurfBreak({ t, shoreX, shoreZ }: { t: ZsTerrain; shoreX: number;
     surfZone.on = true; surfZone.frame = frame;
     // só em desenvolvimento: testes de tela leem a agenda e a zona
     if (import.meta.env.DEV) (window as unknown as { __zsSurf?: unknown }).__zsSurf = { scheduler, frame };
-    const inZone = (s: number, q: number) => Math.abs(s) <= SURF.ZONE_S && q >= SURF.Q_MIN && q <= SURF.Q_MAX;
+    const inZone = (s: number, q: number) => s >= -frame.lim[1] && s <= frame.lim[0] && q >= SURF.Q_MIN && q <= SURF.Q_MAX;
     setZsWaterExtra((x, z, yRef) => { const [s, q] = toSurfLocal(frame, x, z); return inZone(s, q) ? surfHeightAt(s, q, scheduler.states, scheduler.vars, yRef, frame.lim) : 0; });
     // a onda EMPURRA quem boia (carro parado na água, herói nadando) rumo à praia
     setZsWaterPush((x, z, out, yRef) => {

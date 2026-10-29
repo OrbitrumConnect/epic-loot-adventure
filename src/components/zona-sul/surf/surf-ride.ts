@@ -13,7 +13,8 @@
  * Eixos da zona (unitários no plano xz): q = rumo à praia, s = ao longo da onda.
  */
 export const RIDE = {
-  PADDLE: 3.8, PADDLE_FAST: 5.4, GLIDE: 2.8,  // remada (m/s) e resposta (1/s) — Pedro: "2–3 km/h mais rápido, tá presa"
+  PADDLE: 3.8, PADDLE_FAST: 6.1, GLIDE: 2.8,  // remada (m/s) e resposta (1/s) — Pedro: "2–3 km/h mais rápido, tá presa";
+                                             // Shift 5,4 → 6,1 (29/10: "o Shift pode acelerar mais uns 2–3 km/h")
   CATCH: 0.6,                                // fração da velocidade da onda pra conseguir levantar
   POPUP_S: 1.05,                             // levantar: Zombie Stand Up de 30% a 100% (3,08 s × 0,7) a 2× ≈ 1,05 s
   LOSE_S: 2,                                 // segundos sem onda até deitar de novo (1,2 era pouco)

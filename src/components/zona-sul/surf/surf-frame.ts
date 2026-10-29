@@ -42,7 +42,7 @@ export function findSurfFrame(t: ZsTerrain, shoreX: number, shoreZ: number): Sur
     const qx = (shoreX - px) / d, qz = (shoreZ - pz) / d, sx = -qz, sz = qx; // s = direita de quem olha pra praia (+q)
     let n = 0, wet = 0;
     // só onde o TUBO existe precisa ser água aberta (até Q_OPEN); depois a espuma corre até a areia
-    for (let s = -SURF.ZONE_S; s <= SURF.ZONE_S; s += 10) for (let q = SURF.Q_MIN; q <= SURF.Q_OPEN; q += 10) {
+    for (let s = -SURF.CORE_S; s <= SURF.CORE_S; s += 10) for (let q = SURF.Q_MIN; q <= SURF.Q_OPEN; q += 10) {
       n++; if (zsHeightAt(t, px + sx * s + qx * q, pz + sz * s + qz * q) < ZS_WATER_Y - 0.4) wet++;
     }
     const water = wet / n;

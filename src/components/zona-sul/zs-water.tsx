@@ -53,23 +53,24 @@ export function ZsWater({ t }: { t: ZsTerrain }) {
     const prev = m.onBeforeCompile;
     m.onBeforeCompile = (sh, r) => {
       prev.call(m, sh, r);
-      sh.uniforms['uSurf'] = surfU.uSurf; sh.uniforms['uSurfQ'] = surfU.uSurfQ;
+      sh.uniforms['uSurf'] = surfU.uSurf; sh.uniforms['uSurfQ'] = surfU.uSurfQ; sh.uniforms['uSurfL'] = surfU.uSurfL;
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform vec4 uSurf;\nuniform vec4 uSurfQ;')
+        .replace('#include <common>', '#include <common>\nuniform vec4 uSurf;\nuniform vec4 uSurfQ;\nuniform float uSurfL;')
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
   if (uSurfQ.w > 0.5) { vec2 d = vWaveXZ - uSurf.xy; float qq = dot(d, uSurf.zw), ss = dot(d, vec2(-uSurf.w, uSurf.z));
-    if (abs(ss) < uSurfQ.x && qq > uSurfQ.y && qq < uSurfQ.z) discard; }`);
+    if (ss < uSurfQ.x && ss > -uSurfL && qq > uSurfQ.y && qq < uSurfQ.z) discard; }`);
     };
     return withSeaFade(m, r0, r1, 'zs-water-v4');
   }, [time, r0, r1]);
   const floor = useMemo(() => withSeaFade(new THREE.MeshStandardMaterial({ color: '#2d5a66', roughness: 1, depthWrite: true }), r0, r1, 'zs-seafloor-v1'), [r0, r1]);
-  const surfU = useMemo(() => ({ uSurf: { value: new THREE.Vector4() }, uSurfQ: { value: new THREE.Vector4() } }), []);
+  // borda da malha da onda: cada lado com o seu limite (direita = pedra, esquerda = Leblon, mar aberto)
+  const surfU = useMemo(() => ({ uSurf: { value: new THREE.Vector4() }, uSurfQ: { value: new THREE.Vector4() }, uSurfL: { value: 0 } }), []);
   useFrame((_, dt) => {
     time.value += dt;
     const f = surfZone.frame;
     // 5 cm pra dentro da borda da malha da onda: com 0,5 m as duas águas transparentes se sobrepunham (linha escura);
     // com 0 sobrava fresta de pixel (linha pontilhada)
-    if (surfZone.on && f) { surfU.uSurf.value.set(f.px, f.pz, f.qx, f.qz); surfU.uSurfQ.value.set(SURF.ZONE_S - 0.05, SURF.Q_MIN + 0.05, SURF.Q_MAX - 0.05, 1); }
+    if (surfZone.on && f) { surfU.uSurf.value.set(f.px, f.pz, f.qx, f.qz); surfU.uSurfQ.value.set(f.lim[0] - 0.05, SURF.Q_MIN + 0.05, SURF.Q_MAX - 0.05, 1); surfU.uSurfL.value = f.lim[1] - 0.05; }
     else surfU.uSurfQ.value.w = 0;
   });
   return (
