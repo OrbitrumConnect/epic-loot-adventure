@@ -73,7 +73,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
   /** surf na prancha (null = sem prancha na água) · vaca de quem nada sem prancha (s restantes) · giro da vaca */
   const ride = useRef<RideState | null>(null);
   const tumble = useRef(0), spin = useRef(0);
-  const boardYaw = useRef(0), popOk = useRef(false), lean = useRef(0), tubeCam = useRef(0);
+  const boardYaw = useRef(0), popOk = useRef(false), lean = useRef(0), tubeCam = useRef(0), shiftWas = useRef(false);
   const action = useRef<HeroAction>('idle');
   const speed = useRef(0);
   const vy = useRef(0);
@@ -227,7 +227,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       // comandos trocam"); remando: como nadar (relativo à câmera)
       const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x;
       const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z;
-      const d = rideStep(r, { dirX: wantMove ? wx : 0, dirZ: wantMove ? wz : 0, pop, fast: shift, steer, throttle }, w, ax, SURF.C, dt);
+      const boost = shift && !shiftWas.current; // só o TOQUE (segurar não vira turbo)
+      const d = rideStep(r, { dirX: wantMove ? wx : 0, dirZ: wantMove ? wz : 0, pop, fast: shift, steer, throttle, boost }, w, ax, SURF.C, dt);
       st = zsStep(t, p.x, p.z, d.dx, d.dz);
       const sp = Math.hypot(r.vx, r.vz);
       v = sp; moving = sp > 0.3;
@@ -269,6 +270,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       swimVel.current.set(wantMove ? wx * v : 0, wantMove ? wz * v : 0); // entra na água com o embalo de quem vinha
       if (wantMove) facing.current = Math.atan2(wx, wz);
     }
+    shiftWas.current = shift;
     p.x = st.x; p.z = st.z;
     // vertical: pulo (só fora d'água funda) + chão / nado
     if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot') { vy.current = 6.2; grounded.current = false; }
@@ -342,7 +344,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef }: { t: Z
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
       const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
       const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
-        : rm === 'popup' ? 'levantando…' : rm === 'ride' && ride.current ? (ride.current.trickT > 0 ? ride.current.trick.toUpperCase() + ' · ' : '') + (ride.current.air ? 'NO AR! segure A ou D pra girar' : 'SURFANDO ' + Math.round(ride.current.speed * 3.6) + ' km/h · A/D vira (carving) · W acelera · S freia · desça a face = ganha velocidade · suba rápido no lip = aéreo') + (ride.current.airs ? ' · aéreos: ' + ride.current.airs : '')
+        : rm === 'popup' ? 'levantando…' : rm === 'ride' && ride.current ? (ride.current.trickT > 0 ? ride.current.trick.toUpperCase() + ' · ' : '') + (ride.current.air ? 'NO AR! segure A ou D pra girar' : 'SURFANDO ' + Math.round(ride.current.speed * 3.6) + ' km/h · A/D vira (carving) · W acelera · S freia · Shift = boost · desça a face = ganha velocidade · suba rápido no lip = aéreo') + (ride.current.airs ? ' · aéreos: ' + ride.current.airs : '')
         : rolling ? 'tomou a vaca! girando com a espuma…' : '';
       onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : undefined });
     }

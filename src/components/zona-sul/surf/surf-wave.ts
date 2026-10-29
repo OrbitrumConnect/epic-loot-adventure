@@ -16,10 +16,11 @@ export const SURF = {
   // Pedro 28/10: "durar mais, quebrar mais atrás e vir até mais a beira da areia". No Arpoador a areia fica a 45–100 m
   // à frente do pico (medido no terreno): a espuma corre até +70 m (onde já é raso/areia, ela sobe um pouco = espraiado;
   // a areia opaca cobre o resto). Só o trecho onde o TUBO existe (até Q_OPEN) precisa ser água aberta.
-  Q_MIN: -150, Q_MAX: 70, // nasce longe, morre na beira da areia
-  Q_OPEN: 25,             // até aqui a zona tem que ser água aberta (o tubo fecha antes)
-  C: 3.2,                 // m/s rumo à praia → (70 + 6 + 150) / 3,2 ≈ 71 s de vida
-  BREAK_Q: -25,           // quebra 25 m antes do pico (mais atrás)
+  // 2ª (Pedro: "aumentar uns 10 s, quebrando mais atrás e indo mais pra beirada — quebra muito à frente"):
+  Q_MIN: -175, Q_MAX: 80, // nasce longe, morre na beira da areia
+  Q_OPEN: 15,             // até aqui a zona tem que ser água aberta (o tubo fecha antes: quebra − 55 + ~66 m)
+  C: 3.2,                 // m/s rumo à praia → (80 + 6 + 175) / 3,2 ≈ 82 s de vida (era ~71)
+  BREAK_Q: -55,           // quebra 55 m antes do pico (era 25: "quebra muito à frente")
   H_START: 0.35, H_MAX: 4.8,             // Pedro 28/10: "a onda pode ser um pouco mais alta" (4,2 → 4,8)
   V_PEEL: 6.5,            // abertura pros lados (m/s)
   CLOSE_LAG: 22,          // a quantos metros atrás da frente de abertura o tubo fecha (tubo aberto mais comprido)
@@ -86,7 +87,7 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar): { open: number; 
  * O tubo CABE na onda: topo = R·(CY + 1 + LIP) ≈ 2,09R ≈ h. Onda de 4,2 m → R = 2,1 m: vão de ~4 m de altura por
  * ~7 m de largura. Costas longas (WB) como as do corpo da onda.
  */
-export const TUBE = { K: 0.5, MIN: 0.5, MAX: 2.7, WF: 3.0, WB: 6.0, AX0: 1.55, AXK: 0.25, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
+export const TUBE = { K: 0.5, MIN: 0.5, MAX: 3.0, WF: 3.0, WB: 6.0, AX0: 1.55, AXK: 0.25, LIP: 0.09, CQ: 0.2, CY: 0.95 } as const;
 /** Largura da cavidade em alturas (o lip arremessa mais longe na onda maior). */
 export function tubeAx(R: number): number { return TUBE.AX0 + TUBE.AXK * R; }
 /** Raio do tubo pra esta altura e a faixa da dobra (frente wf, costas wb). */

@@ -22,8 +22,9 @@ export const RIDE = {
   // MANOBRA (Pedro 28/10: "pro lado vai lateral, aéreo perto da crista, carving direitinho" — referência: Kelly Slater's
   // Pro Surfer = virar esq/dir + acelerar + frear). A prancha tem RUMO e VELOCIDADE próprios em cima da onda (que te
   // segura no bolso): vira com raio (carving), desce a face = ganha velocidade, sobe = perde (skate numa rampa que anda).
-  TURN: 2.6, TURN_FAST: 3.4,                  // giro da prancha (rad/s) — carving
-  G_FACE: 9, DRAG: 0.55, S_CRUISE: 4, S_MAX: 13, PUMP: 2.2, STALL: 4, // gravidade na face, arrasto, cruzeiro/máx, pump (W/Shift), freio (S)
+  TURN: 2.6,                                 // giro da prancha (rad/s) — carving
+  G_FACE: 9, DRAG: 0.55, S_CRUISE: 4, S_MAX: 13, PUMP: 2.2, STALL: 4, // gravidade na face, arrasto, cruzeiro/máx, pump (W), freio (S)
+  BOOST: 0.55, BOOST_CD: 0.8,                // toque no Shift em pé: +0,55 m/s (≈ 2 km/h) na hora, no máx. 1 a cada 0,8 s (Pedro)
   // AÉREO: subindo a face rápido e passando o lip → decola; no ar A/D gira; pousou alinhado = aéreo, torto = vaca
   AIR_RISE: 2.2, AIR_UP: 0.2, AIR_MIN_S: 4, GRAV: 13, AIR_SPIN: 7.5, LAND_TOL: 70 * Math.PI / 180,
 } as const;
@@ -37,11 +38,15 @@ export type RideState = {
   air: boolean; y: number; vy: number; airSpin: number; spinDir: number; rise: number; prevSurf: number;
   /** placar: aéreos limpos e a última manobra (pro HUD) */
   airs: number; trick: string; trickT: number;
+  /** respiro do boost (s) */
+  boostCd: number;
 };
 /** remando: direção no mundo (relativa à câmera, como nadar). EM PÉ: comandos DA PRANCHA (Pedro 28/10: "em cima da
  *  prancha os comandos trocam") — steer +1 = vira à DIREITA (D), −1 = esquerda (A); throttle +1 = acelera/pump (W),
  *  −1 = freia/stall (S). Não dependem da câmera, então nunca invertem. */
-export type RideInput = { dirX: number; dirZ: number; pop: boolean; fast: boolean; steer?: number; throttle?: number };
+export type RideInput = { dirX: number; dirZ: number; pop: boolean; fast: boolean; steer?: number; throttle?: number;
+  /** em pé: TOQUE no Shift (só no quadro em que apertou) = boost leve de velocidade */
+  boost?: boolean };
 /** água em volta: correnteza, espuma, e (em pé) a altura da água embaixo e a inclinação dela (∂h/∂x, ∂h/∂z) */
 export type RideWater = { pushX: number; pushZ: number; churn: number; surfY?: number; gradX?: number; gradZ?: number;
   /** de que lado do pico você está (+1 direita, −1 esquerda, no eixo s): ao levantar, sai NA LINHA pra esse lado */
@@ -49,7 +54,7 @@ export type RideWater = { pushX: number; pushZ: number; churn: number; surfY?: n
 export type RideAxes = { qx: number; qz: number; sx: number; sz: number };
 
 export function newRide(): RideState {
-  return { mode: 'paddle', t: 0, vx: 0, vz: 0, lost: 0, spin: 0, yaw: 0, speed: 0, carve: 0, air: false, y: 0, vy: 0, airSpin: 0, spinDir: 0, rise: 0, prevSurf: NaN, airs: 0, trick: '', trickT: 0 };
+  return { mode: 'paddle', t: 0, vx: 0, vz: 0, lost: 0, spin: 0, yaw: 0, speed: 0, carve: 0, air: false, y: 0, vy: 0, airSpin: 0, spinDir: 0, rise: 0, prevSurf: NaN, airs: 0, trick: '', trickT: 0, boostCd: 0 };
 }
 const wrap = (a: number) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 
@@ -114,7 +119,7 @@ export function rideStep(st: RideState, inp: RideInput, w: RideWater, ax: RideAx
       // ── CARVING: a prancha vira pro lado que você aponta, com raio (não muda de direção na hora) ───────────────
       // D = direita (o rumo gira no sentido horário visto de cima = yaw diminui), A = esquerda
       const prevYaw = st.yaw, steer = Math.max(-1, Math.min(1, inp.steer ?? 0)), thr = Math.max(-1, Math.min(1, inp.throttle ?? 0));
-      st.yaw = wrap(st.yaw - steer * (inp.fast ? RIDE.TURN_FAST : RIDE.TURN) * dt);
+      st.yaw = wrap(st.yaw - steer * RIDE.TURN * dt);
       // sem velocidade na parede, a ponta CAI rampa abaixo sozinha (não fica "parado" no meio da face)
       const gm = Math.hypot(w.gradX ?? 0, w.gradZ ?? 0);
       if (st.speed < 2.5 && gm > 0.15) {
@@ -125,8 +130,11 @@ export function rideStep(st: RideState, inp: RideInput, w: RideWater, ax: RideAx
       ux = Math.sin(st.yaw); uz = Math.cos(st.yaw);
       // ── VELOCIDADE: desce a face = ganha, sobe = perde (gravidade na rampa); arrasto puxa pro cruzeiro; Shift = pump
       const down = -((w.gradX ?? 0) * ux + (w.gradZ ?? 0) * uz);
-      const pump = (inp.fast ? 1 : 0) + Math.max(0, thr), stall = Math.max(0, -thr);
-      st.speed += (RIDE.G_FACE * down - RIDE.DRAG * (st.speed - RIDE.S_CRUISE) + RIDE.PUMP * Math.min(1, pump) - RIDE.STALL * stall) * dt;
+      const pump = Math.max(0, thr), stall = Math.max(0, -thr);
+      // BOOST: toque no Shift = +2 km/h na hora (com respiro)
+      st.boostCd = Math.max(0, st.boostCd - dt);
+      if (inp.boost && st.boostCd <= 0) { st.speed += RIDE.BOOST; st.boostCd = RIDE.BOOST_CD; }
+      st.speed += (RIDE.G_FACE * down - RIDE.DRAG * (st.speed - RIDE.S_CRUISE) + RIDE.PUMP * pump - RIDE.STALL * stall) * dt;
       st.speed = Math.max(0, Math.min(RIDE.S_MAX, st.speed));
       st.vx = ax.qx * carry + ux * st.speed; st.vz = ax.qz * carry + uz * st.speed;
       // ── AÉREO: a água embaixo subia rápido (subindo a face rumo ao lip) e agora desce (passou o lip) → decola ───

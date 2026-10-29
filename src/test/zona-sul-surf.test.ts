@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { barrelAt, barrelBand, branchOf, crestQ, FULL, SURF, surfHeightAt, surfPoint, surfPushAt, TUBE, tubeAx, type WaveState, type WaveVar, waveStateAt } from '@/components/zona-sul/surf/surf-wave';
-import { SERIES, SurfScheduler, WAVE_LIFE } from '@/components/zona-sul/surf/surf-scheduler';
+import { SERIES, SERIES_GROW, SERIES_GROW_MAX, SurfScheduler, WAVE_LIFE } from '@/components/zona-sul/surf/surf-scheduler';
 import { findSurfFrame, toSurfLocal } from '@/components/zona-sul/surf/surf-frame';
 import { decodeTerrain } from '@/components/zona-sul/zs-terrain-data';
 import { ZS_SPAWN, ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
@@ -12,8 +12,8 @@ const V: WaveVar = { hR: 1, hL: 1, vR: 1.1, vL: 0.9 };
 const ageAtBreak = (SURF.BREAK_Q - SURF.Q_MIN) / SURF.C;
 
 describe('surf — onda e tubo', () => {
-  it('vida ~71 s (veloz e vem até a areia, 28/10); quebra no pico; abre pros DOIS lados com velocidades diferentes (sem espelho perfeito)', () => {
-    expect(WAVE_LIFE).toBeGreaterThan(66); expect(WAVE_LIFE).toBeLessThan(76);
+  it('vida ~82 s (veloz, quebra mais atrás e vem até a beirada, 28/10); quebra no pico; abre pros DOIS lados com velocidades diferentes (sem espelho perfeito)', () => {
+    expect(WAVE_LIFE).toBeGreaterThan(78); expect(WAVE_LIFE).toBeLessThan(86);
     const before = waveStateAt(ageAtBreak - 1, V), after = waveStateAt(ageAtBreak + 3, V);
     expect(before.peelR).toBe(0); expect(before.peelL).toBe(0);
     expect(after.peelR).toBeGreaterThan(after.peelL);             // direita 10% mais rápida, esquerda 10% mais lenta
@@ -122,12 +122,12 @@ describe('surf — onda e tubo', () => {
 
 describe('surf — séries', () => {
   it('ondas da série nunca encostam: distância mínima entre elas > faixa do tubo da maior onda possível (sem rachadura)', () => {
-    const band = barrelBand(SURF.H_MAX * 1.08);                     // variação máxima de altura por lado: +8%
+    const band = barrelBand(SURF.H_MAX * 1.08 * SERIES_GROW_MAX);   // a maior onda da série (3ª) com +8% de um lado
     expect(SERIES.GAP_MIN * SURF.C).toBeGreaterThan(band.wf + band.wb);
   });
   it('séries de 3–5 ondas; CALMARIA de 45–60 s depois da última onda (Pedro: "uns 45 s, 1 min"); NUNCA sobrepõe; 5 vagas', () => {
     const sc = new SurfScheduler(7);
-    const band = barrelBand(SURF.H_MAX * 1.08), minSep = band.wf + band.wb;
+    const band = barrelBand(SURF.H_MAX * 1.08 * SERIES_GROW_MAX), minSep = band.wf + band.wb;
     const seen = new Set<number>(), births: number[] = [];
     let closest = Infinity;
     for (let k = 0; k < 10 * 1800; k++) {                         // 30 min de jogo
@@ -144,6 +144,17 @@ describe('surf — séries', () => {
     for (const g of gaps) expect(g).toBeGreaterThanOrEqual(SERIES.GAP_MIN - 0.06);
     for (const c of calms) { expect(c).toBeGreaterThanOrEqual(SERIES.CALM_MIN - 0.06); expect(c).toBeLessThanOrEqual(SERIES.CALM_MAX + 1.1); }
     expect(sc.births).toHaveLength(5);
+  });
+  it('a série CRESCE: 1ª normal, 2ª maior, 3ª maior ainda (a onda da série)', () => {
+    expect(SERIES_GROW[0]).toBe(1);
+    expect(SERIES_GROW[1]).toBeGreaterThan(SERIES_GROW[0]); expect(SERIES_GROW[2]).toBeGreaterThan(SERIES_GROW[1]);
+    expect(SERIES_GROW_MAX).toBe(SERIES_GROW[2]);
+    const sc = new SurfScheduler(11);
+    while (sc.seriesCount === 0) sc.advance(0.1);
+    while (sc.arriving()) sc.advance(0.1);
+    const order = sc.births.map((b, i) => ({ b, h: (sc.vars[i]!.hR + sc.vars[i]!.hL) / 2 })).filter((o) => o.b > -1e8).sort((a, b) => a.b - b.b);
+    expect(order.length).toBeGreaterThanOrEqual(3);
+    expect(order[1]!.h).toBeGreaterThan(order[0]!.h * 0.98); expect(order[2]!.h).toBeGreaterThan(order[0]!.h * 1.1);
   });
   it('aba que volta não solta séries atrasadas (passo travado); J não chama série enquanto a atual ainda está chegando', () => {
     const sc = new SurfScheduler(3);
@@ -172,7 +183,7 @@ describe('surf — zona no Arpoador (terreno de verdade)', () => {
     const [, qSpawn] = toSurfLocal(f, ZS_SPAWN.x, ZS_SPAWN.z);
     expect(qSpawn).toBeGreaterThan(SURF.Q_OPEN + 20);              // a praia fica bem além de onde o tubo existe
     expect(SURF.Q_MAX).toBeGreaterThan(qSpawn - 15);               // e a espuma vem até a beira da areia (Pedro 28/10)
-    expect(SURF.BREAK_Q).toBeLessThan(-15);                        // quebra mais atrás
+    expect(SURF.BREAK_Q).toBeLessThan(-45);                        // quebra bem mais atrás (2ª: "quebra muito à frente")
     // a Pedra do Arpoador fica à DIREITA de quem olha pra praia: desse lado a onda MORRE antes dela; o outro é mar aberto
     expect(f.lim[0]).toBeLessThan(SURF.ZONE_S); expect(f.lim[0]).toBeGreaterThanOrEqual(SURF.EDGE_S);
     expect(f.lim[1]).toBe(SURF.ZONE_S);

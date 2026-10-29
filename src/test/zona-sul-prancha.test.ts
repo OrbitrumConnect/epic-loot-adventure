@@ -51,6 +51,14 @@ describe('prancha — remar, levantar, surfar, vaca', () => {
     run(cam, 0.5, { dirX: 1, dirZ: 0 }, { pushZ: C, surfY: 0 });
     expect(cam.yaw).toBe(0);
   });
+  it('toque no Shift em pé = boost leve (+~2 km/h na hora), com respiro (segurar não vira turbo)', () => {
+    const b = newRide(); b.mode = 'ride'; b.speed = RIDE.S_CRUISE;
+    rideStep(b, { dirX: 0, dirZ: 0, pop: false, fast: true, boost: true }, { pushX: 0, pushZ: C, churn: 0, surfY: 0 }, AX, C, dt);
+    expect((b.speed - RIDE.S_CRUISE) * 3.6).toBeGreaterThan(1.5); expect((b.speed - RIDE.S_CRUISE) * 3.6).toBeLessThan(2.5);
+    const s1 = b.speed;
+    rideStep(b, { dirX: 0, dirZ: 0, pop: false, fast: true, boost: true }, { pushX: 0, pushZ: C, churn: 0, surfY: 0 }, AX, C, dt);
+    expect(b.speed).toBeLessThanOrEqual(s1);                         // dentro do respiro: não soma de novo
+  });
   it('W acelera (pump), S freia (stall)', () => {
     const w = newRide(); w.mode = 'ride'; w.speed = RIDE.S_CRUISE;
     run(w, 1.5, { throttle: 1 }, { pushZ: C, surfY: 0 });
@@ -58,7 +66,7 @@ describe('prancha — remar, levantar, surfar, vaca', () => {
     run(s2, 1, { throttle: -1 }, { pushZ: C, surfY: 0 });
     expect(w.speed).toBeGreaterThan(RIDE.S_CRUISE + 1); expect(s2.speed).toBeLessThan(5);
   });
-  it('a face é RAMPA: descendo ganha velocidade (dá pra passar da abertura do tubo), subindo perde; Shift = pump', () => {
+  it('a face é RAMPA: descendo ganha velocidade (dá pra passar da abertura do tubo), subindo perde; W = pump', () => {
     const down = newRide(); down.mode = 'ride'; down.yaw = 0; down.speed = RIDE.S_CRUISE;
     run(down, 1.5, { dirZ: 1 }, { pushZ: C, surfY: 0, gradZ: -0.8 });  // face desce rumo à praia (+z)
     expect(down.speed).toBeGreaterThan(SURF.V_PEEL);                // mais rápido que a abertura (6,5 m/s)
@@ -66,7 +74,7 @@ describe('prancha — remar, levantar, surfar, vaca', () => {
     run(up, 0.6, { dirZ: -1 }, { pushZ: C, surfY: 0, gradZ: -0.8 }); // subindo a face
     expect(up.speed).toBeLessThan(6);
     const pump = newRide(); pump.mode = 'ride'; pump.speed = RIDE.S_CRUISE;
-    run(pump, 2, { fast: true }, { pushZ: C, surfY: 0 });
+    run(pump, 2, { throttle: 1 }, { pushZ: C, surfY: 0 });                  // W = pump
     expect(pump.speed).toBeGreaterThan(RIDE.S_CRUISE + 1);
   });
   it('AÉREO: subindo rápido e passando o lip decola; no ar A/D gira; pousa limpo (aéreo 360!) ou torto (vaca)', () => {

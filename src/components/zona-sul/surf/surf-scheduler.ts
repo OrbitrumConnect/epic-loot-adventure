@@ -1,7 +1,7 @@
 /**
  * ZONA SUL — agenda das SÉRIES de onda (surf, fase B). Um relógio só (avança no quadro do jogo), 5 VAGAS FIXAS de onda
  * (nada criado/destruído), semente fixa (determinístico). Regras do documento do Pedro:
- *  - série de 3–5 ondas a 7,5–10,5 s uma da outra (≥ 24 m: o tubo de uma não encosta na outra); CALMARIA de 45–60 s depois da última onda da série (Pedro 28/10: "o
+ *  - série de 3–5 ondas a 8,5–11,5 s uma da outra (≥ 27 m: o tubo de uma não encosta na outra), CRESCENDO (SERIES_GROW); CALMARIA de 45–60 s depois da última onda da série (Pedro 28/10: "o
  *    intervalo tá 3 min? pode ser uns 45 s, 1 min") e vem a próxima;
  *  - nunca sobrepõe: cada onda nova só ocupa uma vaga cuja onda antiga já saiu da zona (sem vaga, a série vem menor);
  *  - aba escondida/voltando: o quadro trava o passo (sem "rajada" de séries atrasadas);
@@ -9,7 +9,11 @@
  */
 import { SURF, type WaveState, type WaveVar, waveStateAt } from './surf-wave';
 
-export const SERIES = { CALM_MIN: 45, CALM_MAX: 60, MIN_WAVES: 3, MAX_WAVES: 5, GAP_MIN: 7.5, GAP_MAX: 10.5, FIRST_AT: 10, MAX_DT: 0.25 } as const;
+export const SERIES = { CALM_MIN: 45, CALM_MAX: 60, MIN_WAVES: 3, MAX_WAVES: 5, GAP_MIN: 8.5, GAP_MAX: 11.5, FIRST_AT: 10, MAX_DT: 0.25 } as const;
+/** Tamanho de cada onda na série (Pedro 28/10: "a 1ª vem do jeito que dá, a 2ª maior, a 3ª maior ainda") — a 3ª é a
+ *  onda da série; a 4ª e a 5ª (se vierem) baixam um pouco. Multiplica a altura (a variação ±8% por lado continua). */
+export const SERIES_GROW = [1, 1.12, 1.25, 1.17, 1.08] as const;
+export const SERIES_GROW_MAX = Math.max(...SERIES_GROW);
 /** Vida de uma onda (s): da origem até sumir. */
 export const WAVE_LIFE = (SURF.Q_MAX + 6 - SURF.Q_MIN) / SURF.C;
 export const SLOTS = 5;
@@ -59,7 +63,8 @@ export class SurfScheduler {
     for (let k = 0; k < n; k++) {
       const i = this.freeSlot(t); if (i < 0) break; // sem vaga: a série vem menor (nunca por cima de onda viva)
       this.births[i] = t; last = t;
-      this.vars[i] = { hR: 0.92 + r() * 0.16, hL: 0.92 + r() * 0.16, vR: 0.88 + r() * 0.24, vL: 0.88 + r() * 0.24 };
+      const g = SERIES_GROW[k] ?? 1;
+      this.vars[i] = { hR: (0.92 + r() * 0.16) * g, hL: (0.92 + r() * 0.16) * g, vR: 0.88 + r() * 0.24, vL: 0.88 + r() * 0.24 };
       t += SERIES.GAP_MIN + r() * (SERIES.GAP_MAX - SERIES.GAP_MIN);
     }
     if (last < 0) { this.nextSeriesAt = this.clock + 1; return; }
