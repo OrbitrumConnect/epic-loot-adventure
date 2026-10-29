@@ -41,7 +41,7 @@ const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/an
 /** Cortes: levantar = 30%→100% a 2× (≈ RIDE.POPUP_S); base = só o finalzinho (a pose final, segurada). */
 // remar/nadar: o RITMO dos braços segue a velocidade real (Pedro 29/10: "remar parece câmera lenta" — a remada tocava
 // fixa a 0,8×): remando 3,8 m/s = 1×, com Shift 6,1 = 1,6×; nadando 2,4 = 1×, rápido 4,2 = 1,75×
-const HERO_CUT = { popup: { from: 0.3, speed: 2 }, surf: { from: 0.97 }, paddle: { sync: 1 / 3.8, syncMin: 0.6, syncMax: 1.7 }, swim: { sync: 1 / 2.4, syncMin: 0.6, syncMax: 1.8 } };
+const HERO_CUT = { open_door: { fixHips: true }, popup: { from: 0.3, speed: 2 }, surf: { from: 0.97 }, paddle: { sync: 1 / 3.8, syncMin: 0.6, syncMax: 1.7 }, swim: { sync: 1 / 2.4, syncMin: 0.6, syncMax: 1.8 } };
 /** Pé na prancha: altura do DECK acima da água (m). Giro do corpo em relação ao bico (base de surfista, de lado). */
 const BOARD_DECK = 0.12, STANCE = -Math.PI / 2;
 /** A pose final do Zombie Stand Up abaixa o quadril: em pé o corpo sobe isto (m) pra os pés ficarem NO deck (Pedro: "corpo

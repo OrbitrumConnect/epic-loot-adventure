@@ -212,7 +212,10 @@ export function GlbHeroMixamo({
   customClipCut?: Record<string, { from?: number; to?: number; speed?: number;
     /** RITMO pela velocidade real (Zona Sul 29/10: "remar parece câmera lenta"): timeScale = velocidade × sync,
      *  entre syncMin e syncMax. Sem isto: velocidade fixa (`speed`). */
-    sync?: number; syncMin?: number; syncMax?: number }>;
+    sync?: number; syncMin?: number; syncMax?: number;
+    /** quadril na altura NORMAL (como andar) em vez de livre — anim EM PÉ que desce o quadril (Zona Sul 29/10: "ao
+     *  abrir a porta do veículo a animação fica metade abaixo do chão"). */
+    fixHips?: boolean }>;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -339,7 +342,7 @@ export function GlbHeroMixamo({
         })
       : [];
     const custom = customKeys.map((k, i) => {
-      const c = mk(customG[i + 1]!, k, true); // quadril livre (sentado / nadando)
+      const c = mk(customG[i + 1]!, k, !customClipCut?.[k]?.fixHips); // quadril livre (sentado / nadando), salvo fixHips
       const cut = customClipCut?.[k];
       if (!c || !cut || (cut.from == null && cut.to == null)) return c;
       const fps = 30, n = Math.round(c.duration * fps);
