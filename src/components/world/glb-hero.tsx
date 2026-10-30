@@ -16,7 +16,9 @@ export type HeroAction = 'idle' | 'walk' | 'run' | 'attack' | 'jump' | 'death' |
   // Zona Sul (28/10, `customClips` do GlbHeroMixamo): o jogo de sempre nunca usa estes
   | 'drive' | 'open_door' | 'swim' | 'tread'
   // surf (Zona Sul): remar deitado na prancha, levantar (Zombie Stand Up de 30%), base de surf (pose final)
-  | 'paddle' | 'popup' | 'surf';
+  | 'paddle' | 'popup' | 'surf'
+  // asa-delta (Zona Sul, 30/10): "Flying" do Mixamo — pendurado deitado sob a asa
+  | 'glide';
 
 function pickClip(names: string[], kind: HeroAction): string | undefined {
   const find = (sub: string) => names.find((n) => n.toLowerCase().includes(sub));

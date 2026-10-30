@@ -44,15 +44,36 @@ function SurfboardIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Asa-delta: a vela em triângulo e o trapézio embaixo. */
+function GliderIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" {...props}>
+      <path d="M2 11 L12 4 L22 11 L12 9 Z" fill="#e0672f" stroke="#1b4c63" strokeWidth="1" strokeLinejoin="round" />
+      <path d="M12 9 L9 17 L15 17 Z" fill="none" stroke="#cfd6dc" strokeWidth="1.2" />
+      <circle cx="12" cy="19" r="1.6" fill="#f4efe2" />
+    </svg>
+  );
+}
+/** Skate voador: o deck com dois "pés" de levitação brilhando. */
+function HoverboardIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" {...props}>
+      <rect x="3" y="9" width="18" height="4" rx="2" fill="#e8ecef" stroke="#1b4c63" strokeWidth="1" />
+      <ellipse cx="7.5" cy="15.5" rx="2.6" ry="1.3" fill="#3fb8ff" opacity="0.85" />
+      <ellipse cx="16.5" cy="15.5" rx="2.6" ry="1.3" fill="#3fb8ff" opacity="0.85" />
+    </svg>
+  );
+}
+
 /** Ícones lucide de reserva, indexados por `Item.icon`. Usados quando o sprite não carrega. */
 export const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   Swords, Axe, Pickaxe, FlaskConical, Crosshair, Utensils, Flame, Sparkles,
   TreePine, Mountain, Gem, Shield, Skull, Package, ArrowUpRight, Target,
-  Bow: BowIcon, Pistol: PistolIcon, Rifle: RifleIcon, Surfboard: SurfboardIcon,
+  Bow: BowIcon, Pistol: PistolIcon, Rifle: RifleIcon, Surfboard: SurfboardIcon, Glider: GliderIcon, Hoverboard: HoverboardIcon,
 };
 
 /** Itens que não têm sprite webp: renderizam o ícone direto (sem 404). */
-const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor', 'surfboard']);
+const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor', 'surfboard', 'hang_glider', 'hover_skate']);
 
 export type ItemSpriteProps = {
   itemId: string | null | undefined;

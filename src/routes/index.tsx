@@ -399,10 +399,11 @@ function Index() {
   // quando a mochila muda.
   useEffect(() => {
     if (!worldOn) return;
-    useGameStore.getState().grantSurfboard();
+    useGameStore.getState().grantMobilityKit();
     return useGameStore.subscribe((s, prev) => {
       if (s.player.inventory === prev.player.inventory) return;
-      if (!s.player.inventory.slots.some(sl => sl.itemId === 'surfboard')) s.grantSurfboard();
+      // falta algum do kit (prancha, asa-delta, skate voador)? devolve
+      if (!(['surfboard', 'hang_glider', 'hover_skate'] as const).every(id => s.player.inventory.slots.some(sl => sl.itemId === id))) s.grantMobilityKit();
     });
   }, [worldOn]);
 

@@ -105,8 +105,8 @@ describe('prancha = item FIXO (Pedro 29/10: "estou nível 13, era pra ter a pran
     expect(useGameStore.getState().player.inventory.slots[idx]?.itemId).toBe('surfboard');
     expect(useGameStore.getState().ui.message).toMatch(/não dá pra descartar/);
     const idxSrc = fs.readFileSync('src/routes/index.tsx', 'utf8');
-    expect(idxSrc).toContain("if (!s.player.inventory.slots.some(sl => sl.itemId === 'surfboard')) s.grantSurfboard();");
+    expect(idxSrc).toContain("s.grantMobilityKit();"); // 30/10: o kit inteiro (prancha, asa-delta, skate) volta sempre que faltar
     expect(idxSrc).not.toMatch(/until = Date\.now\(\) \+ 45_000/);
-    expect(fs.readFileSync('src/components/hud/character-sheet.tsx', 'utf8')).toContain("picked.id !== 'surfboard'");
+    expect(fs.readFileSync('src/components/hud/character-sheet.tsx', 'utf8')).toContain('!isMobilityItem(picked.id)');
   });
 });

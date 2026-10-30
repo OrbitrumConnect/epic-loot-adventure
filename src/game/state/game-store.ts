@@ -58,7 +58,7 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
-import { grantSurfboard, SURFBOARD_ID } from '../systems/zonaSulKit';
+import { grantMobilityKit, isMobilityItem, SURFBOARD_ID } from '../systems/zonaSulKit';
 import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
 import { clampX, clampZ, isClassicWorld, type MapId } from '../data/world-profile';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
@@ -278,6 +278,8 @@ type GameActions = {
   drinkPotion: () => void;
   /** Zona Sul: entrega a prancha (1ª entrada) — mochila + espaço livre da hotbar. */
   grantSurfboard: () => void;
+  /** Kit de mobilidade (prancha, asa-delta, skate voador): entrega o que faltar. `grantSurfboard` = o mesmo (nome antigo). */
+  grantMobilityKit: () => void;
   /** TROCA DE MAPA (o perfil já foi trocado em world-profile): bichos, acampamentos, recursos e posição do mapa novo.
    *  Zona Sul: a fauna vem pronta (precisa do terreno) e a posição é a do herói de lá. */
   enterWorld: (map: MapId, zs?: { creatures: CreatureState[]; position: Position }) => void;
@@ -1674,8 +1676,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   dropItem: (slotIndex) => {
     const state = get();
     const itemId = state.player.inventory.slots[slotIndex]?.itemId;
-    // PRANCHA = item FIXO do personagem (Pedro 29/10: "ela tem que estar no loot"): não sai da mochila
-    if (itemId === SURFBOARD_ID) { set(s => ({ ui: { ...s.ui, message: '🏄 A prancha é sua pra sempre — não dá pra descartar.' } })); return; }
+    // KIT DE MOBILIDADE = FIXO do personagem (Pedro 29/10: "ela tem que estar no loot"): não sai da mochila
+    if (isMobilityItem(itemId)) { set(s => ({ ui: { ...s.ui, message: `🏄 ${ITEMS[itemId!]?.name ?? 'Esse item'} é seu pra sempre — não dá pra descartar.` } })); return; }
     const quantity = itemId ? state.player.inventory.slots[slotIndex]!.quantity : 0;
     if (!itemId || quantity <= 0) return;
     const inventory = { ...state.player.inventory, slots: state.player.inventory.slots.map((slot, i) => i === slotIndex ? { itemId: null, quantity: 0 } : { ...slot }) };
@@ -2399,11 +2401,19 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }));
   },
 
-  grantSurfboard: () => {
-    const r = grantSurfboard(get().player.inventory);
-    if (r.granted) set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: isUnlocked(SURFBOARD_ID, s.player.level)
+  grantSurfboard: () => get().grantMobilityKit(),
+
+  grantMobilityKit: () => {
+    const r = grantMobilityKit(get().player.inventory);
+    if (!r.granted.length) return;
+    const names = r.granted.map(id => {
+      const lv = unlockLevel(id), mine = get().player.level >= lv;
+      return `${ITEMS[id]?.name ?? id}${mine ? '' : ` (nível ${lv})`}`;
+    });
+    const solo = r.granted.length === 1 && r.granted[0] === SURFBOARD_ID && isUnlocked(SURFBOARD_ID, get().player.level);
+    set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: solo
       ? '🏄 Você ganhou uma Prancha de surf' + (r.grewBag ? ' (a mochila ganhou um espaço pra ela)' : '') + ' — selecione na hotbar e entre no mar.'
-      : `🏄 Você ganhou uma Prancha de surf — ela libera no nível ${unlockLevel(SURFBOARD_ID)}.` } }));
+      : `🏄 Na sua mochila: ${names.join(', ')}${r.grewBag ? ' — a mochila ganhou espaço pra eles' : ''}.` } }));
   },
 
   drinkPotion: () => {

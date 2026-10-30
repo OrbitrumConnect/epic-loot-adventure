@@ -164,8 +164,8 @@ describe('prancha = item OFICIAL do jogo (29/10: a Zona Sul entrou na casa do jo
   });
   it('a casa do jogo entrega a prancha ao ENTRAR NO JOGO (qualquer mapa) e de novo quando o save da conta chega', () => {
     const idx = src('src/routes/index.tsx');
-    expect(idx).toContain('useGameStore.getState().grantSurfboard();');
-    expect(idx).toContain("if (!s.player.inventory.slots.some(sl => sl.itemId === 'surfboard')) s.grantSurfboard();");
+    expect(idx).toContain('useGameStore.getState().grantMobilityKit();'); // 30/10: kit inteiro
+    expect(idx).toContain("(['surfboard', 'hang_glider', 'hover_skate'] as const).every(id => s.player.inventory.slots.some(sl => sl.itemId === id))");
   });
   it('a Zona Sul lê a prancha DA HOTBAR do jogo (nada de inventário paralelo); o loot só-leitura saiu', () => {
     const w = src('src/components/zona-sul/zona-sul-world.tsx');

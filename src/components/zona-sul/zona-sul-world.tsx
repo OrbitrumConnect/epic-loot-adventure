@@ -14,13 +14,15 @@ import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
 import { ZS_LANDMARKS, ZS_SPAWN, ZS_SURF } from './zona-sul-meta';
-import { loadZsTerrain, type ZsTerrain, zsHeightAt, zsSurfAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
+import { loadZsTerrain, type ZsTerrain, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
 import { SurfBreak, surfZone } from './surf/surf-break';
 import { SURF } from './surf/surf-wave';
 import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from './surf/surf-ride';
 import { useGameStore } from '@/game/state/game-store';
 import { selectedItemId } from '@/components/world/held-weapon';
-import { SURFBOARD_ID } from '@/game/systems/zonaSulKit';
+import { HANG_GLIDER_ID, HOVER_SKATE_ID, SURFBOARD_ID } from '@/game/systems/zonaSulKit';
+import { canOpenGlider, GLIDE, glideStep, type GlideState, newGlide, newSkate, SKATE, skateStep, type SkateState } from './zs-glide';
+import { ZsGearView } from './zs-gear-view';
 import { isUnlocked, lockedMessage } from '@/game/systems/unlockSystem';
 import { useTouchScreen } from '@/hooks/use-mobile';
 // COMBATE (29/10, Pedro: "usar armas, tiro pro elite… ligar tudo 100%"): as MESMAS peças e regras do Vale
@@ -75,7 +77,9 @@ import { type CarDims, ZsCarView } from './zs-car-view';
 const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/anim/open_door.glb', swim: '/zona-sul/anim/swim.glb', tread: '/zona-sul/anim/tread.glb',
   // SURF (28/10): remar = o nado deitado na prancha; levantar e base = Zombie Stand Up (Pedro: "só levanta direito depois
   // de 30%; a pose final é boa, meio surfista")
-  paddle: '/zona-sul/anim/swim.glb', popup: '/zona-sul/anim/zombie_stand_up.glb', surf: '/zona-sul/anim/zombie_stand_up.glb' };
+  paddle: '/zona-sul/anim/swim.glb', popup: '/zona-sul/anim/zombie_stand_up.glb', surf: '/zona-sul/anim/zombie_stand_up.glb',
+  // ASA-DELTA (30/10): "Flying" do Mixamo (do Pedro) — corpo deitado, braços à frente, pendurado sob a asa
+  glide: '/zona-sul/anim/glide.glb' };
 /** Cortes: levantar = 30%→100% a 2× (≈ RIDE.POPUP_S); base = só o finalzinho (a pose final, segurada). */
 // remar/nadar: o RITMO dos braços segue a velocidade real (Pedro 29/10: "remar parece câmera lenta" — a remada tocava
 // fixa a 0,8×): remando 3,8 m/s = 1×, com Shift 6,1 = 1,6×; nadando 2,4 = 1×, rápido 4,2 = 1,75×
@@ -143,11 +147,13 @@ function attackYaw(px: number, pz: number, fallback: number): number {
   return best ? Math.atan2(best.x - px, best.z - pz) : fallback;
 }
 
-function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRef, movement, c }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose>; playerRef: React.MutableRefObject<THREE.Group | null>; movement: React.MutableRefObject<THREE.Vector3>; c: Palette }) {
+function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRef, movement, c, gearRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose>; playerRef: React.MutableRefObject<THREE.Group | null>; movement: React.MutableRefObject<THREE.Vector3>; c: Palette; gearRef: { glider: BoardPose; skate: BoardPose } }) {
   const group = useRef<THREE.Group>(null);
   /** combate: tique do último ataque visto, tempo de animação restante, especial, giro do R, coice, mira (0..1) */
   const atkTick = useRef(-1), atkT = useRef(0), specTick = useRef(-1), spinT = useRef(0);
   const recoil = useRef({ x: 0, y: 0 }), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0), ambAcc = useRef(0);
+  /** ASA-DELTA planando / SKATE VOADOR em cima (null = não) · Espaço do quadro anterior (pulinho só no toque) */
+  const glide = useRef<GlideState | null>(null), skate = useRef<SkateState | null>(null), spaceWas = useRef(false);
   /** surf na prancha (null = sem prancha na água) · vaca de quem nada sem prancha (s restantes) · giro da vaca */
   const ride = useRef<RideState | null>(null);
   const tumble = useRef(0), spin = useRef(0);
@@ -170,7 +176,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   useEffect(() => { atkTick.current = useGameStore.getState().attackTick; specTick.current = useGameStore.getState().specialTick; }, []);
 
   // só em desenvolvimento: testes de tela leem/forçam o surf (o jogo publicado não expõe nada)
-  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action, scene, camera }; }, [scene, camera]);
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action, scene, camera, glide, skate, air: (vy0 = -3) => { grounded.current = false; vy.current = vy0; } }; }, [scene, camera]);
   const fog = useMemo(() => new THREE.Fog(FOG, 200, 2200), []); // névoa LEVE (custo ~zero: é uma conta no shader)
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
@@ -311,6 +317,74 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     }
     if (drive.mode === 'entering') { action.current = 'open_door'; speed.current = 0; }
     focusRef.current.copy(p);
+    // ===== ASA-DELTA e SKATE VOADOR (30/10) — modos próprios, como o carro: movem o herói/câmera e encerram o quadro =====
+    {
+      const held = drive.mode === 'foot' && !dead ? selectedItemId(gs) : null, lvl = gs.player.level;
+      const surfaceAt = (x: number, z: number) => Math.max(zsHeightAt(t, x, z), zsWaterYAt(x, z));
+      // ASA-DELTA: na mão + caindo de um lugar ALTO → abre sozinha
+      if (!glide.current && held === HANG_GLIDER_ID && isUnlocked(held, lvl) && !grounded.current && !zsCtx.inWater
+        && canOpenGlider(vy.current, p.y - surfaceAt(p.x, p.z))) {
+        glide.current = newGlide(facing.current, p.y, Math.max(GLIDE.CRUISE, Math.hypot(swimVel.current.x, swimVel.current.y)));
+      }
+      if (glide.current && held !== HANG_GLIDER_ID) glide.current = null; // trocou de item no ar: cai (sem asa)
+      // SKATE: na mão (liberado) = em cima dele
+      if (held === HOVER_SKATE_ID && isUnlocked(held, lvl) && !glide.current) { if (!skate.current) skate.current = newSkate(facing.current, Math.max(p.y, surfaceAt(p.x, p.z) + SKATE.HOVER)); }
+      else skate.current = null;
+      const gl = glide.current, sk = skate.current;
+      gearRef.glider.visible = !!gl; gearRef.skate.visible = !!sk;
+      if (gl || sk) {
+        const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
+        const fwd = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
+        const turbo = k.has('ShiftLeft') || k.has('ShiftRight');
+        const space = k.has('Space');
+        const bx = (x: number) => Math.max(t.x0, Math.min(t.x0 + (t.w - 1) * t.cell, x)), bz = (z: number) => Math.max(t.z0, Math.min(t.z0 + (t.h - 1) * t.cell, z));
+        let status = '', lift = 0, roll = 0;
+        if (gl) {
+          const r = glideStep(gl, { steer, pitch: fwd }, surfaceAt(p.x, p.z), dt);
+          p.x = bx(p.x + r.dx); p.z = bz(p.z + r.dz); p.y = gl.y;
+          const under = surfaceAt(p.x, p.z);
+          if (r.landed || p.y <= under + GLIDE.LAND_AGL) { // pousou (ou bateu no morro): fecha a asa
+            glide.current = null; p.y = Math.max(p.y, under); vy.current = 0; grounded.current = true;
+            swimVel.current.set(Math.sin(gl.yaw) * Math.min(gl.speed, ZS_RUN), Math.cos(gl.yaw) * Math.min(gl.speed, ZS_RUN));
+          }
+          facing.current = gl.yaw; action.current = 'glide'; speed.current = gl.speed; roll = gl.bank;
+          const gp = gearRef.glider; gp.x = p.x; gp.y = p.y + 1.15; gp.z = p.z; gp.yaw = gl.yaw; gp.roll = -gl.bank;
+          status = gl.stalled ? 'ESTOL! solte o S ou aperte W pra ganhar velocidade' : 'asa-delta · ' + Math.round(gl.speed * 3.6) + ' km/h · altura ' + Math.round(p.y - under) + ' m · A/D vira · W mergulha · S empina';
+        } else if (sk) {
+          const r = skateStep(sk, { throttle: fwd, steer, turbo, hop: space && !spaceWas.current }, p.x, p.z, dt, surfaceAt, (x, z) => zsSlopeDeg(t, x, z));
+          p.x = bx(r.x); p.z = bz(r.z); p.y = sk.y;
+          facing.current = sk.yaw + STANCE; action.current = 'surf'; speed.current = 0; lift = SURF_LIFT;
+          const sp = gearRef.skate; sp.x = p.x; sp.y = p.y; sp.z = p.z; sp.yaw = sk.yaw; sp.roll = Math.max(-0.35, Math.min(0.35, -steer * Math.min(1, Math.abs(sk.speed) / SKATE.MAX) * 0.3));
+          status = 'skate voador · ' + Math.round(Math.abs(sk.speed) * 3.6) + ' km/h · W acelera · S freia · A/D curva · Shift turbo · Espaço pula' + (zsHeightAt(t, p.x, p.z) < ZS_WATER_Y ? ' · sobre a água' : '');
+        }
+        spaceWas.current = space;
+        grounded.current = !glide.current ? true : false; zsCtx.inWater = false; ride.current = null; dive.current = 0;
+        if (group.current) {
+          group.current.position.set(p.x, p.y + lift, p.z);
+          let d = facing.current - yawNow.current; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+          yawNow.current += d * Math.min(1, dt * 10);
+          group.current.rotation.order = 'YXZ'; group.current.rotation.y = yawNow.current; group.current.rotation.x = 0; group.current.rotation.z = roll * 0.6;
+          heroFacing.yaw = yawNow.current;
+        }
+        // câmera de PERSEGUIÇÃO atrás do rumo (arrastar olha em volta; 1,5 s depois volta) — igual ao carro
+        const heading = gl ? gl.yaw : sk!.yaw;
+        if (now - input.lookAt > 1500) { let dy = heading + Math.PI - input.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2; input.yaw += dy * Math.min(1, dt * 3); }
+        const ct = camTarget.current, follow = 1 - Math.exp(-8 * dt);
+        ct.x += (p.x - ct.x) * follow; ct.y += (p.y + 1.6 - ct.y) * follow; ct.z += (p.z - ct.z) * follow;
+        const dist = (gl ? Math.max(input.dist, 11) : input.dist) + Math.min(6, (gl ? gl.speed : Math.abs(sk!.speed)) * 0.15);
+        const cpp = Math.cos(input.pitch), cx2 = ct.x + Math.sin(input.yaw) * cpp * dist, cz2 = ct.z + Math.cos(input.yaw) * cpp * dist;
+        let cy2 = ct.y + Math.sin(input.pitch) * dist; const gc = Math.max(zsHeightAt(t, cx2, cz2), ZS_WATER_Y) + 0.6; if (cy2 < gc) cy2 = gc;
+        const persp = camera as THREE.PerspectiveCamera; if (Math.abs(persp.fov - CHASE_FOV) > 0.05) { persp.fov = CHASE_FOV; persp.updateProjectionMatrix(); }
+        camera.position.set(cx2, cy2, cz2); camera.lookAt(ct.x, ct.y, ct.z);
+        if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); }
+        boardRef.current.visible = false;
+        audioManager.setFootsteps(false);
+        hudAcc.current += dt;
+        if (hudAcc.current > 0.25) { hudAcc.current = 0; onHud({ x: p.x, z: p.z, y: p.y, state: status, near: '', overview: false }); }
+        return;
+      }
+      spaceWas.current = k.has('Space');
+    }
     // direção relativa à câmera
     let ix = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
     let iz = (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) + input.stick.z + virtualMove.z;
@@ -736,6 +810,9 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const carRef = useRef<ZsCar | null>(null);
   const dimsRef = useRef<CarDims | null>(null);
   const boardRef = useRef<BoardPose>(newBoardPose());
+  /** poses da ASA-DELTA e do SKATE (o herói escreve; as vistas leem) */
+  const gliderPose = useRef<BoardPose>(newBoardPose()), skatePose = useRef<BoardPose>(newBoardPose());
+  const gearRef = useMemo(() => ({ get glider() { return gliderPose.current; }, get skate() { return skatePose.current; } }), []);
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
   if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip };
@@ -787,7 +864,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
           <ZsVegetation t={t} heroRef={focusRef} />
-          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} />
+          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} />
           {/* COMBATE — as mesmas peças do Vale, no chão da Zona Sul (perfil do mapa) */}
           {/* cada peça com a sua rede de carregamento (29/10: um bicho novo carregando o modelo ESCONDIA o mundo inteiro
               por um instante — o React esconde até a rede mais próxima) e proteção contra modelo quebrado (igual ao Vale) */}
@@ -805,6 +882,10 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           )}
           <Suspense fallback={null}><ZsCarView carRef={carRef} dimsRef={dimsRef} /></Suspense>
           <Suspense fallback={null}><ZsBoardView poseRef={boardRef} /></Suspense>
+          <AssetBoundary label="ZsAsaSkate" fallback={null}>
+            <Suspense fallback={null}><ZsGearView kind="glider" poseRef={gliderPose} /></Suspense>
+            <Suspense fallback={null}><ZsGearView kind="skate" poseRef={skatePose} /></Suspense>
+          </AssetBoundary>
           <Controls />
           <ZsPerf elRef={perfRef} />
         </Canvas>

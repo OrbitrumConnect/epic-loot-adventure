@@ -335,6 +335,32 @@ export const ITEMS: Record<string, Item> = {
     equippable: false,
     icon: 'Surfboard',
   },
+  // ASA-DELTA e SKATE VOADOR (Zona Sul, 30/10): itens oficiais do KIT DE MOBILIDADE, como a prancha — na mão +
+  // pular de um lugar alto = plana (asa-delta, nv 8); na mão = flutua 35 cm sobre chão e água (skate, nv 15).
+  hang_glider: {
+    id: 'hang_glider',
+    name: 'Asa-delta',
+    category: 'tool',
+    rarity: 'rare',
+    weight: 0,
+    maxStack: 1,
+    dropOnDeath: false,
+    usable: false,
+    equippable: false,
+    icon: 'Glider',
+  },
+  hover_skate: {
+    id: 'hover_skate',
+    name: 'Skate voador',
+    category: 'tool',
+    rarity: 'epic',
+    weight: 0,
+    maxStack: 1,
+    dropOnDeath: false,
+    usable: false,
+    equippable: false,
+    icon: 'Hoverboard',
+  },
   iron_pickaxe: {
     id: 'iron_pickaxe',
     name: 'Picareta de Ferro',
