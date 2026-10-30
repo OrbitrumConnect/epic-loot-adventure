@@ -380,7 +380,8 @@ export function GlbHeroMixamo({
 
   // 26/10: animação por distância (anim-lod.ts) — herói/perto todo quadro (igual), inimigo longe com menos atualizações.
   const animEveryRef = useRef(1);
-  const { actions, mixer } = useLodAnimations(clips, inner, animEveryRef);
+  // inimigo fora da câmera não anima (30/10); o herói (e a vitrine) sempre
+  const { actions, mixer } = useLodAnimations(clips, inner, animEveryRef, !rangedAttack && !preview);
   const current = useRef<HeroAction | null>(null);
   /** Qual clip de ataque está tocando ('attack' combo ou 'attackBow'). */
   const playingAtk = useRef<string>('attack');

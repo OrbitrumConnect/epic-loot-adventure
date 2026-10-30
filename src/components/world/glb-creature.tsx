@@ -1,5 +1,5 @@
 import { useGLTF } from '@react-three/drei';
-import { animEvery, useLodAnimations } from './anim-lod';
+import { animEvery, leanClip, useLodAnimations } from './anim-lod';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -164,7 +164,9 @@ export function GlbCreature({
   const cloned = useMemo(() => skeletonClone(scene), [scene]);
   // 26/10: animação por distância (anim-lod.ts) — perto todo quadro (igual), longe com menos atualizações.
   const animEveryRef = useRef(1);
-  const { actions, names, mixer } = useLodAnimations(animations, inner, animEveryRef);
+  // só as trilhas que MEXEM (o resto fica no descanso de qualquer jeito — 30/10) e fora da câmera não anima
+  const lean = useMemo(() => animations.map((c) => leanClip(c, scene)), [animations, scene]);
+  const { actions, names, mixer } = useLodAnimations(lean, inner, animEveryRef, true);
   const current = useRef<string | null>(null);
   /** Malhas do modelo (coletadas uma vez) p/ alternar castShadow sem traverse por quadro. */
   const meshes = useRef<THREE.Mesh[]>([]);

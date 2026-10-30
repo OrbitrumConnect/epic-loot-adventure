@@ -8,7 +8,7 @@
  * começa num quadro diferente pra os de longe não atualizarem todos juntos (pico).
  */
 import * as React from 'react';
-import { AnimationMixer, Object3D, type AnimationAction, type AnimationClip } from 'three';
+import { AnimationClip, AnimationMixer, Frustum, Matrix4, Object3D, PropertyBinding, Quaternion, Sphere, type AnimationAction, type Camera, type KeyframeTrack } from 'three';
 import { useFrame } from '@react-three/fiber';
 
 export const ANIM_NEAR_M = 40;
@@ -27,12 +27,67 @@ export function lodStep(state: { frame: number; acc: number }, delta: number, ev
   return 0;
 }
 
+/** FORA DA CÂMERA (30/10, lag — grupo denso de bichos na Lagoa: ~20 animando juntos = ~10% da CPU): o bicho que a câmera
+ *  NÃO vê não calcula a animação; o tempo segue somando e, quando ele entra na tela, aplica de uma vez (a mesma pose de quem
+ *  não parou — ninguém congela). É o 'culling' de animação das engines. Margem larga (corpo grande + sombra na borda). */
+export const ANIM_CULL_MARGIN = 10;
+const frustum = new Frustum(), projView = new Matrix4(), tmpSphere = new Sphere();
+let frustumKey = Number.NaN;
+/** (x, y, z) a até ANIM_CULL_MARGIN m da visão da câmera? `key` = um valor por quadro (o frustum é montado 1× por quadro). */
+export function animInView(camera: Camera, key: number, x: number, y: number, z: number): boolean {
+  if (key !== frustumKey) {
+    frustumKey = key;
+    camera.updateMatrixWorld();
+    projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(projView);
+  }
+  tmpSphere.center.set(x, y, z); tmpSphere.radius = ANIM_CULL_MARGIN;
+  return frustum.intersectsSphere(tmpSphere);
+}
+
+/**
+ * TRILHAS QUE NÃO MEXEM (30/10, lag): os bichos do jogo vêm com rigs enormes (ganso 186 ossos / 1.199 trilhas, jacaré
+ * 187 / 862) e trilha de TODO osso — inclusive as que ficam o clipe inteiro no valor de DESCANSO do osso (escala 1,
+ * posição parada). O mixer avalia todas a cada quadro. Trilha assim não muda nada na tela: sem ela o osso fica no
+ * descanso (e na transição entre clipes o mixer completa com o valor de descanso — o mesmo). Sai. 1× por clipe (cache).
+ */
+const leanCache = new WeakMap<AnimationClip, AnimationClip>();
+const tmpQ = new Quaternion();
+const EPS = 1e-5;
+function isRestTrack(track: KeyframeTrack, node: Object3D, prop: string): boolean {
+  const v = track.values;
+  if (prop === 'quaternion') {
+    const r = node.quaternion;
+    for (let i = 0; i + 3 < v.length; i += 4) { tmpQ.set(v[i]!, v[i + 1]!, v[i + 2]!, v[i + 3]!); if (Math.abs(tmpQ.dot(r)) < 1 - EPS) return false; }
+    return true;
+  }
+  const r = prop === 'position' ? node.position : prop === 'scale' ? node.scale : null;
+  if (!r) return false;
+  for (let i = 0; i + 2 < v.length; i += 3) if (Math.abs(v[i]! - r.x) > EPS || Math.abs(v[i + 1]! - r.y) > EPS || Math.abs(v[i + 2]! - r.z) > EPS) return false;
+  return true;
+}
+/** O clipe sem as trilhas que nunca saem do descanso (`root` = a cena do GLB em repouso). Puro; o original fica intacto. */
+export function leanClip(clip: AnimationClip, root: Object3D): AnimationClip {
+  const hit = leanCache.get(clip);
+  if (hit) return hit;
+  const keep = clip.tracks.filter((t) => {
+    const pn = PropertyBinding.parseTrackName(t.name);
+    const node = PropertyBinding.findNode(root, pn.nodeName) as Object3D | null;
+    return !(node && !pn.propertyIndex && isRestTrack(t, node, pn.propertyName));
+  });
+  const out = keep.length === clip.tracks.length ? clip : new AnimationClip(clip.name, clip.duration, keep, clip.blendMode);
+  leanCache.set(clip, out);
+  return out;
+}
+
 type Api = { ref: React.MutableRefObject<Object3D | null>; clips: AnimationClip[]; actions: Record<string, AnimationAction | null>; names: string[]; mixer: AnimationMixer };
 
 export function useLodAnimations(
   clips: AnimationClip[],
   root: React.RefObject<Object3D | null>,
   everyRef: React.MutableRefObject<number>,
+  /** pula a animação fora da câmera (bichos e inimigos; o herói nunca) */
+  cullOffscreen = false,
 ): Api {
   const actualRef = root as React.MutableRefObject<Object3D | null>;
   const [mixer] = React.useState(() => new AnimationMixer(undefined as unknown as Object3D));
@@ -52,7 +107,9 @@ export function useLodAnimations(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clips]);
   const step = React.useRef({ frame: Math.floor(Math.random() * 6), acc: 0 });
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
+    const e = cullOffscreen ? actualRef.current?.matrixWorld.elements : undefined;
+    if (e && !animInView(state.camera, state.clock.elapsedTime, e[12]!, e[13]!, e[14]!)) { step.current.acc += delta; return; }
     const d = lodStep(step.current, delta, everyRef.current);
     if (d > 0) mixer.update(d);
   });

@@ -2,6 +2,7 @@ import { readFileSync, statSync } from 'node:fs';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { AI_FAR_EVERY, aiLodStep } from '@/components/world/hostile-ai';
+import { animInView, leanClip } from '@/components/world/anim-lod';
 import { pickLights, type LightReq } from '@/components/world/light-pool';
 import { MOUNTS_PER_FRAME, planCreatureMounts } from '@/components/world/world-entities';
 import { PAGE_PLAYER_SKIP, sameButPosition, sameExcept } from '@/game/state/player-sans-position';
@@ -90,6 +91,30 @@ describe('lag — pré-aquecimento dos modelos na carga', () => {
   });
   it('NUNCA trocar a esfera de corte do boneco com esqueleto pela da malha (30/10: no herói ela fica nos pés, minúscula — o corpo sumia)', () => {
     for (const f of ['glb-creature.tsx', 'glb-hero-mixamo.tsx']) expect(readFileSync('src/components/world/' + f, 'utf8')).not.toContain('boundingSphere = m.geometry.boundingSphere.clone()');
+  });
+});
+
+describe('lag — animação: só trilhas que mexem; fora da câmera não anima', () => {
+  it('trilha que fica o clipe inteiro no DESCANSO do osso sai; a que mexe (ou de osso que não existe) fica; original intacto', () => {
+    const root = new THREE.Object3D(), bone = new THREE.Object3D();
+    bone.name = 'osso'; bone.position.set(1, 2, 3); root.add(bone);
+    const clip = new THREE.AnimationClip('andar', 1, [
+      new THREE.VectorKeyframeTrack('osso.position', [0, 1], [1, 2, 3, 1, 2, 3]),          // descanso → sai
+      new THREE.VectorKeyframeTrack('osso.scale', [0, 1], [1, 1, 1, 1, 1, 1]),             // descanso → sai
+      new THREE.QuaternionKeyframeTrack('osso.quaternion', [0, 1], [0, 0, 0, 1, 0, 0.38, 0, 0.92]), // mexe → fica
+      new THREE.VectorKeyframeTrack('outro.position', [0, 1], [0, 0, 0, 0, 0, 0]),         // osso não existe → fica
+    ]);
+    const lean = leanClip(clip, root);
+    expect(lean.tracks.map((t) => t.name)).toEqual(['osso.quaternion', 'outro.position']);
+    expect(clip.tracks).toHaveLength(4);
+    expect(leanClip(clip, root)).toBe(lean); // 1× por clipe
+  });
+  it('bicho na frente da câmera anima; atrás (além da margem) não; colado atrás (sombra na borda) ainda anima', () => {
+    const cam = new THREE.PerspectiveCamera(55, 16 / 9, 0.3, 7000);
+    cam.position.set(0, 0, 0); cam.lookAt(0, 0, -1); cam.updateMatrixWorld();
+    expect(animInView(cam, 1, 0, 0, -20)).toBe(true);
+    expect(animInView(cam, 1, 0, 0, 50)).toBe(false);
+    expect(animInView(cam, 1, 0, 0, 5)).toBe(true);
   });
 });
 
