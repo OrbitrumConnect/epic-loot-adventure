@@ -1079,7 +1079,15 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .zs-btn--pop small { font-size: 10px; opacity: .75; }
 .zs-touch { position: absolute; right: 14px; bottom: 26px; z-index: 3; display: grid; grid-template-columns: repeat(2, auto); gap: 8px; }
 .zs-credit { position: absolute; right: 10px; bottom: 4px; z-index: 2; font-size: 9px; color: rgba(16, 32, 44, .85); background: rgba(255, 255, 255, .55); padding: 1px 6px; border-radius: 4px; pointer-events: none; }
-.game-shell[data-touch] .zs-btn--pop { bottom: 140px; }
+/* CELULAR (Pedro 30/10: "ajustar os triggers que estão sobrepostos"): Carro/Correr/Descer numa coluna estreita à direita
+   LOGO ACIMA do arco de poderes (--mobile-arc-top, publicado pelo arco) e o LEVANTAR da prancha acima deles */
+.game-shell[data-touch] .zs-touch { grid-template-columns: auto; right: 10px; bottom: calc(var(--mobile-arc-top, 232px) + 10px); gap: 6px; }
+.game-shell[data-touch] .zs-touch .zs-btn { min-width: 62px; height: 38px; padding: 0 10px; font-size: 12px; }
+.game-shell[data-touch] .zs-btn--pop { right: 10px; bottom: calc(var(--mobile-arc-top, 232px) + 10px + 3 * 38px + 2 * 6px + 12px); }
+/* a mensagem do mundo sobe pra altura da coluna (não fica embaixo do arco nem do joystick) e o crédito do mapa vai pro
+   alto, pequeno (cobria os botões de baixo do arco) */
+.game-shell[data-touch] .world-bottom { bottom: calc(var(--mobile-arc-top, 232px) + 10px); right: 90px; }
+.game-shell[data-touch] .zs-credit { top: 2px; bottom: auto; right: 6px; font-size: 7px; max-width: 44%; }
 @media (max-width: 700px) {
   .zs-hud { top: 70px; right: 10px; padding: 6px 9px; }
   .zs-hud strong { font-size: 11px; }

@@ -40,6 +40,13 @@ export function arcRadius(n: number, min: number, from = ARC_FROM, to = ARC_TO):
   return Math.max(min, Math.ceil((ARC_GAP * (n - 1)) / span));
 }
 
+/** Altura (px, do rodapé da tela do jogo) do TOPO do arco — margem do ATACAR (18) + meio ATACAR + anel de fora + meio
+ *  botão. Publicada em `--mobile-arc-top` (30/10, Pedro: "os triggers estão sobrepostos"): os botões da Zona Sul (Carro,
+ *  Correr, Descer, LEVANTAR) ficam numa coluna LOGO ACIMA — se o arco crescer (mais poderes), eles sobem junto. */
+export function arcTopPx(innerR: number, outerR: number, hasOuter: boolean): number {
+  return 18 + ATTACK_BTN / 2 + (hasOuter ? outerR : innerR) + ARC_BTN / 2;
+}
+
 /** Posições (dx, dy em px a partir do centro do ATACAR; dy negativo = pra cima) de `n` botões num arco. */
 export function arcLayout(n: number, radius: number, from = ARC_FROM, to = ARC_TO): { dx: number; dy: number }[] {
   if (n <= 0) return [];
@@ -141,6 +148,11 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
   const outerR = arcRadius(outer.length, Math.max(ARC_OUTER, innerR + ARC_RING_GAP), ARC_FROM + 4, ARC_TO - 4);
   const innerPos = arcLayout(inner.length, innerR);
   const outerPos = arcLayout(outer.length, outerR, ARC_FROM + 4, ARC_TO - 4);
+  const arcTop = arcTopPx(innerR, outerR, outer.length > 0);
+  useEffect(() => {
+    document.documentElement.style.setProperty('--mobile-arc-top', `${arcTop}px`);
+    return () => { document.documentElement.style.removeProperty('--mobile-arc-top'); };
+  }, [arcTop]);
 
   const arcBtn = (b: ArcButton, pos: { dx: number; dy: number }) => (
     <button key={b.id} type="button" aria-label={b.label}
