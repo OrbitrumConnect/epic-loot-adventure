@@ -428,6 +428,28 @@ function nearestNode(
   return best;
 }
 
+function nearestExploreTarget(snapshot: AutoSnapshot):
+  | { kind: 'resource'; position: Position }
+  | { kind: 'hunt'; position: Position }
+  | null {
+  let resource: AutoSnapshot['resources'][number] | null = null;
+  let resourceDistance = Infinity;
+  for (const node of snapshot.resources) {
+    if (node.depleted || node.canCollect === false) continue;
+    const distance = getDistance(snapshot.playerPosition, node.position);
+    if (distance < resourceDistance) { resource = node; resourceDistance = distance; }
+  }
+  if (resource) return { kind: 'resource', position: { ...resource.position } };
+  let creature: AutoSnapshot['creatures'][number] | null = null;
+  let creatureDistance = Infinity;
+  for (const candidate of snapshot.creatures) {
+    if (!isCreatureAlive(candidate) || candidate.hostile === false) continue;
+    const distance = getDistance(snapshot.playerPosition, candidate.position);
+    if (distance < creatureDistance) { creature = candidate; creatureDistance = distance; }
+  }
+  return creature ? { kind: 'hunt', position: { ...creature.position } } : null;
+}
+
 /**
  * Alcance de ataque COERENTE com a arma que o piloto vai realmente usar contra
  * um alvo a `dist` metros — não o máximo da hotbar. `pickWeaponFor` (mesma fonte
@@ -616,6 +638,15 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     // 4d. Acabou tudo em volta → VOLTA pro ponto onde ligou o automático (Pedro, 23/10). Ele vai
     // "somando" de bicho em bicho; quando não sobra nada no raio, retorna e espera renascer — e no
     // caminho, se aparecer bicho no raio, os passos acima pegam primeiro (re-decide a cada tique).
+    if (snapshot.autoExplore) {
+      const target = nearestExploreTarget(snapshot);
+      if (target) return {
+        kind: 'move',
+        to: target.position,
+        reason: target.kind === 'resource' ? 'Procurando recurso...' : 'Procurando caça...',
+      };
+    }
+
     const anchor = snapshot.autoAnchor;
     if (anchor && getDistance(snapshot.playerPosition, anchor) > ANCHOR_ARRIVAL) {
       return { kind: 'move', to: { ...anchor }, reason: 'Voltando pro ponto de partida' };

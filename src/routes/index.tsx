@@ -18,6 +18,7 @@ import { getEra, getHallLevel } from '@/game/systems/baseSystem';
 import { startAccountPersistence } from '@/game/state/account-persistence';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
+import { ZsMap } from '@/components/hud/zs-map';
 import { ToolCrafting } from '@/components/hud/tool-crafting';
 import { ItemSprite, ICON_MAP } from '@/components/hud/item-sprite';
 import { BasePanel, cityLockReason } from '@/components/hud/base-panel';
@@ -60,7 +61,7 @@ import { setWorldMap, useWorldMap } from '@/components/world/world-map-choice';
 const ZS_SKIP_KEYS = new Set(['KeyE', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyM', 'KeyK']);
 import { zsCtx } from '@/components/zona-sul/zs-context';
 /** Itens do menu que são do mapa velho (fila do piloto, mapa do vale) — somem na Zona Sul até ganharem a versão dela. */
-const ZS_HIDE_NAV = new Set(['objectives', 'map']);
+const ZS_HIDE_NAV = new Set(['objectives']);
 import { BossSpawner } from '@/components/world/boss-spawner';
 import { NightFlock } from '@/components/world/night-flock';
 import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
@@ -504,7 +505,7 @@ function Index() {
   });
 
   const panel = ui.panel;
-  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? 'Vale dos Ancestrais' : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : panel === 'ranks' ? 'Ranking' : panel === 'rooms' ? 'Salas' : 'Tribo dos Guardiões';
+  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? (zs ? 'Zona Sul · Rio' : 'Vale dos Ancestrais') : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : panel === 'ranks' ? 'Ranking' : panel === 'rooms' ? 'Salas' : 'Tribo dos Guardiões';
 
   // Triggers do mundo (piloto/pegar/atacar/especiais/câmera/casa). Mesma fonte
   // renderizada em dois lugares: sobre o mundo (desktop) e no rodapé ao lado do
@@ -912,7 +913,7 @@ function Index() {
 
           {panel && (
             <div className="modal-backdrop">
-              <section className="game-panel" data-wide={panel === 'inventory' || panel === 'loot' || undefined} role="dialog" aria-modal="true" aria-label={title}>
+              <section className="game-panel" data-wide={panel === 'inventory' || panel === 'loot' || (panel === 'map' && zs) || undefined} data-map={panel === 'map' && zs || undefined} role="dialog" aria-modal="true" aria-label={title}>
                 <div className="panel-heading">
                   <div>
                     <small>{panel === 'map' ? 'Território livre' : panel === 'home' ? 'Os Guardiões' : panel === 'base' ? 'Terreno e muralhas' : panel === 'training' ? 'Tropas e muralhas' : 'TRIBOS'}</small>
@@ -986,7 +987,11 @@ function Index() {
                   </>
                 )}
 
-                {panel === 'map' && (
+                {panel === 'map' && zs && (
+                  <ZsMap onClose={() => setPanel(null)} />
+                )}
+
+                {panel === 'map' && !zs && (
                   <>
                     <div className="map-large"><WorldMap size="large" /></div>
                     <WorldMapLegend />

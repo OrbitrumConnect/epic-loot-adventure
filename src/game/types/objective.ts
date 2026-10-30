@@ -78,6 +78,7 @@ export type AutoSnapshot = {
   autoPotion?: boolean;
   /** Raio (m) pra caçar o bicho mais próximo quando ocioso. 0/ausente = não caça sozinho. */
   autoHuntRadius?: number;
+  autoExplore?: boolean;
   /** Alcance de ataque EFETIVO (m): o maior entre as armas usáveis da hotbar, pra
    *  o piloto atirar de longe com arco/pistola/rifle. Ausente = melee. */
   attackRange?: number;
