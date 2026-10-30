@@ -85,9 +85,11 @@ describe('lag — pré-aquecimento dos modelos na carga', () => {
     expect(w).toContain('<ZsWarmUp c={c} playerRef={playerRef} />');
     expect(w).toContain('<ZsWarmOverlay />');
   });
-  it('navio: árvore de raio (BVH) antes de escanear o convés (eram ~10 s de tela congelada); esfera pronta nos bonecos', () => {
+  it('navio: árvore de raio (BVH) antes de escanear o convés (eram ~10 s de tela congelada)', () => {
     expect(readFileSync('src/components/zona-sul/zs-ship.tsx', 'utf8')).toContain('computeBoundsTree.call(g)');
-    for (const f of ['glb-creature.tsx', 'glb-hero-mixamo.tsx']) expect(readFileSync('src/components/world/' + f, 'utf8')).toContain('(m as THREE.SkinnedMesh).boundingSphere = m.geometry.boundingSphere.clone()');
+  });
+  it('NUNCA trocar a esfera de corte do boneco com esqueleto pela da malha (30/10: no herói ela fica nos pés, minúscula — o corpo sumia)', () => {
+    for (const f of ['glb-creature.tsx', 'glb-hero-mixamo.tsx']) expect(readFileSync('src/components/world/' + f, 'utf8')).not.toContain('boundingSphere = m.geometry.boundingSphere.clone()');
   });
 });
 

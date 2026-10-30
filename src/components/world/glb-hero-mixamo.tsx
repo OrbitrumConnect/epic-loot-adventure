@@ -413,9 +413,6 @@ export function GlbHeroMixamo({
           if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
           m.geometry.userData['_inflated'] = true;
         }
-        // boneco com esqueleto: o three novo IGNORA a esfera da malha e recalcula a dele vértice por vértice (com os ossos)
-        // na 1ª vez que aparece — 10–30 ms por bicho/inimigo novo (30/10, lag). Usa a mesma esfera inflada acima.
-        if ((m as THREE.SkinnedMesh).isSkinnedMesh && m.geometry?.boundingSphere) (m as THREE.SkinnedMesh).boundingSphere = m.geometry.boundingSphere.clone();
       }
     });
     meshes.current = list;
