@@ -58,7 +58,8 @@ import { setWorldMap, useWorldMap } from '@/components/world/world-map-choice';
 /** Teclas que na Zona Sul são DELA: E (carro/pegar — ela decide), V (câmera do carro), P (FPS dela), K (vista de cima)
  *  e as do mapa velho (M mapa do vale, L detalhe do chão, crase câmera livre). Combate (Q/R/F/Z/X/T/Y), piloto (G),
  *  hotbar, I, B e Esc valem igual. C: na água/dirigindo é dela (mergulhar/descer); em terra é o Raio do jogo. */
-const ZS_SKIP_KEYS = new Set(['KeyE', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyM', 'KeyK']);
+// 30/10: M saiu daqui — na Zona Sul abre o mapa DELA (zs-map, PR #14 do Caio)
+const ZS_SKIP_KEYS = new Set(['KeyE', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyK']);
 import { zsCtx } from '@/components/zona-sul/zs-context';
 /** Itens do menu que são do mapa velho (fila do piloto, mapa do vale) — somem na Zona Sul até ganharem a versão dela. */
 const ZS_HIDE_NAV = new Set(['objectives']);

@@ -92,3 +92,32 @@ describe('kit de mobilidade no loot (prancha 5, asa-delta 8, skate 15)', () => {
     expect(useGameStore.getState().player.inventory.slots[idx]?.itemId).toBe('hang_glider');
   });
 });
+
+describe('rasante e manobras (Pedro 30/10)', () => {
+  it('asa: RASANTE (W) inclina o bico pra baixo e desce rápido; S com velocidade sobrando SOBE (pull-up)', () => {
+    const s = newGlide(0, 300);
+    run(90, () => glideStep(s, { steer: 0, pitch: 1 }, 0, dt));
+    expect(s.pitch).toBeGreaterThan(0.4); // bico pra baixo
+    expect(s.speed).toBeGreaterThan(GLIDE.CRUISE + 8);
+    const yLow = s.y;
+    run(30, () => glideStep(s, { steer: 0, pitch: -1 }, 0, dt));
+    expect(s.y).toBeGreaterThan(yLow); // trocou velocidade por altura
+    expect(s.pitch).toBeLessThan(0);   // bico pra cima
+  });
+  it('skate: 2º pulo no AR é mais alto e dá kickflip; A/D no ar gira 360 e o pouso nomeia a manobra', () => {
+    const flat = () => 0, flatSlope = () => 0;
+    const one = newSkate(0, 0.35); let x = 0, z = 0, top1 = 0;
+    ({ x, z } = skateStep(one, { throttle: 0, steer: 0, turbo: false, hop: true }, x, z, dt, flat, flatSlope));
+    run(60, () => { ({ x, z } = skateStep(one, { throttle: 0, steer: 0, turbo: false, hop: false }, x, z, dt, flat, flatSlope)); top1 = Math.max(top1, one.y); });
+    const two = newSkate(0, 0.35); let top2 = 0, sawFlip = false;
+    ({ x, z } = skateStep(two, { throttle: 0, steer: 0, turbo: false, hop: true }, x, z, dt, flat, flatSlope));
+    run(8, () => { ({ x, z } = skateStep(two, { throttle: 0, steer: 0, turbo: false, hop: false }, x, z, dt, flat, flatSlope)); });
+    ({ x, z } = skateStep(two, { throttle: 0, steer: 0, turbo: false, hop: true }, x, z, dt, flat, flatSlope)); // 2º pulo
+    run(90, () => { ({ x, z } = skateStep(two, { throttle: 0, steer: 1, turbo: false, hop: false }, x, z, dt, flat, flatSlope)); top2 = Math.max(top2, two.y); if (two.flip > 0) sawFlip = true; });
+    expect(top2).toBeGreaterThan(top1 + 0.5);
+    expect(sawFlip).toBe(true);
+    expect(two.air).toBe(false);
+    expect(two.trick).toMatch(/kickflip/);
+    expect(two.trick).toMatch(/^\d+/); // girou (360/540/720…)
+  });
+});

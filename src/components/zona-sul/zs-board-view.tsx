@@ -11,7 +11,8 @@ export const BOARD_URL = '/zona-sul/board.glb';
 export const BOARD_LEN = 2.7; // m — Pedro 28/10: "a prancha está pequena" (2,0 → 2,7, tipo longboard)
 export const BOARD_WIDEN = 1.4; // largura × 1,4 (≈ 0,9 m): os dois pés cabem no deck
 
-export type BoardPose = { x: number; y: number; z: number; yaw: number; roll: number; visible: boolean };
+/** `pitch` (opcional): inclinação do bico (+ = pra baixo) — a asa-delta usa no rasante */
+export type BoardPose = { x: number; y: number; z: number; yaw: number; roll: number; visible: boolean; pitch?: number };
 export const newBoardPose = (): BoardPose => ({ x: 0, y: 0, z: 0, yaw: 0, roll: 0, visible: false });
 
 export function ZsBoardView({ poseRef }: { poseRef: React.MutableRefObject<BoardPose> }) {

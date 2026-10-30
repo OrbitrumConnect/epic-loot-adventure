@@ -12,8 +12,9 @@ import type { BoardPose } from './zs-board-view';
 
 export const SKATE_URL = '/zona-sul/hover-skate.glb';
 export const GLIDER_URL = '/zona-sul/hang-glider.glb';
-/** comprimento do skate (m) e envergadura da asa-delta (m) — asa de verdade tem ~10 m */
-export const SKATE_LEN = 1.35, GLIDER_SPAN = 10;
+/** comprimento do skate (m) e envergadura da asa-delta (m) — asa de verdade tem ~10 m. Skate: Pedro 30/10 "a base
+ *  tá um pouco pequena, uns 18–20%" → 1,35 → 1,6 m e 20% mais LARGO (os dois pés cabem). */
+export const SKATE_LEN = 1.6, SKATE_WIDEN = 1.2, GLIDER_SPAN = 10;
 
 function prepare(scene: THREE.Object3D, size: number, kind: 'skate' | 'glider'): THREE.Object3D {
   const c = scene.clone(true);
@@ -27,6 +28,7 @@ function prepare(scene: THREE.Object3D, size: number, kind: 'skate' | 'glider'):
   const b = new THREE.Box3().setFromObject(c), s = b.getSize(new THREE.Vector3());
   const k = size / Math.max(s.x, s.y, s.z);
   c.scale.multiplyScalar(k);
+  if (kind === 'skate') c.scale.x *= SKATE_WIDEN; // largura (o comprimento já está em z)
   c.updateMatrixWorld(true);
   const b2 = new THREE.Box3().setFromObject(c), ctr = b2.getCenter(new THREE.Vector3());
   c.position.sub(new THREE.Vector3(ctr.x, kind === 'skate' ? b2.max.y : b2.min.y, ctr.z));
@@ -79,7 +81,7 @@ export function ZsGearView({ kind, poseRef }: { kind: 'skate' | 'glider'; poseRe
     g.visible = p.visible;
     if (!p.visible) return;
     g.position.set(p.x, p.y, p.z);
-    g.rotation.set(0, p.yaw, p.roll, 'YXZ');
+    g.rotation.set(p.pitch ?? 0, p.yaw, p.roll, 'YXZ');
   });
   return (
     <group ref={group} visible={false}>

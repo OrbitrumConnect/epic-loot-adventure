@@ -48,6 +48,7 @@ import { BurstRuntime } from '@/components/world/burst-runtime';
 import { AutoPilot } from '@/components/world/auto-pilot';
 import { BackgroundSim } from '@/components/world/background-sim';
 import { AssetBoundary } from '@/components/world/asset-boundary';
+import { HarvestNodes } from '@/components/world/harvest-nodes';
 import { SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
 import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
@@ -339,7 +340,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         const turbo = k.has('ShiftLeft') || k.has('ShiftRight');
         const space = k.has('Space');
         const bx = (x: number) => Math.max(t.x0, Math.min(t.x0 + (t.w - 1) * t.cell, x)), bz = (z: number) => Math.max(t.z0, Math.min(t.z0 + (t.h - 1) * t.cell, z));
-        let status = '', lift = 0, roll = 0;
+        let status = '', lift = 0, roll = 0, pitchBody = 0, snapYaw = false;
         if (gl) {
           const r = glideStep(gl, { steer, pitch: fwd }, surfaceAt(p.x, p.z), dt);
           p.x = bx(p.x + r.dx); p.z = bz(p.z + r.dz); p.y = gl.y;
@@ -348,23 +349,35 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
             glide.current = null; p.y = Math.max(p.y, under); vy.current = 0; grounded.current = true;
             swimVel.current.set(Math.sin(gl.yaw) * Math.min(gl.speed, ZS_RUN), Math.cos(gl.yaw) * Math.min(gl.speed, ZS_RUN));
           }
-          facing.current = gl.yaw; action.current = 'glide'; speed.current = gl.speed; roll = gl.bank;
-          const gp = gearRef.glider; gp.x = p.x; gp.y = p.y + 1.15; gp.z = p.z; gp.yaw = gl.yaw; gp.roll = -gl.bank;
-          status = gl.stalled ? 'ESTOL! solte o S ou aperte W pra ganhar velocidade' : 'asa-delta · ' + Math.round(gl.speed * 3.6) + ' km/h · altura ' + Math.round(p.y - under) + ' m · A/D vira · W mergulha · S empina';
+          facing.current = gl.yaw; action.current = 'glide'; speed.current = gl.speed; roll = gl.bank; pitchBody = gl.pitch;
+          // herói DENTRO do triângulo (Pedro 30/10: "na foto o personagem está abaixo") — o trapézio ~1 m abaixo dos pés
+          // do modelo (o corpo deitado fica entre a quilha e a barra); o bico inclina no rasante e na subida
+          // a asa fica PRESA num ponto do corpo (0,95 m abaixo da origem do herói) que gira JUNTO no rasante — os dois
+          // inclinam como uma peça só (antes cada um girava no seu ponto e se separavam de lado)
+          const gp = gearRef.glider, hang = -0.95, ly = hang * Math.cos(gl.pitch), lz = hang * Math.sin(gl.pitch);
+          gp.x = p.x + Math.sin(gl.yaw) * lz; gp.y = p.y + ly; gp.z = p.z + Math.cos(gl.yaw) * lz; gp.yaw = gl.yaw; gp.roll = -gl.bank; gp.pitch = gl.pitch;
+          status = gl.stalled ? 'ESTOL! solte o S ou aperte W pra ganhar velocidade'
+            : 'asa-delta · ' + Math.round(gl.speed * 3.6) + ' km/h · altura ' + Math.round(p.y - under) + ' m · A/D vira · W rasante · S sobe/freia';
         } else if (sk) {
           const r = skateStep(sk, { throttle: fwd, steer, turbo, hop: space && !spaceWas.current }, p.x, p.z, dt, surfaceAt, (x, z) => zsSlopeDeg(t, x, z));
           p.x = bx(r.x); p.z = bz(r.z); p.y = sk.y;
-          facing.current = sk.yaw + STANCE; action.current = 'surf'; speed.current = 0; lift = SURF_LIFT;
-          const sp = gearRef.skate; sp.x = p.x; sp.y = p.y; sp.z = p.z; sp.yaw = sk.yaw; sp.roll = Math.max(-0.35, Math.min(0.35, -steer * Math.min(1, Math.abs(sk.speed) / SKATE.MAX) * 0.3));
-          status = 'skate voador · ' + Math.round(Math.abs(sk.speed) * 3.6) + ' km/h · W acelera · S freia · A/D curva · Shift turbo · Espaço pula' + (zsHeightAt(t, p.x, p.z) < ZS_WATER_Y ? ' · sobre a água' : '');
+          if (!sk.air) sk.spin *= Math.exp(-dt * 10); // pousou fora de volta inteira: assenta suave
+          facing.current = sk.yaw + sk.spin + STANCE; action.current = 'surf'; speed.current = 0; lift = SURF_LIFT;
+          snapYaw = sk.air || Math.abs(sk.spin) > 0.01; // no giro o corpo acompanha na hora (sem atraso)
+          const sp = gearRef.skate; sp.x = p.x; sp.y = p.y; sp.z = p.z; sp.yaw = sk.yaw + sk.spin; sp.pitch = 0;
+          // kickflip: o skate dá uma volta no eixo do comprimento; no chão inclina na curva
+          sp.roll = sk.flip > 0 ? sk.flip * Math.PI * 2 : Math.max(-0.35, Math.min(0.35, -steer * Math.min(1, Math.abs(sk.speed) / SKATE.MAX) * 0.3));
+          status = (sk.trickT > 0 ? sk.trick.toUpperCase() + ' · ' : '') + (sk.air ? (sk.jumps < 2 ? 'NO AR · Espaço de novo = pulo duplo + kickflip · A/D gira 360' : 'NO AR · A/D gira 360')
+            : 'skate voador · ' + Math.round(Math.abs(sk.speed) * 3.6) + ' km/h · W acelera · S freia · A/D curva · Shift turbo · Espaço pula (2× = kickflip)')
+            + (zsHeightAt(t, p.x, p.z) < ZS_WATER_Y ? ' · sobre a água' : '');
         }
         spaceWas.current = space;
         grounded.current = !glide.current ? true : false; zsCtx.inWater = false; ride.current = null; dive.current = 0;
         if (group.current) {
           group.current.position.set(p.x, p.y + lift, p.z);
-          let d = facing.current - yawNow.current; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
-          yawNow.current += d * Math.min(1, dt * 10);
-          group.current.rotation.order = 'YXZ'; group.current.rotation.y = yawNow.current; group.current.rotation.x = 0; group.current.rotation.z = roll * 0.6;
+          if (snapYaw) yawNow.current = facing.current;
+          else { let d = facing.current - yawNow.current; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; yawNow.current += d * Math.min(1, dt * 10); }
+          group.current.rotation.order = 'YXZ'; group.current.rotation.y = yawNow.current; group.current.rotation.x = pitchBody; group.current.rotation.z = roll * 0.6;
           heroFacing.yaw = yawNow.current;
         }
         // câmera de PERSEGUIÇÃO atrás do rumo (arrastar olha em volta; 1,5 s depois volta) — igual ao carro
@@ -881,6 +894,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           {ready && (
             <AssetBoundary label="ZsCombate" fallback={null}>
               <Suspense fallback={null}><Camps c={c} /></Suspense>
+              {/* recursos de colher (madeira na mata, pedra no campo — PR #14): a mesma peça do Vale, VISÍVEIS */}
+              <Suspense fallback={null}><HarvestNodes c={c} /></Suspense>
               <Suspense fallback={null}><Enemies c={c} playerRef={playerRef} cameraMode="third" /></Suspense>
               <Suspense fallback={null}><CombatFeedback /></Suspense>
               <Suspense fallback={null}><Projectiles /></Suspense>
