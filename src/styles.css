@@ -1175,6 +1175,9 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .zs-species-icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; background: var(--world-cloak); color: var(--world-light); flex: 0 0 auto; }
 .zs-species-icon[data-peaceful] { background: var(--world-water); }
 .zs-species-icon svg { width: 15px; height: 15px; }
+/* sprite real do bicho (render do modelo): maior, fundo neutro, imagem inteira visível */
+.zs-species-icon[data-sprite] { width: 40px; height: 40px; background: color-mix(in oklab, var(--world-light) 8%, transparent); border: 1px solid var(--border); }
+.zs-species-icon img { width: 100%; height: 100%; object-fit: contain; }
 .zs-species-id strong { display: block; font-size: 13px; color: var(--world-light); line-height: 1.15; }
 .zs-species-id small { font-size: 10px; color: var(--muted-foreground); }
 .zs-loot { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

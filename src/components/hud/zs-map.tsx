@@ -66,6 +66,22 @@ function creatureIcon(iconName: string | undefined) {
   return CREATURE_ICON[iconName ?? ''] ?? Skull;
 }
 
+/** Espécies com sprite própria (render do modelo do jogo, recortado) em public/assets/creatures/<id>.webp. */
+const CREATURE_SPRITE = new Set(['boar', 'goose', 'wolf_alpha', 'bear', 'deer', 'rabbit', 'pheasant', 'pigeon', 'monster', 'flintmaw']);
+
+/** Carinha do bicho: a sprite real (modelo do jogo); se faltar/falhar, cai no ícone Lucide. */
+function CreatureFace({ speciesId, iconName, peaceful }: { speciesId: string; iconName: string | undefined; peaceful?: boolean }) {
+  const [useSprite, setUseSprite] = useState(CREATURE_SPRITE.has(speciesId));
+  const Icon = creatureIcon(iconName);
+  return (
+    <span className="zs-species-icon" data-peaceful={peaceful || undefined} data-sprite={useSprite || undefined}>
+      {useSprite
+        ? <img src={`/assets/creatures/${speciesId}.webp`} alt="" draggable={false} onError={() => setUseSprite(false)} />
+        : <Icon strokeWidth={1.8} />}
+    </span>
+  );
+}
+
 export type ZsMapProps = { onClose: () => void };
 
 export function ZsMap({ onClose }: ZsMapProps) {
@@ -192,13 +208,12 @@ export function ZsMap({ onClose }: ZsMapProps) {
               {selected.speciesIds.map(id => {
                 const def = CREATURES[id];
                 if (!def) return null;
-                const Icon = creatureIcon(def.icon);
                 const peaceful = def.peaceful;
                 const loot = def.lootTable.slice().sort((a, b) => b.chance - a.chance);
                 return (
                   <div className="zs-species" key={id}>
                     <div className="zs-species-head">
-                      <span className="zs-species-icon" data-peaceful={peaceful || undefined}><Icon strokeWidth={1.8} /></span>
+                      <CreatureFace speciesId={id} iconName={def.icon} peaceful={peaceful} />
                       <div className="zs-species-id">
                         <strong>{def.name}</strong>
                         <small>Nv {creatureLevel(def)} · {creatureXp(def)} XP · {peaceful ? 'pacífico' : 'hostil'}</small>
