@@ -1141,7 +1141,7 @@ function Index() {
                       data-active={ui.selectedHotbar === i}
                       onClick={() => useHotbarSlot(i)}
                       onDragOver={e => e.preventDefault()}
-                      onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < player.inventory.slots.length) useHotbarSlot(n); }}>
+                      onDrop={e => { e.preventDefault(); const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < player.inventory.slots.length) useGameStore.getState().assignHotbar(i, n); }}>
                       <span className="slot-key">{i + 1}</span>
                       {item ? <ItemSprite itemId={item.id} size={40} className="hotbar-sprite" /> : <Package strokeWidth={1.3} aria-hidden="true" />}
                       <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>

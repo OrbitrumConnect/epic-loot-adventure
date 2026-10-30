@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useGameStore } from '@/game/state/game-store';
 import { ITEMS } from '@/game/data/items';
@@ -67,5 +68,30 @@ describe('ficha do personagem usa as contas do combate', () => {
     expect(bagTabOf('chest_rare')).toBe('gear');
     expect(bagTabOf('health_potion')).toBe('use');
     expect(bagTabOf('wood')).toBe('mat');
+  });
+});
+
+describe('pôr item numa tecla da hotbar (bug 29/10: soltar na hotbar só SELECIONAVA)', () => {
+  beforeEach(clean);
+  it('coloca, tira da tecla antiga (sem duplicar), ignora espaço vazio, e arrastar usa isso', () => {
+    give('surfboard');
+    const inv = useGameStore.getState().player.inventory;
+    const idx = inv.slots.findIndex(s => s.itemId === 'surfboard');
+    useGameStore.getState().assignHotbar(2, idx);
+    expect(useGameStore.getState().player.inventory.hotbar.slots[2]).toBe(idx);
+    expect(useGameStore.getState().ui.message).toMatch(/tecla 3/);
+    useGameStore.getState().assignHotbar(9, idx);
+    const hb = useGameStore.getState().player.inventory.hotbar.slots;
+    expect(hb[9]).toBe(idx);
+    expect(hb.filter(v => v === idx)).toHaveLength(1);
+    const empty = inv.slots.findIndex(s => s.itemId === null);
+    useGameStore.getState().assignHotbar(4, empty);
+    expect(useGameStore.getState().player.inventory.hotbar.slots[4]).not.toBe(empty);
+    // tecla selecionada com a prancha: vai pra mão (nível ≥ 5)
+    useGameStore.setState(s => ({ player: { ...s.player, level: 11 } }));
+    useGameStore.getState().useHotbarSlot(9);
+    expect(useGameStore.getState().ui.selectedHotbar).toBe(9);
+    const idxSrc = fs.readFileSync('src/routes/index.tsx', 'utf8');
+    expect(idxSrc).toContain('useGameStore.getState().assignHotbar(i, n)');
   });
 });

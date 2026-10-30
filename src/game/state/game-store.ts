@@ -207,6 +207,10 @@ type GameActions = {
   /** Tira o equipamento de um slot (volta pro "nu"). */
   unequipSlot: (slot: EquipmentKey) => void;
   useHotbarSlot: (index: number, opts?: { manual?: boolean }) => void;
+  /** COLOCA o item do espaço `invIndex` da mochila na tecla `hotIndex` da hotbar (arrastar / "Pôr na hotbar"). Se ele já
+   *  estava em outra tecla, sai de lá. 29/10 (Pedro: "a prancha no loot e não consigo pôr no hotkey") — soltar na
+   *  hotbar chamava useHotbarSlot (SELECIONAR), não colocava nada. */
+  assignHotbar: (hotIndex: number, invIndex: number) => void;
   /** Descarta (joga fora) o item do slot do inventário — tira da hotbar/equipamento também. */
   dropItem: (slotIndex: number) => void;
   craftItem: (recipeId: string) => void;
@@ -1585,6 +1589,20 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     } else {
       set(s => ({ ui: { ...s.ui, message: 'Nada por perto pra pegar.' } }));
     }
+  },
+
+  assignHotbar: (hotIndex, invIndex) => {
+    const inv = get().player.inventory;
+    const slot = inv.slots[invIndex];
+    if (!slot?.itemId || hotIndex < 0 || hotIndex > 99) return;
+    const name = ITEMS[slot.itemId]?.name ?? 'Item';
+    const slots = inv.hotbar.slots.map(v => (v === invIndex ? null : v));
+    while (slots.length <= hotIndex) slots.push(null);
+    slots[hotIndex] = invIndex;
+    set(s => ({
+      player: { ...s.player, inventory: { ...s.player.inventory, hotbar: { ...s.player.inventory.hotbar, slots } } },
+      ui: { ...s.ui, message: `${name} na tecla ${hotIndex === 9 ? 0 : hotIndex + 1}.` },
+    }));
   },
 
   useHotbarSlot: (index: number, opts?: { manual?: boolean }) => {

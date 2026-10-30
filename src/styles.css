@@ -1089,3 +1089,10 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .cs-lock { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); padding: 0 4px; border-radius: 3px; font: 800 8px var(--font-sans); color: #fde68a; background: rgba(0,0,0,.75); white-space: nowrap; }
 .cs-cell:has(.cs-lock) img, .cs-cell:has(.cs-lock) > svg { opacity: .4; filter: grayscale(1); }
 .cs-locked { margin: 8px 0 0; font-size: 11px; font-weight: 700; color: #fde68a; }
+
+/* ficha: pôr item numa tecla da hotbar (29/10) */
+.cs-hotkeys { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 4px 0 8px; font-size: 11px; color: var(--muted-foreground); }
+.cs-hotkeys span { margin-right: 4px; }
+.cs-hotkeys button { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); font: 700 11px var(--font-sans); cursor: pointer; }
+.cs-hotkeys button:hover { border-color: var(--primary); }
+.cs-hotkeys button[data-on] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
