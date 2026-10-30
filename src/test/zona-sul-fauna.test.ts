@@ -83,3 +83,25 @@ describe('Zona Sul — fauna por região e acampamentos na mata', () => {
     expect(v.player.position).toEqual({ x: SAFE_ZONE.x, z: SAFE_ZONE.z });
   });
 });
+
+describe('Zona Sul — postes nas pistas e o sol do relógio do jogo', () => {
+  it('postes na BEIRA das pistas, em terra seca e plana, a ~36 m uns dos outros; cálculo rápido', async () => {
+    const { zsLampSpots, LAMP_SPACING } = await import('@/components/zona-sul/zs-daynight');
+    const t0 = performance.now();
+    const spots = zsLampSpots(t);
+    expect(performance.now() - t0).toBeLessThan(800);
+    expect(spots.length).toBeGreaterThan(80);
+    for (const s of spots) {
+      expect(zsHeightAt(t, s.x, s.z)).toBeGreaterThan(0.5);
+      expect(near(q, s.x, s.z, ZS_SURF.road, 6)).toBe(true);
+      for (const o of spots) if (o !== s) expect((o.x - s.x) ** 2 + (o.z - s.z) ** 2).toBeGreaterThanOrEqual(LAMP_SPACING * LAMP_SPACING);
+    }
+  }, 30_000); // terreno real inteiro: com a bateria toda rodando junto passa de 5 s
+  it('sol: nasce a LESTE às 6h, alto pelo NORTE ao meio-dia, põe a OESTE às 18h, abaixo do horizonte de noite', async () => {
+    const { sunDirAt } = await import('@/components/zona-sul/zs-daynight');
+    expect(sunDirAt(6).x).toBeGreaterThan(0.8);
+    const noon = sunDirAt(12); expect(noon.y).toBeGreaterThan(0.8); expect(noon.z).toBeLessThan(0);
+    expect(sunDirAt(18).x).toBeLessThan(-0.8);
+    expect(sunDirAt(0).y).toBeLessThan(0);
+  });
+});

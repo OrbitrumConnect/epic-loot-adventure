@@ -1202,3 +1202,10 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .zs-species-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .zs-card-head p { -webkit-line-clamp: 1; }
 }
+
+/* ficha: pôr item numa tecla da hotbar (29/10) */
+.cs-hotkeys { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 4px 0 8px; font-size: 11px; color: var(--muted-foreground); }
+.cs-hotkeys span { margin-right: 4px; }
+.cs-hotkeys button { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); font: 700 11px var(--font-sans); cursor: pointer; }
+.cs-hotkeys button:hover { border-color: var(--primary); }
+.cs-hotkeys button[data-on] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }

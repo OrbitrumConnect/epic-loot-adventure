@@ -58,7 +58,7 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
-import { grantSurfboard, SURFBOARD_ID } from '../systems/zonaSulKit';
+import { grantMobilityKit, isMobilityItem, SURFBOARD_ID } from '../systems/zonaSulKit';
 import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
@@ -71,7 +71,7 @@ import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scal
 import { eliteLoot, eliteXp } from '../systems/difficultySystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
 import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, tornadoPositions, tornadoCount, tornadoDamage, TORNADO_HIT_RADIUS, TORNADO_PUSH, TORNADO_BASE_WAVES, TORNADO_EXTEND_WAVES, dist2, type Vec2 } from '../systems/powerSystem';
-import { SAVE_KEY } from '../systems/persistenceSystem';
+import { restoreWave, SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
   pushEvents, shotEvent, xpEvent,
@@ -207,6 +207,10 @@ type GameActions = {
   /** Tira o equipamento de um slot (volta pro "nu"). */
   unequipSlot: (slot: EquipmentKey) => void;
   useHotbarSlot: (index: number, opts?: { manual?: boolean }) => void;
+  /** COLOCA o item do espaço `invIndex` da mochila na tecla `hotIndex` da hotbar (arrastar / "Pôr na hotbar"). Se ele já
+   *  estava em outra tecla, sai de lá. 29/10 (Pedro: "a prancha no loot e não consigo pôr no hotkey") — soltar na
+   *  hotbar chamava useHotbarSlot (SELECIONAR), não colocava nada. */
+  assignHotbar: (hotIndex: number, invIndex: number) => void;
   /** Descarta (joga fora) o item do slot do inventário — tira da hotbar/equipamento também. */
   dropItem: (slotIndex: number) => void;
   craftItem: (recipeId: string) => void;
@@ -275,6 +279,8 @@ type GameActions = {
   drinkPotion: () => void;
   /** Zona Sul: entrega a prancha (1ª entrada) — mochila + espaço livre da hotbar. */
   grantSurfboard: () => void;
+  /** Kit de mobilidade (prancha, asa-delta, skate voador): entrega o que faltar. `grantSurfboard` = o mesmo (nome antigo). */
+  grantMobilityKit: () => void;
   /** TROCA DE MAPA (o perfil já foi trocado em world-profile): bichos, acampamentos, recursos e posição do mapa novo.
    *  Zona Sul: a fauna vem pronta (precisa do terreno) e a posição é a do herói de lá. */
   enterWorld: (map: MapId, zs?: { creatures: CreatureState[]; position: Position; harvestNodes?: HarvestNodeState[]; resources?: ResourceNode[] }) => void;
@@ -1588,6 +1594,20 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
   },
 
+  assignHotbar: (hotIndex, invIndex) => {
+    const inv = get().player.inventory;
+    const slot = inv.slots[invIndex];
+    if (!slot?.itemId || hotIndex < 0 || hotIndex > 99) return;
+    const name = ITEMS[slot.itemId]?.name ?? 'Item';
+    const slots = inv.hotbar.slots.map(v => (v === invIndex ? null : v));
+    while (slots.length <= hotIndex) slots.push(null);
+    slots[hotIndex] = invIndex;
+    set(s => ({
+      player: { ...s.player, inventory: { ...s.player.inventory, hotbar: { ...s.player.inventory.hotbar, slots } } },
+      ui: { ...s.ui, message: `${name} na tecla ${hotIndex === 9 ? 0 : hotIndex + 1}.` },
+    }));
+  },
+
   useHotbarSlot: (index: number, opts?: { manual?: boolean }) => {
     const state = get();
     const invSlotIdx = state.player.inventory.hotbar.slots[index];
@@ -1657,6 +1677,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   dropItem: (slotIndex) => {
     const state = get();
     const itemId = state.player.inventory.slots[slotIndex]?.itemId;
+    // KIT DE MOBILIDADE = FIXO do personagem (Pedro 29/10: "ela tem que estar no loot"): não sai da mochila
+    if (isMobilityItem(itemId)) { set(s => ({ ui: { ...s.ui, message: `🏄 ${ITEMS[itemId!]?.name ?? 'Esse item'} é seu pra sempre — não dá pra descartar.` } })); return; }
     const quantity = itemId ? state.player.inventory.slots[slotIndex]!.quantity : 0;
     if (!itemId || quantity <= 0) return;
     const inventory = { ...state.player.inventory, slots: state.player.inventory.slots.map((slot, i) => i === slotIndex ? { itemId: null, quantity: 0 } : { ...slot }) };
@@ -2367,6 +2389,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const camps = createCamps(Date.now()); // CAMP_PLACEMENTS já é o do mapa ativo
     const wild = map === 'classic' ? [...createInitialCreatures(), ...createWildCreatures()] : zs?.creatures ?? [];
     set(s => ({
+      // VOLTA AO VALE: os bichos da horda não existem mais (o mundo foi recriado) → a onda segue a MESMA regra de quando
+      // o jogo reabre: combate vira a paz da mesma onda; paz que venceu enquanto você estava fora = 1 min de folga.
+      ...(map === 'classic' ? { wave: restoreWave(s.wave, !!s.playerBase, Date.now()) } : {}),
       creatures: [...wild, ...camps.creatures],
       camps: camps.camps,
       harvestNodes: map === 'classic' ? createHarvestNodes() : zs?.harvestNodes ?? [],
@@ -2377,12 +2402,19 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }));
   },
 
-  grantSurfboard: () => {
-    const r = grantSurfboard(get().player.inventory);
-    if (r.granted) set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: isUnlocked(SURFBOARD_ID, s.player.level)
-      ? '🏄 Você ganhou uma Prancha de surf — selecione na hotbar e entre no mar.'
-      : `🏄 Você ganhou uma Prancha de surf — ela libera no nível ${unlockLevel(SURFBOARD_ID)}.` } }));
-    else if (r.full) set(s => ({ ui: { ...s.ui, message: 'Mochila cheia: libere espaço para receber a Prancha de surf.' } }));
+  grantSurfboard: () => get().grantMobilityKit(),
+
+  grantMobilityKit: () => {
+    const r = grantMobilityKit(get().player.inventory);
+    if (!r.granted.length) return;
+    const names = r.granted.map(id => {
+      const lv = unlockLevel(id), mine = get().player.level >= lv;
+      return `${ITEMS[id]?.name ?? id}${mine ? '' : ` (nível ${lv})`}`;
+    });
+    const solo = r.granted.length === 1 && r.granted[0] === SURFBOARD_ID && isUnlocked(SURFBOARD_ID, get().player.level);
+    set(s => ({ player: { ...s.player, inventory: r.inventory }, ui: { ...s.ui, message: solo
+      ? '🏄 Você ganhou uma Prancha de surf' + (r.grewBag ? ' (a mochila ganhou um espaço pra ela)' : '') + ' — selecione na hotbar e entre no mar.'
+      : `🏄 Na sua mochila: ${names.join(', ')}${r.grewBag ? ' — a mochila ganhou espaço pra eles' : ''}.` } }));
   },
 
   drinkPotion: () => {

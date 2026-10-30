@@ -394,6 +394,19 @@ function Index() {
   if (!AUTH_ENABLED || authUser) worldUnlocked.current = true;
   const worldOn = ready && worldUnlocked.current;
   useCardWatchers(worldOn);
+  // PRANCHA = item FIXO de TODO personagem (Pedro 29/10: "ela já tem que entrar dentro do loot… estou nível 13, era pra
+  // ter"): entra ao entrar no jogo e VOLTA sempre que faltar — save da conta chegando depois, outro aparelho/aba com
+  // save antigo subindo pra conta, zerar o personagem… Não dá pra descartar (dropItem recusa). Conferência barata: só
+  // quando a mochila muda.
+  useEffect(() => {
+    if (!worldOn) return;
+    useGameStore.getState().grantMobilityKit();
+    return useGameStore.subscribe((s, prev) => {
+      if (s.player.inventory === prev.player.inventory) return;
+      // falta algum do kit (prancha, asa-delta, skate voador)? devolve
+      if (!(['surfboard', 'hang_glider', 'hover_skate'] as const).every(id => s.player.inventory.slots.some(sl => sl.itemId === id))) s.grantMobilityKit();
+    });
+  }, [worldOn]);
 
   // Novo personagem (zerar): apaga o save LOCAL e, se logado, o da CONTA (senão recarrega
   // o antigo), depois recarrega a página pro estado inicial.
@@ -592,8 +605,9 @@ function Index() {
             </Button>
           ))}
         </nav>
-        <div className="sidebar-label">MAPAS</div>
-        <nav className="sidebar-nav" aria-label="Escolher mapa">
+        {/* MAPAS: escondido desde 29/10 (Pedro: "a Zona Sul é o mapa verdadeiro") — só aparece na porta de teste ?mapa=vale */}
+        {worldMap === 'classic' && <div className="sidebar-label">MAPAS</div>}
+        {worldMap === 'classic' && <nav className="sidebar-nav" aria-label="Escolher mapa">
           {([['classic', 'Vale dos Ancestrais', Mountain], ['zona-sul', 'Zona Sul · Rio', Waves]] as const).map(([id, name, Icon]) => (
             <Button key={id} variant="ghost" className="nav-item" title={id === 'zona-sul' ? 'Zona Sul do Rio — mar, onda, prancha e carro voador (mesmo personagem)' : 'O vale de sempre — acampamentos, base e hordas'}
               data-active={worldMap === id && !inCity} aria-pressed={worldMap === id}
@@ -601,7 +615,7 @@ function Index() {
               <Icon strokeWidth={1.5} /><span>{name}</span>
             </Button>
           ))}
-        </nav>
+        </nav>}
         <div className="sidebar-label">COMUNIDADE</div>
         <nav className="sidebar-nav">
           <MultiplayerPanel placement="sidebar" />
@@ -720,7 +734,7 @@ function Index() {
                   ? <>Renascendo em <strong style={{ fontSize: 28, color: '#fbbf24' }}>{deathCountdown}s</strong></>
                   : 'Renascendo...'}
               </p>
-              <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>Você reaparecerá na sua base</p>
+              <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>{zs ? 'Você reaparecerá na praia do Arpoador (zona segura)' : 'Você reaparecerá na sua base'}</p>
             </div>
           )}
           {ui.baseFell && !inCity && (
@@ -1133,7 +1147,7 @@ function Index() {
                       data-active={ui.selectedHotbar === i}
                       onClick={() => useHotbarSlot(i)}
                       onDragOver={e => e.preventDefault()}
-                      onDrop={e => { const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < player.inventory.slots.length) useHotbarSlot(n); }}>
+                      onDrop={e => { e.preventDefault(); const n = Number(e.dataTransfer.getData('text/plain')); if (Number.isInteger(n) && n >= 0 && n < player.inventory.slots.length) useGameStore.getState().assignHotbar(i, n); }}>
                       <span className="slot-key">{i + 1}</span>
                       {item ? <ItemSprite itemId={item.id} size={40} className="hotbar-sprite" /> : <Package strokeWidth={1.3} aria-hidden="true" />}
                       <span className="slot-count">{item && item.quantity > 1 ? item.quantity : ''}</span>

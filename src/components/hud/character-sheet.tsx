@@ -20,6 +20,7 @@ import { bagTabOf, sheetStats, type BagTab } from '@/game/systems/characterSheet
 import { RARITY_LABEL, type ArmorSlot, type Item } from '@/game/types/item';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { isUnlocked, unlockLevel } from '@/game/systems/unlockSystem';
+import { isMobilityItem } from '@/game/systems/zonaSulKit';
 
 const HeroPreview = lazy(() => import('./hero-preview'));
 
@@ -66,6 +67,7 @@ export function CharacterSheet({ onHome }: { onHome: () => void }) {
   const unequipSlot = useGameStore(s => s.unequipSlot);
   const dropItem = useGameStore(s => s.dropItem);
   const drinkPotion = useGameStore(s => s.drinkPotion);
+  const assignHotbar = useGameStore(s => s.assignHotbar);
   const allocateSkill = useGameStore(s => s.allocateSkill);
   const deallocateSkill = useGameStore(s => s.deallocateSkill);
   const [tab, setTab] = useState<BagTab>('all');
@@ -223,12 +225,22 @@ export function CharacterSheet({ onHome }: { onHome: () => void }) {
               </div>
               {!isUnlocked(picked.id, player.level) && <p className="cs-locked">🔒 Libera no nível {unlockLevel(picked.id)} · você está no {player.level}</p>}
               <ul>{statLines(picked).map(l => <li key={l}>{l}</li>)}<li className="cs-muted">Peso {picked.weight} kg{picked.dropOnDeath ? ' · cai ao morrer' : ''}</li></ul>
+              {pick && 'bag' in pick && (
+                <div className="cs-hotkeys" role="group" aria-label="Pôr na hotbar">
+                  <span>Pôr na hotbar:</span>
+                  {Array.from({ length: 10 }, (_, k) => {
+                    const key = k === 9 ? '0' : String(k + 1);
+                    const on = inv.hotbar.slots[k] === pick.bag;
+                    return <button key={k} type="button" data-on={on || undefined} aria-label={`Pôr na tecla ${key}`} onClick={() => assignHotbar(k, pick.bag)}>{key}</button>;
+                  })}
+                </div>
+              )}
               <div className="cs-actions">
                 {picked.equippable && !pickedEquipped && <Button size="sm" disabled={!isUnlocked(picked.id, player.level)} onClick={() => equipItem(picked.id)}><Hand />Equipar</Button>}
                 {pickedEquipped && <Button size="sm" variant="outline" onClick={() => { const k = pick && 'equip' in pick ? pick.equip : equippedKey(picked.id); if (k) unequipSlot(k); setPick(null); }}>Tirar</Button>}
                 {picked.id === 'health_potion' || (picked.usable && (picked.healAmount ?? 0) > 0)
                   ? <Button size="sm" variant="outline" disabled={!DEV_INFINITE_POTIONS && player.hp >= st.maxHp} onClick={drinkPotion}><FlaskConical />Beber</Button> : null}
-                {pick && 'bag' in pick && (
+                {pick && 'bag' in pick && !isMobilityItem(picked.id) && (
                   <Button size="sm" variant="ghost" className="cs-drop" onClick={() => { dropItem(pick.bag); setPick(null); }}><Trash2 />Descartar</Button>
                 )}
               </div>

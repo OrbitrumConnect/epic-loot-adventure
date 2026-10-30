@@ -1,24 +1,26 @@
 // CARRO VOADOR (Pedro 28/10, GLB baixado: 500 mil triângulos + 3 PNG de 45 MB — sozinho pesaria 5× o mapa). Compacta:
 // solda vértices → SIMPLIFICA a malha (meshoptimizer) → texturas 1024 (cor) / 512 (normal, rugosidade) em JPEG → limpa.
-// Uso: node tools/zona-sul/optimize-car.mjs <entrada.glb> [alvoTriangulos=14000] [saida=public/zona-sul/car.glb] [ladoCor=1024]
+// Uso: node tools/zona-sul/optimize-car.mjs <entrada.glb> [alvoTriangulos=14000] [saida=public/zona-sul/car.glb] [ladoCor=1024] [erroMax=0.012]
 // (28/10: também compacta a PRANCHA de surf: ... 4000 public/zona-sul/board.glb 512)
 import fs from 'node:fs';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { dedup, prune, simplify, textureCompress, weld } from '@gltf-transform/functions';
-import { MeshoptSimplifier } from 'meshoptimizer';
+import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 
-const [input, alvo = '14000', saida = 'public/zona-sul/car.glb', ladoCor = '1024'] = process.argv.slice(2);
+const [input, alvo = '14000', saida = 'public/zona-sul/car.glb', ladoCor = '1024', erroMax = '0.012'] = process.argv.slice(2);
 const OUT = saida, COR = Number(ladoCor), DADO = Math.max(256, COR / 2);
-const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+// GLB que já vem com EXT_meshopt_compression (ex.: o poste do Vale): sem o decodificador não abre (29/10)
+await MeshoptDecoder.ready; await MeshoptEncoder.ready;
+const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': MeshoptDecoder, 'meshopt.encoder': MeshoptEncoder });
 const doc = await io.read(input);
 const tris = () => doc.getRoot().listMeshes().flatMap((m) => m.listPrimitives()).reduce((s, p) => s + (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3, 0);
 const t0 = tris();
 await MeshoptSimplifier.ready;
 await doc.transform(weld());
 const ratio = Math.min(1, Number(alvo) / t0);
-await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error: 0.012, lockBorder: false }));
+await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio, error: Number(erroMax), lockBorder: false }));
 // texturas: a de COR em 1024, as de dado (normal / metal-rugosidade) em 512 — JPEG (sem transparência no carro)
 const mat = doc.getRoot().listMaterials()[0];
 const colorTex = mat?.getBaseColorTexture();

@@ -7,19 +7,22 @@
  */
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
+import type { Sky as SkyImpl } from 'three-stdlib';
 import { memo, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
-import { ZS_LANDMARKS, ZS_SPAWN } from './zona-sul-meta';
-import { loadZsTerrain, type ZsTerrain, zsHeightAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
+import { ZS_LANDMARKS, ZS_SPAWN, ZS_SURF } from './zona-sul-meta';
+import { loadZsTerrain, type ZsTerrain, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
 import { SurfBreak, surfZone } from './surf/surf-break';
 import { SURF } from './surf/surf-wave';
 import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from './surf/surf-ride';
 import { useGameStore } from '@/game/state/game-store';
 import { selectedItemId } from '@/components/world/held-weapon';
-import { SURFBOARD_ID } from '@/game/systems/zonaSulKit';
+import { HANG_GLIDER_ID, HOVER_SKATE_ID, SURFBOARD_ID } from '@/game/systems/zonaSulKit';
+import { canOpenGlider, GLIDE, glideStep, type GlideState, newGlide, newSkate, SKATE, skateStep, type SkateState } from './zs-glide';
+import { ZsGearView } from './zs-gear-view';
 import { isUnlocked, lockedMessage } from '@/game/systems/unlockSystem';
 import { useTouchScreen } from '@/hooks/use-mobile';
 // COMBATE (29/10, Pedro: "usar armas, tiro pro elite… ligar tudo 100%"): as MESMAS peças e regras do Vale
@@ -51,6 +54,10 @@ import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
 import { zsQuery, zsWorldProfile } from './zs-world-profile';
 import { zsAttack, zsCtx } from './zs-context';
+import { shipGround, zsShip, ZsShip } from './zs-ship';
+import { type AmbienceState, zsAmbience } from './zs-ambience';
+import { ZsDayNight, ZsLamps, zsSun } from './zs-daynight';
+import { nightFactor, setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
 import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 
 /** Quanto da correnteza da onda leva o herói nadando (o carro tem a sua em CAR.WAVE_PUSH). */
@@ -59,7 +66,7 @@ const ZS_SWIM_WAVE_CARRY = 1.15; // a espuma leva junto (o bolso da onda segura 
 const ZS_BODYSURF_EXTRA = 0.3;
 const HERO_PUSH = { x: 0, z: 0 }, HERO_SPIT = { x: 0, z: 0 };
 /** Motor de surf (fase B, só na Zona Sul). Chave: ?surf=0 na URL desliga (o mar volta exatamente ao de antes). */
-const SURF_ON = typeof window === 'undefined' || !/[?&]surf=0/.test(window.location.search);
+const SURF_ON = typeof window === 'undefined' || !/[?&]surf=0/.test(window.location.search);
 import { ZsTerrainMesh } from './zs-terrain-mesh';
 import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
@@ -71,7 +78,9 @@ import { type CarDims, ZsCarView } from './zs-car-view';
 const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/anim/open_door.glb', swim: '/zona-sul/anim/swim.glb', tread: '/zona-sul/anim/tread.glb',
   // SURF (28/10): remar = o nado deitado na prancha; levantar e base = Zombie Stand Up (Pedro: "só levanta direito depois
   // de 30%; a pose final é boa, meio surfista")
-  paddle: '/zona-sul/anim/swim.glb', popup: '/zona-sul/anim/zombie_stand_up.glb', surf: '/zona-sul/anim/zombie_stand_up.glb' };
+  paddle: '/zona-sul/anim/swim.glb', popup: '/zona-sul/anim/zombie_stand_up.glb', surf: '/zona-sul/anim/zombie_stand_up.glb',
+  // ASA-DELTA (30/10): "Flying" do Mixamo (do Pedro) — corpo deitado, braços à frente, pendurado sob a asa
+  glide: '/zona-sul/anim/glide.glb' };
 /** Cortes: levantar = 30%→100% a 2× (≈ RIDE.POPUP_S); base = só o finalzinho (a pose final, segurada). */
 // remar/nadar: o RITMO dos braços segue a velocidade real (Pedro 29/10: "remar parece câmera lenta" — a remada tocava
 // fixa a 0,8×): remando 3,8 m/s = 1×, com Shift 6,1 = 1,6×; nadando 2,4 = 1×, rápido 4,2 = 1,75×
@@ -110,6 +119,20 @@ const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch:
 /** Altura do OLHO do motorista sentado acima do pé (m) e campo de visão de dentro (mais aberto). */
 const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
+/** SOM do mundo em volta do herói (mar, arrebentação, carro, vento) — 10×/s. */
+const AMB: AmbienceState = { sea: 0, surf: 0, car: false, carSpeed: 0, carAlt: 0, wind: 0 };
+function ambienceAt(t: ZsTerrain, p: THREE.Vector3, car: ZsCar | null, rideSpeed: number): AmbienceState {
+  let sea = 0;
+  for (let a = 0; a < 8; a++) { const ang = (a / 8) * Math.PI * 2; if (zsSurfAt(t, p.x + Math.sin(ang) * 60, p.z + Math.cos(ang) * 60) === ZS_SURF.sea) sea++; }
+  AMB.sea = zsCtx.inWater ? 1 : (sea / 8) * Math.max(0, 1 - Math.max(0, p.y) / 45);
+  const f = surfZone.frame;
+  AMB.surf = surfZone.on && f ? Math.max(0, 1 - Math.hypot(p.x - f.px, p.z - f.pz) / 320) * (surfZone.drawn ? 1 : 0.4) : 0;
+  AMB.car = drive.mode === 'driving' && !!car;
+  AMB.carSpeed = car?.speed ?? 0; AMB.carAlt = car?.altitude ?? 0;
+  AMB.wind = AMB.car ? Math.min(1, AMB.carAlt / 25 + Math.abs(AMB.carSpeed) / 60) : Math.min(1, (rideSpeed / 14) * 0.6);
+  return AMB;
+}
+
 /** Pra onde virar ao atacar: o ponto do último tiro; senão o bicho vivo mais perto no alcance da arma (igual ao Vale). */
 function attackYaw(px: number, pz: number, fallback: number): number {
   const shot = recentShotPoint();
@@ -125,11 +148,13 @@ function attackYaw(px: number, pz: number, fallback: number): number {
   return best ? Math.atan2(best.x - px, best.z - pz) : fallback;
 }
 
-function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRef, movement, c }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose>; playerRef: React.MutableRefObject<THREE.Group | null>; movement: React.MutableRefObject<THREE.Vector3>; c: Palette }) {
+function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRef, movement, c, gearRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose>; playerRef: React.MutableRefObject<THREE.Group | null>; movement: React.MutableRefObject<THREE.Vector3>; c: Palette; gearRef: { glider: BoardPose; skate: BoardPose } }) {
   const group = useRef<THREE.Group>(null);
   /** combate: tique do último ataque visto, tempo de animação restante, especial, giro do R, coice, mira (0..1) */
   const atkTick = useRef(-1), atkT = useRef(0), specTick = useRef(-1), spinT = useRef(0);
-  const recoil = useRef({ x: 0, y: 0 }), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0);
+  const recoil = useRef({ x: 0, y: 0 }), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0), ambAcc = useRef(0);
+  /** ASA-DELTA planando / SKATE VOADOR em cima (null = não) · Espaço do quadro anterior (pulinho só no toque) */
+  const glide = useRef<GlideState | null>(null), skate = useRef<SkateState | null>(null), spaceWas = useRef(false);
   /** surf na prancha (null = sem prancha na água) · vaca de quem nada sem prancha (s restantes) · giro da vaca */
   const ride = useRef<RideState | null>(null);
   const tumble = useRef(0), spin = useRef(0);
@@ -152,7 +177,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   useEffect(() => { atkTick.current = useGameStore.getState().attackTick; specTick.current = useGameStore.getState().specialTick; }, []);
 
   // só em desenvolvimento: testes de tela leem/forçam o surf (o jogo publicado não expõe nada)
-  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action }; }, []);
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action, scene, camera, glide, skate, air: (vy0 = -3) => { grounded.current = false; vy.current = vy0; } }; }, [scene, camera]);
   const fog = useMemo(() => new THREE.Fog(FOG, 200, 2200), []); // névoa LEVE (custo ~zero: é uma conta no shader)
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
@@ -215,6 +240,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     posAcc.current += dt;
     if (posAcc.current > 0.15) { posAcc.current = 0; const cur = gs.player.position; if (cur.x !== p.x || cur.z !== p.z) useGameStore.setState(s => ({ player: { ...s.player, position: { x: p.x, z: p.z } } })); }
     zsCtx.driving = drive.mode === 'driving';
+    ambAcc.current += dt;
+    if (ambAcc.current > 0.1) { ambAcc.current = 0; zsAmbience.update(ambienceAt(t, p, car, ride.current?.mode === 'ride' ? ride.current.speed : 0)); }
     // E: entra (perto do carro) / sai (parado e rente ao chão)
     if (input.eTap) {
       input.eTap = false;
@@ -279,7 +306,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6; if (cyy < gcam) cyy = gcam;
       camera.position.set(cx, cyy, cz); camera.lookAt(tx, ty, tz);
       }
-      if (sun.current) { sun.current.position.set(p.x + SUN.x * 120, p.y + SUN.y * 120, p.z + SUN.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); }
+      if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
       hudAcc.current += dt;
       if (hudAcc.current > 0.25) {
         hudAcc.current = 0;
@@ -291,6 +318,74 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     }
     if (drive.mode === 'entering') { action.current = 'open_door'; speed.current = 0; }
     focusRef.current.copy(p);
+    // ===== ASA-DELTA e SKATE VOADOR (30/10) — modos próprios, como o carro: movem o herói/câmera e encerram o quadro =====
+    {
+      const held = drive.mode === 'foot' && !dead ? selectedItemId(gs) : null, lvl = gs.player.level;
+      const surfaceAt = (x: number, z: number) => Math.max(zsHeightAt(t, x, z), zsWaterYAt(x, z));
+      // ASA-DELTA: na mão + caindo de um lugar ALTO → abre sozinha
+      if (!glide.current && held === HANG_GLIDER_ID && isUnlocked(held, lvl) && !grounded.current && !zsCtx.inWater
+        && canOpenGlider(vy.current, p.y - surfaceAt(p.x, p.z))) {
+        glide.current = newGlide(facing.current, p.y, Math.max(GLIDE.CRUISE, Math.hypot(swimVel.current.x, swimVel.current.y)));
+      }
+      if (glide.current && held !== HANG_GLIDER_ID) glide.current = null; // trocou de item no ar: cai (sem asa)
+      // SKATE: na mão (liberado) = em cima dele
+      if (held === HOVER_SKATE_ID && isUnlocked(held, lvl) && !glide.current) { if (!skate.current) skate.current = newSkate(facing.current, Math.max(p.y, surfaceAt(p.x, p.z) + SKATE.HOVER)); }
+      else skate.current = null;
+      const gl = glide.current, sk = skate.current;
+      gearRef.glider.visible = !!gl; gearRef.skate.visible = !!sk;
+      if (gl || sk) {
+        const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
+        const fwd = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
+        const turbo = k.has('ShiftLeft') || k.has('ShiftRight');
+        const space = k.has('Space');
+        const bx = (x: number) => Math.max(t.x0, Math.min(t.x0 + (t.w - 1) * t.cell, x)), bz = (z: number) => Math.max(t.z0, Math.min(t.z0 + (t.h - 1) * t.cell, z));
+        let status = '', lift = 0, roll = 0;
+        if (gl) {
+          const r = glideStep(gl, { steer, pitch: fwd }, surfaceAt(p.x, p.z), dt);
+          p.x = bx(p.x + r.dx); p.z = bz(p.z + r.dz); p.y = gl.y;
+          const under = surfaceAt(p.x, p.z);
+          if (r.landed || p.y <= under + GLIDE.LAND_AGL) { // pousou (ou bateu no morro): fecha a asa
+            glide.current = null; p.y = Math.max(p.y, under); vy.current = 0; grounded.current = true;
+            swimVel.current.set(Math.sin(gl.yaw) * Math.min(gl.speed, ZS_RUN), Math.cos(gl.yaw) * Math.min(gl.speed, ZS_RUN));
+          }
+          facing.current = gl.yaw; action.current = 'glide'; speed.current = gl.speed; roll = gl.bank;
+          const gp = gearRef.glider; gp.x = p.x; gp.y = p.y + 1.15; gp.z = p.z; gp.yaw = gl.yaw; gp.roll = -gl.bank;
+          status = gl.stalled ? 'ESTOL! solte o S ou aperte W pra ganhar velocidade' : 'asa-delta · ' + Math.round(gl.speed * 3.6) + ' km/h · altura ' + Math.round(p.y - under) + ' m · A/D vira · W mergulha · S empina';
+        } else if (sk) {
+          const r = skateStep(sk, { throttle: fwd, steer, turbo, hop: space && !spaceWas.current }, p.x, p.z, dt, surfaceAt, (x, z) => zsSlopeDeg(t, x, z));
+          p.x = bx(r.x); p.z = bz(r.z); p.y = sk.y;
+          facing.current = sk.yaw + STANCE; action.current = 'surf'; speed.current = 0; lift = SURF_LIFT;
+          const sp = gearRef.skate; sp.x = p.x; sp.y = p.y; sp.z = p.z; sp.yaw = sk.yaw; sp.roll = Math.max(-0.35, Math.min(0.35, -steer * Math.min(1, Math.abs(sk.speed) / SKATE.MAX) * 0.3));
+          status = 'skate voador · ' + Math.round(Math.abs(sk.speed) * 3.6) + ' km/h · W acelera · S freia · A/D curva · Shift turbo · Espaço pula' + (zsHeightAt(t, p.x, p.z) < ZS_WATER_Y ? ' · sobre a água' : '');
+        }
+        spaceWas.current = space;
+        grounded.current = !glide.current ? true : false; zsCtx.inWater = false; ride.current = null; dive.current = 0;
+        if (group.current) {
+          group.current.position.set(p.x, p.y + lift, p.z);
+          let d = facing.current - yawNow.current; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+          yawNow.current += d * Math.min(1, dt * 10);
+          group.current.rotation.order = 'YXZ'; group.current.rotation.y = yawNow.current; group.current.rotation.x = 0; group.current.rotation.z = roll * 0.6;
+          heroFacing.yaw = yawNow.current;
+        }
+        // câmera de PERSEGUIÇÃO atrás do rumo (arrastar olha em volta; 1,5 s depois volta) — igual ao carro
+        const heading = gl ? gl.yaw : sk!.yaw;
+        if (now - input.lookAt > 1500) { let dy = heading + Math.PI - input.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2; input.yaw += dy * Math.min(1, dt * 3); }
+        const ct = camTarget.current, follow = 1 - Math.exp(-8 * dt);
+        ct.x += (p.x - ct.x) * follow; ct.y += (p.y + 1.6 - ct.y) * follow; ct.z += (p.z - ct.z) * follow;
+        const dist = (gl ? Math.max(input.dist, 11) : input.dist) + Math.min(6, (gl ? gl.speed : Math.abs(sk!.speed)) * 0.15);
+        const cpp = Math.cos(input.pitch), cx2 = ct.x + Math.sin(input.yaw) * cpp * dist, cz2 = ct.z + Math.cos(input.yaw) * cpp * dist;
+        let cy2 = ct.y + Math.sin(input.pitch) * dist; const gc = Math.max(zsHeightAt(t, cx2, cz2), ZS_WATER_Y) + 0.6; if (cy2 < gc) cy2 = gc;
+        const persp = camera as THREE.PerspectiveCamera; if (Math.abs(persp.fov - CHASE_FOV) > 0.05) { persp.fov = CHASE_FOV; persp.updateProjectionMatrix(); }
+        camera.position.set(cx2, cy2, cz2); camera.lookAt(ct.x, ct.y, ct.z);
+        if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); }
+        boardRef.current.visible = false;
+        audioManager.setFootsteps(false);
+        hudAcc.current += dt;
+        if (hudAcc.current > 0.25) { hudAcc.current = 0; onHud({ x: p.x, z: p.z, y: p.y, state: status, near: '', overview: false }); }
+        return;
+      }
+      spaceWas.current = k.has('Space');
+    }
     // direção relativa à câmera
     let ix = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
     let iz = (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) + input.stick.z + virtualMove.z;
@@ -298,7 +393,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
     const sy = Math.sin(input.yaw), cy = Math.cos(input.yaw);
     const wx = ix * cy + iz * sy, wz = -ix * sy + iz * cy; // gira o input pelo yaw da câmera
-    const water0 = zsWaterState(zsHeightAt(t, p.x, p.z));
+    // NAVIO: em pé no convés não é "nadar", mesmo com o mar embaixo (zs-ship)
+    const deckNow = drive.mode === 'foot' ? shipGround(zsShip.c, p.x, p.z, p.y) : null;
+    const water0 = deckNow && !('wall' in deckNow) ? { swimming: false, wading: false } : zsWaterState(zsHeightAt(t, p.x, p.z));
     const shift = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92 || Math.hypot(virtualMove.x, virtualMove.z) > 0.92;
     const moveBonus = 1 + effectiveAttributes(gs.player).moveSpeed / 100; // atributo Velocidade (igual ao Vale)
     let autoRun = false, dodging = false;
@@ -395,6 +492,12 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     }
     zsCtx.inWater = st.swimming;
     shiftWas.current = shift;
+    // NAVIO: o convés é chão; o casco é PAREDE pra quem vem de baixo (água/areia); a prancha é rampa
+    if (drive.mode === 'foot') {
+      let sg = shipGround(zsShip.c, st.x, st.z, p.y);
+      if (sg && 'wall' in sg) { st = { ...st, x: p.x, z: p.z }; sg = shipGround(zsShip.c, p.x, p.z, p.y); }
+      if (sg && !('wall' in sg)) st = { ...st, ground: sg.y, swimming: false, wading: false };
+    }
     p.x = st.x; p.z = st.z;
     // vertical: pulo (só fora d'água funda) + chão / nado
     if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot' && !dead) { vy.current = 6.2; grounded.current = false; }
@@ -480,7 +583,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const shake = impactShake(); // soco de impacto quando um golpe acerta
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.3; camera.position.y += (Math.random() - 0.5) * shake * 0.3; camera.position.z += (Math.random() - 0.5) * shake * 0.3; }
     // sol + sombra seguem o herói
-    if (sun.current) { sun.current.position.set(p.x + SUN.x * 120, p.y + SUN.y * 120, p.z + SUN.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); }
+    if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
     hudAcc.current += dt;
     if (hudAcc.current > 0.25) {
       hudAcc.current = 0;
@@ -701,6 +804,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const playerRef = useRef<THREE.Group | null>(null);
   const movement = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
   const c = useMemo(() => palette(), []);
+  const hemiRef = useRef<THREE.HemisphereLight>(null), ambRef = useRef<THREE.AmbientLight>(null), skyRef = useRef<SkyImpl>(null);
   useEffect(() => { zsAttack.fn = onAttack ?? null; return () => { zsAttack.fn = null; }; }, [onAttack]);
   const [err, setErr] = useState('');
   const touch = useTouchScreen();
@@ -711,9 +815,12 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const carRef = useRef<ZsCar | null>(null);
   const dimsRef = useRef<CarDims | null>(null);
   const boardRef = useRef<BoardPose>(newBoardPose());
+  /** poses da ASA-DELTA e do SKATE (o herói escreve; as vistas leem) */
+  const gliderPose = useRef<BoardPose>(newBoardPose()), skatePose = useRef<BoardPose>(newBoardPose());
+  const gearRef = useMemo(() => ({ get glider() { return gliderPose.current; }, get skate() { return skatePose.current; } }), []);
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -721,15 +828,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   useEffect(() => {
     // entrou no mapa: a pé, câmera no herói; 1ª vez = ganha a prancha
     drive.mode = 'foot'; input.overview = false; input.keys.clear(); hudNow = null;
-    // PRANCHA: entrega agora E de novo quando o save da CONTA chegar (Pedro 29/10: "ainda não vejo a prancha" — o save
-    // da conta chega do servidor depois e trocava o inventário, sumindo com a prancha). Só nos 1ºs 30 s (depois disso
-    // descartar a prancha é escolha sua: ela não volta sozinha).
-    const until = Date.now() + 30_000;
-    useGameStore.getState().grantSurfboard();
-    const unGrant = useGameStore.subscribe((s, prev) => {
-      if (Date.now() > until) return;
-      if (s.player.inventory !== prev.player.inventory && !s.player.inventory.slots.some((sl) => sl.itemId === SURFBOARD_ID)) s.grantSurfboard();
-    });
+    zsAmbience.arm(); // som do mar/carro/vento (liga no 1º clique/tecla)
+    // PRANCHA: quem garante é a casa do jogo (routes/index.tsx) — item fixo, volta sempre que faltar
     let alive = true;
     loadZsTerrain().then((tt) => {
       if (!alive) return;
@@ -750,8 +850,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     }).catch((e) => alive && setErr(String(e)));
     const keep = window.setInterval(() => { if (carRef.current) saveZsPos(heroRef.current); }, 2000);
     return () => {
-      alive = false; unGrant(); window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
-      zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false);
+      alive = false; window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
+      zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false); zsAmbience.mute();
       // saiu da Zona Sul (trocou de mapa / cidade): o jogo volta pro Vale (se a troca já não fez isso)
       if (WORLD.id === 'zona-sul') { resetWorldProfile(); useGameStore.getState().enterWorld('classic'); }
     };
@@ -762,14 +862,19 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       {t && (
         <Canvas shadows dpr={[1, 1.25]} camera={{ fov: 55, near: 0.3, far: 7000 }} gl={{ antialias: true }}>
           <color attach="background" args={[FOG]} />
-          <Sky sunPosition={sunPos} turbidity={5} rayleigh={1.4} mieCoefficient={0.006} distance={4500} />
-          <hemisphereLight args={['#eef4f8', '#6b7a4a', 1.5]} />
-          <ambientLight intensity={0.35} />
+          <Sky ref={skyRef} sunPosition={sunPos} turbidity={5} rayleigh={1.4} mieCoefficient={0.006} distance={4500} />
+          <hemisphereLight ref={hemiRef} args={['#eef4f8', '#6b7a4a', 1.5]} />
+          <ambientLight ref={ambRef} intensity={0.35} />
+          {/* DIA/NOITE (relógio do jogo) + lua + postes nas pistas */}
+          <ZsDayNight hemi={hemiRef} amb={ambRef} sky={skyRef} />
+          <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
+          {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
+          <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
           <ZsTerrainMesh t={t} heroRef={focusRef} />
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
           <ZsVegetation t={t} heroRef={focusRef} />
-          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} />
+          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} />
           {/* COMBATE — as mesmas peças do Vale, no chão da Zona Sul (perfil do mapa) */}
           {/* cada peça com a sua rede de carregamento (29/10: um bicho novo carregando o modelo ESCONDIA o mundo inteiro
               por um instante — o React esconde até a rede mais próxima) e proteção contra modelo quebrado (igual ao Vale) */}
@@ -787,6 +892,10 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           )}
           <Suspense fallback={null}><ZsCarView carRef={carRef} dimsRef={dimsRef} /></Suspense>
           <Suspense fallback={null}><ZsBoardView poseRef={boardRef} /></Suspense>
+          <AssetBoundary label="ZsAsaSkate" fallback={null}>
+            <Suspense fallback={null}><ZsGearView kind="glider" poseRef={gliderPose} /></Suspense>
+            <Suspense fallback={null}><ZsGearView kind="skate" poseRef={skatePose} /></Suspense>
+          </AssetBoundary>
           <Controls />
           <ZsPerf elRef={perfRef} />
         </Canvas>
