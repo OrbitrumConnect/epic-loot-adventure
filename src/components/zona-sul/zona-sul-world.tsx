@@ -431,7 +431,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const zn = surfZoneAt(p.x, p.z)?.zone ?? nearestSurfZone(p.x, p.z), fr = zn?.frame ?? null, waveC = zn?.pf.C ?? SURF.C;
       const ax = fr ? { qx: fr.qx, qz: fr.qz, sx: fr.sx, sz: fr.sz } : NO_AXES;
       const pushing = zsWaterPushAt(p.x, p.z, HERO_PUSH, p.y + 0.3);
-      const w: RideWater = { pushX: pushing ? HERO_PUSH.x : 0, pushZ: pushing ? HERO_PUSH.z : 0, churn: zsWaterChurnAt(p.x, p.z) };
+      const w: RideWater = { pushX: pushing ? HERO_PUSH.x : 0, pushZ: pushing ? HERO_PUSH.z : 0, churn: zsWaterChurnAt(p.x, p.z), foamRide: !!zn?.pf.FOAM_RIDE };
       if (fr) { const ddx = p.x - fr.px, ddz = p.z - fr.pz; w.side = ddx * fr.sx + ddz * fr.sz >= 0 ? 1 : -1; }
       if (r.mode === 'ride' && !r.air && zsWaterSpitAt(p.x, p.z, p.y + 0.3, HERO_SPIT)) { w.spitX = HERO_SPIT.x; w.spitZ = HERO_SPIT.z; }
       if (r.mode === 'ride' && !r.air) w.inTube = zsWaterInTubeAt(p.x, p.z, p.y + 0.3);

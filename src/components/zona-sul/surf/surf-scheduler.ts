@@ -57,6 +57,7 @@ export class SurfScheduler {
       const st = waveStateAt(this.clock - this.births[i]!, this.vars[i]!, this.pf);
       const o = this.states[i]!; o.qc = st.qc; o.h = st.h; o.peelR = st.peelR; o.peelL = st.peelL; o.active = st.active;
       o.peel2R = st.peel2R ?? 0; o.peel2L = st.peel2L ?? 0; o.reform = st.reform ?? 0;
+      o.stA = st.stA ?? 0; o.stB = st.stB ?? 0; o.lagA = st.lagA ?? this.pf.CLOSE_LAG_OUT; o.outer = st.outer ?? 1;
     }
   }
 

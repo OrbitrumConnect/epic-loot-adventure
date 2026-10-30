@@ -41,9 +41,9 @@ export const BEND_S = 90; // a curva da crista se completa até 90 m do pico (de
 /**
  * PERFIL DE ONDA (30/10, Pedro: o SORRISO no meio de Copacabana, "só quando tem ressaca"). Cada pico tem o seu: o do
  * Arpoador é EXATAMENTE as constantes acima (SURF/BEND) — toda função recebe o perfil por último com o Arpoador de padrão,
- * então nada muda nele. O Sorriso tem DUAS quebras: a de fora (grande, cheia, pouco tubular — CURL_OUT limita o quanto o
- * lip arremessa) vira espuma; perto da areia (INNER.Q) a espuma se desfaz em INNER.REFORM m, a onda se refaz e quebra de
- * novo abrindo pros lados — aí sim TUBO — e morre na areia.
+ * então nada muda nele. O Sorriso tem TRÊS SEÇÕES (Pedro 30/10, desenho: "são 3 seções e olha o fundo que ela vem"):
+ * a de fora quebra e vira espuma; mais perto (INNER[k].Q) a espuma se desfaz em INNER[k].REFORM m, a onda se refaz e
+ * quebra de novo abrindo pros lados — e assim até a última, na beira, que morre na areia.
  */
 export type SurfProfile = {
   readonly id: string;
@@ -58,19 +58,31 @@ export type SurfProfile = {
   readonly BARREL_OUT: number;
   /** atrás da abertura, em quantos m a quebra de FORA fecha em espuma (o Arpoador: CLOSE_LAG) */
   readonly CLOSE_LAG_OUT: number;
-  /** 2ª quebra perto da areia (null = uma quebra só) */
-  readonly INNER: { readonly Q: number; readonly REFORM: number; readonly V_PEEL: number } | null;
+  /** em pé dá pra SURFAR A ESPUMA (segura e emenda na próxima seção) em vez de tomar vaca — Sorriso sim, Arpoador não */
+  readonly FOAM_RIDE: boolean;
+  /** largura (m) das COSTAS da onda (rampa descendo pro mar) — Arpoador 7 */
+  readonly BACK_W: number;
+  /** quanto a onda baixa depois de fechar em espuma (0..1) — Arpoador 0,65; menos = espuma com mais volume */
+  readonly CLOSED_DROP: number;
+  /** quanto a onda perde de altura da quebra de fora até a areia (0..1) — Arpoador 0,75; menos = chega mais "gorda" */
+  readonly DECAY: number;
+  /** seções de DENTRO, de fora pra dentro (vazio = uma quebra só): cada uma se refaz da espuma da anterior e quebra de novo */
+  readonly INNER: readonly InnerBreak[];
 };
-export const ARPOADOR: SurfProfile = { id: 'arpoador', ...SURF, BEND, BEND_S, CURL_OUT: 1, BARREL_OUT: 1, CLOSE_LAG_OUT: SURF.CLOSE_LAG, INNER: null };
+/** Uma seção de dentro: onde quebra (q), em quantos m a espuma da anterior se desfaz antes, e a abertura pros lados. */
+export type InnerBreak = { readonly Q: number; readonly REFORM: number; readonly V_PEEL: number };
+export const ARPOADOR: SurfProfile = { id: 'arpoador', ...SURF, BEND, BEND_S, CURL_OUT: 1, BARREL_OUT: 1, CLOSE_LAG_OUT: SURF.CLOSE_LAG, FOAM_RIDE: false, BACK_W: 7, CLOSED_DROP: 0.65, DECAY: 0.75, INNER: [] };
 
 export function crestQ(w: WaveState, s: number, pf: SurfProfile = ARPOADOR): number { const k = Math.min(1, Math.abs(s) / pf.BEND_S); return w.qc + pf.BEND * k * k; }
 
 /** Lado da quebra pro surfista de frente pra praia: +s = direita. */
 export function branchOf(s: number): 'direita' | 'esquerda' { return s >= 0 ? 'direita' : 'esquerda'; }
 
-/** Estado de UMA onda num instante (o shader recebe exatamente isto, por onda). `peel2*`/`reform`: a 2ª quebra (perto da
- *  areia) de perfis que têm uma (Sorriso); 0/ausente = uma quebra só (Arpoador). */
-export type WaveState = { qc: number; h: number; peelR: number; peelL: number; active: boolean; peel2R?: number; peel2L?: number; reform?: number };
+/** Estado de UMA onda num instante (o shader recebe exatamente isto, por onda). Perfis com SEÇÕES (Sorriso): peelR/L = a
+ *  seção de base, `peel2*` = a próxima (se refazendo, `reform` 0..1), `stA`/`stB` = quanto cada uma já empinou (pela
+ *  posição), `lagA` = em quantos m a de base fecha em espuma, `outer` = 1 se a de base é a de fora. Arpoador: ausentes. */
+export type WaveState = { qc: number; h: number; peelR: number; peelL: number; active: boolean; peel2R?: number; peel2L?: number; reform?: number;
+  stA?: number; stB?: number; lagA?: number; outer?: number };
 /** Variação por onda (semente): altura e velocidade de abertura levemente diferentes por lado (nada espelhado perfeito). */
 export type WaveVar = { hR: number; hL: number; vR: number; vL: number };
 
@@ -81,21 +93,31 @@ export function waveStateAt(age: number, v: WaveVar, pf: SurfProfile = ARPOADOR)
   if (age < 0 || qc > pf.Q_MAX + 6) return { qc, h: 0, peelR: 0, peelL: 0, active: false, peel2R: 0, peel2L: 0, reform: 0 };
   const grow = smooth(pf.Q_MIN, pf.BREAK_Q - 4, qc);
   const after = qc > pf.BREAK_Q ? smooth(pf.BREAK_Q + 4, pf.Q_MAX, qc) : 0;
-  const h = (pf.H_START + (pf.H_MAX - pf.H_START) * grow) * (1 - 0.75 * after);
-  const tb = age - (pf.BREAK_Q - pf.Q_MIN) / pf.C;
-  const peel = Math.max(0, tb) * pf.V_PEEL;
-  // 2ª quebra (Sorriso): a espuma se desfaz chegando em INNER.Q e a onda quebra de novo, abrindo do meio pros lados
-  let peel2 = 0, reform = 0;
-  if (pf.INNER) {
-    peel2 = Math.max(0, age - (pf.INNER.Q - pf.Q_MIN) / pf.C) * pf.INNER.V_PEEL;
-    reform = smooth(pf.INNER.Q - pf.INNER.REFORM, pf.INNER.Q, qc);
+  const h = (pf.H_START + (pf.H_MAX - pf.H_START) * grow) * (1 - pf.DECAY * after);
+  if (pf.INNER.length === 0) {
+    const tb = age - (pf.BREAK_Q - pf.Q_MIN) / pf.C;
+    const peel = Math.max(0, tb) * pf.V_PEEL;
+    return { qc, h, peelR: peel * v.vR, peelL: peel * v.vL, active: true, peel2R: 0, peel2L: 0, reform: 0 };
   }
-  return { qc, h, peelR: peel * v.vR, peelL: peel * v.vL, active: true, peel2R: peel2 * v.vR, peel2L: peel2 * v.vL, reform };
+  // SEÇÕES (Sorriso): 0 = a de fora, 1.. = as de dentro. Vale a de BASE e a PRÓXIMA (se refazendo da espuma da de base)
+  const secQ = [pf.BREAK_Q, ...pf.INNER.map((x) => x.Q)], secV = [pf.V_PEEL, ...pf.INNER.map((x) => x.V_PEEL)];
+  const secR = [0, ...pf.INNER.map((x) => x.REFORM)];
+  let j = 0;
+  for (let k = 1; k < secQ.length; k++) if (qc >= secQ[k]! - secR[k]!) j = k;
+  const base = Math.max(0, j - 1), next = j;
+  const peelOf = (k: number) => Math.max(0, age - (secQ[k]! - pf.Q_MIN) / pf.C) * secV[k]!;
+  const stOf = (k: number) => smooth(secQ[k]! - 40, secQ[k]! - 5, qc);
+  const pA = peelOf(j === 0 ? 0 : base), pB = peelOf(next);
+  return {
+    qc, h, active: true, peelR: pA * v.vR, peelL: pA * v.vL, peel2R: pB * v.vR, peel2L: pB * v.vL,
+    reform: j === 0 ? 0 : smooth(secQ[j]! - secR[j]!, secQ[j]!, qc),
+    stA: stOf(j === 0 ? 0 : base), stB: stOf(next), lagA: j <= 1 ? pf.CLOSE_LAG_OUT : pf.CLOSE_LAG, outer: j <= 1 ? 1 : 0,
+  };
 }
 
 /** Corpo da onda sem dobra: costas longas (mar), face mais íngreme (praia); `steep` 0..1 empina a face. */
-export function bump(x: number, h: number, steep: number): number {
-  const w = x > 0 ? 3.4 - 1.4 * steep : 7;
+export function bump(x: number, h: number, steep: number, backW = 7): number {
+  const w = x > 0 ? 3.4 - 1.4 * steep : backW;
   const g = h * Math.exp(-(x / w) * (x / w));
   if (x <= 0 || steep <= 0) return g;
   // PAREDE SURFÁVEL (Pedro 29/10: "a parte que começa a ter parede quebrando, mais curva, deve se estender mais, dando
@@ -121,28 +143,30 @@ export function barrelAt(s: number, st: WaveState, v: WaveVar, pf: SurfProfile =
   // lado direito/esquerdo levemente diferentes (sem espelho), mas a troca no pico é SUAVE (±PEAK_BLEND m): o degrau
   // seco em s = 0 abria uma fenda vertical bem onde a onda começa a quebrar
   const k = smooth(-PEAK_BLEND, PEAK_BLEND, s), d0 = st.peelL + (st.peelR - st.peelL) * k, a = Math.abs(s);
+  const multi = pf.INNER.length > 0, lagA = multi ? (st.lagA ?? pf.CLOSE_LAG_OUT) : pf.CLOSE_LAG_OUT;
   let open = smooth(0, pf.OPEN_EDGE, d0 - a);
-  let closed = smooth(0, pf.CLOSE_EDGE, d0 - pf.CLOSE_LAG_OUT - a);
+  let closed = smooth(0, pf.CLOSE_EDGE, d0 - lagA - a);
   // empina só quando a onda está CHEGANDO no ponto de quebra (a ondulação lá fora segue redonda)
-  let steep = smooth(-STEEP_AHEAD, 0, d0 - a) * smooth(pf.BREAK_Q - 40, pf.BREAK_Q - 5, st.qc);
-  let ramp = smooth(0, CURL_RAMP, d0 - a), behind = d0 - pf.CLOSE_LAG_OUT - a, d = d0;
+  let steep = smooth(-STEEP_AHEAD, 0, d0 - a) * (multi ? (st.stA ?? 0) : smooth(pf.BREAK_Q - 40, pf.BREAK_Q - 5, st.qc));
+  let ramp = smooth(0, CURL_RAMP, d0 - a), behind = d0 - lagA - a, d = d0;
   const rf = st.reform ?? 0;
-  if (pf.INNER && rf > 0) {
-    // 2ª quebra (Sorriso): a espuma da de fora se desfaz (reform) e vale a abertura da de dentro
+  if (multi && rf > 0) {
+    // próxima SEÇÃO (Sorriso): a espuma da de base se desfaz (reform) e vale a abertura da próxima
     const d2 = (st.peel2L ?? 0) + ((st.peel2R ?? 0) - (st.peel2L ?? 0)) * k;
     open += (smooth(0, pf.OPEN_EDGE, d2 - a) - open) * rf;
     closed += (smooth(0, pf.CLOSE_EDGE, d2 - pf.CLOSE_LAG - a) - closed) * rf;
-    steep += (smooth(-STEEP_AHEAD, 0, d2 - a) * smooth(pf.INNER.Q - 40, pf.INNER.Q - 5, st.qc) - steep) * rf;
+    steep += (smooth(-STEEP_AHEAD, 0, d2 - a) * (st.stB ?? 0) - steep) * rf;
     ramp += (smooth(0, CURL_RAMP, d2 - a) - ramp) * rf;
     behind += (d2 - pf.CLOSE_LAG - a - behind) * rf;
     d += (d2 - d) * rf;
   }
-  // quebra "cheia" lá fora (o lip arremessa só CURL_OUT); na de dentro, tubo completo
-  ramp *= pf.CURL_OUT + (1 - pf.CURL_OUT) * rf;
+  // quebra "cheia" na de fora (o lip arremessa só CURL_OUT, forma de tubo BARREL_OUT); nas de dentro, completo
+  const outer = multi ? (st.outer ?? 1) : 1, capA = outer ? pf.CURL_OUT : 1, shpA = outer ? pf.BARREL_OUT : 1;
+  ramp *= capA + (1 - capA) * rf;
   return {
     open, closed, steep,
     /** quanto da forma de tubo existe aqui (quebra de fora "cheia" = 0; Arpoador = 1) */
-    shape: pf.BARREL_OUT + (1 - pf.BARREL_OUT) * rf,
+    shape: shpA + (1 - shpA) * rf,
     hSide: st.h * (v.hL + (v.hR - v.hL) * k) * (1 + RIPPLE_A * Math.sin(RIPPLE_K * s + 7 * v.vR)) * (1 - SHOULDER_DROP * smooth(SHOULDER_HOLD, SHOULDER_HOLD + SHOULDER_LEN, a - d)),
     ramp,
     /** quanto falta (m) pro fechamento chegar nesta coluna (negativo = ainda não fechou; 0 = fechando agora) */
@@ -231,16 +255,16 @@ export function surfPoint(s: number, q0: number, waves: WaveState[], vars: WaveV
   for (let i = 0; i < waves.length; i++) {
     const w = waves[i]!; if (!w.active || w.h <= 0) continue;
     const b = barrelAt(s, w, vars[i]!, pf), x = q0 - crestQ(w, s, pf), band = barrelBand(b.hSide);
-    y += bump(x, b.hSide * (1 - 0.65 * b.closed), b.steep);
+    y += bump(x, b.hSide * (1 - pf.CLOSED_DROP * b.closed), b.steep, pf.BACK_W);
     if (curlOf(b.open, b.closed, b.ramp, b.shape).blend > 0.001 && x <= band.wf && x >= -band.wb) { fi = i; fx = x; }
     // espuma: branco depois de fechar (na crista) + ponta do lip enquanto o tubo está aberto
     foam = Math.max(foam, b.closed * Math.exp(-(((x + 1) / 5) ** 2)), b.open * (1 - b.closed) * b.shape * Math.exp(-(((x + LIP_FOAM_X * band.r) / (LIP_FOAM_W * band.r)) ** 2)) * 0.7);
   }
   if (fi >= 0) {
     const w = waves[fi]!, b = barrelAt(s, w, vars[fi]!, pf), band = barrelBand(b.hSide), c = curlOf(b.open, b.closed, b.ramp, b.shape);
-    const hh = b.hSide * (1 - 0.65 * b.closed);
+    const hh = b.hSide * (1 - pf.CLOSED_DROP * b.closed);
     const t = (band.wf - fx) / (band.wf + band.wb);
-    const [cq, cy] = barrelCurve(t, band.r, c.curl, b.closed, c.rs, bump(band.wf, hh, b.steep), bump(-band.wb, hh, b.steep));
+    const [cq, cy] = barrelCurve(t, band.r, c.curl, b.closed, c.rs, bump(band.wf, hh, b.steep, pf.BACK_W), bump(-band.wb, hh, b.steep, pf.BACK_W));
     q = crestQ(w, s, pf) + fx + (cq - fx) * c.blend;
     y = y + (cy - y) * c.blend;
   }
@@ -269,8 +293,8 @@ export function surfHeightAt(s: number, q: number, waves: WaveState[], vars: Wav
   for (let i = 0; i < waves.length; i++) {
     const w = waves[i]!; if (!w.active || w.h <= 0) continue;
     const b = barrelAt(s, w, vars[i]!, pf), x = q - crestQ(w, s, pf), band = barrelBand(b.hSide), c = curlOf(b.open, b.closed, b.ramp, b.shape);
-    const hb = b.hSide * (1 - 0.65 * b.closed);
-    let hh = bump(x, hb, b.steep);
+    const hb = b.hSide * (1 - pf.CLOSED_DROP * b.closed);
+    let hh = bump(x, hb, b.steep, pf.BACK_W);
     if (c.blend > 0 && x <= band.wf && x >= -band.wb) {
       const R = band.r, Re = R * c.rs, cq = TUBE.CQ * R, cy = TUBE.CY * Re, AX = tubeAxAt(R, c.curl), ax = AX * Re, u = (x - cq) / ax;
       let shape: number;
@@ -280,7 +304,7 @@ export function surfHeightAt(s: number, q: number, waves: WaveState[], vars: Wav
       } else {
         // POR FORA: casca do lip (até onde ele já se projetou) e, atrás do topo, as costas descendo
         const ro = Re * (1 + TUBE.LIP), axo = AX * ro * (0.3 + 0.7 * c.curl), uo = (x - cq) / axo;
-        shape = x >= cq ? (uo < 1 ? cy + ro * Math.sqrt(1 - uo * uo) : 0) : cy + ro + (bump(-band.wb, hb, b.steep) - cy - ro) * smooth(0, 1, (cq - x) / (cq + band.wb));
+        shape = x >= cq ? (uo < 1 ? cy + ro * Math.sqrt(1 - uo * uo) : 0) : cy + ro + (bump(-band.wb, hb, b.steep, pf.BACK_W) - cy - ro) * smooth(0, 1, (cq - x) / (cq + band.wb));
       }
       hh += (shape - hh) * c.blend;
     }

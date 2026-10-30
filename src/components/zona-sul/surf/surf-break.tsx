@@ -33,11 +33,11 @@ export function surfFoldRange(lim: Lim = FULL, pf: SurfProfile = ARPOADOR, break
 export type SurfMeshRule = { ds: number; dsMobile: number; dense: number; denseMobile: number; denseOuter?: number; denseOuterMobile?: number };
 export const ARPOADOR_MESH: SurfMeshRule = { ds: 1.0, dsMobile: 1.4, dense: 0.25, denseMobile: 0.5 };
 
-/** Linhas da malha (q) de um perfil novo: densas só onde a onda dobra — na quebra de fora (`denseOuter`) e na 2ª
- *  quebra (`dense`); 2,5 m no resto (sem pular o começo de uma faixa densa). */
+/** Linhas da malha (q) de um perfil novo: densas só onde a onda dobra — nas seções de fora (`denseOuter`) e na ÚLTIMA,
+ *  a da beira, com o tubo (`dense`); 2,5 m no resto (sem pular o começo de uma faixa densa). */
 function surfRows(dense: number, lim: Lim, pf: SurfProfile, denseOuter = dense): number[] {
-  const bands: [number, number, number][] = [[...surfFoldRange(lim, pf), denseOuter]];
-  if (pf.INNER) bands.push([...surfFoldRange(lim, pf, pf.INNER.Q, pf.INNER.V_PEEL), dense]);
+  const secs = [{ Q: pf.BREAK_Q, V_PEEL: pf.V_PEEL }, ...pf.INNER];
+  const bands: [number, number, number][] = secs.map((x, i) => [...surfFoldRange(lim, pf, x.Q, x.V_PEEL), i === secs.length - 1 && secs.length > 1 ? dense : denseOuter]);
   const rows: number[] = [];
   let q = pf.Q_MIN;
   while (q < pf.Q_MAX - 1e-6) {
@@ -84,22 +84,28 @@ export function buildSurfGeometry(mobile: boolean, lim: Lim = FULL, pf: SurfProf
 }
 
 function surfGlsl(pf: SurfProfile): string {
-  const inner = pf.INNER;
-  // 2ª quebra (só perfis que têm): a espuma da de fora se desfaz (reform) e vale a abertura da de dentro — igual a barrelAt
+  const inner = pf.INNER.length > 0;
+  // SEÇÕES (só perfis que têm): a espuma da de base se desfaz (reform) e vale a abertura da próxima — igual a barrelAt.
+  // uWc = peel2R, peel2L, reform, stB · uWd = stA, lagA, outer
   const innerGlsl = inner ? `
-    vec4 c2 = uWc[i]; float rf = c2.z;
     if (rf > 0.0) { float d2 = mix(c2.y, c2.x, pk);
       op = mix(op, sm(0.0, ${pf.OPEN_EDGE.toFixed(1)}, d2 - aa), rf); cl = mix(cl, sm(0.0, ${pf.CLOSE_EDGE.toFixed(1)}, d2 - ${pf.CLOSE_LAG.toFixed(1)} - aa), rf);
-      stp = mix(stp, sm(-${STEEP_AHEAD.toFixed(1)}, 0.0, d2 - aa) * sm(${(inner.Q - 40).toFixed(1)}, ${(inner.Q - 5).toFixed(1)}, a.x), rf);
+      stp = mix(stp, sm(-${STEEP_AHEAD.toFixed(1)}, 0.0, d2 - aa) * c2.w, rf);
       rp = mix(rp, sm(0.0, ${CURL_RAMP.toFixed(1)}, d2 - aa), rf); d = mix(d, d2, rf); }` : '';
   const capGlsl = pf.CURL_OUT < 1 ? `
-    rp *= ${pf.CURL_OUT.toFixed(3)} + ${(1 - pf.CURL_OUT).toFixed(3)} * ${inner ? 'c2.z' : '0.0'};` : '';
+    { float capA = ${inner ? `c3.z > 0.5 ? ${pf.CURL_OUT.toFixed(3)} : 1.0` : pf.CURL_OUT.toFixed(3)}; rp *= capA + (1.0 - capA) * ${inner ? 'rf' : '0.0'}; }` : '';
   // quanto da forma de tubo existe (quebra de fora cheia) — Arpoador: nada disso (1)
-  const shp = pf.BARREL_OUT < 1 ? `(${pf.BARREL_OUT.toFixed(3)} + ${(1 - pf.BARREL_OUT).toFixed(3)} * ${inner ? 'c2.z' : '0.0'})` : '';
+  const shp = pf.BARREL_OUT < 1 ? `mix(${inner ? `(c3.z > 0.5 ? ${pf.BARREL_OUT.toFixed(3)} : 1.0)` : pf.BARREL_OUT.toFixed(3)}, 1.0, ${inner ? 'rf' : '0.0'})` : '';
+  // a linha da quebra de BASE: no Arpoador igual a antes (fecha em CLOSE_LAG_OUT, empina pela posição da quebra de fora)
+  const baseGlsl = inner
+    ? `vec4 c2 = uWc[i], c3 = uWd[i]; float rf = c2.z;
+    float op = sm(0.0, ${pf.OPEN_EDGE.toFixed(1)}, d - aa), cl = sm(0.0, ${pf.CLOSE_EDGE.toFixed(1)}, d - c3.y - aa), stp = sm(-${STEEP_AHEAD.toFixed(1)}, 0.0, d - aa) * c3.x, rp = sm(0.0, ${CURL_RAMP.toFixed(1)}, d - aa);`
+    : `float op = sm(0.0, ${pf.OPEN_EDGE.toFixed(1)}, d - aa), cl = sm(0.0, ${pf.CLOSE_EDGE.toFixed(1)}, d - ${pf.CLOSE_LAG_OUT.toFixed(1)} - aa), stp = sm(-${STEEP_AHEAD.toFixed(1)}, 0.0, d - aa) * sm(${(pf.BREAK_Q - 40).toFixed(1)}, ${(pf.BREAK_Q - 5).toFixed(1)}, a.x), rp = sm(0.0, ${CURL_RAMP.toFixed(1)}, d - aa);`;
   return /* glsl */ `
 uniform vec4 uWa[${SLOTS}];   // qc, h, peelR, peelL
 uniform vec4 uWb[${SLOTS}];   // hR, hL, ativa, vR (fase da ondulação da crista)${inner ? `
-uniform vec4 uWc[${SLOTS}];   // peel2R, peel2L, reform (2ª quebra)` : ''}
+uniform vec4 uWc[${SLOTS}];   // peel2R, peel2L, reform, stB (próxima seção)
+uniform vec4 uWd[${SLOTS}];   // stA, lagA, outer (seção de base)` : ''}
 float gLipX, gLipK; // ponta do lip da onda que dobra (x em raios, peso) — a espuma do lip é feita por PIXEL
 uniform vec2 uPeak, uQ, uS;
 attribute vec2 aRest;
@@ -107,7 +113,7 @@ varying float vFoam;
 varying float vCrest;
 float sm(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
 float bumpW(float x, float h, float st) {
-  float w = x > 0.0 ? 3.4 - 1.4 * st : 7.0; float r = x / w; float g = h * exp(-r * r);
+  float w = x > 0.0 ? 3.4 - 1.4 * st : ${pf.BACK_W.toFixed(3)}; float r = x / w; float g = h * exp(-r * r);
   if (x <= 0.0 || st <= 0.0) return g;
   float u = min(1.0, x / ${FACE_W.toFixed(3)}); float cc = h * (1.0 - u) * (1.0 - u); // face côncava (igual a bump)
   return g + (cc - g) * st;
@@ -146,16 +152,16 @@ vec4 surfPoint(vec2 sq) {
     vec4 a = uWa[i]; vec4 b = uWb[i];
     if (b.z < 0.5 || a.y <= 0.0) continue;
     float pk = sm(-PB, PB, s), d = mix(a.w, a.z, pk), aa = abs(s);
-    float op = sm(0.0, ${pf.OPEN_EDGE.toFixed(1)}, d - aa), cl = sm(0.0, ${pf.CLOSE_EDGE.toFixed(1)}, d - ${pf.CLOSE_LAG_OUT.toFixed(1)} - aa), stp = sm(-${STEEP_AHEAD.toFixed(1)}, 0.0, d - aa) * sm(${(pf.BREAK_Q - 40).toFixed(1)}, ${(pf.BREAK_Q - 5).toFixed(1)}, a.x), rp = sm(0.0, ${CURL_RAMP.toFixed(1)}, d - aa);${innerGlsl}${capGlsl}
+    ${baseGlsl}${innerGlsl}${capGlsl}
     float hs = a.y * mix(b.y, b.x, pk) * (1.0 + ${RIPPLE_A.toFixed(3)} * sin(${RIPPLE_K.toFixed(4)} * s + 7.0 * b.w)) * (1.0 - ${SHOULDER_DROP.toFixed(3)} * sm(${SHOULDER_HOLD.toFixed(1)}, ${(SHOULDER_HOLD + SHOULDER_LEN).toFixed(1)}, aa - d)), x = q0 - a.x - bendQ(s), R = tubeR(hs), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R;
-    y += bumpW(x, hs * (1.0 - 0.65 * cl), stp);
+    y += bumpW(x, hs * (1.0 - ${pf.CLOSED_DROP.toFixed(3)} * cl), stp);
     if (curlOf(op, cl, rp).y${shp ? ' * ' + shp : ''} > 0.001 && x <= wf && x >= -wb) { fold = true; fx = x; fOpen = op; fClosed = cl; fSteep = stp; fH = hs; fQc = a.x + bendQ(s); fRamp = rp; gLipX = x / R; gLipK = op * (1.0 - cl)${shp ? ' * ' + shp : ''};${shp ? ' fShape = ' + shp + ';' : ''} }
     float r1 = (x + 1.0) / 5.0;
     foam = max(foam, cl * exp(-r1 * r1)); // espuma de depois de fechar (larga, suave); a do lip vai pro pixel
   }
   float q = q0;
   if (fold) {
-    float R = tubeR(fH), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R, hh = fH * (1.0 - 0.65 * fClosed);
+    float R = tubeR(fH), wf = ${TUBE.WF.toFixed(3)} * R, wb = ${TUBE.WB.toFixed(3)} * R, hh = fH * (1.0 - ${pf.CLOSED_DROP.toFixed(3)} * fClosed);
     vec3 cu = curlOf(fOpen, fClosed, fRamp);${shp ? '\n    cu.y *= fShape;' : ''}
     float t = (wf - fx) / (wf + wb);
     vec2 c = barrelCurve(t, R, cu.x, fClosed, cu.z, bumpW(wf, hh, fSteep), bumpW(-wb, hh, fSteep));
@@ -221,6 +227,7 @@ export function SurfBreak({ t, shoreX, shoreZ, pf = ARPOADOR, frameOf, enabled =
     uWa: { value: Array.from({ length: SLOTS }, () => new THREE.Vector4()) },
     uWb: { value: Array.from({ length: SLOTS }, () => new THREE.Vector4()) },
     uWc: { value: Array.from({ length: SLOTS }, () => new THREE.Vector4()) },
+    uWd: { value: Array.from({ length: SLOTS }, () => new THREE.Vector4()) },
     uPeak: { value: new THREE.Vector2() }, uQ: { value: new THREE.Vector2() }, uS: { value: new THREE.Vector2() }, uLim: { value: new THREE.Vector2(pf.ZONE_S, pf.ZONE_S) },
   }), [pf]);
   const material = useMemo(() => surfMaterial(uniforms, pf), [uniforms, pf]);
@@ -253,7 +260,8 @@ export function SurfBreak({ t, shoreX, shoreZ, pf = ARPOADOR, frameOf, enabled =
       const s = scheduler.states[i]!, v = scheduler.vars[i]!;
       uniforms.uWa.value[i]!.set(s.qc, s.h, s.peelR, s.peelL);
       uniforms.uWb.value[i]!.set(v.hR, v.hL, s.active ? 1 : 0, v.vR);
-      uniforms.uWc.value[i]!.set(s.peel2R ?? 0, s.peel2L ?? 0, s.reform ?? 0, 0);
+      uniforms.uWc.value[i]!.set(s.peel2R ?? 0, s.peel2L ?? 0, s.reform ?? 0, s.stB ?? 0);
+      uniforms.uWd.value[i]!.set(s.stA ?? 0, s.lagA ?? pf.CLOSE_LAG_OUT, s.outer ?? 1, 0);
       if (s.active) any = true;
     }
     // só desenha a malha da onda PERTO e COM ONDA (calmaria = mar liso igual ao de volta; longe não se vê) — o mar em

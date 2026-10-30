@@ -20,6 +20,10 @@ export const RIDE = {
   LOSE_S: 2,                                 // segundos sem onda até deitar de novo (1,2 era pouco)
   LOST_PUSH: 0.6,                            // correnteza abaixo disso = "sem onda"
   WIPE_CHURN: 0.55, WIPE_S: 2.2, WIPE_CARRY: 1.2, WIPE_SPIN: 9, // vaca: limiar, duração, arrasto, giro (rad/s)
+  // SURFAR A ESPUMA (Pedro 30/10, Sorriso: "ficar ali pela espuma em pé e emendar na próxima seção"): em pé, onde a zona
+  // deixa (FOAM_RIDE), a espuma NÃO derruba — ela te leva; a prancha fica mais presa (curva ×FOAM_TURN, velocidade
+  // própria puxa pra FOAM_CRUISE, pra você ir JUNTO e não sair na frente) até a onda se refazer e você emendar.
+  FOAM_CHURN: 0.35, FOAM_TURN: 0.6, FOAM_CRUISE: 1.5,
   // MANOBRA (Pedro 28/10: "pro lado vai lateral, aéreo perto da crista, carving direitinho" — referência: Kelly Slater's
   // Pro Surfer = virar esq/dir + acelerar + frear). A prancha tem RUMO e VELOCIDADE próprios em cima da onda (que te
   // segura no bolso): vira com raio (carving), desce a face = ganha velocidade, sobe = perde (skate numa rampa que anda).
@@ -40,6 +44,8 @@ export type RideState = {
   mode: RideMode; t: number; vx: number; vz: number; lost: number; spin: number;
   /** em pé: rumo da prancha (yaw do mundo), velocidade própria em cima da onda, taxa de curva (pra inclinar) */
   yaw: number; speed: number; carve: number;
+  /** em pé surfando a espuma (Sorriso) — pra avisar uma vez no HUD */
+  foam?: boolean;
   /** aéreo: no ar? altura dos pés, velocidade vertical, giro acumulado; subida da água embaixo (suavizada) */
   air: boolean; y: number; vy: number; airSpin: number; spinDir: number; rise: number; prevSurf: number;
   /** placar: aéreos limpos e a última manobra (pro HUD) */
@@ -60,7 +66,9 @@ export type RideWater = { pushX: number; pushZ: number; churn: number; surfY?: n
   /** baforada do tubo (aceleração no mundo, m/s²) — empurra pra fora pela boca */
   spitX?: number; spitZ?: number;
   /** está dentro do tubo aberto? (a onda puxa até TUBE_SPEED) */
-  inTube?: boolean };
+  inTube?: boolean;
+  /** nesta zona dá pra surfar a espuma em pé (perfil FOAM_RIDE — Sorriso) */
+  foamRide?: boolean };
 export type RideAxes = { qx: number; qz: number; sx: number; sz: number };
 
 export function newRide(): RideState {
@@ -77,7 +85,9 @@ export function canPop(st: RideState, w: RideWater, waveC: number): boolean {
 export function rideStep(st: RideState, inp: RideInput, w: RideWater, ax: RideAxes, waveC: number, dt: number): { dx: number; dz: number } {
   st.t += dt;
   const go = (m: RideMode) => { st.mode = m; st.t = 0; st.lost = 0; };
-  if (st.mode !== 'wipe' && w.churn >= RIDE.WIPE_CHURN) go('wipe'); // a onda fechou em cima: vaca
+  // a onda fechou em cima: vaca — menos EM PÉ numa zona que deixa surfar a espuma (Sorriso): aí ela te leva
+  const foamRide = !!w.foamRide && st.mode === 'ride' && !st.air;
+  if (st.mode !== 'wipe' && w.churn >= RIDE.WIPE_CHURN && !foamRide) go('wipe');
   const pm = Math.hypot(w.pushX, w.pushZ);
   switch (st.mode) {
     case 'paddle': {
@@ -129,7 +139,11 @@ export function rideStep(st: RideState, inp: RideInput, w: RideWater, ax: RideAx
       // ── CARVING: a prancha vira pro lado que você aponta, com raio (não muda de direção na hora) ───────────────
       // D = direita (o rumo gira no sentido horário visto de cima = yaw diminui), A = esquerda
       const prevYaw = st.yaw, steer = Math.max(-1, Math.min(1, inp.steer ?? 0)), thr = Math.max(-1, Math.min(1, inp.throttle ?? 0));
-      st.yaw = wrap(st.yaw - steer * RIDE.TURN * dt);
+      // NA ESPUMA (Sorriso): a espuma te leva; prancha mais presa (curva menor, velocidade própria baixa)
+      const inFoam = foamRide && w.churn >= RIDE.FOAM_CHURN;
+      if (inFoam && !st.foam) { st.trick = 'na espuma — segura e emenda!'; st.trickT = 2.5; }
+      st.foam = inFoam;
+      st.yaw = wrap(st.yaw - steer * RIDE.TURN * (inFoam ? RIDE.FOAM_TURN : 1) * dt);
       // sem velocidade na parede, a ponta CAI rampa abaixo sozinha (não fica "parado" no meio da face)
       const gm = Math.hypot(w.gradX ?? 0, w.gradZ ?? 0);
       if (st.speed < 2.5 && gm > 0.15) {
@@ -155,7 +169,7 @@ export function rideStep(st: RideState, inp: RideInput, w: RideWater, ax: RideAx
       // BOOST: toque no Shift = +2 km/h na hora (com respiro)
       st.boostCd = Math.max(0, st.boostCd - dt);
       if (inp.boost && st.boostCd <= 0) { st.speed += RIDE.BOOST; st.boostCd = RIDE.BOOST_CD; }
-      st.speed += (RIDE.G_FACE * down - RIDE.DRAG * (st.speed - RIDE.S_CRUISE) + RIDE.PUMP * pump - RIDE.STALL * stall) * dt;
+      st.speed += (RIDE.G_FACE * down - RIDE.DRAG * (st.speed - (inFoam ? RIDE.FOAM_CRUISE : RIDE.S_CRUISE)) + RIDE.PUMP * pump - RIDE.STALL * stall) * dt;
       st.speed = Math.max(0, Math.min(RIDE.S_MAX, st.speed));
       st.vx = ax.qx * carry + ux * st.speed; st.vz = ax.qz * carry + uz * st.speed;
       // ── AÉREO: a água embaixo subia rápido (subindo a face rumo ao lip) e agora desce (passou o lip) → decola ───
