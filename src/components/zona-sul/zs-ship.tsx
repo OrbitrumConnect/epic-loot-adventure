@@ -15,10 +15,11 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { type ZsTerrain, zsHeightAt } from './zs-terrain-data';
 
-/** Onde/como fica (Pedro 30/10: "estava colado perto da Niemeyer — era mais pro MEIO do mar e da praia"): no MEIO
- *  da praia entre Ipanema e Leblon, ~65 m mar adentro (8,5 m de fundura), quase paralelo à areia, ancorado e flutuando
- *  (quilha 2,2 m abaixo d'água), levemente adernado. Sobe-se por uma ESCADA DE CORDA no costado virado pra praia. */
-export const SHIP = { x: -250, z: 440, yaw: 0.18, length: 38, keelY: -2.2, roll: 0.03 } as const;
+/** Onde/como fica (Pedro 30/10: "mais pro MEIO do mar e da praia" → depois "uns 15 m dentro d'água, virado em diagonal
+ *  leve pra frente, uns 30 m mais longe do Arpoador"): no meio da praia entre Ipanema e Leblon, centro ~18 m depois da
+ *  linha d'água (z ≈ 377 aqui; 2,9 m de fundura), em diagonal leve (~26°) com a PROA (gurupés) de frente pra praia,
+ *  popa pro mar aberto; flutuando (quilha 2,2 m abaixo d'água), levemente adernado. Sobe-se pela prancha (se a areia alcança) ou pela ESCADA DE CORDA no costado da praia. */
+export const SHIP = { x: -280, z: 395, yaw: -0.45, length: 38, keelY: -2.2, roll: 0.03 } as const;
 /** Escada de corda: 1,8 m de largura, sai do bordo até a água; quem chega nadando nela SOBE pro convés. */
 const LADDER_W = 1.8, LADDER_OUT = 1.8;
 /** Convés = 1º piso abaixo desta fração da altura total (acima disso: velas, mastros, cordame). */

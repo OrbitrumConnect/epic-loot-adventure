@@ -11,10 +11,12 @@
  */
 
 export const GLIDE = {
-  /** velocidade de cruzeiro / mínima (abaixo estola) / máxima (m/s) */
-  CRUISE: 11, MIN: 6.5, MAX: 28,
-  /** afundamento (m/s) no cruzeiro; no estol; extra por m/s acima do cruzeiro (mergulho) */
-  SINK: 1.1, SINK_STALL: 5, SINK_PER_SPEED: 0.9,
+  /** velocidade de cruzeiro / mínima (abaixo estola) / máxima (m/s). Pedro 30/10: "planando reto tá em 40 km/h, pode
+   *  ser uns 65" → cruzeiro 18 m/s (65 km/h); estol e máxima subiram na mesma proporção (38 e 130 km/h). */
+  CRUISE: 18, MIN: 10.5, MAX: 36,
+  /** afundamento (m/s) no cruzeiro; no estol; extra por m/s acima do cruzeiro (mergulho). Cruzeiro mais rápido → afunda
+   *  na mesma proporção (1,8 m/s a 18 m/s = os mesmos ~10 m pra frente por metro perdido de antes) */
+  SINK: 1.8, SINK_STALL: 6, SINK_PER_SPEED: 0.9,
   /** W: ganha velocidade (m/s²); S: perde; solto: volta pro cruzeiro. RASANTE (Pedro 30/10: "senti falta de dar
    *  rasante, inclinar ela pra baixo"): W mergulha forte; S com velocidade ACIMA do cruzeiro troca velocidade por SUBIDA
    *  (o "pull-up" de piloto de verdade: desce em rasante e sobe de novo). */

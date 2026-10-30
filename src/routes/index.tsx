@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGameStore, arrowRainCooldownFor } from '@/game/state/game-store';
-import { heroPowerCooldown, HERO_POWER_UNLOCK, type HeroPowerId } from '@/game/systems/heroPowersSystem';
+import { heroPowerCooldown, HERO_POWER_IDS, HERO_POWER_UNLOCK, type HeroPowerId } from '@/game/systems/heroPowersSystem';
 import { BOOST_UNLOCK_LEVEL, boostCooldown } from '@/game/systems/burstSystem';
 import { dodgeCooldownLeft, requestDodge } from '@/game/systems/dodgeSystem';
 import { startLocalPersistence } from '@/game/state/local-persistence';
@@ -45,6 +45,7 @@ import { MusicPlayer } from '@/components/MusicPlayer';
 import { audioManager } from '@/game/audio/audio-manager';
 import { setBuildActive } from '@/components/world/build-mode';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
+import { usePlayerSansPosition } from '@/game/state/player-sans-position';
 import {
   clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
   toggleRepeat, useObjectivesState, useTargetIdState,
@@ -178,6 +179,30 @@ const navigation = [
   { id: 'rooms', name: 'Salas', icon: Users },
 ];
 
+/** Alguma contagem regressiva na tela agora? (recargas Q/R, chuva de flechas, boost, poderes, esquiva, paz da onda,
+ *  ranking aberto, morto) — o relógio de 1 s só precisa re-renderizar a página nesses casos (30/10, lag). */
+function countdownsActive(): boolean {
+  const s = useGameStore.getState(), p = s.player, now = Date.now() / 1000;
+  return dodgeCooldownLeft() > 0
+    || now - (p.lastSpecialAt ?? 0) < effectiveSpecialCooldown(p)
+    || now - s.lastArrowRainAt < arrowRainCooldownFor(p.level)
+    || now - s.lastBoostFireAt < boostCooldown(p.level)
+    || HERO_POWER_IDS.some((id) => now - s.heroPowers.lastAt[id] < heroPowerCooldown(id, p.level))
+    || s.wave.phase === 'peace' || s.ui.panel === 'ranks' || p.dead;
+}
+
+/** Coordenadas do Vale (canto do minimapa): assina SÓ a posição — redesenha só este pedacinho. */
+function MapCoordinate({ day, time }: { day: number; time: string }) {
+  const x = useGameStore(s => Math.round(s.player.position.x + 124));
+  const z = useGameStore(s => Math.round(s.player.position.z + 86));
+  return (
+    <div className="map-coordinate">
+      <span>{x}, {z}</span>
+      <span>Dia {day} · {time}</span>
+    </div>
+  );
+}
+
 function Index() {
   const [ready, setReady] = useState(false);
   const editorActive = useEditorStore(s => s.active);
@@ -213,7 +238,7 @@ function Index() {
   const [levelUpFlash, setLevelUpFlash] = useState(false);
   const prevLevel = useRef<number | null>(null);
 
-  const player = useGameStore(s => s.player);
+  const player = usePlayerSansPosition();
   const stats = useGameStore(s => s.stats);
   const ui = useGameStore(s => s.ui);
   const attackTick = useGameStore(s => s.attackTick);
@@ -238,9 +263,19 @@ function Index() {
   // SSR e cliente renderizarem igual — WORLD_EPOCH difere entre server e cliente, então
   // gameClock() inicial causaria hydration mismatch. O tempo real entra após o mount.
   const [clock, setClock] = useState(() => gameClock(WORLD_EPOCH));
+  // RELÓGIO SÓ QUANDO PRECISA (30/10, Pedro: "o lag está aumentando"): o tique de 1 s re-renderizava a página INTEIRA
+  // toda hora. Na Zona Sul o relógio não aparece → só bate com contagem na tela (+1 tique final pra zerar o número).
+  // No Vale (relógio no minimapa) bate sempre, igual antes.
+  const zsRef = useRef(zs);
+  zsRef.current = zs;
   useEffect(() => {
     setClock(gameClock());
-    const id = setInterval(() => setClock(gameClock()), 1000);
+    let was = true;
+    const id = setInterval(() => {
+      const need = !zsRef.current || countdownsActive();
+      if (need || was) setClock(gameClock());
+      was = need;
+    }, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -343,7 +378,6 @@ function Index() {
   const hallLevel = useGameStore(s => getHallLevel(s.base));
   const eraName = getEra(hallLevel).name;
   const wallTier = useGameStore(s => (s.baseMetal ? 'metal' : s.baseEvolved ? 'pedra' : 'madeira'));
-  const position = [player.position.x, player.position.z];
 
   const hitNearest = useCallback(() => {
     const state = useGameStore.getState();
@@ -864,10 +898,7 @@ function Index() {
 
           {!zs && <div className="world-right">
             <div className="minimap"><WorldMap size="mini" /><span className="minimap-north">N</span></div>
-            <div className="map-coordinate">
-              <span>{Math.round((position[0] ?? 0) + 124)}, {Math.round((position[1] ?? 0) + 86)}</span>
-              <span>Dia {clock.day} · {clock.time}</span>
-            </div>
+            <MapCoordinate day={clock.day} time={clock.time} />
             <div className="quest">
               <div className="quest-caption"><Target />SUA EXPEDIÇÃO</div>
               <h2>O primeiro passo</h2>

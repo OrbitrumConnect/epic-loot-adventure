@@ -12,7 +12,7 @@ import { useGLTF } from '@react-three/drei';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { dayNight, gameHour, nightFactor } from '@/game/systems/dayNightSystem';
-import { touchLayout } from '@/components/world/virtual-input';
+import { requestLight } from '@/components/world/light-pool';
 import { type ZsTerrain, zsHeightAt, zsSlopeDeg } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
 
@@ -26,8 +26,9 @@ const MOON_DIR = new THREE.Vector3(0.35, 0.8, 0.45).normalize();
 const HEMI_DAY = new THREE.Color('#eef4f8'), HEMI_NIGHT = new THREE.Color('#9fb3e6');
 const GROUND_DAY = new THREE.Color('#6b7a4a'), GROUND_NIGHT = new THREE.Color('#2c3448');
 const MOON_LIGHT = new THREE.Color('#c9d8ff'), NIGHT_FOG = new THREE.Color('#3b4a6e');
-/** intensidades da NOITE (lua cheia): luar, céu (hemisfério), ambiente */
-export const NIGHT_LIGHT = { moon: 1.25, hemi: 0.85, amb: 0.3 } as const;
+/** intensidades da NOITE (lua cheia): luar, céu (hemisfério), ambiente. Pedro 30/10: "pode escurecer uns 10–15%"
+ *  → 13% abaixo de antes (1,25 / 0,85 / 0,3). */
+export const NIGHT_LIGHT = { moon: 1.09, hemi: 0.74, amb: 0.26 } as const;
 const tmpC = new THREE.Color(), sunV = new THREE.Vector3();
 
 /** Direção do sol pela hora do jogo: nasce a leste (+x) às 6h, passa pelo norte (−z), põe a oeste às 18h. */
@@ -125,6 +126,8 @@ export function zsLampSpots(t: ZsTerrain, spacing = LAMP_SPACING, max = 600): { 
 }
 
 const LAMP_URL = '/zona-sul/lamp.glb';
+/** quantos postes (os mais perto) pedem luz ao pool por quadro — o pool usa só as vagas que tem (PC 4 · celular 2) */
+const LAMP_LIGHTS = 6, LAMP_COLOR = new THREE.Color('#ffd59a');
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), ONE = new THREE.Vector3(1, 1, 1), tmpP = new THREE.Vector3();
 
 export function ZsLamps({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3> }) {
@@ -155,22 +158,19 @@ export function ZsLamps({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRe
   const posts = useRef<THREE.InstancedMesh>(null);
   const bulbs = useRef<THREE.InstancedMesh>(null);
   const bulbMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffd391', transparent: true, opacity: 0, toneMapped: false, depthWrite: false }), []);
-  const lights = useRef<(THREE.PointLight | null)[]>([]);
   const nearest = useRef<number[]>([]);
   const acc = useRef(1);
   useEffect(() => () => { geo.dispose(); bulbMat.dispose(); }, [geo, bulbMat]);
   useFrame((_, dt) => {
     const nf = nightFactor();
-    // luzes acesas (tremeluzindo) — todo quadro, só as poucas do pool
-    const budget = touchLayout.on ? 3 : 6; // Pedro 30/10: "no poste mais claridade"
-    for (let i = 0; i < lights.current.length; i++) {
-      const l = lights.current[i];
-      if (!l) continue;
-      const idx = nearest.current[i];
-      // a luz fica SEMPRE na cena (só a força muda): ligar/desligar luz faz o three RECOMPILAR os materiais de tudo →
-      // travadinha ao anoitecer / ao trocar de poste (30/10). Apagada = força 0.
-      const on = nf > 0.04 && i < budget && idx !== undefined;
-      l.intensity = on ? nf * 38 * (0.93 + Math.sin(performance.now() * 0.006 + i * 1.3) * 0.07) : 0;
+    // luzes acesas (tremeluzindo) à noite: os postes mais perto PEDEM vaga no POOL de luzes (light-pool.tsx) — ele
+    // tem um número FIXO de luzes (sem recompilar materiais) e de dia, sem pedido, tira as luzes do shader (custo zero)
+    if (nf > 0.04) {
+      const near = nearest.current, now = performance.now();
+      for (let i = 0; i < Math.min(LAMP_LIGHTS, near.length); i++) {
+        const s = spots[near[i]!]!;
+        requestLight(s.x, s.y + LAMP_H * 0.9, s.z, LAMP_COLOR, nf * 38 * (0.93 + Math.sin(now * 0.006 + i * 1.3) * 0.07), 30, 1.25);
+      }
     }
     bulbMat.opacity = Math.min(1, nf * 1.6);
     acc.current += dt;
@@ -189,8 +189,6 @@ export function ZsLamps({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRe
       const s = spots[cand[k]!.i]!;
       pm.setMatrixAt(k, tmpM.compose(tmpP.set(s.x, s.y, s.z), tmpQ, ONE));
       bm.setMatrixAt(k, tmpM.compose(tmpP.set(s.x, s.y + LAMP_H * 0.9, s.z), tmpQ, ONE));
-      const l = lights.current[k];
-      if (l) l.position.set(s.x, s.y + LAMP_H * 0.9, s.z);
     }
     pm.count = n; bm.count = n;
     pm.instanceMatrix.needsUpdate = true; bm.instanceMatrix.needsUpdate = true;
@@ -202,9 +200,6 @@ export function ZsLamps({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRe
       <instancedMesh ref={bulbs} args={[undefined, bulbMat, LAMP_MAX_DRAWN]} frustumCulled={false}>
         <sphereGeometry args={[0.36, 10, 8]} />
       </instancedMesh>
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <pointLight key={i} ref={(l) => { lights.current[i] = l; }} color="#ffd59a" intensity={0} distance={30} decay={1.25} position={[0, -1000, 0]} />
-      ))}
     </>
   );
 }

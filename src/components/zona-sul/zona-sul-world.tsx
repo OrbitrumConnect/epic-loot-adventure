@@ -38,6 +38,7 @@ import { effectiveAttributes } from '@/game/systems/attributesSystem';
 import { audioManager } from '@/game/audio/audio-manager';
 import { heroFacing } from '@/components/world/free-aim';
 import { takeVirtualLook, touchLayout, virtualMove } from '@/components/world/virtual-input';
+import { LightPool } from '@/components/world/light-pool';
 import { noteManualLook } from '@/components/world/pilot-aim';
 import { HeroNameplate } from '@/components/world/hero-nameplate';
 import { Camps, Enemies } from '@/components/world/world-entities';
@@ -172,13 +173,13 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const facing = useRef(0);
   const hudAcc = useRef(0);
   const sun = useRef<THREE.DirectionalLight>(null);
-  const { camera, scene } = useThree();
+  const { camera, scene, gl } = useThree();
   useEffect(() => { playerRef.current = group.current; return () => { playerRef.current = null; }; }, [playerRef]);
   useEffect(() => { setAimCamera(camera); return () => { setAimCamera(null); setAiming(false); }; }, [camera]);
   useEffect(() => { atkTick.current = useGameStore.getState().attackTick; specTick.current = useGameStore.getState().specialTick; }, []);
 
   // só em desenvolvimento: testes de tela leem/forçam o surf (o jogo publicado não expõe nada)
-  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action, scene, camera, glide, skate, air: (vy0 = -3) => { grounded.current = false; vy.current = vy0; } }; }, [scene, camera]);
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __zsRide?: unknown }).__zsRide = { ride, input, action, scene, camera, gl, glide, skate, air: (vy0 = -3) => { grounded.current = false; vy.current = vy0; } }; }, [scene, camera, gl]);
   const fog = useMemo(() => new THREE.Fog(FOG, 200, 2200), []); // névoa LEVE (custo ~zero: é uma conta no shader)
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
@@ -880,6 +881,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           <ambientLight ref={ambRef} intensity={0.35} />
           {/* DIA/NOITE (relógio do jogo) + lua + postes nas pistas */}
           <ZsDayNight hemi={hemiRef} amb={ambRef} sky={skyRef} />
+          {/* POOL DE LUZES (30/10, lag): postes, fogueiras e tocha dividem poucas luzes FIXAS — sem recompilar shader; de dia saem */}
+          <LightPool size={touchLayout.on ? 2 : 4} focus={heroRef} />
           <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
           {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
           <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>

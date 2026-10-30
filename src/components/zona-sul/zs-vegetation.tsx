@@ -77,6 +77,19 @@ function kindGeometry(kind: ZsVegKind): THREE.BufferGeometry {
 }
 const KINDS: ZsVegKind[] = ['canopy', 'emergent', 'fern', 'palm', 'bush', 'farm', 'far'];
 const CAP: Record<ZsVegKind, number> = { canopy: 3500, emergent: 400, fern: 1600, palm: 500, bush: 2200, farm: 400, far: 12000 };
+/** SOMBRA só das árvores PERTO (30/10, Pedro: "o lag está aumentando"): a caixa de sombra do sol cobre ±45 m em volta
+ *  do herói — árvore além de ~64 m (a diagonal da caixa) não sombreia nada que apareça, mas TODAS as copas até 150 m
+ *  (~3 mil, instanciado sem corte) entravam no passe de sombra. Agora as de perto vão numa malha COM sombra (mesma
+ *  geometria e material) e o resto numa sem. Visual igual; o passe de sombra cai pra ~1/10 das árvores. */
+export const ZS_VEG_SHADOW_R = 64;
+const SHADOW_KINDS = ['canopy', 'emergent', 'farm'] as const;
+type ShadowKind = (typeof SHADOW_KINDS)[number];
+const SHADOW_CAP: Record<ShadowKind, number> = { canopy: 500, emergent: 120, farm: 160 };
+const isShadowKind = (k: ZsVegKind): k is ShadowKind => (SHADOW_KINDS as readonly string[]).includes(k);
+/** Vai pra malha com sombra? (puro, testável) */
+export function zsVegCastsShadow(it: ZsVegItem, hx: number, hz: number): boolean {
+  return isShadowKind(it.kind) && (it.x - hx) ** 2 + (it.z - hz) ** 2 < ZS_VEG_SHADOW_R * ZS_VEG_SHADOW_R;
+}
 /** Largura (fração da altura) por tipo. */
 const WIDTH: Record<ZsVegKind, number> = { canopy: 0.85, emergent: 0.75, fern: 0.9, palm: 0.9, bush: 1.5, farm: 0.9, far: 0.85 };
 
@@ -126,11 +139,17 @@ export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.Muta
     for (const k of KINDS) {
       const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: k === 'fern' || k === 'palm' ? THREE.DoubleSide : THREE.FrontSide, flatShading: true });
       const im = new THREE.InstancedMesh(kindGeometry(k), mat, CAP[k]);
-      // sombra só das árvores grandes (samambaia, coqueiro e arbusto não: pesa e quase não se vê)
-      im.count = 0; im.frustumCulled = false; im.castShadow = k === 'canopy' || k === 'emergent' || k === 'farm'; im.receiveShadow = false;
+      // sombra só das árvores grandes e PERTO (a malha "sh" abaixo); samambaia, coqueiro e arbusto não: pesa e quase não se vê
+      im.count = 0; im.frustumCulled = false; im.castShadow = false; im.receiveShadow = false;
       m[k] = im;
     }
-    return m;
+    const sh = {} as Record<ShadowKind, THREE.InstancedMesh>;
+    for (const k of SHADOW_KINDS) {
+      const im = new THREE.InstancedMesh(m[k].geometry, m[k].material, SHADOW_CAP[k]);
+      im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = false;
+      sh[k] = im;
+    }
+    return { ...m, sh };
   }, []);
   const lastCell = useRef('');
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -140,16 +159,24 @@ export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.Muta
     if (key === lastCell.current) return;
     lastCell.current = key;
     const counts = Object.fromEntries(KINDS.map((k) => [k, 0])) as Record<ZsVegKind, number>;
+    const shCounts = { canopy: 0, emergent: 0, farm: 0 } as Record<ShadowKind, number>;
     for (const it of zsVegetationAround(t, hx, hz)) {
-      const im = meshes[it.kind];
-      if (counts[it.kind] >= CAP[it.kind]) continue;
+      const toShadow = zsVegCastsShadow(it, hx, hz) && shCounts[it.kind as ShadowKind] < SHADOW_CAP[it.kind as ShadowKind];
+      if (!toShadow && counts[it.kind] >= CAP[it.kind]) continue;
       const w = it.h * WIDTH[it.kind];
       dummy.position.set(it.x, it.y - 0.15, it.z); dummy.rotation.set(0, it.yaw, 0); dummy.scale.set(w, it.h, w);
       dummy.updateMatrix();
-      im.setMatrixAt(counts[it.kind]++, dummy.matrix);
+      if (toShadow) meshes.sh[it.kind as ShadowKind].setMatrixAt(shCounts[it.kind as ShadowKind]++, dummy.matrix);
+      else meshes[it.kind].setMatrixAt(counts[it.kind]++, dummy.matrix);
     }
     for (const k of KINDS) { meshes[k].count = counts[k]; meshes[k].instanceMatrix.needsUpdate = true; }
+    for (const k of SHADOW_KINDS) { meshes.sh[k].count = shCounts[k]; meshes.sh[k].instanceMatrix.needsUpdate = true; }
   });
   useEffect(() => () => { for (const k of KINDS) { meshes[k].geometry.dispose(); (meshes[k].material as THREE.Material).dispose(); } }, [meshes]);
-  return <group>{KINDS.map((k) => <primitive key={k} object={meshes[k]} />)}</group>;
+  return (
+    <group>
+      {KINDS.map((k) => <primitive key={k} object={meshes[k]} />)}
+      {SHADOW_KINDS.map((k) => <primitive key={'sh-' + k} object={meshes.sh[k]} />)}
+    </group>
+  );
 }

@@ -25,6 +25,7 @@ import { nightFactor } from '@/game/systems/dayNightSystem';
 import { WatchtowerModel } from './glb-watchtower';
 import { useGameStore } from '@/game/state/game-store';
 import { lightAllowed, useLightId } from './light-budget';
+import { requestLight } from './light-pool';
 
 /** Distância² (m²) além da qual a luz da fogueira do acampamento sai do shader. */
 const CAMP_LIGHT_D2 = 26 * 26;
@@ -217,15 +218,21 @@ function Bonfire({ kit, cleared, flameRef }: { kit: CampKit; cleared: boolean; f
     if (fl) {
       fl.getWorldPosition(tmpCampV);
       const d2 = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z);
-      const near = lightAllowed(fireId, d2 < CAMP_LIGHT_D2, d2); // + orçamento de luzes no celular
-      fl.visible = near;
-      if (near) fl.intensity = (3.6 + nightFactor() * 8) + Math.sin(clock.elapsedTime * 7) * 0.7; // +luz (Pedro)
+      const fire = (3.6 + nightFactor() * 8) + Math.sin(clock.elapsedTime * 7) * 0.7; // +luz (Pedro)
+      // Zona Sul (pool de luzes): a luz própria fica FORA da cena e a fogueira pede vaga no pool — sem recompilar
+      if (requestLight(tmpCampV.x, tmpCampV.y, tmpCampV.z, fl.color, d2 < CAMP_LIGHT_D2 ? fire : 0, fl.distance, fl.decay)) fl.visible = false;
+      else {
+        const near = lightAllowed(fireId, d2 < CAMP_LIGHT_D2, d2); // + orçamento de luzes no celular
+        fl.visible = near;
+        if (near) fl.intensity = fire;
+      }
     }
     const el = emberLight.current;
     if (el) {
       el.getWorldPosition(tmpCampV);
       const d2e = (p.x - tmpCampV.x) * (p.x - tmpCampV.x) + (p.z - tmpCampV.z) * (p.z - tmpCampV.z);
-      el.visible = lightAllowed(emberId, d2e < CAMP_LIGHT_D2, d2e);
+      if (requestLight(tmpCampV.x, tmpCampV.y, tmpCampV.z, el.color, d2e < CAMP_LIGHT_D2 ? el.intensity : 0, el.distance, el.decay)) el.visible = false;
+      else el.visible = lightAllowed(emberId, d2e < CAMP_LIGHT_D2, d2e);
     }
   });
   return (

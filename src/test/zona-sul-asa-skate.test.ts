@@ -16,6 +16,7 @@ describe('asa-delta (nível 8)', () => {
     run(300, () => { const r = glideStep(s, { steer: 0, pitch: 0 }, 0, dt); dist += Math.hypot(r.dx, r.dz); });
     const ratio = dist / (300 - s.y);
     expect(ratio).toBeGreaterThan(8); expect(ratio).toBeLessThan(12);
+    expect(Math.round(GLIDE.CRUISE * 3.6)).toBe(65); // Pedro 30/10: planando reto ~65 km/h (era 40)
   });
   it('W mergulha (mais rápido, perde mais altura); S empina até estolar (afunda forte)', () => {
     const dive = newGlide(0, 300), trim = newGlide(0, 300), flare = newGlide(0, 300);

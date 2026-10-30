@@ -21,6 +21,9 @@ import { PistolModel, RifleModel } from './weapon-models';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mixColor, type Palette } from './world-kit';
+import { requestLight } from './light-pool';
+
+const tmpTorchV = new THREE.Vector3();
 
 export type HeldKind = 'sword' | 'axe' | 'pickaxe' | 'iron_axe' | 'iron_pickaxe' | 'torch' | 'bow' | 'pistol' | 'rifle' | 'fist';
 
@@ -171,7 +174,14 @@ function Torch({ k }: { k: Kit }) {
       f.rotation.y = t * 2;
     }
     // Tremeluzir: a tocha realmente ilumina o raio ao redor do jogador.
-    if (light.current) light.current.intensity = 7.8 + Math.sin(t * 17) * 1.1 + Math.sin(t * 29) * 0.5;
+    const l = light.current;
+    if (l) {
+      const inten = 7.8 + Math.sin(t * 17) * 1.1 + Math.sin(t * 29) * 0.5;
+      // Zona Sul (pool de luzes): a tocha pede vaga no pool (equipar/guardar não muda a contagem de luzes → sem travada)
+      l.getWorldPosition(tmpTorchV);
+      if (requestLight(tmpTorchV.x, tmpTorchV.y, tmpTorchV.z, l.color, inten, l.distance, l.decay)) l.visible = false;
+      else { l.visible = true; l.intensity = inten; }
+    }
   });
   return (
     <>

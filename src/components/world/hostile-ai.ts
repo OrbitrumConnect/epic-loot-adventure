@@ -125,6 +125,19 @@ export function labelScaleFor(camera: THREE.Camera, viewportHeight: number, dist
 const LABEL_RANGE = 12;
 /** Raio do corpo da criatura para a colisão com a base (aprox., igual ao player). */
 const CREATURE_RADIUS = 0.5;
+/** IA POR DISTÂNCIA (30/10, Pedro: "o lag está aumentando" — medido: 217 bichos pensando TODO quadro = ~12% da CPU
+ *  dirigindo). Longe de TODO jogador (além do corpo desenhado: 135 + 15 m) o bicho pensa a cada AI_FAR_EVERY quadros com
+ *  o tempo SOMADO — anda/volta pra casa na mesma velocidade, nada congela; perto, todo quadro igual antes. */
+export const AI_FAR_M = 160;
+export const AI_FAR_EVERY = 4;
+/** Passo da IA (puro, testável): devolve o dt a aplicar agora (0 = pula este quadro). */
+export function aiLodStep(st: { frame: number; acc: number }, delta: number, far: boolean): number {
+  st.acc += delta;
+  if (far && ++st.frame % AI_FAR_EVERY !== 0) return 0;
+  const d = Math.min(st.acc, far ? 0.25 : 0.05);
+  st.acc = 0;
+  return d;
+}
 /** Separação entre criaturas (anti-empilhamento): 2 corpos se empurram quando a distância < soma dos raios
  *  (`r` de cada um; sem `r` = SEP_RADIUS/2). Evita "10 bichos dentro de 1" cercando o jogador. */
 const SEP_RADIUS = 1.1;
@@ -378,6 +391,7 @@ export function useHostileAI(opts: HostileOptions) {
   const hitTime = useRef(-Infinity);
   const baseScale = useRef<THREE.Vector3 | null>(null);
   const death = useRef({ startedAt: -Infinity, y: 0, hold: 0 });
+  const lod = useRef({ frame: Math.floor(Math.random() * AI_FAR_EVERY), acc: 0 }); // espalha os de longe entre quadros
 
   useEffect(() => () => {
     creatureAnchors.delete(creatureId); anchor.current = null;
@@ -387,7 +401,15 @@ export function useHostileAI(opts: HostileOptions) {
   useFrame((state, delta) => {
     const g = group.current;
     if (!g) return;
-    const dt = Math.min(delta, 0.05);
+    const me = playerRef.current?.position;
+    let far = false;
+    if (me) {
+      const f2 = AI_FAR_M * AI_FAR_M;
+      far = (g.position.x - me.x) ** 2 + (g.position.z - me.z) ** 2 > f2;
+      if (far) for (const r of remoteTargets()) if ((g.position.x - r.x) ** 2 + (g.position.z - r.z) ** 2 <= f2) { far = false; break; }
+    }
+    const dt = aiLodStep(lod.current, delta, far);
+    if (dt === 0) return;
 
     if (!anchor.current) {
       anchor.current = { x: 0, y: 0, z: 0, top: 1.5, alive: false, r: opts.bodyRadius ?? SEP_RADIUS / 2 };

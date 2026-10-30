@@ -106,14 +106,17 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [x] Liberação por nível: prancha 5 · carro 25 · fuzil 35 · (asa-delta 8 e skate voador 15 quando entrarem)
 - [x] Armas/tiro completos na Zona Sul (mira, coice, poderes, morte/renascer, piloto) — 29/10
 - [x] Celular: TODOS os gatilhos e o joystick do jogo (arco de poderes, atacar, mira) também na Zona Sul
-- [ ] Postes nas pistas de barro · dia/noite
+- [x] Postes nas pistas de barro · dia/noite (lua cheia; 30/10 noite −13%)
 - [x] Fauna por região: jacaré na Lagoa, leão no campo aberto, bichos na mata; PRAIA mais vazia (zona segura)
-- [x] Acampamentos inimigos no mato, em locais adequados (8) — [ ] conferir fogueira acesa na Zona Sul
+- [x] Acampamentos inimigos no mato, em locais adequados (8) — [x] fogueira acesa (pool de luzes, 30/10)
 - [x] Carro +35%
 - [ ] Investigar o aviso INP 224 ms (clique travando a tela)
 - [ ] Minimapa/mapa (M) da Zona Sul
 - [ ] SALAS / MULTIPLAYER na Zona Sul com toda a experiência (outros jogadores, horda, PvP, carro/prancha/onda visíveis) — Pedro 29/10
-- [x] Navio entre Ipanema e Leblon, meio na água, sobe pela prancha, casco com colisão (30/10)
+- [x] Navio entre Ipanema e Leblon, ~15 m dentro d'água, diagonal leve, proa pra praia, escada de corda (30/10)
+- [x] Asa-delta planando ~65 km/h (30/10)
+- [x] LAG 30/10: página sem re-render pela posição/relógio, IA por distância, pool de luzes, pedra/acampamento simplificados, sombra só da mata perto, bichos entrando 1 por quadro
+- [ ] LAG próximo: pré-aquecer na carga os modelos de inimigos/bichos (1ª aparição de cada tipo ~1 s no dev); ganso 6,8 MB
 - [ ] Bases na Zona Sul (Fase 4): locais — Pedro: "tem tudo, só progredir" → propor áreas planas e seguras pra ele aprovar
 - [x] Skate voador (nv 15) · asa-delta (nv 8) — no kit de todo personagem (30/10)
 - [ ] Mixamo: pasta do Pedro disponível pra animações que faltarem

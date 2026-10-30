@@ -86,7 +86,14 @@ export function ZsGearView({ kind, poseRef }: { kind: 'skate' | 'glider'; poseRe
   return (
     <group ref={group} visible={false}>
       <primitive object={model} />
-      {kind === 'skate' && <pointLight position={[0, -0.25, 0]} color="#3fb8ff" intensity={0.8} distance={2.5} decay={2} />}
+      {/* brilho azul da levitação: disco ADITIVO (era uma luz de verdade — subir no skate mudava a contagem de luzes e o
+          three recompilava os materiais de tudo = travada; 30/10) */}
+      {kind === 'skate' && (
+        <mesh position={[0, -0.32, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
+          <circleGeometry args={[0.62, 24]} />
+          <meshBasicMaterial color="#3fb8ff" transparent opacity={0.32} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
     </group>
   );
 }

@@ -15,6 +15,13 @@ import { extendKTX2, preloadKTX2GLTF, primeKTX2 } from './ktx2-gltf';
 
 /** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
 const bindClipCache = new Map<string, THREE.AnimationClip>();
+/** CACHE POR MODELO (30/10, Pedro: "o lag está aumentando" — perfil perto de acampamento: cada inimigo Mixamo que entrava
+ *  na tela refazia o retarget "twist" das animações e media a malha ANIMADA vértice por vértice = 200 ms–1 s por inimigo).
+ *  O resultado é IGUAL pra todos do mesmo modelo (mesmo GLB, mesma correção) → calcula 1×, reaproveita. Só inimigos
+ *  (o herói monta 1× e tem clips extras que mudam por ação). */
+const twistClipCache = new Map<string, THREE.AnimationClip>();
+type FitCache = { s: number; p: [number, number, number]; fooled: boolean; bodyLen: number };
+const fitCache = new Map<string, FitCache>();
 import {
   HERO_EXTRA_CLIPS, HIT_CLIPS, HIT_REACT_GAP_S, SIDE_SUSTAIN_S, SLASH_COMBO, localMoveDir, moveClipFor,
   upperBodyOnly, type HeroExtraClip, type MoveDir,
@@ -265,6 +272,14 @@ export function GlbHeroMixamo({
   const cloned = useMemo(() => {
     const c = skeletonClone(scene);
     if (bindFix) poseToBind(c); // antes de medir/escalar: raiz ainda na origem
+    const fitKey = `${charUrl}|${autoHeight}|${bindFix}`;
+    const fit = rangedAttack ? undefined : fitCache.get(fitKey);
+    if (fit) { // mesmo modelo já medido: mesma escala/posição (sem medir a malha animada de novo)
+      c.scale.setScalar(fit.s); c.position.set(fit.p[0], fit.p[1], fit.p[2]);
+      c.userData['fooled'] = fit.fooled; c.userData['bodyLen'] = fit.bodyLen;
+      c.updateMatrixWorld(true);
+      return c;
+    }
     if (autoHeight) {
       c.updateMatrixWorld(true);
       // A caixa por geometria (bind) é enganada quando o export "assa" uma escala no
@@ -293,8 +308,9 @@ export function GlbHeroMixamo({
     let head: THREE.Object3D | undefined, toe: THREE.Object3D | undefined;
     c.traverse((o) => { if (/head$/i.test(o.name) && !head) head = o; if (/lefttoebase$/i.test(o.name) && !toe) toe = o; });
     c.userData['bodyLen'] = head && toe ? head.getWorldPosition(new THREE.Vector3()).distanceTo(toe.getWorldPosition(new THREE.Vector3())) : 0;
+    if (!rangedAttack) fitCache.set(fitKey, { s: c.scale.x, p: [c.position.x, c.position.y, c.position.z], fooled: c.userData['fooled'] === true, bodyLen: c.userData['bodyLen'] as number });
     return c;
-  }, [scene, autoHeight, bindFix]);
+  }, [scene, autoHeight, bindFix, charUrl, rangedAttack]);
 
   // Nomes de osso que EXISTEM no Red (p/ filtrar tracks de dedos que as anims
   // Mixamo trazem mas o mesh não tem → evita warnings e trabalho à toa).
@@ -331,6 +347,12 @@ export function GlbHeroMixamo({
         const key = `${charUrl}|${name}|${standFixX}${keepY ? `|${deathClip}` : ''}`; // mesmo modelo, morte diferente (tropa × Brutamontes)
         let baked = bindClipCache.get(key);
         if (!baked) { baked = stripRootMotion(retargetBind(a, g.scene, cloned, standFixX, scene), keepY ? null : fixHipsY); bindClipCache.set(key, baked); }
+        return baked;
+      }
+      if (fixTwist && !rangedAttack) {
+        const key = `${charUrl}|${name}|${standFixX}|${keepY ? `y|${deathClip}` : String(fixHipsY)}`;
+        let baked = twistClipCache.get(key);
+        if (!baked) { baked = stripRootMotion(retargetTwist(a, g.scene, cloned, standFixX), keepY ? null : fixHipsY); twistClipCache.set(key, baked); }
         return baked;
       }
       if (fixTwist) a = retargetTwist(a, g.scene, cloned, standFixX);

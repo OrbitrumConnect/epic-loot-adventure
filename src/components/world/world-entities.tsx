@@ -35,6 +35,25 @@ export const ISO_CREATURE_RENDER_RADIUS = 85; // medição: câmera iso vê até
 export const THIRD_CREATURE_RENDER_RADIUS = 135; // medição: 3a pessoa vê até 122 m
 export const FREE_CREATURE_RENDER_RADIUS = Number.POSITIVE_INFINITY; // câmera livre não corta
 const CREATURE_CULL_INTERVAL = 0.25;
+/** MONTAGEM ESPALHADA (30/10, Pedro: "o lag está aumentando"): chegar num grupo de bichos (zonas compactas) montava 30–50
+ *  corpos no MESMO quadro (clone do esqueleto + animações + shader) = travada de 100–500 ms. Agora o corte decide quem
+ *  entra, mas entram no máximo MOUNTS_PER_FRAME por quadro, o MAIS PERTO primeiro. Sair do raio continua na hora. */
+export const MOUNTS_PER_FRAME = 1;
+/** Fila de entrada (puro, testável): quem já está montado e segue no raio fica; os novos entram na fila por distância. */
+export function planCreatureMounts(
+  creatures: readonly { id: string; position: { x: number; z: number } }[],
+  player: { x: number; z: number }, radius: number, mounted: ReadonlySet<string>, cameraMode: CameraMode,
+): { keep: Set<string>; queue: string[] } {
+  const keep = new Set<string>(), add: { id: string; d2: number }[] = [];
+  for (const cr of creatures) {
+    const dx = cr.position.x - player.x, dz = cr.position.z - player.z, d2 = dx * dx + dz * dz;
+    const was = mounted.has(cr.id);
+    if (!shouldMountCreature(d2, radius, was, cameraMode)) continue;
+    if (was) keep.add(cr.id); else add.push({ id: cr.id, d2 });
+  }
+  add.sort((a, b) => a.d2 - b.d2);
+  return { keep, queue: add.map((a) => a.id) };
+}
 
 function PositionSync() {
   const acc = useRef(0);
@@ -81,9 +100,15 @@ export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: R
   // Convive com o `memo` acima: `renderBody` é prop, então só o bicho que cruzou o raio redesenha.
   const renderBodyIds = useRef(new Set<string>());
   const cullAcc = useRef(CREATURE_CULL_INTERVAL);
+  const mountQueue = useRef<string[]>([]);
   const [, setRenderBodyRoster] = useState('');
 
   useFrame((_s, delta) => {
+    // entra 1 corpo por quadro (o mais perto primeiro) — sem pico ao chegar num grupo
+    if (mountQueue.current.length > 0) {
+      for (let k = 0; k < MOUNTS_PER_FRAME && mountQueue.current.length > 0; k++) renderBodyIds.current.add(mountQueue.current.shift()!);
+      setRenderBodyRoster([...renderBodyIds.current].join('|'));
+    }
     cullAcc.current += delta;
     if (cullAcc.current < CREATURE_CULL_INTERVAL) return;
     cullAcc.current = 0;
@@ -93,15 +118,11 @@ export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: R
     const radius = cameraMode === 'iso'
       ? ISO_CREATURE_RENDER_RADIUS
       : cameraMode === 'third' ? THIRD_CREATURE_RENDER_RADIUS : FREE_CREATURE_RENDER_RADIUS;
-    const nextRenderBody = new Set<string>();
-    for (const cr of creatures) {
-      const dx = cr.position.x - player.x;
-      const dz = cr.position.z - player.z;
-      if (shouldMountCreature(dx * dx + dz * dz, radius, renderBodyIds.current.has(cr.id), cameraMode)) nextRenderBody.add(cr.id);
-    }
-    const changed = nextRenderBody.size !== renderBodyIds.current.size || [...nextRenderBody].some(id => !renderBodyIds.current.has(id));
-    renderBodyIds.current = nextRenderBody;
-    if (changed) setRenderBodyRoster([...nextRenderBody].join('|'));
+    const { keep, queue } = planCreatureMounts(creatures, player, radius, renderBodyIds.current, cameraMode);
+    const removed = keep.size !== renderBodyIds.current.size;
+    renderBodyIds.current = keep;
+    mountQueue.current = queue;
+    if (removed) setRenderBodyRoster([...keep].join('|'));
   });
   const list = useMemo(() => {
     const r = nextEnemyList(cache.current, useGameStore.getState().creatures);

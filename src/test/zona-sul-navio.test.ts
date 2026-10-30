@@ -35,7 +35,10 @@ describe('navio — convés é chão, casco é parede, prancha é rampa', () => 
   it('degrau que dá pra subir andando = o mesmo do Vale (0,75 m); navio no MEIO da praia Ipanema–Leblon, mar adentro; na cena', () => {
     expect(SHIP_STEP).toBe(0.75);
     expect(SHIP.x).toBeLessThan(-170); expect(SHIP.x).toBeGreaterThan(-330); // meio da praia (Pedro 30/10: não colado na Niemeyer)
-    expect(SHIP.z).toBeGreaterThan(420); // ~65 m mar adentro (a areia acaba em z ≈ 375)
+    // Pedro 30/10: "uns 15 m dentro d'água, diagonal leve, uns 30 m mais longe do Arpoador" (água começa em z ≈ 377)
+    expect(SHIP.z - 377).toBeGreaterThan(10); expect(SHIP.z - 377).toBeLessThan(25);
+    expect(SHIP.x).toBeLessThanOrEqual(-275); // 30 m pro lado do Leblon (era −250)
+    expect(Math.abs(SHIP.yaw)).toBeGreaterThan(0.3); expect(Math.abs(SHIP.yaw)).toBeLessThan(0.6); // diagonal LEVE
     expect(fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8')).toContain('<ZsShip t={t} />');
   });
 });
