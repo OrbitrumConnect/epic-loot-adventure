@@ -38,6 +38,8 @@ export type ZsRule = {
 export const ZS_SAFE = { x: 90, z: 390, radius: 45 } as const;
 /** Ninguém (bicho ou acampamento) nasce a menos disto do nascedouro (m). */
 export const ZS_CLEAR_R = 140;
+/** Raio máximo do cluster de fauna em torno da âncora do bioma. */
+export const ZONE_SPREAD = 110;
 /** Faixas de PERIGO (m do nascedouro): praia → orla → Lagoa/Botafogo → morros → Tijuca. */
 export const ZS_ZONE_RADII = [140, 300, 480, 680] as const;
 
@@ -92,6 +94,62 @@ export function rng32(seed: number): () => number {
 
 const d2 = (a: Position, b: Position) => (a.x - b.x) ** 2 + (a.z - b.z) ** 2;
 
+type ZsBiome = 'lagoon' | 'field' | 'lowforest' | 'highforest' | 'roads';
+
+const BIOME_BY_SPECIES: Record<string, ZsBiome> = {
+  boar: 'lagoon', goose: 'lagoon',
+  wolf_alpha: 'field', bear: 'field',
+  deer: 'lowforest', rabbit: 'lowforest', pheasant: 'lowforest',
+  monster: 'highforest', flintmaw: 'highforest',
+  pigeon: 'roads',
+};
+
+const BIOME_ANCHOR_SEEDS: Record<ZsBiome, number> = {
+  lagoon: 0x6c61676f, field: 0x6669656c, lowforest: 0x6c6f7766,
+  highforest: 0x68696768, roads: 0x726f6164,
+};
+
+const biomeOf = (speciesId: string): ZsBiome => BIOME_BY_SPECIES[speciesId] ?? 'roads';
+
+/** Escolhe o candidato mais denso dentro de ZONE_SPREAD; empate preserva índice. */
+function findBiomeAnchor(q: ZsQuery, rule: ZsRule, biome: ZsBiome): Position {
+  const rand = rng32(BIOME_ANCHOR_SEEDS[biome]);
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const candidates: Position[] = [];
+  for (let i = 0; i < 3000; i++) {
+    const x = minX + 20 + rand() * (maxX - minX - 40);
+    const z = minZ + 20 + rand() * (maxZ - minZ - 40);
+    if (q.height(x, z) > 0.5 && freeOfSpawn(q, x, z) && rule.ok(q, x, z)) candidates.push({ x, z });
+  }
+  if (candidates.length === 0) return { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
+  if (candidates.length < 32) {
+    return candidates.reduce((sum, point) => ({ x: sum.x + point.x / candidates.length, z: sum.z + point.z / candidates.length }), { x: 0, z: 0 });
+  }
+  let bestIndex = 0;
+  let bestDensity = -1;
+  const spread2 = ZONE_SPREAD * ZONE_SPREAD;
+  for (let i = 0; i < candidates.length; i++) {
+    let density = 0;
+    for (let j = 0; j < candidates.length; j++) {
+      if (i !== j && d2(candidates[i]!, candidates[j]!) <= spread2) density++;
+    }
+    if (density > bestDensity) {
+      bestDensity = density;
+      bestIndex = i;
+    }
+  }
+  return candidates[bestIndex]!;
+}
+
+function biomeAnchors(q: ZsQuery, rules: ZsRule[]): Map<ZsBiome, Position> {
+  const anchors = new Map<ZsBiome, Position>();
+  for (const rule of rules) {
+    const biome = biomeOf(rule.speciesId);
+    if (!anchors.has(biome)) anchors.set(biome, findBiomeAnchor(q, rule, biome));
+  }
+  return anchors;
+}
+
 /** Fora da praia, da zona segura e do raio limpo do nascedouro. */
 export function freeOfSpawn(q: ZsQuery, x: number, z: number, spawn: Position = ZS_SAFE): boolean {
   if (q.surf(x, z) === SURF.beach) return false;
@@ -102,13 +160,18 @@ export function freeOfSpawn(q: ZsQuery, x: number, z: number, spawn: Position = 
 export function createZsWildlife(q: ZsQuery, seed = 20261029, rules: ZsRule[] = ZS_FAUNA, camps: CampPlacement[] = []): CreatureState[] {
   const rand = rng32(seed);
   const out: CreatureState[] = [];
-  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const anchors = biomeAnchors(q, rules);
   for (const rule of rules) {
     const def = CREATURES[rule.speciesId];
     if (!def) continue;
+    const anchor = anchors.get(biomeOf(rule.speciesId));
+    if (!anchor) continue;
     const mine: Position[] = [];
-    for (let tries = 0; mine.length < rule.count && tries < rule.count * 1500; tries++) {
-      const x = minX + 20 + rand() * (maxX - minX - 40), z = minZ + 20 + rand() * (maxZ - minZ - 40);
+    for (let tries = 0; mine.length < rule.count && tries < rule.count * 3000; tries++) {
+      const radius = Math.sqrt(rand()) * ZONE_SPREAD;
+      const angle = rand() * Math.PI * 2;
+      const x = anchor.x + Math.cos(angle) * radius, z = anchor.z + Math.sin(angle) * radius;
+      if (x < q.bounds.minX + 20 || x > q.bounds.maxX - 20 || z < q.bounds.minZ + 20 || z > q.bounds.maxZ - 20) continue;
       if (q.height(x, z) < 0.5 || !freeOfSpawn(q, x, z) || !rule.ok(q, x, z)) continue; // chão SECO (nada nasce na água)
       const p = { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
       if (mine.some((m) => d2(m, p) < rule.spacing * rule.spacing)) continue;
