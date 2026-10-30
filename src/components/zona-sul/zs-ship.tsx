@@ -13,6 +13,7 @@
 import { useGLTF } from '@react-three/drei';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
+import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { type ZsTerrain, zsHeightAt } from './zs-terrain-data';
 
 /** Onde/como fica (Pedro 30/10: "mais pro MEIO do mar e da praia" → depois "uns 15 m dentro d'água, virado em diagonal
@@ -101,6 +102,15 @@ export function ZsShip({ t }: { t: ZsTerrain }) {
     holder.position.set(SHIP.x, SHIP.keelY, SHIP.z);
     holder.rotation.set(SHIP.roll, SHIP.yaw, 0, 'YXZ'); // aderna em torno do COMPRIMENTO (eixo local x)
     holder.updateMatrixWorld(true);
+    // ÁRVORE DE RAIO (BVH) do casco ANTES de escanear (30/10, lag): sem ela cada raio testava os ~45 mil triângulos um
+    // por um — ~200 raios = ~10 s de tela CONGELADA quando o navio terminava de carregar. Com a árvore: milissegundos.
+    holder.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const g = m.geometry as THREE.BufferGeometry & { boundsTree?: unknown };
+      if (!g.boundsTree) computeBoundsTree.call(g);
+      m.raycast = acceleratedRaycast;
+    });
 
     // ESCANEIA o convés: raio de cima pra baixo em cada célula; vale o 1º piso abaixo de DECK_MAX_FRAC da altura
     const H = b1.max.y - b1.min.y, deckMax = SHIP.keelY + H * DECK_MAX_FRAC;
@@ -109,6 +119,7 @@ export function ZsShip({ t }: { t: ZsTerrain }) {
     const deck = new Float32Array(nu * nv).fill(NaN);
     const cos = Math.cos(SHIP.yaw), sin = Math.sin(SHIP.yaw);
     const ray = new THREE.Raycaster(), o = new THREE.Vector3(), down = new THREE.Vector3(0, -1, 0);
+    (ray as THREE.Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true; // só o 1º acerto (o convés)
     for (let j = 0; j < nv; j++) {
       for (let i = 0; i < nu; i++) {
         const u = -halfL + (i + 0.5) * CELL, v = -halfW + (j + 0.5) * CELL;

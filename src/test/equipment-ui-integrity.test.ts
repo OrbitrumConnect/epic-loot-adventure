@@ -56,7 +56,8 @@ describe('routes/index.tsx UI integrity', () => {
     }
     expect(routeSource).toContain('<CharacterSheet');
     expect(sheetSource).toMatch(/equipment\.accessory\s*&&/);
-    expect(routeSource).toMatch(/const maxHp = effectiveMaxHp\(player\)/);
+    // 30/10 (lag): as barras viraram componente próprio que assina só os números — a vida máxima continua a EFETIVA
+    expect(routeSource).toMatch(/const maxHp = (effectiveMaxHp\(player\)|useGameStore\(s => effectiveMaxHp\(s\.player\)\))/);
     expect(routeSource).toMatch(/name: 'Vida',[\s\S]*max: maxHp/);
   });
 });

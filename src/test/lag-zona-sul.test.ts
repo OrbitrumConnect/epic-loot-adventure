@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { AI_FAR_EVERY, aiLodStep } from '@/components/world/hostile-ai';
 import { pickLights, type LightReq } from '@/components/world/light-pool';
 import { MOUNTS_PER_FRAME, planCreatureMounts } from '@/components/world/world-entities';
-import { sameButPosition } from '@/game/state/player-sans-position';
+import { PAGE_PLAYER_SKIP, sameButPosition, sameExcept } from '@/game/state/player-sans-position';
+import { warmOrder } from '@/components/zona-sul/zs-warmup';
 import { ZS_VEG_SHADOW_R, zsVegCastsShadow } from '@/components/zona-sul/zs-vegetation';
 import { useGameStore } from '@/game/state/game-store';
 
@@ -19,9 +20,18 @@ describe('lag — página do jogo não redesenha pela posição', () => {
     expect(sameButPosition(p, { ...p, hp: p.hp - 1 })).toBe(false);
     expect(sameButPosition(p, { ...p, inventory: { ...p.inventory } })).toBe(false);
   });
+  it('em combate: vida/mana/vigor mudando não redesenham a página (as barras sim); XP/mochila/morte redesenham', () => {
+    const p = useGameStore.getState().player;
+    expect(sameExcept(p, { ...p, hp: 1, mana: 2, stamina: 3 }, PAGE_PLAYER_SKIP)).toBe(true);
+    expect(sameExcept(p, { ...p, hp: 0, dead: true }, PAGE_PLAYER_SKIP)).toBe(false);
+    expect(sameExcept(p, { ...p, xp: p.xp + 1 }, PAGE_PLAYER_SKIP)).toBe(false);
+  });
   it('a página usa o jogador sem posição e o relógio só bate com contagem na tela (Zona Sul)', () => {
     const idx = readFileSync('src/routes/index.tsx', 'utf8');
-    expect(idx).toContain('const player = usePlayerSansPosition();');
+    expect(idx).toContain('const player = usePlayerForPage();');
+    expect(idx).toContain('const ui = useUiForPage();');
+    expect(idx).toContain('<Vitals core={playerBase ? { hp: baseHp, max: baseMaxHp } : null} />'); // barras assinam só os números
+    expect(idx).toContain('<WorldMessage />');
     expect(idx).not.toContain('const player = useGameStore(s => s.player);');
     expect(idx).toContain('const need = !zsRef.current || countdownsActive();');
     expect(idx).toContain('<MapCoordinate day={clock.day} time={clock.time} />'); // Vale: coordenadas seguem vivas
@@ -64,6 +74,20 @@ describe('lag — sombra só da mata perto; modelos pesados simplificados', () =
     // GLB: tamanho do arquivo acompanha a malha (texturas iguais) — eram 1,05 MB e 1,04 MB
     expect(statSync('public/models/rocks/mining-rock.glb').size).toBeLessThan(400_000);
     expect(statSync('public/models/props/raider-camp.glb').size).toBeLessThan(500_000);
+  });
+});
+
+describe('lag — pré-aquecimento dos modelos na carga', () => {
+  it('um exemplar por tipo, do mais perto pro mais longe; o mundo monta o aquecimento e a tela', () => {
+    const cr = (speciesId: string, x: number) => ({ speciesId, position: { x, z: 0 } });
+    expect(warmOrder([cr('boar', 300), cr('goose', 50), cr('boar', 20), cr('raider_scout', 900)], { x: 0, z: 0 })).toEqual(['boar', 'goose', 'raider_scout']);
+    const w = readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
+    expect(w).toContain('<ZsWarmUp c={c} playerRef={playerRef} />');
+    expect(w).toContain('<ZsWarmOverlay />');
+  });
+  it('navio: árvore de raio (BVH) antes de escanear o convés (eram ~10 s de tela congelada); esfera pronta nos bonecos', () => {
+    expect(readFileSync('src/components/zona-sul/zs-ship.tsx', 'utf8')).toContain('computeBoundsTree.call(g)');
+    for (const f of ['glb-creature.tsx', 'glb-hero-mixamo.tsx']) expect(readFileSync('src/components/world/' + f, 'utf8')).toContain('(m as THREE.SkinnedMesh).boundingSphere = m.geometry.boundingSphere.clone()');
   });
 });
 

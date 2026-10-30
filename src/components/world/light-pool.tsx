@@ -13,6 +13,8 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
 export const lightPool = { active: false };
+/** o grupo das luzes do pool (o pré-aquecimento compila os materiais com e sem as luzes) */
+export const lightPoolGroup: { g: THREE.Group | null } = { g: null };
 
 export type LightReq = { x: number; y: number; z: number; color: THREE.Color; intensity: number; distance: number; decay: number };
 const reqs: LightReq[] = [];
@@ -54,7 +56,8 @@ export function LightPool({ size, focus }: { size: number; focus: React.MutableR
   const lastReq = useRef(-Infinity);
   useEffect(() => {
     lightPool.active = true;
-    return () => { lightPool.active = false; used = 0; };
+    lightPoolGroup.g = group.current;
+    return () => { lightPool.active = false; used = 0; lightPoolGroup.g = null; };
   }, []);
   useFrame(() => {
     const g = group.current;

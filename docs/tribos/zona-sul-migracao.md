@@ -116,7 +116,8 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [x] Navio entre Ipanema e Leblon, ~15 m dentro d'água, diagonal leve, proa pra praia, escada de corda (30/10)
 - [x] Asa-delta planando ~65 km/h (30/10)
 - [x] LAG 30/10: página sem re-render pela posição/relógio, IA por distância, pool de luzes, pedra/acampamento simplificados, sombra só da mata perto, bichos entrando 1 por quadro
-- [ ] LAG próximo: pré-aquecer na carga os modelos de inimigos/bichos (1ª aparição de cada tipo ~1 s no dev); ganso 6,8 MB
+- [x] LAG: pré-aquecer na carga os modelos de inimigos/bichos (30/10: travada somada 30 → 10,5 s); navio sem os 10 s de tela congelada; página em combate
+- [ ] LAG próximo: 1ª viagem da sessão (Lagoa ~6 s no dev); texturas PNG pesadas dos bichos (ganso 6,8 MB) — só com OK (asset compartilhado)
 - [ ] Bases na Zona Sul (Fase 4): locais — Pedro: "tem tudo, só progredir" → propor áreas planas e seguras pra ele aprovar
 - [x] Skate voador (nv 15) · asa-delta (nv 8) — no kit de todo personagem (30/10)
 - [ ] Mixamo: pasta do Pedro disponível pra animações que faltarem

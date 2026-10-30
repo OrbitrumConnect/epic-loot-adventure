@@ -45,7 +45,7 @@ import { MusicPlayer } from '@/components/MusicPlayer';
 import { audioManager } from '@/game/audio/audio-manager';
 import { setBuildActive } from '@/components/world/build-mode';
 import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
-import { usePlayerSansPosition } from '@/game/state/player-sans-position';
+import { usePlayerForPage, useUiForPage } from '@/game/state/player-sans-position';
 import {
   clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
   toggleRepeat, useObjectivesState, useTargetIdState,
@@ -191,6 +191,45 @@ function countdownsActive(): boolean {
     || s.wave.phase === 'peace' || s.ui.panel === 'ranks' || p.dead;
 }
 
+/** Barras de vida/mana/vigor (+ núcleo da base): assinam SÓ os números delas — em combate a vida muda a cada golpe e a
+ *  página inteira redesenhava junto (30/10, lag). Mesmo visual de antes. */
+function Vitals({ core }: { core: { hp: number; max: number } | null }) {
+  const hp = useGameStore(s => s.player.hp);
+  const maxHp = useGameStore(s => effectiveMaxHp(s.player));
+  const mana = useGameStore(s => s.player.mana);
+  const maxMana = useGameStore(s => s.player.maxMana);
+  const stamina = useGameStore(s => s.player.stamina);
+  const maxStamina = useGameStore(s => s.player.maxStamina);
+  return (
+    <div className="vitals">
+      {[
+        { name: 'Vida', val: hp, max: maxHp, icon: Heart, kind: 'health' },
+        { name: 'Mana', val: mana, max: maxMana, icon: Sparkles, kind: 'mana' },
+        { name: 'Vigor', val: stamina, max: maxStamina, icon: Zap, kind: 'energy' },
+        ...(core ? [{ name: 'Núcleo', val: core.hp, max: core.max, icon: ShieldCheck, kind: 'base' }] : []),
+      ].map(v => (
+        <div className={`vital vital-${v.kind}`} key={v.kind}>
+          <div className="vital-label"><span><v.icon />{v.name}</span><strong>{v.val} / {v.max}</strong></div>
+          <progress value={v.val} max={v.max} aria-label={v.name} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Linha "Mundo · mensagem": assina SÓ a mensagem (muda a cada golpe em combate). */
+function WorldMessage() {
+  const message = useGameStore(s => s.ui.message);
+  return <div><time>08:42</time><strong>Mundo</strong> · {message}</div>;
+}
+
+/** Mundo do VALE com o contador de ataques assinado AQUI (30/10, lag): na página, cada clique de ataque redesenhava tudo
+ *  — e na Zona Sul o contador nem é usado. */
+function ValeWorld(props: Omit<React.ComponentProps<typeof GameWorld>, 'attack'>) {
+  const attackTick = useGameStore(s => s.attackTick);
+  return <GameWorld {...props} attack={attackTick} />;
+}
+
 /** Coordenadas do Vale (canto do minimapa): assina SÓ a posição — redesenha só este pedacinho. */
 function MapCoordinate({ day, time }: { day: number; time: string }) {
   const x = useGameStore(s => Math.round(s.player.position.x + 124));
@@ -238,10 +277,9 @@ function Index() {
   const [levelUpFlash, setLevelUpFlash] = useState(false);
   const prevLevel = useRef<number | null>(null);
 
-  const player = usePlayerSansPosition();
+  const player = usePlayerForPage();
   const stats = useGameStore(s => s.stats);
-  const ui = useGameStore(s => s.ui);
-  const attackTick = useGameStore(s => s.attackTick);
+  const ui = useUiForPage();
 
   const objectives = useObjectivesState();
   const targetId = useTargetIdState();
@@ -365,7 +403,6 @@ function Index() {
 
   const weight = getWeight(player.inventory);
   const attrs = effectiveAttributes(player);
-  const maxHp = effectiveMaxHp(player);
 
   const woodCount = useGameStore(s => s.getItemCount)('wood');
   const stoneCount = useGameStore(s => s.getItemCount)('stone');
@@ -373,8 +410,13 @@ function Index() {
   const potionCount = useGameStore(s => s.getItemCount)('health_potion');
   const hasCraftedSword = player.inventory.slots.some(s => s.itemId === 'iron_sword');
   // Armazém REAL (cidade, compartilhado com a base — 23/10). Antes a aba Home mostrava a BOLSA aqui.
-  const storage = useGameStore(s => s.base.resources);
-  const totalResources = Math.floor(storage.wood + storage.stone + storage.essence);
+  // números INTEIROS do armazém (30/10, lag): a produção da cidade soma frações ~1×/s e a página inteira redesenhava
+  // a cada tique; a tela só mostra inteiros → só redesenha quando o número que aparece muda
+  const storageWood = useGameStore(s => Math.floor(s.base.resources.wood));
+  const storageStone = useGameStore(s => Math.floor(s.base.resources.stone));
+  const storageEssence = useGameStore(s => Math.floor(s.base.resources.essence));
+  const storage = { wood: storageWood, stone: storageStone, essence: storageEssence };
+  const totalResources = useGameStore(s => Math.floor(s.base.resources.wood + s.base.resources.stone + s.base.resources.essence));
   const hallLevel = useGameStore(s => getHallLevel(s.base));
   const eraName = getEra(hallLevel).name;
   const wallTier = useGameStore(s => (s.baseMetal ? 'metal' : s.baseEvolved ? 'pedra' : 'madeira'));
@@ -693,19 +735,7 @@ function Index() {
               </div>
             </div>
           </div>
-          <div className="vitals">
-            {[
-              { name: 'Vida', val: player.hp, max: maxHp, icon: Heart, kind: 'health' },
-              { name: 'Mana', val: player.mana, max: player.maxMana, icon: Sparkles, kind: 'mana' },
-              { name: 'Vigor', val: player.stamina, max: player.maxStamina, icon: Zap, kind: 'energy' },
-              ...(playerBase ? [{ name: 'Núcleo', val: baseHp, max: baseMaxHp, icon: ShieldCheck, kind: 'base' }] : []),
-            ].map(v => (
-              <div className={`vital vital-${v.kind}`} key={v.kind}>
-                <div className="vital-label"><span><v.icon />{v.name}</span><strong>{v.val} / {v.max}</strong></div>
-                <progress value={v.val} max={v.max} aria-label={v.name} />
-              </div>
-            ))}
-          </div>
+          <Vitals core={playerBase ? { hp: baseHp, max: baseMaxHp } : null} />
           {waveLabel && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8,
@@ -733,7 +763,7 @@ function Index() {
           )}
           {worldOn && !inCity && !zs && (
             <Suspense fallback={<div className="world-loading">Entrando no vale…</div>}>
-              <GameWorld mode={ui.mode} attack={attackTick} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel) || editorActive} onAttack={hitNearest} cameraMode={cameraMode} />
+              <ValeWorld mode={ui.mode} onCollect={collectNearest} onPosition={updatePosition} paused={Boolean(panel) || editorActive} onAttack={hitNearest} cameraMode={cameraMode} />
             </Suspense>
           )}
           {worldOn && !inCity && zs && (
@@ -947,7 +977,7 @@ function Index() {
 
           {!panel && (<div className="world-bottom">
             <div className="world-message">
-              <div><time>08:42</time><strong>Mundo</strong> · {ui.message}</div>
+              <WorldMessage />
               {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
             </div>
             <div className="world-actions world-actions--overlay">{actionButtons}</div>

@@ -39,6 +39,7 @@ import { audioManager } from '@/game/audio/audio-manager';
 import { heroFacing } from '@/components/world/free-aim';
 import { takeVirtualLook, touchLayout, virtualMove } from '@/components/world/virtual-input';
 import { LightPool } from '@/components/world/light-pool';
+import { ZsWarmOverlay, ZsWarmUp } from './zs-warmup';
 import { noteManualLook } from '@/components/world/pilot-aim';
 import { HeroNameplate } from '@/components/world/hero-nameplate';
 import { Camps, Enemies } from '@/components/world/world-entities';
@@ -908,6 +909,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
               <BackgroundSim paused={paused} />
             </AssetBoundary>
           )}
+          {/* PRÉ-AQUECIMENTO: 1 exemplar invisível de cada bicho/inimigo do mapa (o 1º encontro não trava) */}
+          {ready && <ZsWarmUp c={c} playerRef={playerRef} />}
           <Suspense fallback={null}><ZsCarView carRef={carRef} dimsRef={dimsRef} /></Suspense>
           <Suspense fallback={null}><ZsBoardView poseRef={boardRef} /></Suspense>
           <AssetBoundary label="ZsAsaSkate" fallback={null}>
@@ -920,6 +923,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       )}
       {/* STATUS (canto direito, onde no mapa velho fica o minimapa) + LEVANTAR — componente próprio, o mundo não re-renderiza */}
       <ZsHudView touch={touch} />
+      <ZsWarmOverlay />
       <div ref={perfRef} className="zs-perf" style={{ display: 'none' }} />
       {touch && t && !paused && (
         <div className="zs-touch">
