@@ -74,13 +74,16 @@ describe('lag — pool de luzes (Zona Sul)', () => {
     expect(pickLights(list, list.length, 0, 0, 3).map((r) => r.x)).toEqual([5, 10, 30]);
     expect(pickLights(list, 2, 0, 0, 4).map((r) => r.x)).toEqual([5, 50]); // só os pedidos deste quadro
   });
-  it('fogueira, tocha e postes pedem vaga; o skate brilha sem luz de verdade; o mundo monta o pool', () => {
+  it('fogueira, tocha e postes pedem vaga; o skate pede a mesma luz de antes; o mundo monta o pool', () => {
     expect(readFileSync('src/components/world/camp.tsx', 'utf8')).toContain('requestLight(');
     expect(readFileSync('src/components/world/held-weapon.tsx', 'utf8')).toContain('requestLight(');
     const dn = readFileSync('src/components/zona-sul/zs-daynight.tsx', 'utf8');
     expect(dn).toContain('requestLight(');
     expect(dn).not.toContain('<pointLight');
-    expect(readFileSync('src/components/zona-sul/zs-gear-view.tsx', 'utf8')).not.toContain('<pointLight');
+    const gear = readFileSync('src/components/zona-sul/zs-gear-view.tsx', 'utf8');
+    expect(gear).not.toContain('<pointLight');
+    expect(gear).toContain('requestLight(p.x, p.y - 0.25, p.z, SKATE_GLOW, 0.8, 2.5, 2)'); // a MESMA luz azul de antes (Pedro 30/10)
+    expect(gear).not.toContain('circleGeometry');
     expect(readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8')).toContain('<LightPool size={touchLayout.on ? 2 : 4} focus={heroRef} />');
   });
 });

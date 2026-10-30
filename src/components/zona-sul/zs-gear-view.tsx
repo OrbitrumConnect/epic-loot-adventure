@@ -9,6 +9,10 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { BoardPose } from './zs-board-view';
+import { requestLight } from '@/components/world/light-pool';
+
+/** brilho da levitação do skate — a MESMA luz de sempre (azul fraca, 0,8 · 2,5 m, logo abaixo do deck) */
+const SKATE_GLOW = new THREE.Color('#3fb8ff');
 
 export const SKATE_URL = '/zona-sul/hover-skate.glb';
 export const GLIDER_URL = '/zona-sul/hang-glider.glb';
@@ -82,18 +86,13 @@ export function ZsGearView({ kind, poseRef }: { kind: 'skate' | 'glider'; poseRe
     if (!p.visible) return;
     g.position.set(p.x, p.y, p.z);
     g.rotation.set(p.pitch ?? 0, p.yaw, p.roll, 'YXZ');
+    // Pedro 30/10: "por que a luz do skate ficou estranha?" (o disco azul no chão) → volta a luz de antes, igual, só que
+    // pela vaga do POOL de luzes (subir no skate não muda a contagem de luzes → sem recompilar/travar)
+    if (kind === 'skate') requestLight(p.x, p.y - 0.25, p.z, SKATE_GLOW, 0.8, 2.5, 2);
   });
   return (
     <group ref={group} visible={false}>
       <primitive object={model} />
-      {/* brilho azul da levitação: disco ADITIVO (era uma luz de verdade — subir no skate mudava a contagem de luzes e o
-          three recompilava os materiais de tudo = travada; 30/10) */}
-      {kind === 'skate' && (
-        <mesh position={[0, -0.32, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
-          <circleGeometry args={[0.62, 24]} />
-          <meshBasicMaterial color="#3fb8ff" transparent opacity={0.32} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
-        </mesh>
-      )}
     </group>
   );
 }
