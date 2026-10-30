@@ -15,8 +15,12 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { type ZsTerrain, zsHeightAt } from './zs-terrain-data';
 
-/** Onde/como fica: em frente ao canal do Jardim de Alah, proa pro mar, ~32° com a praia, quilha 2,2 m abaixo d'água. */
-export const SHIP = { x: -452, z: 458, yaw: -0.56, length: 38, keelY: -2.2, roll: 0.06 } as const;
+/** Onde/como fica (Pedro 30/10: "estava colado perto da Niemeyer — era mais pro MEIO do mar e da praia"): no MEIO
+ *  da praia entre Ipanema e Leblon, ~65 m mar adentro (8,5 m de fundura), quase paralelo à areia, ancorado e flutuando
+ *  (quilha 2,2 m abaixo d'água), levemente adernado. Sobe-se por uma ESCADA DE CORDA no costado virado pra praia. */
+export const SHIP = { x: -250, z: 440, yaw: 0.18, length: 38, keelY: -2.2, roll: 0.03 } as const;
+/** Escada de corda: 1,8 m de largura, sai do bordo até a água; quem chega nadando nela SOBE pro convés. */
+const LADDER_W = 1.8, LADDER_OUT = 1.8;
 /** Convés = 1º piso abaixo desta fração da altura total (acima disso: velas, mastros, cordame). */
 const DECK_MAX_FRAC = 0.5;
 const CELL = 1.5;
@@ -34,6 +38,8 @@ export type ShipCollider = {
   deck: Float32Array;
   /** prancha em coordenadas do MUNDO: A = ponta no convés, B = ponta na areia */
   plank: { ax: number; az: number; ay: number; bx: number; bz: number; by: number; halfW: number } | null;
+  /** escada de corda (navio longe da areia): A = no bordo, B = 1,8 m pra fora, na água; y = altura do convés */
+  ladder: { ax: number; az: number; bx: number; bz: number; y: number; halfW: number } | null;
 };
 
 /** Colisor ATIVO (null = navio ainda não carregou / fora da Zona Sul). */
@@ -58,6 +64,13 @@ export function shipGround(c: ShipCollider | null, x: number, z: number, feetY: 
       }
     }
   }
+  const ld = c.ladder;
+  if (ld) {
+    // ESCADA: nadando (ou de pé) na faixa dela, colado no costado → sobe pro convés
+    const ex = ld.ax - ld.bx, ez = ld.az - ld.bz, L2 = ex * ex + ez * ez;
+    const k = L2 > 0 ? ((x - ld.bx) * ex + (z - ld.bz) * ez) / L2 : -1;
+    if (k >= 0 && k <= 1 && Math.abs((x - ld.bx) * ez - (z - ld.bz) * ex) / Math.sqrt(L2) <= ld.halfW && feetY >= SHIP.keelY) return { y: ld.y };
+  }
   const i = Math.floor((u - c.u0) / c.cell), j = Math.floor((v - c.v0) / c.cell);
   if (i < 0 || j < 0 || i >= c.nu || j >= c.nv) return null;
   const d = c.deck[j * c.nu + i]!;
@@ -69,7 +82,7 @@ const SHIP_URL = '/zona-sul/ship.glb';
 
 export function ZsShip({ t }: { t: ZsTerrain }) {
   const { scene } = useGLTF(SHIP_URL);
-  const { root, collider, plank } = useMemo(() => {
+  const { root, collider, plank, ladder } = useMemo(() => {
     const r = scene.clone(true);
     r.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
     // escala pelo COMPRIMENTO e pé (quilha) na altura combinada
@@ -130,8 +143,21 @@ export function ZsShip({ t }: { t: ZsTerrain }) {
         }
       }
     }
-    const col: ShipCollider = { cx: SHIP.x, cz: SHIP.z, cos, sin, u0: -halfL, v0: -halfW, nu, nv, cell: CELL, deck, plank: plankOut };
-    return { root: holder, collider: col, plank: plankOut };
+    // ESCADA DE CORDA (sem areia por perto pra prancha): no meio do navio, no costado virado pra PRAIA
+    let ladderOut: ShipCollider['ladder'] = null;
+    if (!plankOut) {
+      const shore = (sgn: number) => { const q = toW(uMid, sgn * (halfW + 60)); return zsHeightAt(t, q.x, q.z); };
+      const sgn = shore(-1) > shore(1) ? -1 : 1;
+      let jEdge = -1;
+      for (let j = 0; j < nv; j++) if (!Number.isNaN(deck[j * nu + iMid]!)) { if (jEdge < 0 || (sgn < 0 ? j < jEdge : j > jEdge)) jEdge = j; }
+      if (jEdge >= 0) {
+        const vA = -halfW + (jEdge + (sgn < 0 ? 0 : 1)) * CELL;
+        const pA = toW(uMid, vA), pB = toW(uMid, vA + sgn * LADDER_OUT);
+        ladderOut = { ax: pA.x, az: pA.z, bx: pB.x, bz: pB.z, y: deck[jEdge * nu + iMid]!, halfW: LADDER_W / 2 };
+      }
+    }
+    const col: ShipCollider = { cx: SHIP.x, cz: SHIP.z, cos, sin, u0: -halfL, v0: -halfW, nu, nv, cell: CELL, deck, plank: plankOut, ladder: ladderOut };
+    return { root: holder, collider: col, plank: plankOut as ShipCollider['plank'], ladder: ladderOut as ShipCollider['ladder'] };
   }, [scene, t]);
 
   useEffect(() => { zsShip.c = collider; return () => { if (zsShip.c === collider) zsShip.c = null; }; }, [collider]);
@@ -145,9 +171,29 @@ export function ZsShip({ t }: { t: ZsTerrain }) {
     return { pos: [mid.x, mid.y - 0.08, mid.z] as [number, number, number], quat: q, len: dir.length() };
   }, [plank]);
 
+  // escada visível: cordas e degraus pendurados do bordo até a água, encostados no costado
+  const ladderMesh = useMemo(() => {
+    if (!ladder) return null;
+    const ox = ladder.bx - ladder.ax, oz = ladder.bz - ladder.az, ol = Math.hypot(ox, oz) || 1;
+    const out = { x: ox / ol, z: oz / ol }; // pra fora do casco
+    const yaw = Math.atan2(out.x, out.z);
+    const top = ladder.y, bottom = -0.4, h = top - bottom;
+    return { pos: [ladder.ax + out.x * 0.25, bottom, ladder.az + out.z * 0.25] as [number, number, number], yaw, h, rungs: Math.max(2, Math.round(h / 0.4)) };
+  }, [ladder]);
+
   return (
     <>
       <primitive object={root} />
+      {ladderMesh && (
+        <group position={ladderMesh.pos} rotation={[0, ladderMesh.yaw, 0]}>
+          {[-0.75, 0.75].map((x) => (
+            <mesh key={x} position={[x, ladderMesh.h / 2, 0]} castShadow><boxGeometry args={[0.06, ladderMesh.h, 0.06]} /><meshStandardMaterial color="#8a6a43" roughness={1} /></mesh>
+          ))}
+          {Array.from({ length: ladderMesh.rungs }, (_, i) => (
+            <mesh key={i} position={[0, 0.2 + i * (ladderMesh.h - 0.3) / ladderMesh.rungs, 0]} castShadow><boxGeometry args={[1.5, 0.07, 0.09]} /><meshStandardMaterial color="#6b4a2a" roughness={1} /></mesh>
+          ))}
+        </group>
+      )}
       {plankMesh && (
         <mesh position={plankMesh.pos} quaternion={plankMesh.quat} castShadow receiveShadow>
           <boxGeometry args={[PLANK_W, 0.16, plankMesh.len]} />

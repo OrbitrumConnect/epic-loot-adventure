@@ -6,8 +6,10 @@ import { shipGround, SHIP, SHIP_STEP, type ShipCollider } from '@/components/zon
    ficar clara): convés a 1,5 m numa grade 4×4 de 1 m; prancha da areia (z = −6, y = 0,4) até o bordo (z = −2, y = 1,5). */
 const c: ShipCollider = {
   cx: 0, cz: 0, cos: 1, sin: 0, u0: -2, v0: -2, nu: 4, nv: 4, cell: 1, deck: new Float32Array(16).fill(1.5),
-  plank: { ax: 0, az: -2, ay: 1.5, bx: 0, bz: -6, by: 0.4, halfW: 1.1 },
+  plank: { ax: 0, az: -2, ay: 1.5, bx: 0, bz: -6, by: 0.4, halfW: 1.1 }, ladder: null,
 };
+// navio LONGE da areia: escada de corda no costado (z = +2 → +3,8), sobe pro convés (1,5 m)
+const withLadder: ShipCollider = { ...c, plank: null, ladder: { ax: 0, az: 2, bx: 0, bz: 3.8, y: 1.5, halfW: 0.9 } };
 
 describe('navio — convés é chão, casco é parede, prancha é rampa', () => {
   it('em pé no convés: anda no convés (mesmo com o mar embaixo)', () => {
@@ -26,9 +28,14 @@ describe('navio — convés é chão, casco é parede, prancha é rampa', () => 
     expect(shipGround(c, 10, 10, 0)).toBeNull();
     expect(shipGround(null, 0, 0, 0)).toBeNull();
   });
-  it('degrau que dá pra subir andando = o mesmo do Vale (0,75 m); navio entre Ipanema e Leblon; na cena', () => {
+  it('escada de corda: nadando colado no costado SOBE pro convés; longe dela, o casco é parede', () => {
+    expect(shipGround(withLadder, 0, 2.9, -0.1)).toEqual({ y: 1.5 });
+    expect(shipGround(withLadder, 1.5, 1.5, -0.1)).toEqual({ wall: true });
+  });
+  it('degrau que dá pra subir andando = o mesmo do Vale (0,75 m); navio no MEIO da praia Ipanema–Leblon, mar adentro; na cena', () => {
     expect(SHIP_STEP).toBe(0.75);
-    expect(SHIP.x).toBeLessThan(-400); expect(SHIP.x).toBeGreaterThan(-480); // em frente ao canal do Jardim de Alah
+    expect(SHIP.x).toBeLessThan(-170); expect(SHIP.x).toBeGreaterThan(-330); // meio da praia (Pedro 30/10: não colado na Niemeyer)
+    expect(SHIP.z).toBeGreaterThan(420); // ~65 m mar adentro (a areia acaba em z ≈ 375)
     expect(fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8')).toContain('<ZsShip t={t} />');
   });
 });
