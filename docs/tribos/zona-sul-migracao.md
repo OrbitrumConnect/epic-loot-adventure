@@ -113,7 +113,7 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [ ] Investigar o aviso INP 224 ms (clique travando a tela)
 - [ ] Minimapa/mapa (M) da Zona Sul
 - [ ] SALAS / MULTIPLAYER na Zona Sul com toda a experiência (outros jogadores, horda, PvP, carro/prancha/onda visíveis) — Pedro 29/10
-- [ ] Navio entre Ipanema e Leblon: prancha de embarque certa (hoje fora da cena, ?navio=1)
+- [x] Navio entre Ipanema e Leblon, meio na água, sobe pela prancha, casco com colisão (30/10)
 - [ ] Bases na Zona Sul (Fase 4): locais — Pedro: "tem tudo, só progredir" → propor áreas planas e seguras pra ele aprovar
 - [ ] Skate voador (nv 15) · asa-delta (nv 8) — novos veículos
 - [ ] Mixamo: pasta do Pedro disponível pra animações que faltarem

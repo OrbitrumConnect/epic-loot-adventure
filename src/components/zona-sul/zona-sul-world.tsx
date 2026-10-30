@@ -52,8 +52,6 @@ import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
 import { zsQuery, zsWorldProfile } from './zs-world-profile';
 import { zsAttack, zsCtx } from './zs-context';
 import { shipGround, zsShip, ZsShip } from './zs-ship';
-/** Navio: em ajuste (prancha de embarque) — só entra quando subir pelo convés estiver testado. Teste: ?navio=1 */
-const SHIP_ON = typeof window !== 'undefined' && /[?&]navio=1(&|$)/.test(window.location.search);
 import { type AmbienceState, zsAmbience } from './zs-ambience';
 import { ZsDayNight, ZsLamps, zsSun } from './zs-daynight';
 import { nightFactor, setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
@@ -784,7 +782,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           <ZsDayNight hemi={hemiRef} amb={ambRef} sky={skyRef} />
           <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
           {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
-          {SHIP_ON && <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>}
+          <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
           <ZsTerrainMesh t={t} heroRef={focusRef} />
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
