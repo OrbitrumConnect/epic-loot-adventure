@@ -15,7 +15,9 @@ import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
 import { ZS_LANDMARKS, ZS_SPAWN, ZS_SURF } from './zona-sul-meta';
 import { loadZsTerrain, type ZsTerrain, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
-import { SurfBreak, surfZone } from './surf/surf-break';
+import { SurfBreak } from './surf/surf-break';
+import { SorrisoBreak } from './surf/sorriso-break';
+import { nearestSurfZone, surfZoneAt } from './surf/surf-zones';
 import { SURF } from './surf/surf-wave';
 import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from './surf/surf-ride';
 import { useGameStore } from '@/game/state/game-store';
@@ -128,8 +130,9 @@ function ambienceAt(t: ZsTerrain, p: THREE.Vector3, car: ZsCar | null, rideSpeed
   let sea = 0;
   for (let a = 0; a < 8; a++) { const ang = (a / 8) * Math.PI * 2; if (zsSurfAt(t, p.x + Math.sin(ang) * 60, p.z + Math.cos(ang) * 60) === ZS_SURF.sea) sea++; }
   AMB.sea = zsCtx.inWater ? 1 : (sea / 8) * Math.max(0, 1 - Math.max(0, p.y) / 45);
-  const f = surfZone.frame;
-  AMB.surf = surfZone.on && f ? Math.max(0, 1 - Math.hypot(p.x - f.px, p.z - f.pz) / 320) * (surfZone.drawn ? 1 : 0.4) : 0;
+  // arrebentação do pico MAIS PERTO (Arpoador ou, na ressaca, o Sorriso); calmaria = mais baixo; Sorriso sem ressaca = mudo
+  const zn = nearestSurfZone(p.x, p.z), f = zn?.frame;
+  AMB.surf = zn && f ? Math.max(0, 1 - Math.hypot(p.x - f.px, p.z - f.pz) / 320) * (zn.drawn ? 1 : zn.scheduler.enabled ? 0.4 : 0) : 0;
   AMB.car = drive.mode === 'driving' && !!car;
   AMB.carSpeed = car?.speed ?? 0; AMB.carAlt = car?.altitude ?? 0;
   AMB.wind = AMB.car ? Math.min(1, AMB.carAlt / 25 + Math.abs(AMB.carSpeed) / 60) : Math.min(1, (rideSpeed / 14) * 0.6);
@@ -424,7 +427,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (onBoard) {
       // PRANCHA (fase C): remar → ESPAÇO levanta quando a onda pegar → em pé corre a parede → vaca se fechar em cima
       const r = ride.current ?? (ride.current = newRide());
-      const fr = surfZone.frame, ax = fr ? { qx: fr.qx, qz: fr.qz, sx: fr.sx, sz: fr.sz } : NO_AXES;
+      // a onda da ZONA onde o herói está (Arpoador ou Sorriso); fora de todas, a do pico mais perto
+      const zn = surfZoneAt(p.x, p.z)?.zone ?? nearestSurfZone(p.x, p.z), fr = zn?.frame ?? null, waveC = zn?.pf.C ?? SURF.C;
+      const ax = fr ? { qx: fr.qx, qz: fr.qz, sx: fr.sx, sz: fr.sz } : NO_AXES;
       const pushing = zsWaterPushAt(p.x, p.z, HERO_PUSH, p.y + 0.3);
       const w: RideWater = { pushX: pushing ? HERO_PUSH.x : 0, pushZ: pushing ? HERO_PUSH.z : 0, churn: zsWaterChurnAt(p.x, p.z) };
       if (fr) { const ddx = p.x - fr.px, ddz = p.z - fr.pz; w.side = ddx * fr.sx + ddz * fr.sz >= 0 ? 1 : -1; }
@@ -438,13 +443,13 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         w.gradZ = (zsWaterYAt(p.x, p.z + e, yr) - zsWaterYAt(p.x, p.z - e, yr)) / (2 * e);
       }
       const pop = k.has('Space') || input.popTap; input.popTap = false;
-      popOk.current = canPop(r, w, SURF.C);
+      popOk.current = canPop(r, w, waveC);
       // em pé: comandos DA PRANCHA (A/D vira, W acelera, S freia) — não dependem da câmera (Pedro: "em cima da prancha os
       // comandos trocam"); remando: como nadar (relativo à câmera)
       const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x;
       const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z;
       const boost = shift && !shiftWas.current; // só o TOQUE (segurar não vira turbo)
-      const d = rideStep(r, { dirX: wantMove ? wx : 0, dirZ: wantMove ? wz : 0, pop, fast: shift, steer, throttle, boost }, w, ax, SURF.C, dt);
+      const d = rideStep(r, { dirX: wantMove ? wx : 0, dirZ: wantMove ? wz : 0, pop, fast: shift, steer, throttle, boost }, w, ax, waveC, dt);
       st = zsStep(t, p.x, p.z, d.dx, d.dz);
       const sp = Math.hypot(r.vx, r.vz);
       v = sp; moving = sp > 0.3;
@@ -890,6 +895,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           <ZsTerrainMesh t={t} heroRef={focusRef} />
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
+          {/* SORRISO: no meio de Copacabana, só na RESSACA (Pedro 30/10) */}
+          {SURF_ON && <SorrisoBreak t={t} />}
           <ZsVegetation t={t} heroRef={focusRef} />
           <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} />
           {/* COMBATE — as mesmas peças do Vale, no chão da Zona Sul (perfil do mapa) */}

@@ -7,8 +7,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { type ZsTerrain, ZS_WATER_Y } from './zs-terrain-data';
-import { surfZone } from './surf/surf-break';
-import { SURF } from './surf/surf-wave';
+import { surfZones } from './surf/surf-zones';
 import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from './zs-water-look';
 
 /** Raio onde o mar começa a sumir e onde some de vez (m), a partir do centro do mapa. */
@@ -54,24 +53,32 @@ export function ZsWater({ t }: { t: ZsTerrain }) {
     m.onBeforeCompile = (sh, r) => {
       prev.call(m, sh, r);
       sh.uniforms['uSurf'] = surfU.uSurf; sh.uniforms['uSurfQ'] = surfU.uSurfQ; sh.uniforms['uSurfL'] = surfU.uSurfL;
+      sh.uniforms['uSurf2'] = surfU.uSurf2; sh.uniforms['uSurfQ2'] = surfU.uSurfQ2; sh.uniforms['uSurfL2'] = surfU.uSurfL2;
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform vec4 uSurf;\nuniform vec4 uSurfQ;\nuniform float uSurfL;')
+        .replace('#include <common>', '#include <common>\nuniform vec4 uSurf;\nuniform vec4 uSurfQ;\nuniform float uSurfL;\nuniform vec4 uSurf2;\nuniform vec4 uSurfQ2;\nuniform float uSurfL2;')
         .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
   if (uSurfQ.w > 0.5) { vec2 d = vWaveXZ - uSurf.xy; float qq = dot(d, uSurf.zw), ss = dot(d, vec2(-uSurf.w, uSurf.z));
-    if (ss < uSurfQ.x && ss > -uSurfL && qq > uSurfQ.y && qq < uSurfQ.z) discard; }`);
+    if (ss < uSurfQ.x && ss > -uSurfL && qq > uSurfQ.y && qq < uSurfQ.z) discard; }
+  if (uSurfQ2.w > 0.5) { vec2 d = vWaveXZ - uSurf2.xy; float qq = dot(d, uSurf2.zw), ss = dot(d, vec2(-uSurf2.w, uSurf2.z));
+    if (ss < uSurfQ2.x && ss > -uSurfL2 && qq > uSurfQ2.y && qq < uSurfQ2.z) discard; }`);
     };
-    return withSeaFade(m, r0, r1, 'zs-water-v4');
+    return withSeaFade(m, r0, r1, 'zs-water-v5'); // v5: 2 zonas de surf (Arpoador + Sorriso, 30/10)
   }, [time, r0, r1]);
   const floor = useMemo(() => withSeaFade(new THREE.MeshStandardMaterial({ color: '#2d5a66', roughness: 1, depthWrite: true }), r0, r1, 'zs-seafloor-v1'), [r0, r1]);
   // borda da malha da onda: cada lado com o seu limite (direita = pedra, esquerda = Leblon, mar aberto)
-  const surfU = useMemo(() => ({ uSurf: { value: new THREE.Vector4() }, uSurfQ: { value: new THREE.Vector4() }, uSurfL: { value: 0 } }), []);
+  const surfU = useMemo(() => ({ uSurf: { value: new THREE.Vector4() }, uSurfQ: { value: new THREE.Vector4() }, uSurfL: { value: 0 }, uSurf2: { value: new THREE.Vector4() }, uSurfQ2: { value: new THREE.Vector4() }, uSurfL2: { value: 0 } }), []);
   useFrame((_, dt) => {
     time.value += dt;
-    const f = surfZone.frame;
     // 5 cm pra dentro da borda da malha da onda: com 0,5 m as duas águas transparentes se sobrepunham (linha escura);
-    // com 0 sobrava fresta de pixel (linha pontilhada)
-    if (surfZone.on && surfZone.drawn && f) { surfU.uSurf.value.set(f.px, f.pz, f.qx, f.qz); surfU.uSurfQ.value.set(f.lim[0] - 0.05, SURF.Q_MIN + 0.05, SURF.Q_MAX - 0.05, 1); surfU.uSurfL.value = f.lim[1] - 0.05; }
-    else surfU.uSurfQ.value.w = 0;
+    // com 0 sobrava fresta de pixel (linha pontilhada). Até 2 zonas desenhadas (Arpoador + Sorriso).
+    const drawn = surfZones.filter((z) => z.drawn);
+    const slots: [THREE.Vector4, THREE.Vector4, { value: number }][] = [[surfU.uSurf.value, surfU.uSurfQ.value, surfU.uSurfL], [surfU.uSurf2.value, surfU.uSurfQ2.value, surfU.uSurfL2]];
+    slots.forEach(([a, q, l], i) => {
+      const z = drawn[i];
+      if (!z) { q.w = 0; return; }
+      const f = z.frame;
+      a.set(f.px, f.pz, f.qx, f.qz); q.set(f.lim[0] - 0.05, z.pf.Q_MIN + 0.05, z.pf.Q_MAX - 0.05, 1); l.value = f.lim[1] - 0.05;
+    });
   });
   return (
     <>

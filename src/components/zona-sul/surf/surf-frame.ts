@@ -4,7 +4,7 @@
  * praia. Puro (testável no terreno de verdade). Nada é inventado: sai do relevo/costa do mapa.
  */
 import { type ZsTerrain, zsHeightAt, ZS_WATER_Y } from '../zs-terrain-data';
-import { SURF } from './surf-wave';
+import { ARPOADOR, SURF, type SurfProfile } from './surf-wave';
 
 export type SurfFrame = {
   /** pico (mundo) */ px: number; pz: number;
@@ -16,13 +16,13 @@ export type SurfFrame = {
 };
 
 /** Até onde (|s|) a região do tubo (q ≤ Q_OPEN) é água aberta de cada lado, com folga de 6 m. Máx. ZONE_S. */
-export function surfLimits(t: ZsTerrain, px: number, pz: number, qx: number, qz: number, sx: number, sz: number): [number, number] {
+export function surfLimits(t: ZsTerrain, px: number, pz: number, qx: number, qz: number, sx: number, sz: number, pf: SurfProfile = ARPOADOR): [number, number] {
   const side = (sign: number) => {
-    for (let a = 4; a <= SURF.ZONE_S; a += 2) for (let q = SURF.Q_MIN; q <= SURF.Q_OPEN; q += 4) {
+    for (let a = 4; a <= pf.ZONE_S; a += 2) for (let q = pf.Q_MIN; q <= pf.Q_OPEN; q += 4) {
       const s = sign * a;
-      if (zsHeightAt(t, px + sx * s + qx * q, pz + sz * s + qz * q) >= ZS_WATER_Y - 0.4) return Math.max(SURF.EDGE_S, a - 6);
+      if (zsHeightAt(t, px + sx * s + qx * q, pz + sz * s + qz * q) >= ZS_WATER_Y - 0.4) return Math.max(pf.EDGE_S, a - 6);
     }
-    return SURF.ZONE_S;
+    return pf.ZONE_S;
   };
   return [side(1), side(-1)];
 }
