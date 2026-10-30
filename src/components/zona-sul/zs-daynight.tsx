@@ -21,8 +21,13 @@ export const zsSun = { dir: new THREE.Vector3(-0.55, 0.62, -0.45).normalize(), i
 
 const DAY_FOG = new THREE.Color('#bcd0dc');
 const MOON_DIR = new THREE.Vector3(0.35, 0.8, 0.45).normalize();
-const HEMI_DAY = new THREE.Color('#eef4f8'), HEMI_NIGHT = new THREE.Color('#7d8fd0');
-const GROUND_DAY = new THREE.Color('#6b7a4a'), GROUND_NIGHT = new THREE.Color('#1a2030');
+// NOITE DE LUA CHEIA (Pedro 30/10: "a noite tá um breu… pode ser aquela noite de lua cheia que fica mais claro"):
+// luar prateado forte, céu/névoa azul-acinzentados (não preto), sombras do luar visíveis.
+const HEMI_DAY = new THREE.Color('#eef4f8'), HEMI_NIGHT = new THREE.Color('#9fb3e6');
+const GROUND_DAY = new THREE.Color('#6b7a4a'), GROUND_NIGHT = new THREE.Color('#2c3448');
+const MOON_LIGHT = new THREE.Color('#c9d8ff'), NIGHT_FOG = new THREE.Color('#3b4a6e');
+/** intensidades da NOITE (lua cheia): luar, céu (hemisfério), ambiente */
+export const NIGHT_LIGHT = { moon: 1.25, hemi: 0.85, amb: 0.3 } as const;
 const tmpC = new THREE.Color(), sunV = new THREE.Vector3();
 
 /** Direção do sol pela hora do jogo: nasce a leste (+x) às 6h, passa pelo norte (−z), põe a oeste às 18h. */
@@ -55,16 +60,17 @@ export function ZsDayNight({ hemi, amb, sky }: {
     sunDirAt(h, sunV);
     // luz principal: o SOL de dia, o LUAR de noite (mesma luz direcional, cor e direção mudam)
     zsSun.dir.copy(sunV.y > 0.05 ? sunV : MOON_DIR).lerp(MOON_DIR, nf).normalize();
-    zsSun.intensity = THREE.MathUtils.lerp(2.1 * Math.min(1.15, dn.sunIntensity / 3.25), 0.45, nf);
-    zsSun.color.set(dn.sunColor);
+    zsSun.intensity = THREE.MathUtils.lerp(2.1 * Math.min(1.15, dn.sunIntensity / 3.25), NIGHT_LIGHT.moon, nf);
+    zsSun.color.set(dn.sunColor).lerp(MOON_LIGHT, nf); // de noite o luar é prateado (não o azul escuro do relógio)
     if (hemi.current) {
-      hemi.current.intensity = THREE.MathUtils.lerp(1.5, 0.3, nf);
+      hemi.current.intensity = THREE.MathUtils.lerp(1.5, NIGHT_LIGHT.hemi, nf);
       hemi.current.color.copy(HEMI_DAY).lerp(HEMI_NIGHT, nf);
       hemi.current.groundColor.copy(GROUND_DAY).lerp(GROUND_NIGHT, nf);
     }
-    if (amb.current) { amb.current.intensity = THREE.MathUtils.lerp(0.35, 0.12, nf); amb.current.color.set(dn.ambientColor); }
+    if (amb.current) { amb.current.intensity = THREE.MathUtils.lerp(0.35, NIGHT_LIGHT.amb, nf); amb.current.color.set(dn.ambientColor); }
     // névoa/fundo: a cor do dia da Zona Sul, puxando a do relógio no amanhecer/entardecer e de noite
-    tmpC.copy(DAY_FOG).lerp(new THREE.Color(dn.fogColor), 0.3 + 0.7 * nf);
+    // dia: a cor da Zona Sul puxando a do relógio (amanhecer/entardecer); noite: azul-acinzentado de lua cheia
+    tmpC.copy(DAY_FOG).lerp(new THREE.Color(dn.fogColor), 0.3 * (1 - nf)).lerp(NIGHT_FOG, nf);
     if (scene.fog) (scene.fog as THREE.Fog).color.copy(tmpC);
     if (scene.background instanceof THREE.Color) scene.background.copy(tmpC);
     // céu: o sol do shader segue a hora (abaixo do horizonte = céu escuro de verdade)
@@ -73,8 +79,8 @@ export function ZsDayNight({ hemi, amb, sky }: {
   });
   return (
     <group ref={moon} visible={false}>
-      <mesh renderOrder={1}><circleGeometry args={[60, 40]} /><meshBasicMaterial color="#eef1f8" fog={false} depthWrite={false} toneMapped={false} /></mesh>
-      <mesh position={[26, 8, -1]} renderOrder={2}><circleGeometry args={[61, 40]} /><meshBasicMaterial color="#141f38" fog={false} depthWrite={false} toneMapped={false} /></mesh>
+      <mesh renderOrder={2}><circleGeometry args={[70, 48]} /><meshBasicMaterial color="#f4f6ff" fog={false} depthWrite={false} toneMapped={false} /></mesh>
+      <mesh renderOrder={1}><circleGeometry args={[150, 48]} /><meshBasicMaterial color="#9fb3e6" transparent opacity={0.18} fog={false} depthWrite={false} toneMapped={false} /></mesh>
     </group>
   );
 }
@@ -156,13 +162,15 @@ export function ZsLamps({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRe
   useFrame((_, dt) => {
     const nf = nightFactor();
     // luzes acesas (tremeluzindo) — todo quadro, só as poucas do pool
-    const budget = touchLayout.on ? 2 : 4;
+    const budget = touchLayout.on ? 3 : 6; // Pedro 30/10: "no poste mais claridade"
     for (let i = 0; i < lights.current.length; i++) {
       const l = lights.current[i];
       if (!l) continue;
       const idx = nearest.current[i];
-      l.visible = nf > 0.04 && i < budget && idx !== undefined;
-      if (l.visible) l.intensity = nf * 6.6 * (0.9 + Math.sin(performance.now() * 0.006 + i * 1.3) * 0.1);
+      // a luz fica SEMPRE na cena (só a força muda): ligar/desligar luz faz o three RECOMPILAR os materiais de tudo →
+      // travadinha ao anoitecer / ao trocar de poste (30/10). Apagada = força 0.
+      const on = nf > 0.04 && i < budget && idx !== undefined;
+      l.intensity = on ? nf * 38 * (0.93 + Math.sin(performance.now() * 0.006 + i * 1.3) * 0.07) : 0;
     }
     bulbMat.opacity = Math.min(1, nf * 1.6);
     acc.current += dt;
@@ -192,10 +200,10 @@ export function ZsLamps({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRe
     <>
       <instancedMesh ref={posts} args={[geo, mat, LAMP_MAX_DRAWN]} castShadow frustumCulled={false} />
       <instancedMesh ref={bulbs} args={[undefined, bulbMat, LAMP_MAX_DRAWN]} frustumCulled={false}>
-        <sphereGeometry args={[0.28, 10, 8]} />
+        <sphereGeometry args={[0.36, 10, 8]} />
       </instancedMesh>
-      {[0, 1, 2, 3].map((i) => (
-        <pointLight key={i} ref={(l) => { lights.current[i] = l; }} color="#ffcf87" intensity={0} distance={16} decay={1.6} visible={false} />
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <pointLight key={i} ref={(l) => { lights.current[i] = l; }} color="#ffd59a" intensity={0} distance={30} decay={1.25} position={[0, -1000, 0]} />
       ))}
     </>
   );
