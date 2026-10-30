@@ -393,15 +393,15 @@ function Index() {
   if (!AUTH_ENABLED || authUser) worldUnlocked.current = true;
   const worldOn = ready && worldUnlocked.current;
   useCardWatchers(worldOn);
-  // PRANCHA no loot de TODO personagem (Pedro 29/10: "ela já tem que entrar dentro do loot"): ao entrar no jogo, em
-  // qualquer mapa — e de novo quando o save da CONTA chegar do servidor (ele troca o inventário). Só nos 1ºs 45 s:
-  // depois, descartar a prancha é escolha do jogador.
+  // PRANCHA = item FIXO de TODO personagem (Pedro 29/10: "ela já tem que entrar dentro do loot… estou nível 13, era pra
+  // ter"): entra ao entrar no jogo e VOLTA sempre que faltar — save da conta chegando depois, outro aparelho/aba com
+  // save antigo subindo pra conta, zerar o personagem… Não dá pra descartar (dropItem recusa). Conferência barata: só
+  // quando a mochila muda.
   useEffect(() => {
     if (!worldOn) return;
-    const until = Date.now() + 45_000;
     useGameStore.getState().grantSurfboard();
     return useGameStore.subscribe((s, prev) => {
-      if (Date.now() > until || s.player.inventory === prev.player.inventory) return;
+      if (s.player.inventory === prev.player.inventory) return;
       if (!s.player.inventory.slots.some(sl => sl.itemId === 'surfboard')) s.grantSurfboard();
     });
   }, [worldOn]);

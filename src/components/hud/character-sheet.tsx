@@ -239,7 +239,7 @@ export function CharacterSheet({ onHome }: { onHome: () => void }) {
                 {pickedEquipped && <Button size="sm" variant="outline" onClick={() => { const k = pick && 'equip' in pick ? pick.equip : equippedKey(picked.id); if (k) unequipSlot(k); setPick(null); }}>Tirar</Button>}
                 {picked.id === 'health_potion' || (picked.usable && (picked.healAmount ?? 0) > 0)
                   ? <Button size="sm" variant="outline" disabled={!DEV_INFINITE_POTIONS && player.hp >= st.maxHp} onClick={drinkPotion}><FlaskConical />Beber</Button> : null}
-                {pick && 'bag' in pick && (
+                {pick && 'bag' in pick && picked.id !== 'surfboard' && (
                   <Button size="sm" variant="ghost" className="cs-drop" onClick={() => { dropItem(pick.bag); setPick(null); }}><Trash2 />Descartar</Button>
                 )}
               </div>

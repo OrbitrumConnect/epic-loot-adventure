@@ -1674,6 +1674,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   dropItem: (slotIndex) => {
     const state = get();
     const itemId = state.player.inventory.slots[slotIndex]?.itemId;
+    // PRANCHA = item FIXO do personagem (Pedro 29/10: "ela tem que estar no loot"): não sai da mochila
+    if (itemId === SURFBOARD_ID) { set(s => ({ ui: { ...s.ui, message: '🏄 A prancha é sua pra sempre — não dá pra descartar.' } })); return; }
     const quantity = itemId ? state.player.inventory.slots[slotIndex]!.quantity : 0;
     if (!itemId || quantity <= 0) return;
     const inventory = { ...state.player.inventory, slots: state.player.inventory.slots.map((slot, i) => i === slotIndex ? { itemId: null, quantity: 0 } : { ...slot }) };

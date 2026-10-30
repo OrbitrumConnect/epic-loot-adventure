@@ -95,3 +95,18 @@ describe('pôr item numa tecla da hotbar (bug 29/10: soltar na hotbar só SELECI
     expect(idxSrc).toContain('useGameStore.getState().assignHotbar(i, n)');
   });
 });
+
+describe('prancha = item FIXO (Pedro 29/10: "estou nível 13, era pra ter a prancha")', () => {
+  beforeEach(clean);
+  it('não dá pra descartar; a casa do jogo devolve sempre que faltar (sem janela de tempo); ficha esconde "Descartar"', () => {
+    give('surfboard');
+    const idx = useGameStore.getState().player.inventory.slots.findIndex(s => s.itemId === 'surfboard');
+    useGameStore.getState().dropItem(idx);
+    expect(useGameStore.getState().player.inventory.slots[idx]?.itemId).toBe('surfboard');
+    expect(useGameStore.getState().ui.message).toMatch(/não dá pra descartar/);
+    const idxSrc = fs.readFileSync('src/routes/index.tsx', 'utf8');
+    expect(idxSrc).toContain("if (!s.player.inventory.slots.some(sl => sl.itemId === 'surfboard')) s.grantSurfboard();");
+    expect(idxSrc).not.toMatch(/until = Date\.now\(\) \+ 45_000/);
+    expect(fs.readFileSync('src/components/hud/character-sheet.tsx', 'utf8')).toContain("picked.id !== 'surfboard'");
+  });
+});

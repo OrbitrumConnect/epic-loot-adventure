@@ -51,6 +51,9 @@ import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-pro
 import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
 import { zsQuery, zsWorldProfile } from './zs-world-profile';
 import { zsAttack, zsCtx } from './zs-context';
+import { shipGround, zsShip, ZsShip } from './zs-ship';
+/** Navio: em ajuste (prancha de embarque) — só entra quando subir pelo convés estiver testado. Teste: ?navio=1 */
+const SHIP_ON = typeof window !== 'undefined' && /[?&]navio=1(&|$)/.test(window.location.search);
 import { type AmbienceState, zsAmbience } from './zs-ambience';
 import { ZsDayNight, ZsLamps, zsSun } from './zs-daynight';
 import { nightFactor, setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
@@ -317,7 +320,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
     const sy = Math.sin(input.yaw), cy = Math.cos(input.yaw);
     const wx = ix * cy + iz * sy, wz = -ix * sy + iz * cy; // gira o input pelo yaw da câmera
-    const water0 = zsWaterState(zsHeightAt(t, p.x, p.z));
+    // NAVIO: em pé no convés não é "nadar", mesmo com o mar embaixo (zs-ship)
+    const deckNow = drive.mode === 'foot' ? shipGround(zsShip.c, p.x, p.z, p.y) : null;
+    const water0 = deckNow && !('wall' in deckNow) ? { swimming: false, wading: false } : zsWaterState(zsHeightAt(t, p.x, p.z));
     const shift = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92 || Math.hypot(virtualMove.x, virtualMove.z) > 0.92;
     const moveBonus = 1 + effectiveAttributes(gs.player).moveSpeed / 100; // atributo Velocidade (igual ao Vale)
     let autoRun = false, dodging = false;
@@ -414,6 +419,12 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     }
     zsCtx.inWater = st.swimming;
     shiftWas.current = shift;
+    // NAVIO: o convés é chão; o casco é PAREDE pra quem vem de baixo (água/areia); a prancha é rampa
+    if (drive.mode === 'foot') {
+      let sg = shipGround(zsShip.c, st.x, st.z, p.y);
+      if (sg && 'wall' in sg) { st = { ...st, x: p.x, z: p.z }; sg = shipGround(zsShip.c, p.x, p.z, p.y); }
+      if (sg && !('wall' in sg)) st = { ...st, ground: sg.y, swimming: false, wading: false };
+    }
     p.x = st.x; p.z = st.z;
     // vertical: pulo (só fora d'água funda) + chão / nado
     if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot' && !dead) { vy.current = 6.2; grounded.current = false; }
@@ -729,7 +740,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const boardRef = useRef<BoardPose>(newBoardPose());
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }) };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -738,15 +749,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     // entrou no mapa: a pé, câmera no herói; 1ª vez = ganha a prancha
     drive.mode = 'foot'; input.overview = false; input.keys.clear(); hudNow = null;
     zsAmbience.arm(); // som do mar/carro/vento (liga no 1º clique/tecla)
-    // PRANCHA: entrega agora E de novo quando o save da CONTA chegar (Pedro 29/10: "ainda não vejo a prancha" — o save
-    // da conta chega do servidor depois e trocava o inventário, sumindo com a prancha). Só nos 1ºs 30 s (depois disso
-    // descartar a prancha é escolha sua: ela não volta sozinha).
-    const until = Date.now() + 30_000;
-    useGameStore.getState().grantSurfboard();
-    const unGrant = useGameStore.subscribe((s, prev) => {
-      if (Date.now() > until) return;
-      if (s.player.inventory !== prev.player.inventory && !s.player.inventory.slots.some((sl) => sl.itemId === SURFBOARD_ID)) s.grantSurfboard();
-    });
+    // PRANCHA: quem garante é a casa do jogo (routes/index.tsx) — item fixo, volta sempre que faltar
     let alive = true;
     loadZsTerrain().then((tt) => {
       if (!alive) return;
@@ -762,7 +765,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     }).catch((e) => alive && setErr(String(e)));
     const keep = window.setInterval(() => { if (carRef.current) saveZsPos(heroRef.current); }, 2000);
     return () => {
-      alive = false; unGrant(); window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
+      alive = false; window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
       zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false); zsAmbience.mute();
       // saiu da Zona Sul (trocou de mapa / cidade): o jogo volta pro Vale (se a troca já não fez isso)
       if (WORLD.id === 'zona-sul') { resetWorldProfile(); useGameStore.getState().enterWorld('classic'); }
@@ -780,6 +783,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           {/* DIA/NOITE (relógio do jogo) + lua + postes nas pistas */}
           <ZsDayNight hemi={hemiRef} amb={ambRef} sky={skyRef} />
           <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
+          {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
+          {SHIP_ON && <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>}
           <ZsTerrainMesh t={t} heroRef={focusRef} />
           <ZsWater t={t} />
           {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
