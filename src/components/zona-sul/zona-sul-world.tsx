@@ -51,6 +51,7 @@ import { AssetBoundary } from '@/components/world/asset-boundary';
 import { SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
 import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
+import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
 import { zsQuery, zsWorldProfile } from './zs-world-profile';
 import { zsAttack, zsCtx } from './zs-context';
 import { shipGround, zsShip, ZsShip } from './zs-ship';
@@ -637,7 +638,11 @@ function Controls() {
       if (e.code === 'KeyK' && !e.repeat) input.overview = !input.overview;
       if (e.code === 'KeyP' && !e.repeat) input.perf = !input.perf;
       if (e.code === 'KeyE' && !e.repeat) input.eTap = true;
-      if (e.code === 'KeyV' && !e.repeat && drive.mode === 'driving') { input.carCam = input.carCam === 'chase' ? 'cockpit' : 'chase'; input.cockYaw = 0; input.cockPitch = 0; }
+      // V a pé = alterna 3ª pessoa ↔ de cima (igual ao V do Vale, que cicla seguir/de-cima); V dirigindo = câmera do carro.
+      if (e.code === 'KeyV' && !e.repeat) {
+        if (drive.mode === 'driving') { input.carCam = input.carCam === 'chase' ? 'cockpit' : 'chase'; input.cockYaw = 0; input.cockPitch = 0; }
+        else input.overview = !input.overview;
+      }
       input.keys.add(e.code); if (e.code === 'Space') e.preventDefault();
     };
     const ku = (e: KeyboardEvent) => input.keys.delete(e.code);
@@ -835,7 +840,12 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       // o JOGO passa a viver na Zona Sul: chão/terra/limites/zona segura/acampamentos dela + a fauna por região
       const prof = zsWorldProfile(tt);
       setWorldProfile(prof);
-      useGameStore.getState().enterWorld('zona-sul', { creatures: createZsWildlife(zsQuery(tt), undefined, ZS_FAUNA, prof.camps), position: { x: at.x, z: at.z } });
+      const query = zsQuery(tt);
+      useGameStore.getState().enterWorld('zona-sul', {
+        creatures: createZsWildlife(query, undefined, ZS_FAUNA, prof.camps),
+        harvestNodes: createZsHarvestNodes(query),
+        position: { x: at.x, z: at.z },
+      });
       setT(tt); setReady(true);
     }).catch((e) => alive && setErr(String(e)));
     const keep = window.setInterval(() => { if (carRef.current) saveZsPos(heroRef.current); }, 2000);

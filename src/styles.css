@@ -1090,6 +1090,119 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .cs-cell:has(.cs-lock) img, .cs-cell:has(.cs-lock) > svg { opacity: .4; filter: grayscale(1); }
 .cs-locked { margin: 8px 0 0; font-size: 11px; font-weight: 700; color: #fde68a; }
 
+/* ------------------------------------------------------------------ *
+ * MAPA DA ZONA SUL (zs-map.tsx) — fundo terrain.png, zonas de fauna e
+ * ficha dos bichos. Só tokens existentes (--world-*, --primary, etc.).
+ * Cabe SEM rolagem da página: altura limitada, mapa de um lado e painel
+ * da zona do outro (desktop) / empilhados (celular). A ficha da zona rola
+ * por dentro só se a fauna não couber.
+ * ------------------------------------------------------------------ */
+/* O mapa da ZS usa a TELA TODA: só o seu backdrop vira full-viewport (os outros painéis ficam
+ * iguais). `:has()` isola a mudança ao painel do mapa — onde não houver suporte, cai no backdrop
+ * padrão (menor, mas ainda sem rolagem da página). */
+.modal-backdrop:has(.game-panel[data-map]) { position: fixed; inset: 0; z-index: 100; padding: 2.5vh 2.5vw; }
+/* Painel do mapa: alto (~90vh) e largo, sem rolagem externa — o conteúdo se ajusta à altura. */
+.game-panel[data-map] { width: min(1240px, 95vw); height: 90vh; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
+.game-panel[data-map] .panel-heading { margin-bottom: 12px; flex: 0 0 auto; }
+.game-panel[data-map] .panel-heading h2 { font-size: 20px; margin-top: 3px; }
+
+/* 2 colunas: MAPA dominante à esquerda (~61%), painel de zonas/card à direita (~39%). */
+.zs-map-wrap { display: flex; gap: 16px; align-items: stretch; min-height: 0; flex: 1 1 auto; }
+.zs-map-col { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; min-width: 0; min-height: 0; flex: 0 0 61%; }
+.zs-map {
+  position: relative; flex: 0 1 auto; width: 100%; height: auto; aspect-ratio: 400 / 264; max-height: 100%;
+  border: 1px solid var(--world-path); border-radius: 10px; overflow: hidden;
+  background: var(--world-dark); box-shadow: var(--panel-shadow);
+}
+/* contain: a área do mapa mantém a proporção do terrain.png (= aspect-ratio do container), então os
+ * pins batem com o relevo e a imagem não distorce. */
+.zs-map-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
+.zs-zone {
+  position: absolute; transform: translate(-50%, -50%); padding: 0; border: 0; background: none;
+  cursor: pointer; color: var(--world-light); z-index: 2;
+}
+.zs-zone-ring {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: calc(var(--rx, 6%) * 2); height: calc(var(--ry, 6%) * 2);
+  min-width: 24px; min-height: 24px; border-radius: 50%;
+  border: 1.5px dashed var(--world-crystal); background: color-mix(in oklab, var(--world-crystal) 16%, transparent);
+  pointer-events: none;
+}
+.zs-zone-pin {
+  position: relative; z-index: 1; display: grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--world-cloak); border: 2px solid var(--world-light);
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+.zs-zone-pin svg { width: 15px; height: 15px; }
+.zs-zone-tag {
+  position: absolute; left: 50%; top: calc(100% + 2px); transform: translateX(-50%);
+  white-space: nowrap; font: 800 11px var(--font-sans); color: var(--world-light);
+  text-shadow: var(--world-text-shadow); pointer-events: none;
+}
+.zs-zone[data-active] { z-index: 4; }
+.zs-zone[data-active] .zs-zone-pin { background: var(--primary); border-color: var(--world-gold); }
+.zs-zone[data-active] .zs-zone-ring { border-color: var(--primary); border-style: solid; }
+.zs-zone:hover .zs-zone-pin { border-color: var(--world-gold); }
+.zs-hero {
+  position: absolute; transform: translate(-50%, -50%); z-index: 3;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--world-gold); border: 2px solid var(--world-dark);
+  box-shadow: 0 0 0 2px var(--world-light); pointer-events: none;
+}
+
+.zs-map-side { flex: 1 1 0; min-width: 240px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.zs-zone-tabs { display: flex; flex-wrap: wrap; gap: 6px; flex: 0 0 auto; }
+.zs-zone-tab {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0; cursor: pointer;
+  padding: 5px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--card);
+  color: var(--world-light); line-height: 1.15;
+}
+.zs-zone-tab strong { font-size: 12px; font-weight: 700; }
+.zs-zone-tab small { font-size: 10px; color: var(--world-crystal); }
+.zs-zone-tab[data-active] { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 20%, var(--card)); }
+.zs-map-hint { margin: 0; font-size: 13px; color: var(--muted-foreground); line-height: 1.5; }
+.zs-zone-card { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1 1 auto; }
+.zs-card-head { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.zs-card-head h3 { margin: 0; font-size: 16px; color: var(--world-light); }
+.zs-card-head small { font: 700 10px var(--font-sans); color: var(--world-crystal); text-transform: uppercase; letter-spacing: .04em; }
+.zs-card-head p { margin: 0; width: 100%; font-size: 11px; color: var(--muted-foreground); line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.zs-species-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 8px; align-content: start; min-height: 0; flex: 1 1 auto; overflow-y: auto; padding-right: 2px; }
+.zs-species { border: 1px solid var(--border); border-radius: 8px; padding: 7px; background: var(--card); flex: 0 0 auto; }
+.zs-species-head { display: flex; align-items: center; gap: 7px; }
+.zs-species-icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; background: var(--world-cloak); color: var(--world-light); flex: 0 0 auto; }
+.zs-species-icon[data-peaceful] { background: var(--world-water); }
+.zs-species-icon svg { width: 15px; height: 15px; }
+.zs-species-id strong { display: block; font-size: 13px; color: var(--world-light); line-height: 1.15; }
+.zs-species-id small { font-size: 10px; color: var(--muted-foreground); }
+.zs-loot { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.zs-loot-item { display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px 1px 1px; border-radius: 999px; background: var(--muted); font-size: 10px; color: var(--world-ink); }
+.zs-loot-item b { font-weight: 800; color: var(--world-crystal); }
+.zs-card-actions { display: flex; gap: 8px; flex-wrap: wrap; flex: 0 0 auto; }
+.zs-map-legend { display: flex; gap: 14px; flex: 0 0 auto; font-size: 11px; color: var(--muted-foreground); }
+.zs-map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.zs-key { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+.zs-key-hero { background: var(--world-gold); border: 2px solid var(--world-dark); }
+.zs-key-zone { background: var(--world-cloak); border: 2px solid var(--world-light); }
+
+/* CELULAR: layout próprio — mapa em cima, painel da zona embaixo, tudo sem rolagem da página. */
+@media (max-width: 720px) {
+  .game-panel[data-map] { width: 96vw; height: 92vh; max-height: 92vh; }
+  .zs-map-wrap { flex-direction: column; gap: 8px; }
+  .zs-map-col { flex: 0 0 auto; width: 100%; justify-content: flex-start; }
+  .zs-map { flex: 0 0 auto; width: 100%; height: auto; max-height: 34vh; }
+  .zs-map-side { flex: 1 1 0; min-width: 0; }
+  /* As 5 abas visíveis de uma vez (grade 3 colunas, 2 linhas) — SEM rolagem horizontal. */
+  .zs-zone-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .zs-zone-tab { align-items: center; text-align: center; padding: 4px 6px; }
+  .zs-zone-tab strong { font-size: 11px; line-height: 1.1; }
+  /* Grade de bichos em 2 colunas na tela estreita (usa a largura, não a altura). */
+  .zs-species-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .zs-card-head p { -webkit-line-clamp: 1; }
+}
+
 /* ficha: pôr item numa tecla da hotbar (29/10) */
 .cs-hotkeys { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 4px 0 8px; font-size: 11px; color: var(--muted-foreground); }
 .cs-hotkeys span { margin-right: 4px; }

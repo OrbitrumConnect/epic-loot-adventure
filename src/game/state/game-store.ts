@@ -60,7 +60,7 @@ import {
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { grantMobilityKit, isMobilityItem, SURFBOARD_ID } from '../systems/zonaSulKit';
 import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
-import { clampX, clampZ, isClassicWorld, type MapId } from '../data/world-profile';
+import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
@@ -274,7 +274,8 @@ type GameActions = {
   /** O executor do piloto (auto-pilot.tsx) realimenta a intenção do tique pra dar
    *  histerese à decisão do tique seguinte (banda morta, alvo pegajoso). */
   recordPilotIntent: (intent: AutoIntent | null) => void;
-  addHuntArea: (x: number, z: number) => void;
+  /** `radius` opcional (Zona Sul: raio grande da zona). Ausente = HUNT_AREA_RADIUS de sempre. */
+  addHuntArea: (x: number, z: number, radius?: number) => void;
   drinkPotion: () => void;
   /** Zona Sul: entrega a prancha (1ª entrada) — mochila + espaço livre da hotbar. */
   grantSurfboard: () => void;
@@ -282,7 +283,7 @@ type GameActions = {
   grantMobilityKit: () => void;
   /** TROCA DE MAPA (o perfil já foi trocado em world-profile): bichos, acampamentos, recursos e posição do mapa novo.
    *  Zona Sul: a fauna vem pronta (precisa do terreno) e a posição é a do herói de lá. */
-  enterWorld: (map: MapId, zs?: { creatures: CreatureState[]; position: Position }) => void;
+  enterWorld: (map: MapId, zs?: { creatures: CreatureState[]; position: Position; harvestNodes?: HarvestNodeState[]; resources?: ResourceNode[] }) => void;
   tickWorld: () => void;
   /** O mundo 3D chama quando uma criatura acerta o jogador (ou outro dano que só ele vê). */
   reportDamage: (targetId: string, amount: number, position: Position, onPlayer: boolean) => void;
@@ -2393,8 +2394,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       ...(map === 'classic' ? { wave: restoreWave(s.wave, !!s.playerBase, Date.now()) } : {}),
       creatures: [...wild, ...camps.creatures],
       camps: camps.camps,
-      harvestNodes: map === 'classic' ? createHarvestNodes() : [],
-      resources: map === 'classic' ? createInitialResources() : [],
+      harvestNodes: map === 'classic' ? createHarvestNodes() : zs?.harvestNodes ?? [],
+      resources: map === 'classic' ? createInitialResources() : zs?.resources ?? [],
       deathBags: [],
       objectives: createQueue(),
       player: { ...s.player, position: zs?.position ?? { x: SAFE_ZONE.x, z: SAFE_ZONE.z } },
@@ -2477,7 +2478,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (pruned !== state.feedback) set({ feedback: pruned });
   },
 
-  addHuntArea: (x, z) => {
+  addHuntArea: (x, z, radius) => {
     const state = get();
     const cx = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, x)) : clampX(x));
     const cz = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, z)) : clampZ(z));
@@ -2487,9 +2488,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       set(s => ({ ui: { ...s.ui, message: 'Essa área de caça já está na fila.' } }));
       return;
     }
+    // Raio grande (zona da Zona Sul) quando pedido; senão o padrão de sempre.
+    const areaRadius = radius != null && radius > 0 ? Math.round(radius) : HUNT_AREA_RADIUS;
     const objectives = addQueueObjective(
       state.objectives,
-      { kind: 'hunt_area', targetId, position: { x: cx, z: cz }, label, radius: HUNT_AREA_RADIUS },
+      { kind: 'hunt_area', targetId, position: { x: cx, z: cz }, label, radius: areaRadius },
       Date.now(),
     );
     set({ objectives, ui: { ...state.ui, message: `${label}: entrou na fila.` } });
@@ -2723,6 +2726,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }),
       autoPotion: state.autoPotion,
       autoHuntRadius: state.autoHuntRadius,
+      ...(WORLD.id === 'zona-sul' ? { autoExplore: true } : {}),
       pilotWeaponStyle: state.pilotWeaponStyle,
       ...(state.player.lastDamagedAt != null ? { playerLastDamagedAt: state.player.lastDamagedAt } : {}),
       ...(state.pilotLastIntent != null ? { previousIntent: state.pilotLastIntent } : {}),
