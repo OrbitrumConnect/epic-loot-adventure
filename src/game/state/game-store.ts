@@ -62,6 +62,7 @@ import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
 import { grantMobilityKit, isMobilityItem, SURFBOARD_ID } from '../systems/zonaSulKit';
 import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
+import { lineWalkable } from '@/components/world/map-walk';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
@@ -1760,6 +1761,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // Nasce 22–34 m do jogador, direção aleatória, dentro do mundo.
     let x = isClassicWorld() ? Math.max(-margin, Math.min(margin, p.x + 20)) : clampX(p.x + 20, 6);
     let z = p.z;
+    let found = false;
     // Nasce 16–26 m do jogador: longe o bastante pra ser um susto, perto o
     // bastante pra já entrar no aggro (30) e vir caçar imediatamente.
     for (let i = 0; i < 24; i++) {
@@ -1769,8 +1771,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const cx = classic ? Math.max(-margin, Math.min(margin, p.x + Math.sin(ang) * r)) : clampX(p.x + Math.sin(ang) * r, 6);
       const cz = classic ? Math.max(-margin, Math.min(margin, p.z + Math.cos(ang) * r)) : clampZ(p.z + Math.cos(ang) * r, 6);
       if (!classic && WORLD.walkable && !WORLD.walkable(cx, cz)) continue; // Zona Sul: nunca no mar/Lagoa
-      if (getDistance(p, { x: cx, z: cz }) >= 14) { x = cx; z = cz; break; }
+      // Zona Sul: só nascer se houver TERRA andável em linha reta até o herói (sem braço d'água no caminho),
+      // senão o boss encalha na margem e nunca alcança nem ataca (hostil não contorna água).
+      if (!classic && !lineWalkable(p.x, p.z, cx, cz)) continue;
+      if (getDistance(p, { x: cx, z: cz }) >= 14) { x = cx; z = cz; found = true; break; }
     }
+    // Zona Sul: nenhum ponto com caminho de terra até o herói neste ciclo — não nasce agora (tenta no próximo).
+    if (!isClassicWorld() && !found) return;
     const hp = scaleEnemyHp(def.maxHp);
     const boss: CreatureState = {
       id: `boss_${Date.now()}`,

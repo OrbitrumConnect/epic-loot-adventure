@@ -34,3 +34,20 @@ export function walkStep(ox: number, oz: number, nx: number, nz: number): [numbe
   if (isWalkable(ox, nz)) return [ox, nz];
   return [ox, oz];
 }
+
+/**
+ * Há terra ANDÁVEL em toda a reta de (ax,az) até (bx,bz)? Amostra a cada ~2 m.
+ * Usada no spawn pra o bicho não nascer separado do alvo por um braço d'água.
+ * `walk` injetável só pra teste; em produção usa isWalkable (que respeita WORLD.walkable da Zona Sul).
+ */
+export function lineWalkable(
+  ax: number, az: number, bx: number, bz: number,
+  walk: (x: number, z: number) => boolean = isWalkable,
+): boolean {
+  const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 2));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+    if (!walk(x, z)) return false;
+  }
+  return true;
+}
