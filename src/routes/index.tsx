@@ -986,7 +986,17 @@ function Index() {
           {!panel && (<div className="world-bottom">
             <div className="world-message">
               <WorldMessage />
-              {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
+              {ui.chatOpen && (
+                <form className="chat-input" onSubmit={e => {
+                  e.preventDefault();
+                  const el = e.currentTarget.elements.namedItem('chatmsg') as HTMLInputElement | null;
+                  const v = el?.value.trim() ?? '';
+                  if (v) { useGameStore.getState().runGmCommand(v); if (el) el.value = ''; }
+                }}>
+                  <strong>Tribo</strong>
+                  <input name="chatmsg" type="text" autoComplete="off" placeholder="Mensagem / comando de GM (ex.: !spawn Jacaré, !goto Colosso, !item Rifle, !start)" aria-label="Chat e comandos" />
+                </form>
+              )}
             </div>
             <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}

@@ -1244,6 +1244,7 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   background: #f59e0b; color: #1a1205; font-weight: 800; font-size: 11px;
   padding: 1px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.4);
 }
+
 .attrp { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px; }
 .attrp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .attrp-ident { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -1271,3 +1272,12 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .attrp-bar { display: none; }
   .attrp-xp { width: 46vw; }
 }
+
+/* ===== Input de chat / comandos de GM ===== */
+.chat-input { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.chat-input > strong { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; }
+.chat-input input {
+  flex: 1; min-width: 0; background: color-mix(in oklab, var(--world-light) 8%, transparent);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; color: inherit; font-size: 13px;
+}
+.chat-input input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }

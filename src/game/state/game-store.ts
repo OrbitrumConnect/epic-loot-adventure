@@ -88,6 +88,9 @@ import {
   heroBoomerangPositions, heroPowerCooldown, heroPowerRadius, heroTornadoPositions, pushAway, type HeroPowerId,
 } from '../systems/heroPowersSystem';
 import { queueKnockback } from '../systems/knockbackSystem';
+import { parseGmCommand, resolveCreatureId, resolveItemId, isGM, normalizeName } from '../systems/gmCommands';
+import { computeZsZones } from '../data/zs-zones';
+import { ZS_SAFE } from '../systems/zsSpawnSystem';
 
 /** Para onde o piloto automático recua e para onde aponta um `travel` sem alvo. */
 export const HOME_POSITION: Position = { x: 7, z: -26 };
@@ -95,6 +98,7 @@ export const HOME_POSITION: Position = { x: 7, z: -26 };
 type GameState = {
   player: PlayerState;
   creatures: CreatureState[];
+  gmTeleport: Position | null;
   resources: ResourceNode[];
   deathBags: DeathBag[];
   ui: UIState;
@@ -222,6 +226,8 @@ type GameActions = {
   toggleSidebar: () => void;
   toggleChat: () => void;
   setMessage: (msg: string) => void;
+  runGmCommand: (raw: string) => void;
+  clearGmTeleport: () => void;
   setPanelMessage: (msg: string) => void;
   updatePosition: (x: number, z: number) => void;
   startRaid: () => void;
@@ -652,6 +658,7 @@ function heroStrike(st: GameState, hits: Map<string, { power: number; push: Vec2
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
   player: createInitialPlayer(),
   creatures: [...createInitialCreatures(), ...createWildCreatures(), ...INITIAL_CAMP_WORLD.creatures],
+  gmTeleport: null,
   resources: createInitialResources(),
   deathBags: [],
   attackTick: 0,
@@ -1730,6 +1737,79 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   toggleSidebar: () => set(s => ({ ui: { ...s.ui, sidebarCollapsed: !s.ui.sidebarCollapsed } })),
   toggleChat: () => set(s => ({ ui: { ...s.ui, chatOpen: !s.ui.chatOpen } })),
   setMessage: (msg) => set(s => ({ ui: { ...s.ui, message: msg } })),
+
+  clearGmTeleport: () => set(s => (s.gmTeleport ? { gmTeleport: null } : s)),
+  runGmCommand: (raw) => {
+    const parsed = parseGmCommand(raw);
+    if (!parsed) return;
+    const state = get();
+    const say = (msg: string) => set(s => ({ ui: { ...s.ui, message: msg } }));
+    if (!isGM(state.player)) { say('Comandos de GM: só para personagens GM.'); return; }
+    const { cmd, arg } = parsed;
+    const p = state.player.position;
+    const tp = (x: number, z: number, label: string) => { set({ gmTeleport: { x, z } }); say(`GM: ${label}`); };
+
+    if (cmd === 'start') {
+      const sp = isClassicWorld() ? PLAYER_SPAWN : ZS_SAFE;
+      tp(sp.x, sp.z, 'teleportado pro ponto de partida.');
+      return;
+    }
+    if (cmd === 'goto') {
+      if (!arg) { say('GM: use !goto <bicho / zona / player>.'); return; }
+      const q = normalizeName(arg);
+      // jogador online mais próximo
+      if (q === 'player') {
+        let best: { x: number; z: number } | null = null, bd = Infinity;
+        for (const rp of Object.values(useNet.getState().players)) {
+          const d = Math.hypot(rp.x - p.x, rp.z - p.z); if (d < bd) { bd = d; best = { x: rp.x, z: rp.z }; }
+        }
+        if (best) { tp(best.x, best.z, 'indo pro jogador mais próximo.'); return; }
+        say('GM: nenhum outro jogador online.'); return;
+      }
+      // zona (só Zona Sul tem zonas nomeadas)
+      if (!isClassicWorld()) {
+        const zones = computeZsZones(state.creatures);
+        const zone = zones.find(z => normalizeName(z.name) === q) ?? zones.find(z => normalizeName(z.name).includes(q));
+        if (zone) { tp(zone.center.x, zone.center.z, `indo pra zona ${zone.name}.`); return; }
+      }
+      // criatura (mob/boss) viva mais próxima por nome
+      const sid = resolveCreatureId(arg);
+      if (!sid) { say(`GM: não achei "${arg}".`); return; }
+      let bc: CreatureState | null = null, bcd = Infinity;
+      for (const c of state.creatures) {
+        if (c.speciesId !== sid || c.behavior === 'dead' || c.hp <= 0) continue;
+        const d = Math.hypot(c.position.x - p.x, c.position.z - p.z); if (d < bcd) { bcd = d; bc = c; }
+      }
+      if (!bc) { say(`GM: nenhum "${arg}" vivo no mapa.`); return; }
+      tp(bc.position.x, bc.position.z, `indo até ${bc.name}.`);
+      return;
+    }
+    if (cmd === 'spawn') {
+      const sid = resolveCreatureId(arg);
+      if (!sid || !CREATURES[sid]) { say(`GM: não achei criatura "${arg}".`); return; }
+      const def = CREATURES[sid]!;
+      const ang = Math.random() * Math.PI * 2, r = 6;
+      let sx = p.x + Math.cos(ang) * r, sz = p.z + Math.sin(ang) * r;
+      if (!isClassicWorld()) { sx = clampX(sx, 6); sz = clampZ(sz, 6); }
+      const hp = scaleEnemyHp(def.maxHp);
+      const creature: CreatureState = {
+        id: `gm_${Date.now()}`, speciesId: sid, name: def.name, hp, maxHp: hp,
+        attackPower: def.attackPower, armor: def.armor, attackCooldown: def.attackCooldown,
+        lastAttackAt: 0, position: { x: sx, z: sz }, behavior: 'patrol', lootTable: [], respawnAt: null,
+      };
+      set(s => ({ creatures: [...s.creatures, creature], ui: { ...s.ui, message: `GM: ${def.name} spawnado.` } }));
+      return;
+    }
+    if (cmd === 'item') {
+      const iid = resolveItemId(arg);
+      if (!iid) { say(`GM: não achei item "${arg}".`); return; }
+      if (!canAddItem(state.player.inventory, iid, 1)) { say('GM: inventário sem espaço.'); return; }
+      const inv = addItem(state.player.inventory, iid, 1);
+      set(s => ({ player: { ...s.player, inventory: inv }, ui: { ...s.ui, message: `GM: ${ITEMS[iid]?.name ?? iid} no inventário.` } }));
+      return;
+    }
+    say(`GM: comando desconhecido "!${cmd}".`);
+  },
 
   tickNightFlock: (night) => {
     if (!canSimulateSharedWorld()) return; // online: o host decide (o convidado recebe na foto do mundo)
