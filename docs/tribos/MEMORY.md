@@ -40,6 +40,7 @@
 
 > Correção: a pasta é `docs/tribos/diarios/`. Os links `diarios-tribos/` abaixo estão quebrados desde o começo.
 
+- [**🎮 VISÃO MASTER PLAY + checklist (31/10)**](visao-master-play.md) — onde estamos (migração Fases 0–4 ✅), loop do dia, quadro de missões MIR4 sobre a fila do piloto, hordas +5 min na Zona Sul, nível carro/skate, base elite (13 + torres de perímetro + modo livre), botões do carro no celular, ordem e checklist. Nada codado.
 - [2026-10-31](diarios/2026-10-31.md) — **CAVERNA** do Rebouças (salão do chefe, saídas Leblon e Laranjeiras, 13 inimigos, cristal leve), sair do carro no ar, acampamentos armados nos topos (Sumaré/Horto/Gávea/Rocinha), bug antigo da silhueta cobrindo o herói, lockfile Cloudflare. **Seção 6: o sentido que o jogo está tomando** (mapa disparou; falta o loop base/raid na Zona Sul → Fase 4).
 - 2026-10-25 a 2026-10-30 — ver a pasta `diarios/` (29/10: a Zona Sul vira o mapa oficial; 30/10: lag, Sorriso, PR #14 do Caio).
 - [2026-10-24](diarios/2026-10-24.md) — Mapa: +30% de verde só na parte plana (manchas novas, não repinta as velhas).

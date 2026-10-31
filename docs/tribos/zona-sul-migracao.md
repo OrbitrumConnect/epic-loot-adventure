@@ -134,6 +134,14 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [x] (31/10) Acampamentos ARMADOS nos topos: Sumaré, Horto, Gávea, Rocinha (+38 inimigos, atiram no carro) (`7a38780`)
 - [x] (31/10) Bug antigo: a silhueta de longe cobria o herói em vale encostado em morro (`6056e0d`)
 - [ ] Caverna online: mandar altura/camada na rede (hoje quem está dentro aparece na superfície pros outros) — junto da Fase 5
+  - [x] (31/10) feito junto da Fase 4: pose com altura na rede, IA/torre/tropa/PvP por camada (`738d29f`)
+- [ ] (31/10) Hordas mais espaçadas na Zona Sul: "5–8 min a mais, mapa maior" → proposta +5 min em toda paz (ver visao-master-play.md §3.2)
+- [ ] (31/10) Base: muro NÃO encurtou (11 × 2 m desde 13/10); "a boa seria 13–14" → proposta 13 (ímpar) no pacote base elite — "ok por hora"
+- [ ] (31/10) Futuro: 4–6 torres FORA do muro defendendo o perímetro + modo livre depois do Lv1 ("pode ser, talvez"; não pesar, não bugar)
+- [ ] (31/10) Pensar o nível do carro e do skate (andam bem pelo mapa) → medir tempo até o nível; proposta skate 20 / carro 30
+- [ ] (31/10) QUADRO DE MISSÕES estilo MIR4: escolhe até 10, o idle faz as automáticas (visao-master-play.md §3.1)
+- [ ] (31/10) Clash ↔ mapa: armazém já é o mesmo (23/10) — conferir na tela da Zona Sul ("não esquecer")
+- [ ] (31/10) Celular: Carro/Correr/Descer grandes em cima não tá bom → menores, embaixo, no esquema dos gatilhos dos poderes
 
 ## Decisões do Pedro antes de começar
 1. **Um personagem só nos dois mapas?** (recomendado: sim — mesmo save)
