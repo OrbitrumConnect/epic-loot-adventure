@@ -112,6 +112,7 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [x] Carro +35%
 - [ ] Investigar o aviso INP 224 ms (clique travando a tela)
 - [ ] Minimapa/mapa (M) da Zona Sul
+  - [x] (31/10) feito pelo Caio em 30/10: tela de mapa (M) com zonas, loot e XP (`zs-map.tsx`, diário 30/10)
 - [ ] SALAS / MULTIPLAYER na Zona Sul com toda a experiência (outros jogadores, horda, PvP, carro/prancha/onda visíveis) — Pedro 29/10
 - [x] Navio entre Ipanema e Leblon, ~15 m dentro d'água, diagonal leve, proa pra praia, escada de corda (30/10)
 - [x] Asa-delta planando ~65 km/h (30/10)
@@ -121,9 +122,17 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [x] Celular: Carro/Correr/Descer/LEVANTAR acima do arco de poderes, sem sobrepor (30/10)
 - [x] O SORRISO no meio de Copacabana, só na RESSACA (6 min a cada 20; ?ressaca=1 força) — quebra cheia lá fora, tubo na beira (30/10)
 - [ ] Vercel: conta bloqueada ("Account is blocked") — Pedro ver no painel; o código está no GitHub
+  - (31/10) Pedro migrando o deploy pro **Cloudflare Workers**; lockfile corrigido (`b7cee5a`); PWA: reinstala se o domínio mudar
 - [ ] Bases na Zona Sul (Fase 4): locais — Pedro: "tem tudo, só progredir" → propor áreas planas e seguras pra ele aprovar
 - [x] Skate voador (nv 15) · asa-delta (nv 8) — no kit de todo personagem (30/10)
 - [ ] Mixamo: pasta do Pedro disponível pra animações que faltarem
+- [x] (30–31/10) Sorriso SEM ressaca: sempre ligado, MESMO tempo de série do Arpoador, 3 seções vindo do fundo, véu, costas em rampa, surfar a espuma e emendar (`c374e7f`)
+- [x] (31/10) CAVERNA do Rebouças: boca no Túnel Rebouças (Humaitá), galerias, águas, grande caverna, salão do chefe a −32 m, saída no Leblon (`6a0d3ef`)
+- [x] (31/10) Caverna maior por dentro (+30%), 13 inimigos nos salões, cristal azul do jogo (versão leve), saída de LARANJEIRAS/Flamengo pelo Cosme Velho (`6056e0d`)
+- [x] (31/10) Sair do carro a qualquer hora (no ar cai e o carro desce sozinho) (`7a38780`)
+- [x] (31/10) Acampamentos ARMADOS nos topos: Sumaré, Horto, Gávea, Rocinha (+38 inimigos, atiram no carro) (`7a38780`)
+- [x] (31/10) Bug antigo: a silhueta de longe cobria o herói em vale encostado em morro (`6056e0d`)
+- [ ] Caverna online: mandar altura/camada na rede (hoje quem está dentro aparece na superfície pros outros) — junto da Fase 5
 
 ## Decisões do Pedro antes de começar
 1. **Um personagem só nos dois mapas?** (recomendado: sim — mesmo save)

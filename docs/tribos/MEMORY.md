@@ -40,6 +40,8 @@
 
 > Correção: a pasta é `docs/tribos/diarios/`. Os links `diarios-tribos/` abaixo estão quebrados desde o começo.
 
+- [2026-10-31](diarios/2026-10-31.md) — **CAVERNA** do Rebouças (salão do chefe, saídas Leblon e Laranjeiras, 13 inimigos, cristal leve), sair do carro no ar, acampamentos armados nos topos (Sumaré/Horto/Gávea/Rocinha), bug antigo da silhueta cobrindo o herói, lockfile Cloudflare. **Seção 6: o sentido que o jogo está tomando** (mapa disparou; falta o loop base/raid na Zona Sul → Fase 4).
+- 2026-10-25 a 2026-10-30 — ver a pasta `diarios/` (29/10: a Zona Sul vira o mapa oficial; 30/10: lag, Sorriso, PR #14 do Caio).
 - [2026-10-24](diarios/2026-10-24.md) — Mapa: +30% de verde só na parte plana (manchas novas, não repinta as velhas).
 - [2026-10-23](diarios/2026-10-23.md) — **Abertura + LISTA do que falta (em ordem).** Incidente: save do Pedro (nv 38) recusado por base em MEIA célula → corrigido sem perda (conta protegida). Auto: ponto de partida + horda volta pra base; joystick desliga o auto. Tropas investigadas (sem uso hoje). 643 testes.
 - [2026-10-22](diarios/2026-10-22.md) — **Dia longo:** online (tiro do convidado, arma do outro, poderes 5 s), save do progresso da base (casa de metal), contas com DONO por aparelho, login leve (mundo 3D só após login), mira 3ª pessoa igual CS, anims PvP (strafe/golpe/gesto/combo), raid (torre clicável + torre atira em jogador), escada/2º andar das casas, quem te matou, piloto (bolsa cheia, fila), bichos +10% e renascem mais rápido, mapa mais verde, PWA, VRAM.
