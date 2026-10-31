@@ -145,6 +145,10 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [ ] (31/10) Surf dá XP quando está na onda; no TUBO um XP maiorzinho (visao-master-play.md §3.7)
 - [ ] (31/10) Carro voador: amigo/aliado junto puxa a arma e atira do carro (depende do carro online, Fase 5)
 - [ ] (31/10) Carro: modo de dano, explodir, talvez farmável; carro = nível + recurso pra construir (explodiu → farmar outro) (§3.8)
+- [ ] (31/10) TUBARÃO GLB animado com ataque (Pedro manda) + 2 NAVIOS (escolher o melhor) (visao-master-play.md §3.9)
+- [ ] (31/10) Nível 80 libera NAVIO DE GUERRA que ataca outro navio (PvP naval)
+- [ ] (31/10) Experiência MULTIPLAYER 100% na Zona Sul — roteiro do teste com 2 em §3.10 (achado: veículo do outro jogador não aparece, só o herói)
+- [ ] (31/10) Elite escalável SEM perder FPS — medido: ~2 mi de triângulos/quadro (teto 600 mil); sombra na caverna, árvores de coleta e acampamentos de longe = os 3 maiores, cortáveis sem mudar visual (§3.11)
 
 ## Decisões do Pedro antes de começar
 1. **Um personagem só nos dois mapas?** (recomendado: sim — mesmo save)
