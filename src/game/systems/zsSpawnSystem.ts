@@ -188,6 +188,20 @@ export function createZsWildlife(q: ZsQuery, seed = 20261029, rules: ZsRule[] = 
   return out;
 }
 
+/**
+ * TOPOS ARMADOS (Pedro 31/10: "no topo de alguns locais como Sumaré, ali pra subida de Laranjeiras; no Horto, que é no
+ * Jardim Botânico; Gávea; Rocinha — pôr mais inimigos armados: eles atiram quando passo voando com o carro"). O ponto é
+ * o topo PLANO mais perto do morro de cada nome no OSM (medido no relevo): Morro do Sumaré, Morro do Horto, Morro da
+ * Margarida (Gávea) e a parte alta da Rocinha. Fortim no Sumaré (com Couraça), posto/garra nos outros — todos com
+ * piratas atiradores. Ids próprios, depois dos sorteados (os `zs_camp_N` e os bichos deles não mudam).
+ */
+export const ZS_HILLTOP_CAMPS: readonly CampPlacement[] = [
+  { id: 'zs_top_sumare', defId: 'stonefist_stronghold', position: { x: -360, z: -287 } },
+  { id: 'zs_top_horto', defId: 'raider_outpost', position: { x: -582, z: 121 } },
+  { id: 'zs_top_gavea', defId: 'blackclaw_camp', position: { x: -484, z: 151 } },
+  { id: 'zs_top_rocinha', defId: 'raider_outpost', position: { x: -690, z: 320 } },
+];
+
 /** Clareira de acampamento: chão PLANO no raio todo (5 pontos), terra seca, encostada na MATA. */
 function campSiteOk(q: ZsQuery, x: number, z: number, r: number): boolean {
   if (!freeOfSpawn(q, x, z) || q.surf(x, z) === SURF.road) return false;

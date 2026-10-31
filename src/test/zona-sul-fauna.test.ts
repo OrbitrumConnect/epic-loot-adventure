@@ -4,7 +4,7 @@ import { decodeTerrain, type ZsTerrain, zsHeightAt } from '@/components/zona-sul
 import { ZS_SURF, ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
 import { zsQuery, zsWorldProfile } from '@/components/zona-sul/zs-world-profile';
 import { createZsWildlife, near, SURF, ZS_CLEAR_R, ZS_FAUNA, ZS_SAFE, type ZsQuery } from '@/game/systems/zsSpawnSystem';
-import { CAMP_PLACEMENTS, PLAYER_SPAWN, SAFE_ZONE } from '@/game/data/camps';
+import { CAMP_PLACEMENTS, CAMPS, PLAYER_SPAWN, SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
 import { terrainHeight } from '@/components/world/world-kit';
 import { isWalkable } from '@/components/world/map-walk';
@@ -41,13 +41,29 @@ describe('Zona Sul — fauna por região e acampamentos na mata', () => {
 
   it('8 acampamentos em clareira plana encostada na mata, longe do nascedouro e uns dos outros; fraco perto, forte longe', () => {
     const p = zsWorldProfile(t, q);
-    expect(p.camps).toHaveLength(8);
-    for (const c of p.camps) {
+    const sorteados = p.camps.filter((c) => c.id.startsWith('zs_camp_'));
+    expect(sorteados).toHaveLength(8);
+    for (const c of sorteados) {
       expect(near(q, c.position.x, c.position.z, SURF.forest, 25)).toBe(true);
       expect(q.slope(c.position.x, c.position.z)).toBeLessThan(14);
       expect(Math.hypot(c.position.x - ZS_SAFE.x, c.position.z - ZS_SAFE.z)).toBeGreaterThan(ZS_CLEAR_R);
-      for (const o of p.camps) if (o !== c) expect(Math.hypot(o.position.x - c.position.x, o.position.z - c.position.z)).toBeGreaterThanOrEqual(170);
+      for (const o of sorteados) if (o !== c) expect(Math.hypot(o.position.x - c.position.x, o.position.z - c.position.z)).toBeGreaterThanOrEqual(170);
     }
+  });
+
+  it('TOPOS armados (Pedro 31/10): Sumaré, Horto, Gávea e Rocinha — no alto, plano, com atirador, sem colar nos outros', () => {
+    const p = zsWorldProfile(t, q);
+    const topos = p.camps.filter((c) => c.id.startsWith('zs_top_'));
+    expect(topos.map((c) => c.id)).toEqual(['zs_top_sumare', 'zs_top_horto', 'zs_top_gavea', 'zs_top_rocinha']);
+    for (const c of topos) {
+      const { x, z } = c.position;
+      expect(q.height(x, z), c.id).toBeGreaterThan(30);                 // no alto
+      expect(q.slope(x, z), c.id).toBeLessThan(12);                     // dá pra montar o acampamento
+      expect([SURF.sea, SURF.lagoon, SURF.out, SURF.road]).not.toContain(q.surf(x, z));
+      expect(CAMPS[c.defId]!.spawns.some((s) => s.speciesId === 'raider_scout'), c.id).toBe(true); // pirata atirador
+      for (const o of p.camps) if (o !== c) expect(Math.hypot(o.position.x - x, o.position.z - z), `${c.id}×${o.id}`).toBeGreaterThan(90);
+    }
+    expect(CAMPS[topos[0]!.defId]!.spawns.some((s) => s.speciesId === 'raider_samurai')).toBe(true); // Sumaré tem Couraça
   });
 
   it('trocar de mapa troca chão/terra/perigo/acampamentos; voltar ao Vale restaura TUDO igual', () => {

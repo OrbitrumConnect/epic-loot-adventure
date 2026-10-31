@@ -6,7 +6,7 @@
 import type { WorldProfile } from '@/game/data/world-profile';
 import { CREATURES, scaleEnemyHp } from '@/game/data/creatures';
 import type { CreatureState } from '@/game/types';
-import { pickZsCampSites, ZS_SAFE, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
+import { pickZsCampSites, ZS_HILLTOP_CAMPS, ZS_SAFE, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
 import { type ZsTerrain, zsBounds, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
 import { CAVE_BOSS, zsCaveUnder } from './zs-cave';
@@ -47,7 +47,8 @@ export function zsWorldProfile(t: ZsTerrain, q: ZsQuery = zsQuery(t)): WorldProf
     bounds: q.bounds,
     spawn: { x: ZS_SAFE.x, z: ZS_SAFE.z },
     safeZone: { x: ZS_SAFE.x, z: ZS_SAFE.z, radius: ZS_SAFE.radius },
-    camps: pickZsCampSites(q),
+    // 8 sorteados + os TOPOS armados (Sumaré, Horto, Gávea, Rocinha — Pedro 31/10)
+    camps: [...pickZsCampSites(q), ...ZS_HILLTOP_CAMPS.map((c) => ({ ...c, position: { ...c.position } }))],
     lakes: [],
     height: (x, z) => zsHeightAt(t, x, z),
     walkable: (x, z) => zsWalkable(t, x, z),
