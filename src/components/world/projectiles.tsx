@@ -10,6 +10,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { FeedbackEvent } from '@/game/types/feedback';
 import { terrainHeight } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
+import { effectGround } from '@/game/systems/layerSystem';
 import { useArrowAsset } from './fx-models';
 
 /** Carrega a flecha GLB fora do caminho crítico: até chegar, a flecha simples segue valendo. */
@@ -54,7 +55,8 @@ export function Projectiles() {
     const m = meshes.current[i];
     // Altura pelo CHÃO REAL do mapa (GLB) — antes usava o relevo procedural antigo e o tiro saía
     // torto (abaixo/acima) em terreno do mapa (Pedro, 22/10). Tiro da mira traz `toY` (pontinho).
-    const ground = (x: number, z: number) => glbSurfaceY(x, z, terrainHeight(x, z));
+    // caverna (30/10): com o herói dentro, o chão dela (o tiro não sai do topo do morro)
+    const ground = (x: number, z: number) => effectGround(x, z, glbSurfaceY(x, z, terrainHeight(x, z)));
     s.from.set(ev.position.x, ground(ev.position.x, ev.position.z) + (ev.sourceHeight ?? 1.1), ev.position.z);
     s.to.set(ev.to.x, ev.toY ?? ground(ev.to.x, ev.to.z) + 0.8, ev.to.z);
     s.dur = Math.max(0.05, s.from.distanceTo(s.to) / SPEED);

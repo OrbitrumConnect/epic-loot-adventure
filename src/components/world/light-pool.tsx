@@ -11,6 +11,8 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { WORLD } from '@/game/data/world-profile';
+import { layers } from '@/game/systems/layerSystem';
 
 export const lightPool = { active: false };
 /** o grupo das luzes do pool (o pré-aquecimento compila os materiais com e sem as luzes) */
@@ -24,6 +26,8 @@ let used = 0;
 export function requestLight(x: number, y: number, z: number, color: THREE.ColorRepresentation, intensity: number, distance: number, decay: number): boolean {
   if (!lightPool.active) return false;
   if (!(intensity > 0)) return true;
+  // CAVERNA (30/10): poste/fogueira lá em cima não acende a rocha de quem está embaixo (e vice-versa)
+  if (WORLD.under && WORLD.under.layer(x, y, z) !== layers.player) return true;
   let r = reqs[used];
   if (!r) { r = { x: 0, y: 0, z: 0, color: new THREE.Color(), intensity: 0, distance: 0, decay: 1 }; reqs[used] = r; }
   used++;

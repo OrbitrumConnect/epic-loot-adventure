@@ -128,6 +128,8 @@ const CAVE_DROP = 1.0;
  * Sem malha ali: `fallback`. Custo fora de caverna = o mesmo de antes (1 raio).
  */
 export function groundUnder(x: number, z: number, feetY: number, fallback: number, maxDrop = CAVE_DROP): number {
+  const u = WORLD.under; // caverna da Zona Sul (30/10): quem está dentro pisa no chão dela
+  if (u) { const f = u.floor(x, z, feetY); if (f !== null) return f; }
   const top = terrainMeshTopY(x, z);
   if (top === -Infinity) return fallback;
   if (top <= feetY + STEP_UP) return top;
@@ -157,6 +159,7 @@ const CAVE_WALL_SLOPE = 0.7; // debaixo de teto, chão subindo mais que ~35° = 
  * Fora de teto os morros seguem escaláveis como antes. Vale pra andar, rolar e empurrão. Longe das cavernas: nada muda.
  */
 export function caveStep(ox: number, oz: number, nx: number, nz: number, feetY: number, maxDrop = CAVE_DROP): [number, number] {
+  if (WORLD.under) return WORLD.under.step(ox, oz, nx, nz, feetY); // caverna da Zona Sul: paredes dela
   if (!nearCave(nx, nz) && !nearCave(ox, oz)) return [nx, nz];
   const hereRoofed = ceilingAbove(ox, oz, feetY + 1) < feetY + CAVE_ROOF_NEAR;
   const blocked = (x: number, z: number): boolean => {
@@ -368,6 +371,12 @@ export function worldBlocksShot(from: THREE.Vector3, to: THREE.Vector3, skipNear
 function heightHit(from: THREE.Vector3, dir: THREE.Vector3, near: number, far: number): number | null {
   const h = WORLD.height;
   if (!h) return null;
+  // de DENTRO da caverna (30/10): o que segura o tiro é a rocha dela (o morro lá em cima não conta)
+  const u = WORLD.under;
+  if (u && u.inside(from.x, from.y, from.z)) {
+    for (let d = Math.max(near, 0.5); d <= far; d += 0.5) if (u.solid(from.x + dir.x * d, from.y + dir.y * d, from.z + dir.z * d)) return d;
+    return null;
+  }
   for (let d = Math.max(near, 0.5); d <= far; d += 1) {
     if (from.y + dir.y * d < h(from.x + dir.x * d, from.z + dir.z * d)) return d;
   }

@@ -15,6 +15,7 @@ import { dayNight, gameHour, nightFactor } from '@/game/systems/dayNightSystem';
 import { requestLight } from '@/components/world/light-pool';
 import { type ZsTerrain, zsHeightAt, zsSlopeDeg } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
+import { zsCave } from './zs-context';
 
 /** Sol/luar compartilhado: o herói posiciona a luz direcional (e a sombra) com isto. */
 export const zsSun = { dir: new THREE.Vector3(-0.55, 0.62, -0.45).normalize(), intensity: 2.1, color: new THREE.Color('#fff4e0') };
@@ -30,6 +31,8 @@ const MOON_LIGHT = new THREE.Color('#c9d8ff'), NIGHT_FOG = new THREE.Color('#3b4
  *  → 13% abaixo de antes (1,25 / 0,85 / 0,3). */
 export const NIGHT_LIGHT = { moon: 1.09, hemi: 0.74, amb: 0.26 } as const;
 const tmpC = new THREE.Color(), sunV = new THREE.Vector3();
+/** CAVERNA (30/10): lá no fundo o céu/ambiente quase somem e a névoa vira breu (o herói tem a lanterna). */
+const CAVE_FOG = new THREE.Color('#07090c'), CAVE_HEMI = 0.1, CAVE_AMB = 0.5;
 
 /** Direção do sol pela hora do jogo: nasce a leste (+x) às 6h, passa pelo norte (−z), põe a oeste às 18h. */
 export function sunDirAt(hour: number, out = new THREE.Vector3()): THREE.Vector3 {
@@ -46,6 +49,8 @@ export function ZsDayNight({ hemi, amb, sky }: {
   const { scene, camera } = useThree();
   const acc = useRef(1);
   const moon = useRef<THREE.Group>(null);
+  /** valores de FORA (o relógio, 4×/s); a caverna escurece em cima deles todo quadro */
+  const base = useRef({ hemi: 1.5, amb: 0.35, fog: new THREE.Color(DAY_FOG), dark: -1 });
   useFrame((_, dt) => {
     // a lua acompanha a câmera (longe, fixa no céu) — barato, todo quadro
     const m = moon.current;
@@ -55,7 +60,11 @@ export function ZsDayNight({ hemi, amb, sky }: {
       if (m.visible) { m.position.copy(camera.position).addScaledVector(MOON_DIR, 2500); m.lookAt(camera.position); }
     }
     acc.current += dt;
-    if (acc.current < 0.25) return;
+    const b = base.current, dk = zsCave.dark;
+    if (acc.current < 0.25) {
+      if (dk !== b.dark) applyCave();
+      return;
+    }
     acc.current = 0;
     const dn = dayNight(), h = gameHour();
     sunDirAt(h, sunV);
@@ -63,20 +72,29 @@ export function ZsDayNight({ hemi, amb, sky }: {
     zsSun.dir.copy(sunV.y > 0.05 ? sunV : MOON_DIR).lerp(MOON_DIR, nf).normalize();
     zsSun.intensity = THREE.MathUtils.lerp(2.1 * Math.min(1.15, dn.sunIntensity / 3.25), NIGHT_LIGHT.moon, nf);
     zsSun.color.set(dn.sunColor).lerp(MOON_LIGHT, nf); // de noite o luar é prateado (não o azul escuro do relógio)
+    b.hemi = THREE.MathUtils.lerp(1.5, NIGHT_LIGHT.hemi, nf);
+    b.amb = THREE.MathUtils.lerp(0.35, NIGHT_LIGHT.amb, nf);
     if (hemi.current) {
-      hemi.current.intensity = THREE.MathUtils.lerp(1.5, NIGHT_LIGHT.hemi, nf);
       hemi.current.color.copy(HEMI_DAY).lerp(HEMI_NIGHT, nf);
       hemi.current.groundColor.copy(GROUND_DAY).lerp(GROUND_NIGHT, nf);
     }
-    if (amb.current) { amb.current.intensity = THREE.MathUtils.lerp(0.35, NIGHT_LIGHT.amb, nf); amb.current.color.set(dn.ambientColor); }
+    if (amb.current) amb.current.color.set(dn.ambientColor);
     // névoa/fundo: a cor do dia da Zona Sul, puxando a do relógio no amanhecer/entardecer e de noite
     // dia: a cor da Zona Sul puxando a do relógio (amanhecer/entardecer); noite: azul-acinzentado de lua cheia
-    tmpC.copy(DAY_FOG).lerp(new THREE.Color(dn.fogColor), 0.3 * (1 - nf)).lerp(NIGHT_FOG, nf);
-    if (scene.fog) (scene.fog as THREE.Fog).color.copy(tmpC);
-    if (scene.background instanceof THREE.Color) scene.background.copy(tmpC);
+    b.fog.copy(DAY_FOG).lerp(new THREE.Color(dn.fogColor), 0.3 * (1 - nf)).lerp(NIGHT_FOG, nf);
+    applyCave();
     // céu: o sol do shader segue a hora (abaixo do horizonte = céu escuro de verdade)
     const u = ((sky.current as THREE.Mesh | null)?.material as THREE.ShaderMaterial | undefined)?.uniforms;
     if (u?.['sunPosition']) (u['sunPosition'].value as THREE.Vector3).copy(sunV).multiplyScalar(1000);
+    /** luz/névoa = as de fora escurecidas pela caverna */
+    function applyCave() {
+      b.dark = dk;
+      if (hemi.current) hemi.current.intensity = b.hemi * (1 + (CAVE_HEMI - 1) * dk);
+      if (amb.current) amb.current.intensity = b.amb * (1 + (CAVE_AMB - 1) * dk);
+      tmpC.copy(b.fog).lerp(CAVE_FOG, dk);
+      if (scene.fog) (scene.fog as THREE.Fog).color.copy(tmpC);
+      if (scene.background instanceof THREE.Color) scene.background.copy(tmpC);
+    }
   });
   return (
     <group ref={moon} visible={false}>

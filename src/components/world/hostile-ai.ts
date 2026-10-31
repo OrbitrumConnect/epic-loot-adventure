@@ -45,6 +45,7 @@ import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTarget
 import { takeKnockback } from '@/game/systems/knockbackSystem';
 import { pushEvent, shotEvent } from '@/game/systems/feedbackSystem';
 import { activeGrab, breakGrab, grabTicksDue, tryStartGrab } from '@/game/systems/grabSystem';
+import { layers, setCreatureLayer } from '@/game/systems/layerSystem';
 import { isInvulnerable } from '@/game/systems/dodgeSystem';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 
@@ -451,7 +452,7 @@ export function useHostileAI(opts: HostileOptions) {
             return def && scalesWithWorld(cr, def) ? applyWorldLevel(back, def, zoneLevel(home), Math.random, true, isNight()) : back;
           }),
         }));
-        g.position.set(home.x, glbSurfaceY(home.x, home.z, terrainHeight(home.x, home.z)), home.z);
+        g.position.set(home.x, WORLD.under?.homeY(creatureId, home.x, home.z) ?? glbSurfaceY(home.x, home.z, terrainHeight(home.x, home.z)), home.z);
         g.scale.copy(baseScale.current);
         if (death.current.hold > 0) { releaseCorpseSlot(); death.current.hold = 0; }
         death.current.startedAt = -Infinity;
@@ -471,6 +472,8 @@ export function useHostileAI(opts: HostileOptions) {
     g.visible = true;
     anc.alive = true;
     if (opts.label.current) opts.label.current.visible = true;
+    // mora EMBAIXO (chefe da caverna): nasce no chão de lá, não no topo do morro
+    if (!homePos.current && WORLD.under) { const hy = WORLD.under.homeY(creatureId, creature.position.x, creature.position.z); if (hy !== null) g.position.y = hy; }
 
     // Guarda a escala base uma vez e marca o instante do golpe quando o HP cai.
     if (prevHp.current !== null && creature.hp < prevHp.current) hitTime.current = state.clock.elapsedTime;
@@ -498,6 +501,12 @@ export function useHostileAI(opts: HostileOptions) {
 
     const wx = g.position.x;
     const wz = g.position.z;
+    // CAMADA (30/10, caverna da Zona Sul): bicho e herói em camadas diferentes não se enxergam (nada através da rocha)
+    const under = WORLD.under;
+    const myLayer = under ? under.layer(wx, g.position.y, wz) : 0;
+    if (under) setCreatureLayer(creatureId, myLayer);
+    const localOk = !under || myLayer === layers.player;
+    if (opts.label.current && !localOk) opts.label.current.visible = false;
     // Convidado em sala: o bicho NÃO pensa aqui — espelha o host (uma cena só pra todos).
     const mirror = !canSimulateSharedWorld();
     // Enfurecido corre +35% (Pedro: "mais rápido, doidão").
@@ -508,16 +517,16 @@ export function useHostileAI(opts: HostileOptions) {
     // Alvo: eu (solo) — ou, sendo HOST, o jogador MAIS PERTO entre mim e os convidados.
     let px = player.position.x;
     let pz = player.position.z;
-    const distToLocal = Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz));
+    const distToLocal = localOk ? Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz)) : Infinity;
     let targetRemoteId: string | null = null;
-    if (!mirror) {
+    if (!mirror && myLayer === 0) { // convidados: a camada deles não chega aqui — só os da superfície os alcançam
       let best = distToLocal;
       for (const r of remoteTargets()) {
         const d = Math.sqrt((r.x - wx) * (r.x - wx) + (r.z - wz) * (r.z - wz));
         if (d < best) { best = d; px = r.x; pz = r.z; targetRemoteId = r.id; }
       }
     }
-    const distToPlayer = Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz));
+    const distToPlayer = targetRemoteId || localOk ? Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz)) : Infinity;
 
     let moving = false;
     let targetX = wx;
@@ -823,7 +832,7 @@ export function useHostileAI(opts: HostileOptions) {
     const highlighted = isHighlightedCreature(creatureId);
     const targeted = getTargetId() === creatureId;
     const hurt = creature.hp < creature.maxHp;
-    const showBar = distToLocal < LABEL_RANGE || hurt || highlighted;
+    const showBar = localOk && (distToLocal < LABEL_RANGE || hurt || highlighted);
     const hpGroup = opts.hpGroup.current;
     if (hpGroup) {
       hpGroup.visible = showBar;

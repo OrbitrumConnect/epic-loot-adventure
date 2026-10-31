@@ -7,7 +7,8 @@ const src = fs.readFileSync('src/components/world/combat-feedback.tsx', 'utf8');
 
 describe('sangue no golpe', () => {
   it('gotas no chão REAL do mapa (1× por golpe, não por gota/quadro)', () => {
-    expect(src).toMatch(/const ground = glbSurfaceY\(ev\.position\.x, ev\.position\.z, terrainHeight/);
+    // (caverna 30/10: com o herói dentro dela, o chão dela — `effectGround` em volta do chão real)
+    expect(src).toMatch(/const ground = (effectGround\(ev\.position\.x, ev\.position\.z, )?glbSurfaceY\(ev\.position\.x, ev\.position\.z, terrainHeight/);
     expect(src).toMatch(/const ground = arr\[o \+ 9\]!;/); // no quadro: lê o chão guardado
     expect(src).not.toMatch(/const ground = terrainHeight\(arr\[o\]!/);
   });

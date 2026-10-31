@@ -13,6 +13,7 @@ import { useGameStore, arrowRainCooldownFor } from '@/game/state/game-store';
 import { heroPowerCooldown, HERO_POWER_IDS, HERO_POWER_UNLOCK, type HeroPowerId } from '@/game/systems/heroPowersSystem';
 import { BOOST_UNLOCK_LEVEL, boostCooldown } from '@/game/systems/burstSystem';
 import { dodgeCooldownLeft, requestDodge } from '@/game/systems/dodgeSystem';
+import { sameLayerAsPlayer } from '@/game/systems/layerSystem';
 import { startLocalPersistence } from '@/game/state/local-persistence';
 import { getEra, getHallLevel } from '@/game/systems/baseSystem';
 import { startAccountPersistence } from '@/game/state/account-persistence';
@@ -439,14 +440,14 @@ function Index() {
     // Alvo selecionado tem prioridade sobre o mais próximo.
     const selectedId = (state as unknown as { targetId?: string | null }).targetId ?? null;
     if (selectedId) {
-      const selected = creatures.find(c => c.id === selectedId && c.behavior !== 'dead');
+      const selected = creatures.find(c => c.id === selectedId && c.behavior !== 'dead' && sameLayerAsPlayer(c.id));
       if (selected && dist(selected) <= range) { attack(selected.id); return; }
     }
 
     let nearest: string | null = null;
     let bestDist = Infinity;
     for (const c of creatures) {
-      if (c.behavior === 'dead') continue;
+      if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) continue; // caverna: só a mesma camada (layerSystem)
       const d = dist(c);
       if (d < bestDist) { bestDist = d; nearest = c.id; }
     }

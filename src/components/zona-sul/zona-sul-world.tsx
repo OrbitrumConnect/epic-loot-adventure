@@ -57,8 +57,11 @@ import { SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
 import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
-import { zsQuery, zsWorldProfile } from './zs-world-profile';
-import { zsAttack, zsCtx } from './zs-context';
+import { createCaveBoss, zsQuery, zsWorldProfile } from './zs-world-profile';
+import { zsAttack, zsCave, zsCtx } from './zs-context';
+import { CAVE_MOUTH_ZONE, caveCamFit, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
+import { ZsCave } from './zs-cave-view';
+import { layers, resetLayers, sameLayerAsPlayer } from '@/game/systems/layerSystem';
 import { shipGround, zsShip, ZsShip } from './zs-ship';
 import { type AmbienceState, zsAmbience } from './zs-ambience';
 import { ZsDayNight, ZsLamps, zsSun } from './zs-daynight';
@@ -136,6 +139,8 @@ function ambienceAt(t: ZsTerrain, p: THREE.Vector3, car: ZsCar | null, rideSpeed
   AMB.car = drive.mode === 'driving' && !!car;
   AMB.carSpeed = car?.speed ?? 0; AMB.carAlt = car?.altitude ?? 0;
   AMB.wind = AMB.car ? Math.min(1, AMB.carAlt / 25 + Math.abs(AMB.carSpeed) / 60) : Math.min(1, (rideSpeed / 14) * 0.6);
+  // caverna: lá dentro o mar e o vento somem (a rocha abafa)
+  const muffle = 1 - zsCave.dark; AMB.sea *= muffle; AMB.surf *= muffle; AMB.wind *= muffle;
   return AMB;
 }
 
@@ -147,7 +152,7 @@ function attackYaw(px: number, pz: number, fallback: number): number {
   const range = weaponRangeFor(selectedItemId(st), st.player.level) + 1;
   let best: { x: number; z: number } | null = null, bd = range * range;
   for (const c of st.creatures) {
-    if (c.behavior === 'dead') continue;
+    if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) continue;
     const d = (c.position.x - px) ** 2 + (c.position.z - pz) ** 2;
     if (d < bd) { bd = d; best = c.position; }
   }
@@ -165,6 +170,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const ride = useRef<RideState | null>(null);
   const tumble = useRef(0), spin = useRef(0);
   const boardYaw = useRef(0), popOk = useRef(false), lean = useRef(0), tubeCam = useRef(0), shiftWas = useRef(false);
+  /** caverna: na poça (anda mais devagar) · quanto da distância da câmera cabe sem entrar na rocha (0..1) */
+  const caveWade = useRef(false), camFit = useRef(1);
   const action = useRef<HeroAction>('idle');
   const speed = useRef(0);
   const vy = useRef(0);
@@ -192,6 +199,17 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   useFrame((_, dtRaw) => {
     const dt = Math.min(0.05, dtRaw);
     const p = heroRef.current, k = input.keys;
+    // CAVERNA (30/10): dentro dela (ou perto da boca) a caverna desenha; quanto mais fundo, mais escuro (lanterna acende)
+    {
+      const inside = drive.mode === 'foot' && caveInside(p.x, p.y, p.z), md = caveMouthDist(p.x, p.y, p.z);
+      layers.inside = inside; layers.player = inside && md > CAVE_MOUTH_ZONE ? 1 : 0;
+      zsCave.inCave = inside;
+      const want = inside && !input.overview ? Math.min(1, Math.max(0, (md - 6) / 28)) : 0;
+      zsCave.dark += (want * want * (3 - 2 * want) - zsCave.dark) * Math.min(1, dt * 2.5);
+      if (zsCave.dark < 0.002) zsCave.dark = 0;
+      zsCave.near = inside || md < 170 || input.overview;
+      zsCave.deep = zsCave.dark > 0.97;
+    }
     if (input.overview) {
       if (!wasOverview.current) { input.ov.x = p.x; input.ov.z = p.z; wasOverview.current = true; }
       const o = input.ov, sy0 = Math.sin(input.yaw), cy0 = Math.cos(input.yaw);
@@ -212,6 +230,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       return;
     }
     if (wasOverview.current) { wasOverview.current = false; fog.near = 200; fog.far = 2200; }
+    { const d2 = zsCave.dark * zsCave.dark; fog.near = 200 + (5 - 200) * d2; fog.far = 2200 + (75 - 2200) * d2; } // caverna: breu ao longe
     const car = carRef.current, now = performance.now();
     const gs = useGameStore.getState();
     // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
@@ -312,7 +331,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6; if (cyy < gcam) cyy = gcam;
       camera.position.set(cx, cyy, cz); camera.lookAt(tx, ty, tz);
       }
-      if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
+      if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity * (1 - zsCave.dark); sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
       hudAcc.current += dt;
       if (hudAcc.current > 0.25) {
         hudAcc.current = 0;
@@ -324,18 +343,19 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     }
     if (drive.mode === 'entering') { action.current = 'open_door'; speed.current = 0; }
     focusRef.current.copy(p);
+    const caveNow = zsCave.inCave;
     // ===== ASA-DELTA e SKATE VOADOR (30/10) — modos próprios, como o carro: movem o herói/câmera e encerram o quadro =====
     {
       const held = drive.mode === 'foot' && !dead ? selectedItemId(gs) : null, lvl = gs.player.level;
       const surfaceAt = (x: number, z: number) => Math.max(zsHeightAt(t, x, z), zsWaterYAt(x, z));
       // ASA-DELTA: na mão + caindo de um lugar ALTO → abre sozinha
-      if (!glide.current && held === HANG_GLIDER_ID && isUnlocked(held, lvl) && !grounded.current && !zsCtx.inWater
+      if (!glide.current && held === HANG_GLIDER_ID && isUnlocked(held, lvl) && !grounded.current && !zsCtx.inWater && !caveNow
         && canOpenGlider(vy.current, p.y - surfaceAt(p.x, p.z))) {
         glide.current = newGlide(facing.current, p.y, Math.max(GLIDE.CRUISE, Math.hypot(swimVel.current.x, swimVel.current.y)));
       }
       if (glide.current && held !== HANG_GLIDER_ID) glide.current = null; // trocou de item no ar: cai (sem asa)
       // SKATE: na mão (liberado) = em cima dele
-      if (held === HOVER_SKATE_ID && isUnlocked(held, lvl) && !glide.current) { if (!skate.current) skate.current = newSkate(facing.current, Math.max(p.y, surfaceAt(p.x, p.z) + SKATE.HOVER)); }
+      if (held === HOVER_SKATE_ID && isUnlocked(held, lvl) && !glide.current && !caveNow) { if (!skate.current) skate.current = newSkate(facing.current, Math.max(p.y, surfaceAt(p.x, p.z) + SKATE.HOVER)); }
       else skate.current = null;
       const gl = glide.current, sk = skate.current;
       gearRef.glider.visible = !!gl; gearRef.skate.visible = !!sk;
@@ -395,7 +415,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         let cy2 = ct.y + Math.sin(input.pitch) * dist; const gc = Math.max(zsHeightAt(t, cx2, cz2), ZS_WATER_Y) + 0.6; if (cy2 < gc) cy2 = gc;
         const persp = camera as THREE.PerspectiveCamera; if (Math.abs(persp.fov - CHASE_FOV) > 0.05) { persp.fov = CHASE_FOV; persp.updateProjectionMatrix(); }
         camera.position.set(cx2, cy2, cz2); camera.lookAt(ct.x, ct.y, ct.z);
-        if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); }
+        if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity * (1 - zsCave.dark); sun.current.color.copy(zsSun.color); }
         boardRef.current.visible = false;
         audioManager.setFootsteps(false);
         hudAcc.current += dt;
@@ -413,7 +433,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const wx = ix * cy + iz * sy, wz = -ix * sy + iz * cy; // gira o input pelo yaw da câmera
     // NAVIO: em pé no convés não é "nadar", mesmo com o mar embaixo (zs-ship)
     const deckNow = drive.mode === 'foot' ? shipGround(zsShip.c, p.x, p.z, p.y) : null;
-    const water0 = deckNow && !('wall' in deckNow) ? { swimming: false, wading: false } : zsWaterState(zsHeightAt(t, p.x, p.z));
+    const water0 = caveNow || (deckNow && !('wall' in deckNow)) ? { swimming: false, wading: false } : zsWaterState(zsHeightAt(t, p.x, p.z));
     const shift = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92 || Math.hypot(virtualMove.x, virtualMove.z) > 0.92;
     const moveBonus = 1 + effectiveAttributes(gs.player).moveSpeed / 100; // atributo Velocidade (igual ao Vale)
     let autoRun = false, dodging = false;
@@ -501,10 +521,15 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         if (startDodge(d.x, d.z)) atkT.current = 0;
       }
       const dg = activeDodge(); dodging = !!dg;
-      let dx = mx * mv * dt, dz = mz * mv * dt;
+      const wadeK = caveNow && caveWade.current ? 0.7 : 1; // poça da caverna: água no joelho
+      let dx = mx * mv * dt * wadeK, dz = mz * mv * dt * wadeK;
       if (dg) { const sp = dodgeSpeed(dg.t); dx = dg.dirX * sp * dt; dz = dg.dirZ * sp * dt; }
       const shove = takeKnockback('player', dt); if (shove) { dx += shove.x; dz += shove.z; }
-      st = dx || dz ? zsStep(t, p.x, p.z, dx, dz) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
+      // CAVERNA: dentro (ou entrando pela boca) o chão e as paredes são os dela; fora, o mapa como sempre
+      const cm = drive.mode === 'foot' && (caveNow || dx || dz) ? caveMove(t, p.x, p.z, p.y, dx, dz) : null;
+      caveWade.current = !!cm?.wading;
+      st = cm ? { x: cm.x, z: cm.z, ground: cm.ground, swimming: false, wading: cm.wading }
+        : dx || dz ? zsStep(t, p.x, p.z, dx, dz) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
       moving = Math.hypot(dx, dz) > 0.05 * dt; v = Math.hypot(dx, dz) / dt;
       swimVel.current.set(dx / dt, dz / dt); // entra na água com o embalo de quem vinha
       if (dg) facing.current = Math.atan2(dg.dirX, dg.dirZ);
@@ -519,6 +544,11 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (sg && !('wall' in sg)) st = { ...st, ground: sg.y, swimming: false, wading: false };
     }
     p.x = st.x; p.z = st.z;
+    // caverna: chão bem abaixo do pé (o buraco da boca, a beirada) = cai de verdade; o teto segura o pulo
+    if (caveNow || caveInside(p.x, p.y, p.z)) {
+      if (grounded.current && st.ground < p.y - 0.8) { grounded.current = false; vy.current = 0; }
+      if (!grounded.current && vy.current > 0 && caveField(p.x, p.y + 1.85, p.z) > -0.05) vy.current = 0;
+    }
     // vertical: pulo (só fora d'água funda) + chão / nado
     if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot' && !dead) { vy.current = 6.2; grounded.current = false; }
     dive.current = st.swimming && drive.mode === 'foot' ? zsDiveStep(dive.current, k.has('KeyC'), ZS_WATER_Y - st.ground, dt) : 0;
@@ -596,19 +626,29 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const cp = Math.cos(camPitch);
     const cx = tx + Math.sin(yawC) * cp * camDist, cz = tz + Math.cos(yawC) * cp * camDist;
     let cyy = ty + Math.sin(camPitch) * camDist;
-    const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6;
-    if (cyy < gcam) cyy = gcam;
-    camera.position.set(cx, cyy, cz);
+    if (zsCave.inCave) {
+      // CAVERNA: a câmera chega até onde cabe (encolhe na hora, volta devagar) — nunca dentro da rocha
+      const fit = caveCamFit(t, tx, ty, tz, cx, cyy, cz);
+      camFit.current = fit < camFit.current ? fit : Math.min(fit, camFit.current + dt * 1.2);
+      const kf = Math.max(camFit.current, Math.min(1, 0.9 / Math.max(0.1, camDist)));
+      camera.position.set(tx + (cx - tx) * kf, ty + (cyy - ty) * kf, tz + (cz - tz) * kf);
+    } else {
+      camFit.current = 1;
+      const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6;
+      if (cyy < gcam) cyy = gcam;
+      camera.position.set(cx, cyy, cz);
+    }
     camera.lookAt(tx, ty, tz);
     const shake = impactShake(); // soco de impacto quando um golpe acerta
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.3; camera.position.y += (Math.random() - 0.5) * shake * 0.3; camera.position.z += (Math.random() - 0.5) * shake * 0.3; }
     // sol + sombra seguem o herói
-    if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity; sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
+    if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity * (1 - zsCave.dark); sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
     hudAcc.current += dt;
     if (hudAcc.current > 0.25) {
       hudAcc.current = 0;
       let best = '', bd = 700;
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
+      if (zsCave.inCave) best = `${caveRoomName(p.x, p.z)} (caverna, ${Math.max(0, Math.round(zsHeightAt(t, p.x, p.z) - p.y))} m de rocha em cima)`;
       const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
       const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
         : rm === 'popup' ? 'levantando…' : rm === 'ride' && ride.current ? (ride.current.trickT > 0 ? ride.current.trick.toUpperCase() + ' · ' : '') + (ride.current.air ? 'NO AR! segure A ou D pra girar' : 'SURFANDO ' + Math.round(ride.current.speed * 3.6) + ' km/h · A/D vira (carving) · W acelera · S freia · Shift = boost · desça a face = ganha velocidade · suba rápido no lip = aéreo') + (ride.current.airs ? ' · aéreos: ' + ride.current.airs : '')
@@ -789,20 +829,31 @@ function ZsHudView({ touch }: { touch: boolean }) {
   );
 }
 
+/** A superfície (chão, mar, onda, mata, postes, navio): some no fundo da caverna (`zsCave.deep`). */
+function ZsSurface({ children }: { children: React.ReactNode }) {
+  const g = useRef<THREE.Group>(null);
+  useFrame(() => { if (g.current) g.current.visible = !zsCave.deep; });
+  return <group ref={g}>{children}</group>;
+}
+
 /** Painel do jogo aberto (inventário, mapa, base…): as teclas não mexem o herói (o mar segue vivo). */
 const zsPause = { on: false };
 /** Onde você parou na Zona Sul (neste aparelho) — o mapa velho sempre nasce no ponto de partida; aqui volta onde estava. */
 const POS_KEY = 'tribos.zs.pos';
-function readZsPos(t: ZsTerrain): { x: number; z: number } {
+function readZsPos(t: ZsTerrain): { x: number; z: number; y?: number } {
   try {
-    const v = JSON.parse(localStorage.getItem(POS_KEY) ?? 'null') as { x?: unknown; z?: unknown } | null;
-    const x = Number(v?.x), z = Number(v?.z);
-    if (Number.isFinite(x) && Number.isFinite(z) && x > t.x0 && x < t.x0 + t.w * t.cell && z > t.z0 && z < t.z0 + t.h * t.cell) return { x, z };
+    const v = JSON.parse(localStorage.getItem(POS_KEY) ?? 'null') as { x?: unknown; z?: unknown; y?: unknown } | null;
+    const x = Number(v?.x), z = Number(v?.z), y = Number(v?.y);
+    if (Number.isFinite(x) && Number.isFinite(z) && x > t.x0 && x < t.x0 + t.w * t.cell && z > t.z0 && z < t.z0 + t.h * t.cell) {
+      // saiu do jogo DENTRO da caverna: volta lá dentro (não em cima do morro)
+      if (Number.isFinite(y) && caveInside(x, y, z)) return { x, z, y };
+      return { x, z };
+    }
   } catch { /* sem storage / lixo: nasce no ponto de partida */ }
   return { x: ZS_SPAWN.x, z: ZS_SPAWN.z };
 }
 function saveZsPos(p: THREE.Vector3) {
-  try { localStorage.setItem(POS_KEY, JSON.stringify({ x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10 })); } catch { /* sem storage */ }
+  try { localStorage.setItem(POS_KEY, JSON.stringify({ x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10, ...(layers.inside ? { y: Math.round(p.y * 100) / 100 } : {}) })); } catch { /* sem storage */ }
 }
 
 /** Botão de SEGURAR (celular): enquanto o dedo está nele, a tecla fica apertada. */
@@ -853,8 +904,9 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     let alive = true;
     loadZsTerrain().then((tt) => {
       if (!alive) return;
+      setCaveTerrain(tt); // a caverna precisa do chão do mapa (bocas) antes de qualquer conta
       const at = readZsPos(tt);
-      heroRef.current.set(at.x, zsHeightAt(tt, at.x, at.z), at.z); focusRef.current.copy(heroRef.current);
+      heroRef.current.set(at.x, at.y ?? zsHeightAt(tt, at.x, at.z), at.z); focusRef.current.copy(heroRef.current);
       movement.current.set(at.x, 0, at.z);
       carRef.current = newCar(at.x + 3, at.z - 2, 0, tt);
       // o JOGO passa a viver na Zona Sul: chão/terra/limites/zona segura/acampamentos dela + a fauna por região
@@ -862,7 +914,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       setWorldProfile(prof);
       const query = zsQuery(tt);
       useGameStore.getState().enterWorld('zona-sul', {
-        creatures: createZsWildlife(query, undefined, ZS_FAUNA, prof.camps),
+        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...[createCaveBoss()].filter((c) => c !== null)],
         harvestNodes: createZsHarvestNodes(query),
         position: { x: at.x, z: at.z },
       });
@@ -872,6 +924,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     return () => {
       alive = false; window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
       zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false); zsAmbience.mute();
+      resetLayers(); zsCave.inCave = false; zsCave.dark = 0; zsCave.near = false; zsCave.deep = false; setCaveTerrain(null);
       // saiu da Zona Sul (trocou de mapa / cidade): o jogo volta pro Vale (se a troca já não fez isso)
       if (WORLD.id === 'zona-sul') { resetWorldProfile(); useGameStore.getState().enterWorld('classic'); }
     };
@@ -889,15 +942,20 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           <ZsDayNight hemi={hemiRef} amb={ambRef} sky={skyRef} />
           {/* POOL DE LUZES (30/10, lag): postes, fogueiras e tocha dividem poucas luzes FIXAS — sem recompilar shader; de dia saem */}
           <LightPool size={touchLayout.on ? 2 : 4} focus={heroRef} />
-          <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
-          {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
-          <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
-          <ZsTerrainMesh t={t} heroRef={focusRef} />
-          <ZsWater t={t} />
-          {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
-          {/* SORRISO: no meio de Copacabana, só na RESSACA (Pedro 30/10) */}
-          {SURF_ON && <SorrisoBreak t={t} />}
-          <ZsVegetation t={t} heroRef={focusRef} />
+          {/* a SUPERFÍCIE some quando o herói está no fundo da caverna (nada dela aparece lá dentro — e não pesa) */}
+          <ZsSurface>
+            <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
+            {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
+            <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
+            <ZsTerrainMesh t={t} heroRef={focusRef} />
+            <ZsWater t={t} />
+            {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
+            {/* SORRISO: no meio de Copacabana (Pedro 30/10) */}
+            {SURF_ON && <SorrisoBreak t={t} />}
+            <ZsVegetation t={t} heroRef={focusRef} />
+          </ZsSurface>
+          {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}
+          <ZsCave t={t} heroRef={heroRef} />
           <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} />
           {/* COMBATE — as mesmas peças do Vale, no chão da Zona Sul (perfil do mapa) */}
           {/* cada peça com a sua rede de carregamento (29/10: um bicho novo carregando o modelo ESCONDIA o mundo inteiro

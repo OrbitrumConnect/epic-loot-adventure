@@ -14,8 +14,31 @@ import { CAMP_PLACEMENTS, LAKE_CENTERS, PLAYER_SPAWN, SAFE_ZONE, WORLD_HALF, typ
 export type MapId = 'classic' | 'zona-sul';
 export type WorldBounds = { minX: number; maxX: number; minZ: number; maxZ: number };
 
+/**
+ * CAMADA DE BAIXO (30/10 — caverna da Zona Sul): o que o jogo precisa saber de um mundo SOB o chão. Tudo por conta
+ * (sem malha): chão/parede/camada de quem está em (x, y, z). Sem camada (Vale): null — nada muda.
+ */
+export type UnderLayer = {
+  /** chão de baixo sob quem tem os pés em `feetY`, se ele está DENTRO dela; null = está em cima (usa o chão do mapa) */
+  floor: (x: number, z: number, feetY: number) => number | null;
+  /** chão de baixo em (x, z), seja quem for (efeitos de quem está dentro); null = não tem embaixo ali */
+  floorAt: (x: number, z: number) => number | null;
+  /** passo de (ox, oz) → (nx, nz) de quem está dentro (paredes); fora dela devolve o passo como veio */
+  step: (ox: number, oz: number, nx: number, nz: number, feetY: number) => [number, number];
+  /** camada do ponto: 0 = superfície, 1 = embaixo (ninguém briga entre camadas) */
+  layer: (x: number, y: number, z: number) => number;
+  /** é rocha em (x, y, z)? (tiro/visão de quem está dentro) */
+  solid: (x: number, y: number, z: number) => boolean;
+  /** dentro dela em (x, y, z)? */
+  inside: (x: number, y: number, z: number) => boolean;
+  /** altura de nascer de um bicho que MORA embaixo (null = mora na superfície) */
+  homeY: (id: string, x: number, z: number) => number | null;
+};
+
 export type WorldProfile = {
   id: MapId;
+  /** mundo sob o chão (caverna); null/ausente = não tem */
+  under?: UnderLayer | null;
   bounds: WorldBounds;
   spawn: Position;
   safeZone: { x: number; z: number; radius: number };
@@ -42,12 +65,13 @@ const CLASSIC: WorldProfile = {
 };
 
 /** O mapa ativo (lido por todo mundo; trocado só por `setWorldProfile`). */
-export const WORLD: { id: MapId; bounds: WorldBounds; height: WorldProfile['height']; walkable: WorldProfile['walkable']; zoneRadii: readonly number[] } = {
-  id: 'classic', bounds: { ...CLASSIC.bounds }, height: null, walkable: null, zoneRadii: CLASSIC.zoneRadii,
+export const WORLD: { id: MapId; bounds: WorldBounds; height: WorldProfile['height']; walkable: WorldProfile['walkable']; zoneRadii: readonly number[]; under: UnderLayer | null } = {
+  id: 'classic', bounds: { ...CLASSIC.bounds }, height: null, walkable: null, zoneRadii: CLASSIC.zoneRadii, under: null,
 };
 
 export function setWorldProfile(p: WorldProfile): void {
   WORLD.id = p.id;
+  WORLD.under = p.under ?? null;
   WORLD.bounds = { ...p.bounds };
   WORLD.height = p.height;
   WORLD.walkable = p.walkable;

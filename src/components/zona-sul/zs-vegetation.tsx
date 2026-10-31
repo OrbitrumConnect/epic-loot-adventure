@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ZS_SURF } from './zona-sul-meta';
 import { type ZsTerrain, zsHash, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
+import { caveMouthClear } from './zs-cave';
 
 export const ZS_VEG_CELL = 16;
 export const ZS_VEG_NEAR = 150;
@@ -109,6 +110,7 @@ export function zsVegetationAround(t: ZsTerrain, hx: number, hz: number, near = 
       const x = (cx + zsHash(cx, cz, k * 3 + 1)) * ZS_VEG_CELL, z = (cz + zsHash(cx, cz, k * 3 + 2)) * ZS_VEG_CELL;
       const s = zsSurfAt(t, x, z), y = zsHeightAt(t, x, z);
       if (y < ZS_WATER_Y + 0.1 || s === ZS_SURF.sea || s === ZS_SURF.lagoon || s === ZS_SURF.out || s === ZS_SURF.road) continue; // nada no meio da rua
+      if (!caveMouthClear(x, z)) continue; // boca da caverna limpa
       const slope = zsSlopeDeg(t, x, z), r = zsHash(cx, cz, k * 3 + 3), r2 = zsHash(cx, cz, k * 3 + 40);
       let kind: ZsVegKind | null = null;
       if (s === ZS_SURF.beach) { if (k < 1 && r < 0.35) kind = 'palm'; }

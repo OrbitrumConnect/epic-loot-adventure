@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { ZS_ROAD_MASK, ZS_SURF } from './zona-sul-meta';
 import { type ZsTerrain, zsHash, ZS_WATER_Y } from './zs-terrain-data';
+import { CAVE_HOLE_IN, ZS_CAVE_MOUTHS } from './zs-cave';
 
 export const ZS_CHUNK = 64;
 /** Detalhe por distância (m) → passo em células. */
@@ -100,6 +101,14 @@ const roadUniforms = {
   uRoadRect: { value: new THREE.Vector4(ZS_ROAD_MASK.x0, ZS_ROAD_MASK.z0, ZS_ROAD_MASK.w, ZS_ROAD_MASK.h) },
   uRoadOn: { value: 0 },
 };
+/** BOCAS DA CAVERNA (30/10): o 1º trecho de cada túnel com boca — o chão some DENTRO do arco (buraco exato). */
+const caveUniforms = {
+  uCaveA: { value: ZS_CAVE_MOUTHS.map((m) => new THREE.Vector4(m.ax, m.az, m.ay, m.ra)) },
+  uCaveB: { value: ZS_CAVE_MOUTHS.map((m) => new THREE.Vector4(m.bx, m.bz, m.by, m.rb)) },
+  // altura do arco no começo/fim + onde o buraco começa (fração do trecho: CAVE_HOLE_IN m depois do plano da boca)
+  uCaveH: { value: ZS_CAVE_MOUTHS.map((m) => new THREE.Vector3(m.ha, m.hb, CAVE_HOLE_IN / Math.hypot(m.bx - m.ax, m.bz - m.az))) },
+};
+const CAVE_N = ZS_CAVE_MOUTHS.length;
 let roadRequested = false;
 function requestRoadMask(): void {
   if (roadRequested || typeof window === 'undefined') return;
@@ -121,7 +130,7 @@ function requestRoadMask(): void {
  */
 function withGroundDetail(m: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (s) => {
-    Object.assign(s.uniforms, roadUniforms);
+    Object.assign(s.uniforms, roadUniforms, caveUniforms);
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vZsW;\nvarying float vZsUp;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvZsW = (modelMatrix * vec4(position, 1.0)).xyz;\nvZsUp = normal.y;');
@@ -132,9 +141,25 @@ varying float vZsUp;
 uniform sampler2D uRoadMask;
 uniform vec4 uRoadRect;
 uniform float uRoadOn;
+uniform vec4 uCaveA[${CAVE_N}];
+uniform vec4 uCaveB[${CAVE_N}];
+uniform vec3 uCaveH[${CAVE_N}];
 float zsH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float zsN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(zsH(i), zsH(i + vec2(1.0, 0.0)), f.x), mix(zsH(i + vec2(0.0, 1.0)), zsH(i + vec2(1.0, 1.0)), f.x), f.y); }`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+  // boca da caverna: dentro do arco do 1º trecho o chão some (o chão do túnel, mais baixo, aparece)
+  for (int i = 0; i < ${CAVE_N}; i++) {
+    vec2 ca = uCaveA[i].xy, cab = uCaveB[i].xy - ca;
+    float ct = dot(vZsW.xz - ca, cab) / dot(cab, cab);
+    if (ct < uCaveH[i].z || ct > 1.0) continue;
+    float cr = mix(uCaveA[i].w, uCaveB[i].w, ct), ch = mix(uCaveH[i].x, uCaveH[i].y, ct), cy = mix(uCaveA[i].z, uCaveB[i].z, ct);
+    float cd = length(vZsW.xz - (ca + cab * ct)), cv = (vZsW.y - cy) / ch;
+    float ce = (cd * cd) / (cr * cr) + cv * cv;
+    // some só o chão do mapa ACIMA do chão do túnel, dentro do arco; onde ele está na altura do chão do túnel (a beira
+    // mais baixa da boca), ele mesmo é o chão ali — sem fresta, sem lâmina de grama
+    if (ce < 1.0 && vZsW.y > cy + 0.05) discard;
+  }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
   float zg = zsN(vZsW.xz * 1.6) * 0.55 + zsN(vZsW.xz * 0.31) * 0.45;
   float zp = zsN(vZsW.xz * 0.045);
@@ -157,7 +182,7 @@ float zsN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
     }
   }`);
   };
-  m.customProgramCacheKey = () => 'zs-ground-v3';
+  m.customProgramCacheKey = () => 'zs-ground-v4';
   return m;
 }
 

@@ -23,6 +23,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { FeedbackEvent } from '@/game/types/feedback';
 import { markImpact, pixelsPerUnit, terrainHeight } from './world-kit';
 import { glbSurfaceY } from './terrain-collision';
+import { effectGround } from '@/game/systems/layerSystem';
 import { triggerHitStop } from './hit-stop';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 import { creatureById } from './hostile-ai';
@@ -184,7 +185,7 @@ export function CombatFeedback() {
     slot.life = THREE.MathUtils.clamp(ev.ttl / 1000, 0.7, 1.8);
     slot.x = ev.position.x + (Math.random() - 0.5) * 0.5;
     slot.z = ev.position.z + (Math.random() - 0.5) * 0.5;
-    slot.y = terrainHeight(ev.position.x, ev.position.z) + (ev.onPlayer ? 2.1 : 1.6);
+    slot.y = effectGround(ev.position.x, ev.position.z, terrainHeight(ev.position.x, ev.position.z)) + (ev.onPlayer ? 2.1 : 1.6);
     slot.scale = crit ? 1.55 : 1;
     slot.sprite.visible = true;
   };
@@ -199,7 +200,7 @@ export function CombatFeedback() {
     const n = isDeath ? 24 : ev.critical ? 24 : 18;
     const sizeK = isDeath ? 1 : HIT_DROP_SIZE;
     // Chão REAL do mapa, calculado 1× por golpe (as gotas andam < 2 m — não precisa por gota).
-    const ground = glbSurfaceY(ev.position.x, ev.position.z, terrainHeight(ev.position.x, ev.position.z));
+    const ground = effectGround(ev.position.x, ev.position.z, glbSurfaceY(ev.position.x, ev.position.z, terrainHeight(ev.position.x, ev.position.z)));
     const baseY = ground + (ev.onPlayer ? 1.1 : 0.8);
     // Jato pra LONGE de quem bateu (o herói, quando o golpe é num bicho).
     const me = useGameStore.getState().player.position;

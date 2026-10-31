@@ -13,6 +13,7 @@ import { audioManager, distanceGain } from '../audio/audio-manager';
 import { noteShotAt } from '../systems/shotFacing';
 import { breakGrab } from '../systems/grabSystem';
 import { isInvulnerable } from '../systems/dodgeSystem';
+import { layers, sameLayerAsPlayer } from '../systems/layerSystem';
 import { BOOST_DURATION_MS, BOOST_ITEMS, BOOST_UNLOCK_LEVEL, boostCooldown, boostScale, BURST_GAP, burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
@@ -593,7 +594,7 @@ export const INITIAL_HERO_POWERS: HeroPowersState = {
 
 /** Hostil pra poder: vivo e não pacífico (igual aos poderes da base). */
 function isPowerTarget(c: CreatureState): boolean {
-  return c.behavior !== 'dead' && c.hp > 0 && !CREATURES[c.speciesId]?.peaceful;
+  return c.behavior !== 'dead' && c.hp > 0 && !CREATURES[c.speciesId]?.peaceful && sameLayerAsPlayer(c.id);
 }
 
 /** Força base do herói pros poderes (mesma conta da Chuva de Flechas). */
@@ -967,6 +968,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const state = get();
     const creature = state.creatures.find(c => c.id === targetId);
     if (!creature || creature.behavior === 'dead') return;
+    if (!sameLayerAsPlayer(targetId)) return; // caverna: nada através da rocha (layerSystem)
 
     // Arma ativa = item na mão (hotbar). O perfil define alcance, cadência e tipo
     // (melee vs ranged). Tocha = dano de fogo. CombatController único: humano e
@@ -1187,7 +1189,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const CLEAVE_RADIUS = 3, CLEAVE_MAX = 7; // raio 3 m (corpo a corpo) + o alvo = até 8 inimigos
       let extra = 0;
       updatedCreatures = updatedCreatures.map(c => {
-        if (extra >= CLEAVE_MAX || c.id === targetId || c.behavior === 'dead') return c;
+        if (extra >= CLEAVE_MAX || c.id === targetId || c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
         if (getDistance(state.player.position, c.position) > CLEAVE_RADIUS) return c;
         extra += 1;
         const r = resolveAttack(finalPower, c.hp, c.maxHp, c.armor, c.name, playerCritStats(state.player));
@@ -1252,7 +1254,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     audioManager.playMelee(); // especial (salto/giro) = melee
 
     const creatures = state.creatures.map(c => {
-      if (c.behavior === 'dead') return c;
+      if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
       if (getDistance(pos, c.position) > radius) return c;
       hits += 1;
       const result = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
@@ -1344,7 +1346,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const nearestHostile = (): Position | null => {
       let best: Position | null = null, bestD = Infinity;
       for (const c of get().creatures) {
-        if (c.behavior === 'dead') continue;
+        if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) continue;
         const d = getDistance(get().player.position, c.position);
         if (d <= reach && d < bestD) { bestD = d; best = c.position; }
       }
@@ -1387,7 +1389,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       let hits = 0;
 
       const creatures = st.creatures.map(c => {
-        if (c.behavior === 'dead') return c;
+        if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
         if (getDistance(center, c.position) > radius) return c;
         hits += 1;
         const r = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
@@ -1568,7 +1570,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let bestNode: (typeof state.harvestNodes)[number] | null = null;
     let bestNodeDist = Infinity;
     for (const node of state.harvestNodes) {
-      if (node.depleted) continue;
+      if (node.depleted || layers.player !== 0) continue; // fundo da caverna: os recursos estão lá em cima
       const def = HARVEST_NODES[node.kind];
       if (!def) continue;
       const d = getDistance(pos, node.position);
@@ -1579,7 +1581,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let bestRes: ResourceNode | null = null;
     let bestResDist = Infinity;
     for (const node of state.resources) {
-      if (node.depleted) continue;
+      if (node.depleted || layers.player !== 0) continue;
       const d = getDistance(pos, node.position);
       if (d <= 4 && d < bestResDist) { bestResDist = d; bestRes = node; }
     }
@@ -2783,13 +2785,14 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
           attackRange: maxAttackRange(weapons, heldRange),
         };
       })(),
-      harvestNodes: state.harvestNodes.map(n => ({
+      // caverna (layerSystem): o piloto só vê o que está na MESMA camada do herói
+      harvestNodes: (layers.player === 0 ? state.harvestNodes : []).map(n => ({
         id: n.id,
         kind: n.kind,
         position: n.position,
         depleted: n.depleted,
       })),
-      creatures: state.creatures.map(c => ({
+      creatures: state.creatures.filter(c => sameLayerAsPlayer(c.id)).map(c => ({
         id: c.id,
         position: c.position,
         behavior: c.behavior,

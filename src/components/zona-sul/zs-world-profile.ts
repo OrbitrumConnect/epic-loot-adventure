@@ -4,9 +4,23 @@
  * Puro (recebe o terreno decodificado): o mundo 3D usa ao carregar; os testes usam com o PNG de verdade.
  */
 import type { WorldProfile } from '@/game/data/world-profile';
+import { CREATURES, scaleEnemyHp } from '@/game/data/creatures';
+import type { CreatureState } from '@/game/types';
 import { pickZsCampSites, ZS_SAFE, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
 import { type ZsTerrain, zsBounds, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
+import { CAVE_BOSS, zsCaveUnder } from './zs-cave';
+
+/** O CHEFE da caverna (salão do fundo) — mesmo formato da fauna; nasce no chão de lá (`homeY` da camada de baixo). */
+export function createCaveBoss(): CreatureState | null {
+  const def = CREATURES[CAVE_BOSS.speciesId];
+  if (!def) return null;
+  const hp = Math.round(scaleEnemyHp(def.maxHp) * CAVE_BOSS.hpK);
+  return {
+    id: CAVE_BOSS.id, speciesId: def.id, name: def.name, hp, maxHp: hp, attackPower: def.attackPower, armor: def.armor,
+    attackCooldown: def.attackCooldown, lastAttackAt: 0, position: { x: CAVE_BOSS.x, z: CAVE_BOSS.z }, behavior: 'patrol', lootTable: [], respawnAt: null,
+  };
+}
 
 export function zsQuery(t: ZsTerrain): ZsQuery {
   const b = zsBounds(t);
@@ -38,5 +52,7 @@ export function zsWorldProfile(t: ZsTerrain, q: ZsQuery = zsQuery(t)): WorldProf
     height: (x, z) => zsHeightAt(t, x, z),
     walkable: (x, z) => zsWalkable(t, x, z),
     zoneRadii: ZS_ZONE_RADII,
+    // CAVERNA (30/10): o mundo embaixo do Rebouças/Jardim Botânico/Gávea
+    under: zsCaveUnder(t),
   };
 }

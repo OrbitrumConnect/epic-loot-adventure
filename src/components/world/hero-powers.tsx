@@ -9,6 +9,7 @@ import {
 } from '@/game/systems/heroPowersSystem';
 import { glbSurfaceY } from './terrain-collision';
 import { terrainHeight } from './world-kit';
+import { effectGround } from '@/game/systems/layerSystem';
 
 /**
  * Render dos PODERES DO HERÓI (o dano/empurrão é do store: `tickHeroPowers`, throttled; aqui
@@ -55,7 +56,7 @@ export function HeroPowers({ playerRef, paused }: { playerRef: React.RefObject<T
       const q = tw[i];
       g.visible = !!q;
       if (q) {
-        g.position.set(q.x, glbSurfaceY(q.x, q.z, terrainHeight(q.x, q.z)), q.z);
+        g.position.set(q.x, effectGround(q.x, q.z, glbSurfaceY(q.x, q.z, terrainHeight(q.x, q.z))), q.z);
         g.rotation.y = now / 90;
       }
     }
@@ -68,7 +69,7 @@ export function HeroPowers({ playerRef, paused }: { playerRef: React.RefObject<T
       const age = b ? now - b.at : Infinity;
       m.visible = age < LIGHTNING_BOLT_MS;
       if (b && m.visible) {
-        m.position.set(b.x, glbSurfaceY(b.x, b.z, terrainHeight(b.x, b.z)) + 7, b.z);
+        m.position.set(b.x, effectGround(b.x, b.z, glbSurfaceY(b.x, b.z, terrainHeight(b.x, b.z))) + 7, b.z);
         (m.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - age / LIGHTNING_BOLT_MS);
       }
     }
