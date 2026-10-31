@@ -124,6 +124,7 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [ ] Vercel: conta bloqueada ("Account is blocked") — Pedro ver no painel; o código está no GitHub
   - (31/10) Pedro migrando o deploy pro **Cloudflare Workers**; lockfile corrigido (`b7cee5a`); PWA: reinstala se o domínio mudar
 - [ ] Bases na Zona Sul (Fase 4): locais — Pedro: "tem tudo, só progredir" → propor áreas planas e seguras pra ele aprovar
+  - [x] (31/10) FASE 4 feita: a base do Vale inteira na Zona Sul (reivindica onde o terreno passar, como no Vale), horda, torres, tropas, casa, chefe 15 min, noite; online com a camada da caverna (`738d29f`)
 - [x] Skate voador (nv 15) · asa-delta (nv 8) — no kit de todo personagem (30/10)
 - [ ] Mixamo: pasta do Pedro disponível pra animações que faltarem
 - [x] (30–31/10) Sorriso SEM ressaca: sempre ligado, MESMO tempo de série do Arpoador, 3 seções vindo do fundo, véu, costas em rampa, surfar a espuma e emendar (`c374e7f`)

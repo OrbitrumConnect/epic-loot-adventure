@@ -17,7 +17,7 @@ import { creatureLayer, layers, sameLayerAsPlayer } from '../systems/layerSystem
 import { BOOST_DURATION_MS, BOOST_ITEMS, BOOST_UNLOCK_LEVEL, boostCooldown, boostScale, BURST_GAP, burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
-import { CAMPS, SAFE_ZONE, WORLD_HALF } from '../data/camps';
+import { CAMPS, PLAYER_SPAWN, SAFE_ZONE, WORLD_HALF } from '../data/camps';
 import { HARVEST_NODES, harvestRangeFor } from '../data/harvest-nodes';
 import { DEV_INFINITE_POTIONS } from '../config/dev-flags';
 import { createInventory, addItem, removeItem, getWeight, getUsedSlots, canAddItem, getDroppableItems, getItemCount } from '../systems/inventorySystem';
@@ -2840,7 +2840,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         ...state.resources.map(r => ({ id: r.id, position: r.position, depleted: r.depleted })),
       ],
       objectives: state.objectives,
-      homePosition: HOME_POSITION,
+      // nascedouro do MAPA ATIVO (31/10: na Zona Sul era o (7, −26) do Vale; no Vale é o mesmo ponto)
+      homePosition: { x: PLAYER_SPAWN.x, z: PLAYER_SPAWN.z },
       ...(state.pilotAnchor ? { autoAnchor: state.pilotAnchor } : {}),
       ...(() => {
         const core = state.playerBase?.pieces.find(p => p.kind === 'core');
@@ -2897,7 +2898,7 @@ function resolveObjectiveTarget(
     return { position: node.position, label: `Viajar até ${name}` };
   }
   if (targetId != null) return null;
-  return { position: HOME_POSITION, label: 'Voltar para a base' };
+  return { position: { x: PLAYER_SPAWN.x, z: PLAYER_SPAWN.z }, label: 'Voltar para a base' };
 }
 
 function applyBaseResult(
