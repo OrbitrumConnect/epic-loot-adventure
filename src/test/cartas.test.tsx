@@ -71,6 +71,14 @@ describe('carta de nível na tela', () => {
     expect(screen.queryByText('Escolha 1 de 3')).toBeNull();
     expect(screen.getByTitle('Abrir carta')).toBeTruthy();
   });
+  it('janela de Atributos aberta: não mostra carta nem selinho (sem sobrepor o painel)', () => {
+    useGameStore.setState((s) => ({ player: { ...s.player, skillPoints: 3, lastDamagedAt: 0, lastAttackAt: 0 }, ui: { ...s.ui, panel: 'attributes' } }));
+    act(() => pushCard({ kind: 'level', icon: '✦', title: 'Pontos', sticky: true }, true));
+    const { container } = render(<CardHost />);
+    expect(screen.queryByText('Escolha 1 de 3')).toBeNull();
+    expect(container.querySelector('.card-badge')).toBeNull();
+    expect(container.querySelector('.game-card')).toBeNull();
+  });
 });
 
 describe('sem clicar em vazio (checklist item 9)', () => {
