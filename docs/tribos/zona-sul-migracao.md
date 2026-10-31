@@ -142,6 +142,9 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [ ] (31/10) QUADRO DE MISSÕES estilo MIR4: escolhe até 10, o idle faz as automáticas (visao-master-play.md §3.1)
 - [ ] (31/10) Clash ↔ mapa: armazém já é o mesmo (23/10) — conferir na tela da Zona Sul ("não esquecer")
 - [ ] (31/10) Celular: Carro/Correr/Descer grandes em cima não tá bom → menores, embaixo, no esquema dos gatilhos dos poderes
+- [ ] (31/10) Surf dá XP quando está na onda; no TUBO um XP maiorzinho (visao-master-play.md §3.7)
+- [ ] (31/10) Carro voador: amigo/aliado junto puxa a arma e atira do carro (depende do carro online, Fase 5)
+- [ ] (31/10) Carro: modo de dano, explodir, talvez farmável; carro = nível + recurso pra construir (explodiu → farmar outro) (§3.8)
 
 ## Decisões do Pedro antes de começar
 1. **Um personagem só nos dois mapas?** (recomendado: sim — mesmo save)

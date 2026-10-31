@@ -126,6 +126,38 @@ Pilares que isso respeita (selados): pós-colapso (sobreviver e reconstruir), 3 
   aparecer só quando servem: "Carro" perto do carro ou dentro dele, "Descer" no carro/na água, "Correr" sempre. Menos
   coisa na tela, cara mais pro. Não mexe nos poderes nem no joystick.
 
+### 3.7 Surf dá XP, e o TUBO dá mais (Pedro, 31/10 noite: "pra não esquecer")
+- **Hoje:** surfar não dá XP nenhum. O jogo já sabe quando o herói está EM PÉ na onda e quando está DENTRO DO TUBO
+  (é o que fecha a câmera no tubo, `zsWaterInTubeAt`). Ou seja, a parte difícil já existe.
+- **Proposta:** XP por segundo em pé na onda e XP "maiorzinho" no tubo (ex.: 3× o da onda), pago quando a onda acaba
+  (cai, sai ou a onda morre). Vale pro Arpoador e pro Sorriso. Casa com a missão manual "pegar N ondas" (3.1).
+- **Pra decidir junto:** um teto de XP por onda, pra não virar farm de XP parado no tubo.
+
+### 3.8 Carro voador: amigo atirando, dano/explosão, construir com nível + recurso (Pedro, 31/10 noite)
+- **Hoje:** o modelo tem 5 bancos, mas só o do motorista é usado. O carro ainda não vai pela rede (o amigo não vê nem
+  entra; isso está na Fase 5). Dentro do carro o herói não ataca. O carro não tem vida (os topos armados atiram nele,
+  mas não quebra). É o "veículo do mapa", liberado no nv 25, e não é item de mochila.
+- **Pedido:**
+  - (a) **amigo/aliado no carro puxa a arma e atira** (o motorista dirige, os passageiros atiram);
+  - (b) **o carro leva dano e EXPLODE**, e talvez seja "farmável";
+  - (c) **o carro custa nível + recurso pra construir**. Se explodir, tem que farmar outro, e isso deixa o jogo mais
+    dinâmico.
+- **Como encaixa no que já existe:**
+  - (a) depende do carro online (Fase 5): o passageiro senta nos bancos 2–5 do carro do outro e usa as MESMAS armas e a
+    mira do jogo.
+  - (b) os topos armados que já atiram no carro passam a ser perigo de verdade. Junta com a proposta do carro no nv 30
+    (3.4).
+  - (c) o carro vira algo seu, que precisa ir pro save numa chave OPCIONAL (lição do nv 38). A receita deve usar recurso
+    que já existe (madeira/pedra/ferro do armazém), sem item novo inventado.
+- **Pra decidir junto:** o que é "farmável": os destroços do SEU carro devolvem parte do recurso, ou carro de OUTRO
+  jogador derrubado dá loot (PvP)?
+
+### Pedidos somados de 31/10 (3 mensagens), pra não se perder
+1. Muro da base 13–14 · torres fora do muro · modo livre ("talvez") · não pesar/bugar · hordas 5–8 min a mais ·
+   nível do carro e do skate · quadro de missões MIR4 (até 10, idle) · Clash ↔ mapa "não esquecer" → **3.1–3.5**
+2. Botões do carro no celular menores, embaixo, no esquema dos poderes → **3.6**
+3. Surf dá XP (tubo maior) · amigo atira do carro · carro com dano/explosão/farmável · carro = nível + recurso → **3.7–3.8**
+
 ---
 
 ## 4. Ordem sugerida (proposta minha, tu decide)
@@ -158,6 +190,10 @@ Pilares que isso respeita (selados): pós-colapso (sobreviver e reconstruir), 3 
 - [ ] Celular: Carro/Correr/Descer menores, embaixo, no esquema dos poderes; aparecem só quando servem
 - [ ] Base elite: lado 13 (ímpar), torres de perímetro (4–6), modo livre depois do Lv1 (teto de peças)
 - [ ] Piloto andar dentro da caverna (pra liberar missão automática lá)
+- [ ] Surf dá XP: em pé na onda por segundo, no TUBO maior (proposta 3×), teto por onda
+- [ ] Carro: passageiro (amigo/aliado) puxa a arma e atira — depende do carro online (Fase 5)
+- [ ] Carro: vida, dano (topos armados), explosão; "farmável" = destroços devolvem recurso? ou loot no PvP? (decidir)
+- [ ] Carro: construir com nível + recurso do armazém; explodiu → farmar outro (save em chave opcional)
 
 **Fase 6 — raid e cerco** (não existe nem no Vale)
 - [ ] Tropas etapa 2 (escolta) e 3 (raid) · tropa tank
