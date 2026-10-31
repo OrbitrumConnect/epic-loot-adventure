@@ -1226,3 +1226,11 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .cs-hotkeys button { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); font: 700 11px var(--font-sans); cursor: pointer; }
 .cs-hotkeys button:hover { border-color: var(--primary); }
 .cs-hotkeys button[data-on] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+
+/* Mapa (M) da Zona Sul: BASE e ACAMPAMENTOS (31/10) */
+.zs-mapmark { position: absolute; transform: translate(-50%, -50%); z-index: 2; pointer-events: auto; }
+.zs-mapmark--base { width: 18px; height: 18px; border-radius: 4px; background: var(--world-gold); border: 2px solid var(--world-dark); box-shadow: 0 0 0 2px var(--world-light); transform: translate(-50%, -50%) rotate(45deg); }
+.zs-mapmark--camp { width: 11px; height: 11px; border-radius: 2px; background: #c8412f; border: 2px solid var(--world-dark); }
+.zs-mapmark--camp[data-cleared] { background: #6b6b6b; }
+.zs-key-base { background: var(--world-gold); border: 2px solid var(--world-dark); border-radius: 3px; transform: rotate(45deg); }
+.zs-key-camp { background: #c8412f; border: 2px solid var(--world-dark); border-radius: 2px; }

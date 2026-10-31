@@ -498,10 +498,11 @@ export type MobHitIntent = { id: string; targetId: string; damage: number; creat
 let mobHitHandler: ((intent: MobHitIntent) => void) | null = null;
 
 /** Jogadores remotos vivos (pro AI do HOST escolher o alvo mais perto). Vazio fora de sala/convidado. */
-export function remoteTargets(): { id: string; x: number; z: number }[] {
+export function remoteTargets(): { id: string; x: number; z: number; y?: number }[] {
   const s = useNet.getState();
   if (!s.connected || !s.isHost) return [];
-  return Object.values(s.players).filter(p => p.hp > 0).map(p => ({ id: p.id, x: p.x, z: p.z }));
+  // y (31/10): a altura real dele — a IA sabe se ele está na caverna ou na superfície (camada)
+  return Object.values(s.players).filter(p => p.hp > 0).map(p => ({ id: p.id, x: p.x, z: p.z, ...(Number.isFinite(p.y) ? { y: p.y as number } : {}) }));
 }
 
 /** Host: um bicho acertou um CONVIDADO (dano bruto; o convidado aplica a própria armadura). */

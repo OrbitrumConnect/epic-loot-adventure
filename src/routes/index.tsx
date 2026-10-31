@@ -645,14 +645,14 @@ function Index() {
       )}
       {!zs && <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>}
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
-      {!playerBase && !zs && (
+      {!playerBase && (
         <Button variant="ghost" className="world-action" data-on="true" aria-label="Reivindicar base"
           title="Reivindicar base — clique aqui e depois no quadrado VERDE no chão"
           onClick={() => { setBuildActive(true); useGameStore.getState().setMessage('🔨 Modo construção ligado — clique no quadrado VERDE no chão para reivindicar a base.'); }}>
           <Hammer />
         </Button>
       )}
-      {baseProg && baseProg.pct < 100 && !zs && (
+      {baseProg && baseProg.pct < 100 && (
         <Button variant="ghost" className="world-action" data-on="true" aria-label="Construir base" title={`Construir base — entregar recursos (${baseProg.pct}%)`} onClick={deliverToBase}><Hammer /></Button>
       )}
     </>
@@ -777,8 +777,9 @@ function Index() {
           {/* Cartas de um toque + lateral UPAR (Pedro 25/10: sem precisar ir à cidade). */}
           {worldOn && !inCity && !player.dead && <CardHost />}
           {worldOn && !inCity && !player.dead && <UpgradeSide />}
-          {worldOn && ui.mode === 'world' && !zs && <BossSpawner />}
-          {worldOn && ui.mode === 'world' && !zs && <NightFlock />}
+          {/* 31/10: chefe a cada 15 min e a noite (pombos/mortos-vivos) também na Zona Sul — a mesma do Vale */}
+          {worldOn && ui.mode === 'world' && <BossSpawner />}
+          {worldOn && ui.mode === 'world' && <NightFlock />}
           {player.dead && !inCity && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 50,
@@ -800,7 +801,7 @@ function Index() {
                   ? <>Renascendo em <strong style={{ fontSize: 28, color: '#fbbf24' }}>{deathCountdown}s</strong></>
                   : 'Renascendo...'}
               </p>
-              <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>{zs ? 'Você reaparecerá na praia do Arpoador (zona segura)' : 'Você reaparecerá na sua base'}</p>
+              <p style={{ fontSize: 14, marginTop: 8, opacity: 0.6 }}>{playerBase ? 'Você reaparecerá na sua base' : zs ? 'Você reaparecerá na praia do Arpoador (zona segura)' : 'Você reaparecerá na sua base'}</p>
             </div>
           )}
           {ui.baseFell && !inCity && (
@@ -986,7 +987,7 @@ function Index() {
           {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={zs || cameraMode === 'third'} powers={mobilePowers} />}
           </>)}
 
-          {!inCity && !panel && !zs && <PiecePicker />}
+          {!inCity && !panel && <PiecePicker />}
 
           {panel && (
             <div className="modal-backdrop">

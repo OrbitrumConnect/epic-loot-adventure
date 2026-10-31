@@ -6,6 +6,7 @@ import { selectTowerPlayerTarget, type TowerSource } from '@/game/systems/towerS
 import { towerLevelStats } from '@/game/systems/towerLevelSystem';
 import { broadcastPlayerHit, broadcastTroopHit, MP_ENABLED, setOutgoingTroops, useNet } from '@/net/multiplayer';
 import type { BasePiece } from '@/game/types/playerbase';
+import { WORLD } from '@/game/data/world-profile';
 
 /** O render apenas agenda; seleção, cooldown e dano pertencem ao sistema/store. */
 export function TowerRuntime({ paused }: { paused: boolean }) {
@@ -59,7 +60,9 @@ function towersHitEnemyPlayers(towers: readonly TowerSource[], now: number): voi
   const net = useNet.getState();
   if (!net.connected) return;
   const isHostile = (id: string) => net.players[id]?.side === 'enemy' || net.selfSide === 'enemy';
-  const hostile = Object.values(net.players).filter((r) => r.hp > 0 && isHostile(r.id));
+  // caverna (31/10): quem está lá embaixo (pela altura que vem da rede) não leva tiro da torre através da rocha
+  const hostile = Object.values(net.players).filter((r) => r.hp > 0 && isHostile(r.id)
+    && !(WORLD.under && Number.isFinite(r.y) && WORLD.under.layer(r.x, r.y as number, r.z) !== 0));
   // Tropas do invasor (raid): alvo DEPOIS do jogador — elas tankam a torre (visão do Pedro).
   const troops: { x: number; z: number; hp: number; owner: string; id: string }[] = [];
   for (const owner in net.troops) {

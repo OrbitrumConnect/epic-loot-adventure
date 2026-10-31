@@ -33,6 +33,7 @@ import { useNet, broadcastBase, MP_ENABLED } from '@/net/multiplayer';
 import { strikeRemotePiece } from './remote-base-strike';
 import { AllyTroops, RemoteTroops } from './ally-troops';
 import { useShallow } from 'zustand/react/shallow';
+import { layers } from '@/game/systems/layerSystem';
 
 /** Muro-por-muro Kenney DESLIGADO (fica fiddly). Base = cerca procedural + CASA central. */
 const USE_GLB_BASE = false;
@@ -563,6 +564,7 @@ function BuildLayer({
     const gs = useGameStore.getState();
     if (gs.playerBase) { console.log('[BASE] clique ignorado: você JÁ tem uma base (só pode 1).'); return; }
     if (!isBuildActive()) { console.log('[BASE] clique ignorado: modo de construção DESLIGADO (abra "Minha base" → Entrar no modo de construção).'); return; }
+    if (layers.inside) { gs.setMessage('Saia da caverna pra reivindicar a base (ela fica na superfície).'); return; } // Zona Sul (31/10)
     const chk = updateClaimCandidate();
     if (!chk) { console.log('[BASE] clique ignorado: sem candidato de terreno sob o cursor.'); return; }
     if (!chk.ok) { console.log('[BASE] terreno INVÁLIDO:', chk.message, chk.origin); gs.setMessage(`Não dá para reivindicar: ${chk.message}`); return; }

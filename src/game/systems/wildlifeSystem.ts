@@ -1,6 +1,7 @@
 import type { CreatureState, Position } from '../types';
 import { CREATURES, scaleEnemyHp } from '../data/creatures';
-import { CAMPS, CAMP_PLACEMENTS, LAKE_CENTERS, PLAYER_SPAWN, RIVER_HALF_WIDTH, RUINS_POSITION, RUINS_RADIUS, WORLD_HALF, riverDistance } from '../data/camps';
+import { CAMPS, CAMP_PLACEMENTS, LAKE_CENTERS, PLAYER_SPAWN, RIVER_HALF_WIDTH, RUINS_POSITION, RUINS_RADIUS, SAFE_ZONE, WORLD_HALF, riverDistance } from '../data/camps';
+import { clampX, clampZ, isClassicWorld, WORLD } from '../data/world-profile';
 
 /** Quantas de cada espécie `createWildCreatures` posiciona. */
 // +10% (Pedro, 22/10): nv alto limpava o mapa. 155 → 173. Bicho longe (>40 m) não anima (custo baixo).
@@ -51,6 +52,17 @@ function dist(a: Position, b: Position): number {
 }
 
 export function isFreeForWildlife(p: Position): boolean {
+  // fora do Vale (Zona Sul, 31/10): limites, zona segura, acampamentos e chão firme do MAPA ATIVO
+  if (!isClassicWorld()) {
+    const b = WORLD.bounds;
+    if (p.x < b.minX + 3 || p.x > b.maxX - 3 || p.z < b.minZ + 3 || p.z > b.maxZ - 3) return false;
+    if (dist(p, SAFE_ZONE) < SAFE_ZONE.radius) return false;
+    for (const placement of CAMP_PLACEMENTS) {
+      const def = CAMPS[placement.defId];
+      if (def && dist(p, placement.position) < def.radius + WILD_CAMP_MARGIN) return false;
+    }
+    return WORLD.walkable ? WORLD.walkable(p.x, p.z) : true;
+  }
   const limit = WORLD_HALF - 3;
   if (Math.abs(p.x) > limit || Math.abs(p.z) > limit) return false;
   if (dist(p, PLAYER_SPAWN) < WILD_SPAWN_SAFE_RADIUS) return false;
@@ -143,9 +155,11 @@ export function createNightPigeons(center: Position, rng: () => number = Math.ra
   for (let attempts = 0; out.length < count && attempts < count * 60; attempts++) {
     const ang = rng() * Math.PI * 2;
     const r = FLOCK_MIN_R + rng() * (FLOCK_MAX_R - FLOCK_MIN_R);
+    const classic = isClassicWorld();
+    const px = center.x + Math.sin(ang) * r, pz = center.z + Math.cos(ang) * r;
     const pos: Position = {
-      x: Math.round(Math.max(-(WORLD_HALF - 3), Math.min(WORLD_HALF - 3, center.x + Math.sin(ang) * r)) * 100) / 100,
-      z: Math.round(Math.max(-(WORLD_HALF - 3), Math.min(WORLD_HALF - 3, center.z + Math.cos(ang) * r)) * 100) / 100,
+      x: Math.round((classic ? Math.max(-(WORLD_HALF - 3), Math.min(WORLD_HALF - 3, px)) : clampX(px, 3)) * 100) / 100,
+      z: Math.round((classic ? Math.max(-(WORLD_HALF - 3), Math.min(WORLD_HALF - 3, pz)) : clampZ(pz, 3)) * 100) / 100,
     };
     if (!isFreeForWildlife(pos)) continue;
     if (out.some((c) => dist(c.position, pos) < 4)) continue;
@@ -180,14 +194,17 @@ export function mergeResumedWorld(snapshot: CreatureState[], current: CreatureSt
  */
 export const NIGHT_ZOMBIES = 6;
 export const NIGHT_ZOMBIE_PREFIX = 'wild_zombie_night_';
-export function createNightZombies(rng: () => number = Math.random, count = NIGHT_ZOMBIES): CreatureState[] {
+export function createNightZombies(rng: () => number = Math.random, count = NIGHT_ZOMBIES, center?: Position): CreatureState[] {
   const def = CREATURES['zombie'];
   if (!def) return [];
   const out: CreatureState[] = [];
+  // Vale: o mapa inteiro (±87 m). Mapa grande (Zona Sul): a MESMA área (±87 m) em volta de quem joga — senão 6 zumbis
+  // sumiam em 1,6 km de mapa
+  const cx = !isClassicWorld() && center ? center.x : 0, cz = !isClassicWorld() && center ? center.z : 0;
   for (let attempts = 0; out.length < count && attempts < count * 300; attempts++) {
     const pos: Position = {
-      x: Math.round((rng() * 2 - 1) * (WORLD_HALF - 3) * 100) / 100,
-      z: Math.round((rng() * 2 - 1) * (WORLD_HALF - 3) * 100) / 100,
+      x: Math.round((cx + (rng() * 2 - 1) * (WORLD_HALF - 3)) * 100) / 100,
+      z: Math.round((cz + (rng() * 2 - 1) * (WORLD_HALF - 3)) * 100) / 100,
     };
     if (!isFreeForWildlife(pos) || out.some((c) => dist(c.position, pos) < WILD_MIN_SPACING * 2)) continue;
     const hp = scaleEnemyHp(def.maxHp);

@@ -11,6 +11,15 @@ import { audioManager } from '@/game/audio/audio-manager';
 import { glbSurfaceY } from './terrain-collision';
 import { useGameStore } from '@/game/state/game-store';
 import { hitRecently, markPvpHit, PVP_LOCK_BREAK, pvpStrike, pvpTarget, setPvpTarget } from './pvp-attack';
+import { WORLD } from '@/game/data/world-profile';
+import { layers } from '@/game/systems/layerSystem';
+
+/** Mesma camada que eu (caverna × superfície, 31/10)? Pela altura que ele manda. Sem mundo embaixo: sempre. */
+function sameLayerAsMe(p: { x: number; z: number; y?: number | undefined }): boolean {
+  const u = WORLD.under;
+  if (!u) return true;
+  return (Number.isFinite(p.y) ? u.layer(p.x, p.y as number, p.z) : 0) === layers.player;
+}
 
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
 const LABEL_RANGE = 12;
@@ -64,8 +73,9 @@ function RemotePlayer({ id }: { id: string }) {
     g.rotation.y += dy * t;
     const player = useGameStore.getState().player.position;
     const dist = Math.hypot(player.x - g.position.x, player.z - g.position.z);
+    const sameL = sameLayerAsMe(p); // nada através da rocha: nem plaquinha nem PvP
     if (labelGroup.current) {
-      labelGroup.current.visible = dist <= LABEL_RANGE;
+      labelGroup.current.visible = dist <= LABEL_RANGE && sameL;
       labelGroup.current.quaternion.copy(state.camera.quaternion);
     }
     const enemy = p.side === 'enemy';
@@ -93,7 +103,7 @@ function RemotePlayer({ id }: { id: string }) {
     // Alvo TRAVADO: segue golpeando no ritmo da arma (sem precisar ficar clicando).
     if (pvpTarget() === id) {
       const hostile = enemy || useNet.getState().selfSide === 'enemy';
-      if (!hostile || store.player.dead || p.hp <= 0 || dist > PVP_LOCK_BREAK) setPvpTarget(null);
+      if (!hostile || store.player.dead || p.hp <= 0 || dist > PVP_LOCK_BREAK || !sameL) setPvpTarget(null);
       else if (pvpStrike(p.name, g.position.x, g.position.z, 0.6, (raw) => broadcastPlayerHit(id, raw), true)) markPvpHit(id);
     }
   });
@@ -111,7 +121,7 @@ function RemotePlayer({ id }: { id: string }) {
       const hostile = p.side === 'enemy' || useNet.getState().selfSide === 'enemy';
       const g = group.current;
       // Aliado (ou eu morto): só mostra a ficha. Inimigo: PvP — golpe se estiver no alcance.
-      if (!hostile || me.dead || !g) {
+      if (!hostile || me.dead || !g || !sameLayerAsMe(p)) {
         store.setMessage(`${p.name} · Nv. ${p.level} · ${Math.round(p.hp)}/${Math.round(p.maxHp)} PV.`);
         return;
       }

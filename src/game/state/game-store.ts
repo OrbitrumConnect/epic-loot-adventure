@@ -13,7 +13,7 @@ import { audioManager, distanceGain } from '../audio/audio-manager';
 import { noteShotAt } from '../systems/shotFacing';
 import { breakGrab } from '../systems/grabSystem';
 import { isInvulnerable } from '../systems/dodgeSystem';
-import { layers, sameLayerAsPlayer } from '../systems/layerSystem';
+import { creatureLayer, layers, sameLayerAsPlayer } from '../systems/layerSystem';
 import { BOOST_DURATION_MS, BOOST_ITEMS, BOOST_UNLOCK_LEVEL, boostCooldown, boostScale, BURST_GAP, burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
@@ -502,14 +502,23 @@ let guestWaveFirstAskAt = 0;
 export function spawnWaveRaiders(wave: number, center: { x: number; z: number }, now: number, owner = ''): CreatureState[] {
   const ownerTag = owner ? `o${owner}_` : '';
   const hpScale = waveHpScale(wave);
+  const classic = isClassicWorld();
   const clamp = (v: number) => Math.max(-WORLD_HALF + 2, Math.min(WORLD_HALF - 2, v));
   const out: CreatureState[] = [];
   const mk = (sp: string, i: number, tag: string, hpMul = 1) => {
     const def = CREATURES[sp];
     if (!def) return;
     const total = waveEnemyCount(wave) + waveBossCount(wave);
-    const ang = (i / Math.max(1, total)) * Math.PI * 2 + Math.random() * 0.5;
-    const r = 34 + Math.random() * 14; // nascem BEM fora da vista, marcham até a base
+    let ang = (i / Math.max(1, total)) * Math.PI * 2 + Math.random() * 0.5;
+    let r = 34 + Math.random() * 14; // nascem BEM fora da vista, marcham até a base
+    // fora do Vale (Zona Sul, 31/10): dentro do mapa ativo e em CHÃO FIRME (não nasce no mar/Lagoa) — gira o anel até achar
+    if (!classic && WORLD.walkable) {
+      for (let k = 0; k < 24; k++) {
+        const x = clampX(center.x + Math.sin(ang) * r, 4), z = clampZ(center.z + Math.cos(ang) * r, 4);
+        if (WORLD.walkable(x, z)) break;
+        ang += 0.55; if (k % 8 === 7) r = Math.max(18, r - 8);
+      }
+    }
     const hp = Math.round(scaleEnemyHp(def.maxHp) * hpScale * hpMul);
     out.push({
       id: `wave${wave}_${ownerTag}${tag}${i}_${now}`,
@@ -520,7 +529,7 @@ export function spawnWaveRaiders(wave: number, center: { x: number; z: number },
       armor: def.armor,
       attackCooldown: def.attackCooldown,
       lastAttackAt: 0,
-      position: { x: clamp(center.x + Math.sin(ang) * r), z: clamp(center.z + Math.cos(ang) * r) },
+      position: classic ? { x: clamp(center.x + Math.sin(ang) * r), z: clamp(center.z + Math.cos(ang) * r) } : { x: clampX(center.x + Math.sin(ang) * r, 4), z: clampZ(center.z + Math.cos(ang) * r, 4) },
       behavior: 'patrol',
       lootTable: [],
       respawnAt: null,
@@ -763,7 +772,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const dep = deployTroops(st.base.troops, st.fieldTroops, center, warCamp, st.troopSeq, half);
     if (dep.field.length === 0) return;
     const foes: TroopFoe[] = st.creatures
-      .filter((c) => c.behavior !== 'dead' && c.hp > 0 && CREATURES[c.speciesId]?.peaceful === false)
+      .filter((c) => c.behavior !== 'dead' && c.hp > 0 && CREATURES[c.speciesId]?.peaceful === false && creatureLayer(c.id) === 0) // base: só a superfície
       .map((c) => ({ id: c.id, position: c.position, hp: c.hp, attackPower: c.attackPower, attackCooldown: c.attackCooldown }));
     // RAID (online): jogador INIMIGO na área da base vira alvo PRIORITÁRIO. Ele não bate por contato
     // (o golpe dele chega pela rede: `troop-hit`).
@@ -771,6 +780,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (net.connected) {
       for (const p of Object.values(net.players)) {
         if (p.hp <= 0 || !(p.side === 'enemy' || net.selfSide === 'enemy')) continue;
+        if (WORLD.under && Number.isFinite(p.y) && WORLD.under.layer(p.x, p.y as number, p.z) !== 0) continue; // na caverna embaixo: a tropa não alcança
         foes.push({ id: `${PLAYER_FOE}${p.id}`, position: { x: p.x, z: p.z }, hp: p.hp, attackPower: 0, attackCooldown: 1, priority: true });
       }
     }
@@ -873,6 +883,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const c = next[i]!;
       if (c.hp <= 0 || c.behavior === 'dead') continue;
       if (CREATURES[c.speciesId]?.peaceful) continue; // power não corta bicho pacífico
+      if (creatureLayer(c.id) !== 0) continue; // nem o que está na caverna embaixo da base
       let dmg = 0;
       let push = 0;
       for (const f of fields) {
@@ -1729,12 +1740,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // Morto-vivo só à noite (26/10): mesma regra de chegar/ir embora, espalhados pelo mapa.
     const hasZ = get().creatures.some((c) => c.id.startsWith(NIGHT_ZOMBIE_PREFIX));
     const actZ = nightFlockAction(night, hasZ);
-    if (actZ === 'spawn') set((s) => ({ creatures: [...s.creatures, ...createNightZombies()] }));
+    if (actZ === 'spawn') set((s) => ({ creatures: [...s.creatures, ...createNightZombies(Math.random, undefined, s.player.position)] }));
     else if (actZ === 'leave') set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(NIGHT_ZOMBIE_PREFIX)) }));
   },
 
   spawnBoss: () => {
     const state = get();
+    if (layers.player !== 0) return; // dentro da caverna: o chefe da superfície espera você sair (31/10)
     // UM boss ambiente por vez (qualquer espécie com id boss_ viva).
     if (state.creatures.some(c => c.id.startsWith('boss_') && c.behavior !== 'dead')) return;
     // Sorteia o boss que ronda o MAPA: Colosso, Fúngico, Samurai ou Kaiju —
@@ -1750,11 +1762,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let z = p.z;
     // Nasce 16–26 m do jogador: longe o bastante pra ser um susto, perto o
     // bastante pra já entrar no aggro (30) e vir caçar imediatamente.
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 24; i++) {
       const ang = Math.random() * Math.PI * 2;
       const r = 16 + Math.random() * 10;
-      const cx = Math.max(-margin, Math.min(margin, p.x + Math.sin(ang) * r));
-      const cz = Math.max(-margin, Math.min(margin, p.z + Math.cos(ang) * r));
+      const classic = isClassicWorld();
+      const cx = classic ? Math.max(-margin, Math.min(margin, p.x + Math.sin(ang) * r)) : clampX(p.x + Math.sin(ang) * r, 6);
+      const cz = classic ? Math.max(-margin, Math.min(margin, p.z + Math.cos(ang) * r)) : clampZ(p.z + Math.cos(ang) * r, 6);
+      if (!classic && WORLD.walkable && !WORLD.walkable(cx, cz)) continue; // Zona Sul: nunca no mar/Lagoa
       if (getDistance(p, { x: cx, z: cz }) >= 14) { x = cx; z = cz; break; }
     }
     const hp = scaleEnemyHp(def.maxHp);
@@ -1775,7 +1789,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     };
     set(s => ({
       creatures: [...s.creatures, boss],
-      ui: { ...s.ui, message: `⚠️ ${def.name} surgiu no vale! Prepare-se.` },
+      ui: { ...s.ui, message: `⚠️ ${def.name} surgiu ${isClassicWorld() ? 'no vale' : 'por perto'}! Prepare-se.` },
     }));
   },
 
@@ -2580,8 +2594,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let waveCreatures = ticked.creatures;
     let upgradeChoices = state.upgradeChoices;
     let waveSummary: { wave: number; kills: number; seconds: number } | null = null;
-    // a base (e a horda dela) mora no VALE: na Zona Sul o relógio da horda fica parado (Fase 4 traz a base pra cá)
-    if (isClassicWorld()) {
+    // HORDA em qualquer mapa (31/10, Fase 4: a base veio pra Zona Sul — o mesmo relógio paz↔combate do Vale)
+    {
       const center = baseCenter(state.playerBase);
       // Só conta a horda da MINHA base (online cada jogador tem a sua no mesmo mundo).
       const aliveWave = ticked.creatures.filter(

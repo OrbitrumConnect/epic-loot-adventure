@@ -15,6 +15,8 @@ import { getItemCount, removeItem } from './inventorySystem';
 import { basePieceCost, basePieceMaxHp } from './baseTypeSystem';
 import { BASE_TYPES } from '../data/base-types';
 import { MAX_TOWER_LEVEL, resolveTowerLevel, towerLevelStats, towerUpgradeCost } from './towerLevelSystem';
+import { isClassicWorld, WORLD } from '../data/world-profile';
+import { SAFE_ZONE } from '../data/camps';
 
 // ---------------------------------------------------------------------------
 // Grade (UM lugar só: mundo 3D e HUD importam daqui)
@@ -94,6 +96,7 @@ const ISSUE_MESSAGES: Record<ClaimIssue, string> = {
   'sobre-agua': 'Pega água (lago ou córrego).',
   'perto-de-outra-base': 'Perto demais de outra base.',
   'terreno-ingreme': 'Terreno íngreme demais.',
+  'sobre-caverna': 'Pega a boca da caverna.',
 };
 
 const PROBLEM_TO_ISSUE: Partial<Record<PlacementProblemKind, ClaimIssue>> = {
@@ -129,16 +132,32 @@ export function checkClaim(
 
   const center = squareCenter(origin, size);
   const radius = (size * BASE_GRID / 2) * Math.SQRT2;
+  const classic = isClassicWorld();
   for (const problem of findPlacementProblems(CAMP_PLACEMENTS, [{ id: 'claim', position: center, radius }])) {
     const issue = PROBLEM_TO_ISSUE[problem.kind];
-    if (issue) add(issue);
+    // fora do Vale (Zona Sul, 31/10): "fora do mapa" e "ruínas" são medidas do Vale (±90 m, ruínas do Vale) — o mapa
+    // ativo responde por elas logo abaixo
+    if (issue && (classic || (issue !== 'fora-do-mapa' && issue !== 'sobre-ruinas'))) add(issue);
   }
 
   const waterMargin = CLAIM_WATER_MARGIN + BASE_GRID * Math.SQRT1_2;
-  if (squareCells(origin, size).some(c => {
-    const p = cellCenter(c);
-    return isOnWater(p.x, p.z, waterMargin);
-  })) add('sobre-agua');
+  if (classic) {
+    if (squareCells(origin, size).some(c => {
+      const p = cellCenter(c);
+      return isOnWater(p.x, p.z, waterMargin);
+    })) add('sobre-agua');
+  } else {
+    // MAPA ATIVO: dentro dos limites, chão firme (mar/Lagoa = água), fora da zona segura e longe da boca da caverna
+    const b = WORLD.bounds, half = size * BASE_GRID / 2;
+    if (center.x - half < b.minX || center.x + half > b.maxX || center.z - half < b.minZ || center.z + half > b.maxZ) add('fora-do-mapa');
+    if (Math.hypot(center.x - SAFE_ZONE.x, center.z - SAFE_ZONE.z) - radius < SAFE_ZONE.radius) add('perto-do-nascedouro');
+    const walk = WORLD.walkable, under = WORLD.under;
+    for (let dz = 0; dz <= size; dz++) for (let dx = 0; dx <= size; dx++) {
+      const x = (origin.gx + dx) * BASE_GRID, z = (origin.gz + dz) * BASE_GRID;
+      if (walk && !walk(x, z)) add('sobre-agua');
+      if (under && world.heightAt && under.inside(x, world.heightAt(x, z) + 0.6, z)) add('sobre-caverna');
+    }
+  }
 
   if (world.bases.some(b => squareGap(origin, size, b.origin, b.size) < MIN_BASE_DISTANCE)) {
     add('perto-de-outra-base');

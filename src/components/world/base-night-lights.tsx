@@ -13,6 +13,7 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { nightFactor } from '@/game/systems/dayNightSystem';
 import { terrainHeight } from './world-kit';
 import { lightAllowed, useLightId } from './light-budget';
+import { requestLight } from './light-pool';
 
 /** Distância² da base dentro da qual os refletores ligam (base é o lar — raio generoso). */
 const BASE_LIGHT_D2 = 70 * 70;
@@ -26,6 +27,8 @@ function TowerLight({ x, y, z }: { x: number; y: number; z: number }) {
     const nf = nightFactor();
     const p = useGameStore.getState().player.position;
     const d2 = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+    // Zona Sul (pool de luzes ativo, 31/10): pede vaga no pool — a luz própria nunca acende (sem recompilar shader)
+    if (requestLight(x, y + 4.6, z, '#ffe9c0', nf > 0.04 && d2 < BASE_LIGHT_D2 ? nf * 9 : 0, 24, 1.2)) { l.visible = false; return; }
     l.visible = lightAllowed(lightId, nf > 0.04 && d2 < BASE_LIGHT_D2, d2); // + orçamento de luzes no celular
     if (l.visible) l.intensity = nf * 9; // forte: ilumina a base à noite
   });

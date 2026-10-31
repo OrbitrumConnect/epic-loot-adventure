@@ -4,6 +4,7 @@ import type { CreatureState, Position } from '../types';
 import type { BasePiece, BaseType } from '../types/playerbase';
 import { baseTowerRange } from './baseTypeSystem';
 import { calculateDamage } from './combatSystem';
+import { creatureLayer } from './layerSystem';
 
 /** Cache plano: posição calculada só quando as peças mudam. */
 export type TowerSource = Position & { id: string; tier: BasePiece['tier']; level?: number | undefined; hp: number; baseType?: BaseType | undefined };
@@ -18,7 +19,8 @@ export function selectTowerTarget(tower: TowerSource, creatures: readonly Creatu
   for (let i = 0; i < creatures.length; i++) {
     const c = creatures[i]!;
     if (c.hp <= 0 || c.behavior === 'dead' || c.behavior === 'respawning'
-      || (c.respawnAt !== null && c.respawnAt > now) || CREATURES[c.speciesId]?.peaceful !== false) continue;
+      || (c.respawnAt !== null && c.respawnAt > now) || CREATURES[c.speciesId]?.peaceful !== false
+      || creatureLayer(c.id) !== 0) continue; // a torre não atira no que está na caverna embaixo (31/10)
     const dx = c.position.x - tower.x;
     const dz = c.position.z - tower.z;
     const d = dx * dx + dz * dz;

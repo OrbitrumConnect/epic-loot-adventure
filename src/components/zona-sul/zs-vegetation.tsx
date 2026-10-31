@@ -14,6 +14,20 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ZS_SURF } from './zona-sul-meta';
 import { type ZsTerrain, zsHash, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
 import { caveMouthClear } from './zs-cave';
+import { useGameStore } from '@/game/state/game-store';
+import { useNet } from '@/net/multiplayer';
+import { BASE_GRID, type PlayerBaseState } from '@/game/types/playerbase';
+
+/** Quadrados das BASES (minha + as dos outros, online) com 3 m de folga: a mata não nasce dentro (31/10, base na Zona Sul). */
+function baseBoxes(pb: PlayerBaseState | null, others: Record<string, PlayerBaseState | null | undefined>): number[][] {
+  const out: number[][] = [];
+  for (const b of [pb, ...Object.values(others)]) {
+    if (!b) continue;
+    const x0 = b.origin.gx * BASE_GRID, z0 = b.origin.gz * BASE_GRID, s = b.size * BASE_GRID;
+    out.push([x0 - 3, z0 - 3, x0 + s + 3, z0 + s + 3]);
+  }
+  return out;
+}
 
 export const ZS_VEG_CELL = 16;
 export const ZS_VEG_NEAR = 150;
@@ -155,14 +169,20 @@ export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.Muta
   }, []);
   const lastCell = useRef('');
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const bases = useRef<{ pb: unknown; nb: unknown; boxes: number[][] }>({ pb: undefined, nb: undefined, boxes: [] });
   useFrame(() => {
     const hx = heroRef.current.x, hz = heroRef.current.z;
+    // base nova/mudou (minha ou de outro jogador): refaz a mata em volta sem nada dentro do quadrado dela
+    const pb = useGameStore.getState().playerBase, nb = useNet.getState().bases;
+    if (pb !== bases.current.pb || nb !== bases.current.nb) { bases.current = { pb, nb, boxes: baseBoxes(pb, nb) }; lastCell.current = ''; }
+    const boxes = bases.current.boxes;
     const key = `${Math.floor(hx / ZS_VEG_CELL)}_${Math.floor(hz / ZS_VEG_CELL)}`;
     if (key === lastCell.current) return;
     lastCell.current = key;
     const counts = Object.fromEntries(KINDS.map((k) => [k, 0])) as Record<ZsVegKind, number>;
     const shCounts = { canopy: 0, emergent: 0, farm: 0 } as Record<ShadowKind, number>;
     for (const it of zsVegetationAround(t, hx, hz)) {
+      if (boxes.length && boxes.some((b) => it.x > b[0]! && it.x < b[2]! && it.z > b[1]! && it.z < b[3]!)) continue;
       const toShadow = zsVegCastsShadow(it, hx, hz) && shCounts[it.kind as ShadowKind] < SHADOW_CAP[it.kind as ShadowKind];
       if (!toShadow && counts[it.kind] >= CAP[it.kind]) continue;
       const w = it.h * WIDTH[it.kind];

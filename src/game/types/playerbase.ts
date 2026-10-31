@@ -47,7 +47,9 @@ export type ClaimIssue =
   | 'sobre-acampamento'
   | 'sobre-agua'
   | 'perto-de-outra-base'
-  | 'terreno-ingreme';
+  | 'terreno-ingreme'
+  /** Zona Sul (31/10): o quadrado pega a boca da caverna */
+  | 'sobre-caverna';
 
 /** O que o jogador vê antes de confirmar o claim. */
 export type ClaimCheck = {

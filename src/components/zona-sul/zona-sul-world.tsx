@@ -44,7 +44,16 @@ import { LightPool } from '@/components/world/light-pool';
 import { ZsWarmOverlay, ZsWarmUp } from './zs-warmup';
 import { noteManualLook } from '@/components/world/pilot-aim';
 import { HeroNameplate } from '@/components/world/hero-nameplate';
-import { Camps, Enemies } from '@/components/world/world-entities';
+import { Camps, Enemies, MultiplayerWorldSync } from '@/components/world/world-entities';
+// BASE e ONLINE do Vale (31/10, Pedro: "tudo do Vale passa pra cá, a base toda, a mecânica — sem inventar")
+import { NetBases, PlayerBase } from '@/components/world/player-base';
+import { BaseFireFX } from '@/components/world/base-fire';
+import { BaseNightLights } from '@/components/world/base-night-lights';
+import { RemotePlayers } from '@/components/world/remote-players';
+import { TargetRoute } from '@/components/world/target-route';
+import { houseFloorSurfaceY, houseWalkFloorY, pushOutBasePieces, pushOutHouseWalls } from '@/components/world/base-collision';
+import { cellCenter } from '@/game/systems/playerBaseSystem';
+import { broadcastPose } from '@/net/multiplayer';
 import { CombatFeedback } from '@/components/world/combat-feedback';
 import { Projectiles } from '@/components/world/projectiles';
 import { HeroPowers } from '@/components/world/hero-powers';
@@ -95,6 +104,8 @@ const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/an
 const HERO_CUT = { open_door: { fixHips: true }, popup: { from: 0.3, speed: 2 }, surf: { from: 0.97 }, paddle: { sync: 1 / 3.8, syncMin: 0.6, syncMax: 1.7 }, swim: { sync: 1 / 2.4, syncMin: 0.6, syncMax: 1.8 } };
 /** Pé na prancha: altura do DECK acima da água (m). Giro do corpo em relação ao bico (base de surfista, de lado). */
 const BOARD_DECK = 0.12, STANCE = -Math.PI / 2;
+/** Raio do corpo do herói contra muro/casa da base (o mesmo do Vale). */
+const HERO_RADIUS = 0.5;
 /** A pose final do Zombie Stand Up abaixa o quadril: em pé o corpo sobe isto (m) pra os pés ficarem NO deck (Pedro: "corpo
  *  abaixo d'água como se estivesse sentado"); no levantar sobe aos poucos junto com a animação. Medido em foto. */
 const SURF_LIFT = 0.8;
@@ -234,11 +245,16 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     { const d2 = zsCave.dark * zsCave.dark; fog.near = 200 + (5 - 200) * d2; fog.far = 2200 + (75 - 2200) * d2; } // caverna: breu ao longe
     const car = carRef.current, now = performance.now();
     const gs = useGameStore.getState();
+    // ONLINE (igual ao Vale): a pose vai pra rede COM A ALTURA — quem está na caverna aparece NA caverna pros outros
+    broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs));
     // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
     if (gs.player.dead && gs.player.respawnAt > 0 && Date.now() >= gs.player.respawnAt) {
-      useGameStore.setState(s => ({ player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: SAFE_ZONE.x, z: SAFE_ZONE.z } }, ui: { ...s.ui, message: 'Você reviveu na zona segura.', deathBy: null } }));
+      // renasce na CAMA da base, se já tiver uma; senão na zona segura (igual ao Vale)
+      const core = gs.playerBase?.pieces.find((pc) => pc.kind === 'core');
+      const sp = core ? cellCenter(core.cell) : { x: SAFE_ZONE.x, z: SAFE_ZONE.z };
+      useGameStore.setState(s => ({ player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: sp.x, z: sp.z } }, ui: { ...s.ui, message: core ? 'Você reviveu na sua base.' : 'Você reviveu na zona segura.', deathBy: null } }));
       drive.mode = 'foot'; ride.current = null; swimVel.current.set(0, 0); vy.current = 0; grounded.current = true; dive.current = 0;
-      p.set(SAFE_ZONE.x, zsHeightAt(t, SAFE_ZONE.x, SAFE_ZONE.z), SAFE_ZONE.z); movement.current.set(p.x, 0, p.z);
+      p.set(sp.x, zsHeightAt(t, sp.x, sp.z), sp.z); movement.current.set(p.x, 0, p.z);
       if (group.current) group.current.visible = true;
     }
     const dead = useGameStore.getState().player.dead;
@@ -542,6 +558,12 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (dg) facing.current = Math.atan2(dg.dirX, dg.dirZ);
       else if (moving && (mx || mz)) facing.current = Math.atan2(mx, mz);
     }
+    // BASE (igual ao Vale): parede da casa (a do andar dos pés) e cerca (muro/torre) são sólidas; entra pela porta/portão
+    if (drive.mode === 'foot' && !st.swimming && !zsCave.inCave && (st.x !== p.x || st.z !== p.z)) {
+      let [bx, bz] = pushOutHouseWalls(st.x, st.z, HERO_RADIUS, p.y);
+      [bx, bz] = pushOutBasePieces(bx, bz, HERO_RADIUS);
+      if (bx !== st.x || bz !== st.z) st = { ...st, x: bx, z: bz, ground: zsHeightAt(t, bx, bz) };
+    }
     zsCtx.inWater = st.swimming;
     shiftWas.current = shift;
     // NAVIO: o convés é chão; o casco é PAREDE pra quem vem de baixo (água/areia); a prancha é rampa
@@ -563,7 +585,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const rm = ride.current?.mode, rolling = rm === 'wipe' || tumble.current > 0;
     if (rm) dive.current = 0;
     const waterY = st.swimming ? zsWaterYAt(p.x, p.z, p.y + 0.3) : 0;
-    const floor = !st.swimming ? st.ground
+    const floor = !st.swimming ? (!zsCave.inCave ? Math.max(st.ground, houseFloorSurfaceY(p.x, p.z), houseWalkFloorY(p.x, p.z, p.y)) : st.ground)
       : rm === 'popup' || rm === 'ride' ? waterY + BOARD_DECK                 // em pé no deck
       : rm === 'paddle' ? waterY + BOARD_DECK + 0.07                         // deitado EM CIMA do deck (acima da água)
       : rolling ? waterY - 0.6                                               // vaca: embaixo da espuma
@@ -985,6 +1007,17 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
               <Suspense fallback={null}><CombatFeedback /></Suspense>
               <Suspense fallback={null}><Projectiles /></Suspense>
               <Suspense fallback={null}><HeroPowers playerRef={playerRef} paused={paused} /></Suspense>
+              {/* BASE (31/10): reivindicar/construir, casa, torres, muros, tropas, poderes, fogo e luz — a mesma do Vale */}
+              <AssetBoundary label="ZsBase" fallback={null}><Suspense fallback={null}><PlayerBase c={c} playerRef={playerRef} paused={paused} /></Suspense></AssetBoundary>
+              <BaseFireFX />
+              <BaseNightLights />
+              <Suspense fallback={null}><TargetRoute playerRef={playerRef} /></Suspense>
+              {/* ONLINE (31/10): bases e jogadores dos outros (com a altura real — caverna/casa), mundo do host */}
+              <AssetBoundary label="ZsOnline" fallback={null}>
+                <Suspense fallback={null}><NetBases c={c} /></Suspense>
+                <Suspense fallback={null}><RemotePlayers /></Suspense>
+                <MultiplayerWorldSync />
+              </AssetBoundary>
               <BurstRuntime paused={paused} />
               <AutoPilot playerRef={playerRef} movement={movement} paused={paused} />
               <BackgroundSim paused={paused} />

@@ -8,6 +8,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { requestLight } from './light-pool';
 import { useGameStore } from '@/game/state/game-store';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { terrainHeight } from './world-kit';
@@ -39,7 +40,12 @@ function Flame({ x, y, z, intensity, lit, seed }: { x: number; y: number; z: num
       m.opacity = 0.32 * (1 - rise / 1.4);
       smoke.current.scale.setScalar(s * (0.5 + rise * 0.5));
     }
-    if (light.current) light.current.intensity = (2.5 + intensity * 4) + Math.sin(t * 17) * 0.8;
+    if (light.current) {
+      const li = (2.5 + intensity * 4) + Math.sin(t * 17) * 0.8;
+      // Zona Sul (pool de luzes ativo, 31/10): o fogo pede vaga no pool; a luz própria nunca acende
+      if (requestLight(x, y + 0.8, z, '#ff8a3a', li, 8 + intensity * 4, 1.6)) light.current.visible = false;
+      else light.current.intensity = li;
+    }
   });
   return (
     <group position={[x, y + 0.2, z]}>

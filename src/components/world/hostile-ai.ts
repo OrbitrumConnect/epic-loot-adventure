@@ -519,9 +519,11 @@ export function useHostileAI(opts: HostileOptions) {
     let pz = player.position.z;
     const distToLocal = localOk ? Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz)) : Infinity;
     let targetRemoteId: string | null = null;
-    if (!mirror && myLayer === 0) { // convidados: a camada deles não chega aqui — só os da superfície os alcançam
+    if (!mirror) {
       let best = distToLocal;
       for (const r of remoteTargets()) {
+        // convidado na OUTRA camada (caverna × superfície, pela altura dele que vem da rede): não se enxergam
+        if (under && (r.y !== undefined ? under.layer(r.x, r.y, r.z) : 0) !== myLayer) continue;
         const d = Math.sqrt((r.x - wx) * (r.x - wx) + (r.z - wz) * (r.z - wz));
         if (d < best) { best = d; px = r.x; pz = r.z; targetRemoteId = r.id; }
       }
