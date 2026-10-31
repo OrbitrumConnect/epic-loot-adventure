@@ -9,12 +9,13 @@
  *  - poças d'água, estalactites/estalagmites, cristais e cogumelos (salão do chefe): instâncias, 1 desenho cada.
  */
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLight } from '@/components/world/light-pool';
 import type { ZsTerrain } from './zs-terrain-data';
-import { CAVE_ROOMS, type CaveTile, caveDecor, caveField, caveFloorAt, caveMeshJob, cavePools } from './zs-cave';
+import { CAVE_ROOMS, type CaveDecor, type CaveTile, caveDecor, caveField, caveFloorAt, caveMeshJob, cavePools } from './zs-cave';
 import { zsCave } from './zs-context';
 
 const caveUniforms = { uInside: { value: 0 }, uGlow: { value: 0.06 } };
@@ -82,8 +83,66 @@ function useCaveTiles(t: ZsTerrain): CaveTile[] | null {
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpP = new THREE.Vector3(), tmpS = new THREE.Vector3();
 const CRYSTAL_A = new THREE.Color('#7fe8ff'), CRYSTAL_B = new THREE.Color('#c79bff'), tmpC = new THREE.Color();
 const LANTERN = new THREE.Color('#ffcf9a'), CRYSTAL_LIGHT = new THREE.Color('#8fd8ff'), FUNGUS_LIGHT = new THREE.Color('#ff9a4a');
-/** Distância (m) da boca em que a caverna começa a desenhar. */
-const DRAW_NEAR = 170;
+/** CRISTAIS (31/10, Pedro: "temos o nosso cristal azulado já resolvido em GLB… sem perder performance"): a FORMA do
+ *  cristal do jogo (models/crystal/crystal.glb, 92 mil tri) numa versão de 798 tri / 12 KB (tools/zona-sul/cave-crystal-glb.mjs),
+ *  facetada, brilhando na cor de cada um (azul/violeta). Só os a até CRYSTAL_DRAW_M do herói desenham (lista refeita 4×/s). */
+const CRYSTAL_URL = '/models/crystal/crystal-cave.glb', CRYSTAL_DRAW_M = 55;
+function crystalMaterial(): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ color: '#d6ecff', roughness: 0.22, metalness: 0.15, emissive: '#ffffff', emissiveIntensity: 0.55, flatShading: true });
+  m.onBeforeCompile = (s) => {
+    s.fragmentShader = s.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR\n  totalEmissiveRadiance *= vColor.rgb;\n#endif');
+  };
+  m.customProgramCacheKey = () => 'zs-cave-crystal-v1';
+  return m;
+}
+function CaveCrystals({ list, heroRef }: { list: CaveDecor[]; heroRef: React.MutableRefObject<THREE.Vector3> }) {
+  const { scene } = useGLTF(CRYSTAL_URL);
+  const geo = useMemo(() => {
+    scene.updateMatrixWorld(true);
+    const parts: THREE.BufferGeometry[] = [];
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const g = m.geometry.clone(); g.applyMatrix4(m.matrixWorld);
+      for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+      parts.push(g);
+    });
+    const g = parts.length > 1 ? mergeGeometries(parts)! : parts[0] ?? new THREE.OctahedronGeometry(0.5, 0);
+    g.computeBoundingBox();
+    const b = g.boundingBox!, h = b.max.y - b.min.y || 1;
+    g.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); g.scale(1 / h, 1 / h, 1 / h);
+    return g;
+  }, [scene]);
+  const mat = useMemo(() => crystalMaterial(), []);
+  useEffect(() => () => { geo.dispose(); mat.dispose(); }, [geo, mat]);
+  const mesh = useRef<THREE.InstancedMesh>(null), acc = useRef(1);
+  const { gl, camera, scene: world } = useThree();
+  useEffect(() => {
+    const m = mesh.current; if (!m) return;
+    for (let i = 0; i < list.length; i++) m.setColorAt(i, tmpC.copy(CRYSTAL_A).lerp(CRYSTAL_B, (i * 0.37) % 1)); // a cor existe antes de compilar
+    m.count = 0;
+    void gl.compileAsync(m, camera, world).catch(() => {});
+  }, [list, gl, camera, world]);
+  useFrame((_, dt) => {
+    const m = mesh.current; if (!m) return;
+    if (!zsCave.near) { m.count = 0; return; }
+    acc.current += dt; if (acc.current < 0.25) return; acc.current = 0;
+    const h = heroRef.current, r2 = CRYSTAL_DRAW_M * CRYSTAL_DRAW_M;
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i]!;
+      if ((d.x - h.x) ** 2 + (d.z - h.z) ** 2 > r2) continue;
+      tmpQ.setFromEuler(tmpE.set(d.tilt, d.yaw, d.tilt * 0.6));
+      m.setMatrixAt(n, tmpM.compose(tmpP.set(d.x, d.y, d.z), tmpQ, tmpS.setScalar(d.s * 1.25)));
+      m.setColorAt(n, tmpC.copy(CRYSTAL_A).lerp(CRYSTAL_B, (i * 0.37) % 1));
+      n++;
+    }
+    m.count = n;
+    m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  });
+  return <instancedMesh ref={mesh} args={[geo, mat, Math.max(1, list.length)]} frustumCulled={false} />;
+}
+useGLTF.preload(CRYSTAL_URL);
 
 export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3> }) {
   const tiles = useCaveTiles(t);
@@ -107,25 +166,23 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
   const geo = useMemo(() => {
     const down = new THREE.ConeGeometry(0.5, 1, 7, 1, true); down.rotateX(Math.PI); down.translate(0, -0.5, 0);
     const up = new THREE.ConeGeometry(0.5, 1, 7, 1, true); up.translate(0, 0.5, 0);
-    const crystal = new THREE.OctahedronGeometry(0.5, 0); crystal.translate(0, 0.45, 0);
     const stem = new THREE.CylinderGeometry(0.09, 0.13, 0.7, 6); stem.translate(0, 0.35, 0);
     const cap = new THREE.SphereGeometry(0.42, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2); cap.scale(1, 0.55, 1); cap.translate(0, 0.66, 0);
     const paint = (g: THREE.BufferGeometry, c: THREE.Color) => { const n = g.getAttribute('position').count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
     const mush = mergeGeometries([paint(stem.toNonIndexed(), new THREE.Color('#6b5d4a')), paint(cap.toNonIndexed(), new THREE.Color('#ff8a3a'))])!;
     // poças: discos (elipse) na altura da lâmina
     const pools = mergeGeometries(cavePools().map((p) => { const d = new THREE.CircleGeometry(1, 28); d.rotateX(-Math.PI / 2); d.scale(p.rx, 1, p.rz); d.rotateY(-p.yaw); d.translate(p.x, p.y, p.z); return d; }))!;
-    return { down, up, crystal, mush, pools };
+    return { down, up, mush, pools };
   }, []);
   useEffect(() => () => { for (const g of Object.values(geo)) g.dispose(); }, [geo]);
   const mats = useMemo(() => ({
     // mesmo tom (linear) da rocha das paredes + um fio de brilho próprio (não vira silhueta preta longe da lanterna)
     rock: new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.42, 0.39, 0.35), roughness: 0.95, emissive: new THREE.Color().setRGB(0.03, 0.028, 0.025) }),
-    crystal: new THREE.MeshBasicMaterial({ toneMapped: false }),
     mush: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
     water: new THREE.MeshStandardMaterial({ color: '#1d5662', roughness: 0.12, metalness: 0.15, transparent: true, opacity: 0.84, emissive: new THREE.Color('#0b2d34'), emissiveIntensity: 0.7 }),
   }), []);
   useEffect(() => () => { for (const m of Object.values(mats)) m.dispose(); }, [mats]);
-  const refs = { stalactite: useRef<THREE.InstancedMesh>(null), stalagmite: useRef<THREE.InstancedMesh>(null), crystal: useRef<THREE.InstancedMesh>(null), mushroom: useRef<THREE.InstancedMesh>(null) };
+  const refs = { stalactite: useRef<THREE.InstancedMesh>(null), stalagmite: useRef<THREE.InstancedMesh>(null), mushroom: useRef<THREE.InstancedMesh>(null) };
   useEffect(() => {
     const put = (m: THREE.InstancedMesh | null, list: typeof decor, scale: (d: (typeof decor)[number]) => [number, number, number], color?: (i: number) => THREE.Color) => {
       if (!m) return;
@@ -140,7 +197,6 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
     };
     put(refs.stalactite.current, kinds.stalactite, (d) => [d.s * 0.7, d.s * 2.6, d.s * 0.7]);
     put(refs.stalagmite.current, kinds.stalagmite, (d) => [d.s * 0.8, d.s * 2, d.s * 0.8]);
-    put(refs.crystal.current, kinds.crystal, (d) => [d.s * 0.36, d.s * 1.7, d.s * 0.36], (i) => tmpC.copy(CRYSTAL_A).lerp(CRYSTAL_B, (i * 0.37) % 1));
     put(refs.mushroom.current, kinds.mushroom, (d) => [d.s, d.s * 1.2, d.s]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kinds]);
@@ -148,7 +204,7 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
   // luzes dos cristais (centro de cada grupinho) e do salão do chefe
   const glowSpots = useMemo(() => {
     const out: { x: number; y: number; z: number; c: THREE.Color; i: number; d: number }[] = [];
-    for (let k = 0; k < kinds.crystal.length; k += 3) { const d = kinds.crystal[k]!; out.push({ x: d.x, y: d.y + 1.2, z: d.z, c: CRYSTAL_LIGHT, i: 3.2, d: 11 }); }
+    for (const d of kinds.crystal) out.push({ x: d.x, y: d.y + 1.2, z: d.z, c: CRYSTAL_LIGHT, i: 3.2, d: 11 });
     const boss = CAVE_ROOMS.find((r) => r.id === 'chefe')!;
     out.push({ x: boss.x, y: boss.y + 6, z: boss.z, c: FUNGUS_LIGHT, i: 9, d: 34 });
     return out;
@@ -160,7 +216,7 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
     caveUniforms.uInside.value = zsCave.dark;
     for (const g of geos) g.setDrawRange(0, near ? Infinity : 0);
     water.current?.geometry.setDrawRange(0, near ? Infinity : 0);
-    for (const k of ['stalactite', 'stalagmite', 'crystal', 'mushroom'] as const) { const m = refs[k].current; if (m) m.count = near ? kinds[k].length : 0; }
+    for (const k of ['stalactite', 'stalagmite', 'mushroom'] as const) { const m = refs[k].current; if (m) m.count = near ? kinds[k].length : 0; }
     if (!near) return;
     // lanterna do herói (fundo) + os 3 cristais mais perto + o fogo-fátuo do salão do chefe — o POOL escolhe os mais perto
     const h = heroRef.current;
@@ -179,7 +235,8 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
       <mesh ref={water} geometry={geo.pools} material={mats.water} renderOrder={1} />
       <instancedMesh ref={refs.stalactite} args={[geo.down, mats.rock, Math.max(1, kinds.stalactite.length)]} />
       <instancedMesh ref={refs.stalagmite} args={[geo.up, mats.rock, Math.max(1, kinds.stalagmite.length)]} />
-      <instancedMesh ref={refs.crystal} args={[geo.crystal, mats.crystal, Math.max(1, kinds.crystal.length)]} />
+      {/* o NOSSO cristal azulado (forma do models/crystal, versão leve) — só os perto desenham */}
+      <Suspense fallback={null}><CaveCrystals list={kinds.crystal} heroRef={heroRef} /></Suspense>
       <instancedMesh ref={refs.mushroom} args={[geo.mush, mats.mush, Math.max(1, kinds.mushroom.length)]} />
     </group>
   );

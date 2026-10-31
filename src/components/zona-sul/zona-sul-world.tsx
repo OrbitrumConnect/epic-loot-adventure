@@ -57,7 +57,7 @@ import { SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
 import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
-import { createCaveBoss, zsQuery, zsWorldProfile } from './zs-world-profile';
+import { createCaveCreatures, zsQuery, zsWorldProfile } from './zs-world-profile';
 import { zsAttack, zsCave, zsCtx } from './zs-context';
 import { CAVE_MOUTH_ZONE, caveCamFit, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
 import { ZsCave } from './zs-cave-view';
@@ -209,6 +209,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (zsCave.dark < 0.002) zsCave.dark = 0;
       zsCave.near = inside || md < 170 || input.overview;
       zsCave.deep = zsCave.dark > 0.97;
+      zsCave.seaOff = inside && md > 20;
     }
     if (input.overview) {
       if (!wasOverview.current) { input.ov.x = p.x; input.ov.z = p.z; wasOverview.current = true; }
@@ -842,6 +843,13 @@ function ZsSurface({ children }: { children: React.ReactNode }) {
   return <group ref={g}>{children}</group>;
 }
 
+/** O MAR (água + ondas): some lá dentro da caverna (`zsCave.seaOff`) — o plano da água cortava o túnel abaixo do nível do mar. */
+function ZsSea({ children }: { children: React.ReactNode }) {
+  const g = useRef<THREE.Group>(null);
+  useFrame(() => { if (g.current) g.current.visible = !zsCave.seaOff; });
+  return <group ref={g}>{children}</group>;
+}
+
 /** Painel do jogo aberto (inventário, mapa, base…): as teclas não mexem o herói (o mar segue vivo). */
 const zsPause = { on: false };
 /** Onde você parou na Zona Sul (neste aparelho) — o mapa velho sempre nasce no ponto de partida; aqui volta onde estava. */
@@ -920,7 +928,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       setWorldProfile(prof);
       const query = zsQuery(tt);
       useGameStore.getState().enterWorld('zona-sul', {
-        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...[createCaveBoss()].filter((c) => c !== null)],
+        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures()],
         harvestNodes: createZsHarvestNodes(query),
         position: { x: at.x, z: at.z },
       });
@@ -930,7 +938,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     return () => {
       alive = false; window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
       zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false); zsAmbience.mute();
-      resetLayers(); zsCave.inCave = false; zsCave.dark = 0; zsCave.near = false; zsCave.deep = false; setCaveTerrain(null);
+      resetLayers(); zsCave.inCave = false; zsCave.dark = 0; zsCave.near = false; zsCave.deep = false; zsCave.seaOff = false; setCaveTerrain(null);
       // saiu da Zona Sul (trocou de mapa / cidade): o jogo volta pro Vale (se a troca já não fez isso)
       if (WORLD.id === 'zona-sul') { resetWorldProfile(); useGameStore.getState().enterWorld('classic'); }
     };
@@ -954,10 +962,12 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
             <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
             <ZsTerrainMesh t={t} heroRef={focusRef} />
-            <ZsWater t={t} />
-            {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
-            {/* SORRISO: no meio de Copacabana (Pedro 30/10) */}
-            {SURF_ON && <SorrisoBreak t={t} />}
+            <ZsSea>
+              <ZsWater t={t} />
+              {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
+              {/* SORRISO: no meio de Copacabana (Pedro 30/10) */}
+              {SURF_ON && <SorrisoBreak t={t} />}
+            </ZsSea>
             <ZsVegetation t={t} heroRef={focusRef} />
           </ZsSurface>
           {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}

@@ -39,27 +39,37 @@ export type CaveRoom = {
 
 const P = (x: number, z: number, y: number, r: number, h: number): CaveTunnelPt => ({ x, z, y, r, h });
 
+// 31/10 (Pedro: "os túneis são um pouco baixos e poderiam ser mais largos"): por dentro ~+30% de largura e altura (as
+// bocas quase iguais); conferido pelo teste "não fura o mapa".
 export const CAVE_TUNNELS: CaveTunnel[] = [
   // BOCA DO REBOUÇAS (larga: 12 m × 6,5 m) — entra pro norte e curva pro oeste descendo por baixo do Corcovado
   { id: 'reboucas', name: 'entrada do Rebouças', mouth: true, pts: [
-    P(-70, -63, 10.6, 6, 6.5), P(-71, -96, 7, 5.8, 6.5), P(-78, -118, 4, 5.5, 6.5), P(-98, -136, 1, 5, 6.5),
-    P(-132, -149, -2, 5, 6.5), P(-180, -158, -5, 5, 7)] },
-  { id: 'galeria-agua', name: 'galeria', pts: [P(-220, -158, -5, 4.6, 6), P(-262, -150, -7, 4.4, 6), P(-300, -152, -9, 4.6, 6), P(-338, -162, -10, 4.6, 6)] },
+    P(-70, -63, 10.6, 6, 6.5), P(-71, -96, 7, 7, 8.5), P(-78, -118, 4, 7, 9), P(-98, -136, 1, 6.5, 8.5),
+    P(-132, -149, -2, 6.5, 8.5), P(-180, -158, -5, 6.5, 9)] },
+  { id: 'galeria-agua', name: 'galeria', pts: [P(-220, -158, -5, 6, 8.5), P(-262, -150, -7, 6, 8), P(-300, -152, -9, 6, 8), P(-338, -162, -10, 6, 8)] },
   // as duas galerias d'água: passagem entre elas (pela beira das poças)
-  { id: 'agua-agua', name: "galeria d'água", pts: [P(-366, -175, -10, 4.4, 6), P(-376, -181, -10.5, 4.4, 6), P(-386, -185, -11, 4.4, 6)] },
-  { id: 'agua-grande', name: 'galeria', pts: [P(-396, -178, -11, 4.4, 6), P(-418, -171, -14, 4.6, 6.5), P(-430, -168, -16, 5, 7)] },
+  { id: 'agua-agua', name: "galeria d'água", pts: [P(-366, -175, -10, 5.8, 8), P(-376, -181, -10.5, 5.8, 8), P(-386, -185, -11, 5.8, 8)] },
+  { id: 'agua-grande', name: 'galeria', pts: [P(-396, -178, -11, 6, 8.5), P(-418, -171, -14, 6.2, 8.5), P(-430, -168, -16, 6.5, 9)] },
   // descendo pro FUNDO: o salão do chefe
-  { id: 'grande-chefe', name: 'descida pro salão do chefe', pts: [P(-482, -178, -16, 5, 7), P(-503, -188, -22, 5.4, 8), P(-526, -194, -28, 6, 9), P(-536, -195, -32, 6, 10)] },
+  { id: 'grande-chefe', name: 'descida pro salão do chefe', pts: [P(-482, -178, -16, 6.5, 9), P(-503, -188, -22, 7, 10), P(-526, -194, -28, 7.5, 11), P(-536, -195, -32, 8, 12)] },
   // RAMAL DO LEBLON (boca menor: 6,4 m × 4,2 m) — sai no pé do Dois Irmãos, no fim do Leblon
   { id: 'leblon', name: 'saída do Leblon', mouth: true, pts: [
-    P(-446, 366, 10.45, 3.2, 4.2), P(-470, 366, 8, 3.2, 4.2), P(-500, 364, 5, 3.4, 4.4), P(-540, 360, 2, 3.6, 4.6),
-    P(-584, 344, -1, 3.8, 4.8), P(-600, 300, -4, 4, 5), P(-606, 230, -6, 4, 5), P(-610, 205, -7.5, 4, 5.2)] },
+    P(-446, 366, 10.45, 3.2, 4.2), P(-470, 366, 8, 3.8, 5.2), P(-500, 364, 5, 4.6, 6.2), P(-540, 360, 2, 5, 6.5),
+    P(-584, 344, -1, 5.2, 6.5), P(-600, 300, -4, 5.4, 7), P(-606, 230, -6, 5.4, 7), P(-610, 205, -7.5, 5.4, 7)] },
   { id: 'gavea', name: 'passagem da Gávea', pts: [
-    P(-612, 165, -7.5, 4, 5.2), P(-610, 130, -8.5, 4, 5), P(-596, 75, -10, 4.2, 5.2), P(-570, 5, -12, 4.2, 5.4),
-    P(-525, -48, -14, 4.4, 5.6), P(-478, -102, -16, 4.6, 6), P(-458, -140, -16, 5, 6.5)] },
+    P(-612, 165, -7.5, 5.4, 7), P(-610, 130, -8.5, 5.4, 7), P(-596, 75, -10, 5.6, 7), P(-570, 5, -12, 5.6, 7.2),
+    P(-525, -48, -14, 5.8, 7.5), P(-478, -102, -16, 6, 8), P(-458, -140, -16, 6.5, 8.5)] },
+  // RAMAL DE LARANJEIRAS (31/10, Pedro: "uma saída pra quase Flamengo/Laranjeiras") — boca no pé do Morro de São Judas
+  // Tadeu virada pra Rua das Laranjeiras; o túnel desce pelo vale do Cosme Velho (sob o Rebouças de verdade) até a
+  // galeria do Cosme Velho e liga no túnel do Rebouças pela encruzilhada
+  { id: 'laranjeiras', name: 'saída de Laranjeiras', mouth: true, pts: [
+    P(84, -416, 13.4, 3.8, 5), P(68, -432, 11, 4.6, 6.5), P(32, -402, 6, 5.6, 7.5), P(2, -372, 2, 6, 8),
+    P(-24, -336, -1, 6, 8), P(-42, -290, -2, 6, 8), P(-50, -245, -2, 6, 8)] },
+  { id: 'cosme-encruzilhada', name: 'túnel do Cosme Velho', pts: [P(-54, -205, -2, 6, 8), P(-62, -170, 0, 6, 8), P(-70, -140, 2.5, 6.5, 8.5), P(-76, -124, 4, 6.5, 8.5)] },
 ];
 
 export const CAVE_ROOMS: CaveRoom[] = [
+  { id: 'encruzilhada', name: 'encruzilhada', x: -80, z: -120, y: 4, rx: 13, rz: 11, h: 11, yaw: 0.6, lobe: 1.8, tint: [0.45, 0.42, 0.38] },
   { id: 'corcovado', name: 'galeria do Corcovado', x: -200, z: -160, y: -5, rx: 26, rz: 17, h: 13, yaw: 0.15, lobe: 2.2,
     pillars: [{ x: -207, z: -154, r: 2.6 }], tint: [0.46, 0.43, 0.39] },
   { id: 'agua', name: "galeria d'água", x: -357, z: -166, y: -10, rx: 21, rz: 14, h: 10, yaw: 0.25, lobe: 2,
@@ -73,6 +83,21 @@ export const CAVE_ROOMS: CaveRoom[] = [
   { id: 'cristais', name: 'galeria dos cristais', x: -610, z: 185, y: -7.5, rx: 15, rz: 22, h: 12, yaw: 0.05, lobe: 2, tint: [0.4, 0.37, 0.46] },
   { id: 'poco', name: 'poço da Gávea', x: -596, z: 70, y: -10, rx: 11, rz: 11, h: 8, yaw: 0, lobe: 1.5,
     pools: [{ u: 0, v: 0, rx: 7, rz: 6, depth: 0.8 }], tint: [0.35, 0.41, 0.41] },
+  { id: 'cosme', name: 'galeria do Cosme Velho', x: -52, z: -225, y: -2, rx: 16, rz: 20, h: 12, yaw: 0.15, lobe: 2.2,
+    pools: [{ u: -4, v: 6, rx: 7, rz: 9, depth: 0.8 }], tint: [0.38, 0.41, 0.4] },
+];
+
+/** INIMIGOS DA CAVERNA (31/10, Pedro: "falta os inimigos dentro da cave"): Fauce de Sílex e Aberração (os bichos da mata
+ *  alta) espalhados nos salões — [salão, espécie, u, v] (u/v = fração do raio do salão). Nascem como FAUNA
+ *  (`wild_cave_*`): força pela região (a caverna fica embaixo da Tijuca), renascem em casa, no chão da caverna. */
+export const CAVE_ENEMIES: readonly (readonly [string, string, number, number])[] = [
+  ['encruzilhada', 'flintmaw', 0.3, -0.3],
+  ['corcovado', 'flintmaw', 0.35, 0.3], ['corcovado', 'flintmaw', -0.4, -0.2],
+  ['agua', 'monster', 0.55, -0.4], ['agua2', 'flintmaw', -0.3, 0.45],
+  ['grande', 'monster', 0.3, 0.35], ['grande', 'monster', -0.35, -0.3], ['grande', 'flintmaw', 0.55, -0.25],
+  ['poco', 'monster', 0.5, 0.3],
+  ['cristais', 'flintmaw', 0.3, 0.4], ['cristais', 'flintmaw', -0.35, -0.45],
+  ['cosme', 'monster', 0.35, -0.3], ['cosme', 'flintmaw', -0.4, 0.2],
 ];
 
 /** O CHEFE mora no salão do fundo: a Aberração Fúngica (o chefão das hordas), com 1,5× a vida — é o fim da caverna. */
@@ -323,7 +348,7 @@ export function zsCaveUnder(t: ZsTerrain): UnderLayer {
     layer: caveLayer,
     solid: caveSolid,
     inside: caveAir,
-    homeY: (id, x, z) => (id.startsWith('zs_cave_') ? caveFloorAt(x, z) : null),
+    homeY: (id, x, z) => (id.startsWith('zs_cave_') || id.startsWith('wild_cave_') ? caveFloorAt(x, z) : null),
   };
 }
 
@@ -334,6 +359,18 @@ const BODY_Y = 1.0, BODY_R = 0.3, HEAD_Y = 1.75, STEP_UP = 0.9;
 /** Cabe um corpo em pé em (x, z) com o chão `fl`? (cintura com folga + cabeça) */
 function bodyFits(x: number, fl: number, z: number): boolean {
   return caveField(x, fl + BODY_Y, z) < -BODY_R && caveField(x, fl + HEAD_Y, z) < -0.05;
+}
+/** Onde nasce cada inimigo da caverna (`CAVE_ENEMIES`): no salão, num chão onde cabe em pé (se a posição pedida cair na
+ *  parede, puxa pro meio do salão). Puro. */
+export function caveEnemySpots(): { id: string; speciesId: string; x: number; z: number }[] {
+  return CAVE_ENEMIES.map(([room, speciesId, fu, fv], i) => {
+    const r = ROOMS.find((q) => q.id === room)!;
+    for (let k = 1; k >= 0; k -= 0.1) {
+      const u = fu * r.rx * k, v = fv * r.rz * k, x = r.x + u * r.c - v * r.s, z = r.z + u * r.s + v * r.c;
+      if (caveStandAt(x, z) !== null) return { id: `wild_cave_${room}_${i}`, speciesId, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10 };
+    }
+    return { id: `wild_cave_${room}_${i}`, speciesId, x: r.x, z: r.z };
+  });
 }
 /** Chão onde cabe um corpo EM PÉ em (x, z) (null = rocha/parede). */
 export function caveStandAt(x: number, z: number): number | null {
@@ -579,7 +616,8 @@ export function caveDecor(): CaveDecor[] {
       const x = r.x + u * r.c - v * r.s, z = r.z + u * r.s + v * r.c;
       const fl = caveFloorAt(x, z);
       if (fl === null || cavePoolY(x, z) !== null || !caveAir(x, fl + 1, z)) continue;
-      for (let m = 0; m < 3; m++) out.push({ kind: 'crystal', x: x + (hash3(ri, k * 7 + m, 13) - 0.5) * 1.6, y: fl - 0.15, z: z + (hash3(ri, k * 7 + m, 14) - 0.5) * 1.6, s: 0.5 + hash3(ri, k * 7 + m, 15) * 0.9, yaw: hash3(ri, k, 16) * 6.28, tilt: (hash3(ri, k * 7 + m, 17) - 0.5) * 0.7 });
+      // 1 cacho por ponto (o cristal GLB já é um cacho — 31/10)
+      out.push({ kind: 'crystal', x, y: fl - 0.12, z, s: 0.8 + hash3(ri, k, 15) * 0.9, yaw: hash3(ri, k, 16) * 6.28, tilt: (hash3(ri, k, 17) - 0.5) * 0.3 });
     }
     if (r.id === 'chefe') {
       for (let k = 0; k < 22; k++) {

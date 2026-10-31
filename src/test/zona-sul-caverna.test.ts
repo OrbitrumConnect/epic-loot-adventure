@@ -4,11 +4,11 @@ import { triTable } from 'three/addons/objects/MarchingCubes.js';
 import { decodeTerrain, type ZsTerrain, zsHeightAt } from '@/components/zona-sul/zs-terrain-data';
 import { ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
 import {
-  CAVE_BOSS, CAVE_MOUTH_ZONE, CAVE_ROOMS, caveCamFit, caveField, caveFloorAt, caveInside, caveLayer, caveMeshJob, caveMouthClear,
+  CAVE_BOSS, CAVE_MOUTH_ZONE, CAVE_ROOMS, CAVE_TUNNELS, caveEnemySpots, caveCamFit, caveField, caveFloorAt, caveInside, caveLayer, caveMeshJob, caveMouthClear,
   caveMove, caveNearXZ, cavePoolY, caveStandAt, setCaveTerrain, ZS_CAVE_MOUTHS, zsCaveUnder,
 } from '@/components/zona-sul/zs-cave';
 import { zsVegetationAround } from '@/components/zona-sul/zs-vegetation';
-import { createCaveBoss } from '@/components/zona-sul/zs-world-profile';
+import { createCaveBoss, createCaveCreatures } from '@/components/zona-sul/zs-world-profile';
 import { WORLD } from '@/game/data/world-profile';
 import { layers, resetLayers, sameLayerAsPlayer, setCreatureLayer } from '@/game/systems/layerSystem';
 
@@ -49,6 +49,14 @@ describe('caverna da Zona Sul — onde fica', () => {
     expect(Math.abs(l.ay - zsHeightAt(t, l.ax, l.az))).toBeLessThan(0.3);
     expect(l.ra * l.ha).toBeLessThan(r.ra * r.ha * 0.5);
     expect(l.az).toBeGreaterThan(330); // no pé do morro, no fim do Leblon
+    // 31/10: saída de LARANJEIRAS (quase Flamengo) — pé do Morro de São Judas Tadeu, virada pra Rua das Laranjeiras
+    const j = mouth('laranjeiras');
+    expect(Math.abs(j.ay - zsHeightAt(t, j.ax, j.az))).toBeLessThan(0.3);
+    expect(Math.hypot(j.ax - 149, j.az - -409)).toBeLessThan(80);
+    expect(j.ra * j.ha).toBeLessThan(r.ra * r.ha);
+  });
+  it('túneis por dentro mais altos e largos (Pedro 31/10): ≥ 6 m de largura e ≥ 7 m de altura fora das bocas', () => {
+    for (const tn of CAVE_TUNNELS) tn.pts.slice(tn.mouth ? 2 : 0).forEach((p) => { expect(p.r * 2, tn.id).toBeGreaterThanOrEqual(9); expect(p.h, tn.id).toBeGreaterThanOrEqual(6.2); });
   });
   it('o salão do chefe é o ponto MAIS FUNDO; tem galeria com ÁGUA e uma caverna GRANDE', () => {
     const boss = CAVE_ROOMS.find((r) => r.id === 'chefe')!;
@@ -90,7 +98,7 @@ describe('caverna — uma camada EMBAIXO do mapa (não fura nada)', () => {
 
 describe('caverna — dá pra andar dela inteira', () => {
   it('da boca do Rebouças se chega (a pé, sem pular parede) em TODOS os salões, no fundo do chefe e na boca do Leblon', () => {
-    const S = 2, X0 = -680, Z0 = -280, W = Math.ceil((-20 - X0) / S), H = Math.ceil((420 - Z0) / S);
+    const S = 2, X0 = -680, Z0 = -460, W = Math.ceil((120 - X0) / S), H = Math.ceil((420 - Z0) / S);
     const fl = new Float32Array(W * H).fill(NaN);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       const x = X0 + i * S, z = Z0 + j * S;
@@ -122,9 +130,11 @@ describe('caverna — dá pra andar dela inteira', () => {
       expect(k, room.name).toBeGreaterThanOrEqual(0);
       expect(seen[k], room.name).toBe(1);
     }
-    const l = mouth('leblon');
-    const lk = near(l.ax + (l.bx - l.ax) * 0.15, l.az + (l.bz - l.az) * 0.15);
-    expect(seen[lk]).toBe(1);
+    for (const id of ['leblon', 'laranjeiras']) {
+      const l = mouth(id);
+      const lk = near(l.ax + (l.bx - l.ax) * 0.15, l.az + (l.bz - l.az) * 0.15);
+      expect(seen[lk], id).toBe(1);
+    }
   });
   it('herói: entra pela boca (o chão é o do túnel), a parede segura, e sai pela boca do Leblon pro chão do mapa', () => {
     const r = mouth('reboucas');
@@ -197,6 +207,21 @@ describe('caverna — camada: ninguém briga através da rocha', () => {
       expect(sameLayerAsPlayer('macaco')).toBe(true);
     } finally { WORLD.under = before; resetLayers(); setCaveTerrain(t); }
   });
+  it('inimigos DENTRO da caverna (Pedro 31/10): nos salões, em pé no chão, camada da caverna, fauna (força pela região)', () => {
+    const spots = caveEnemySpots();
+    expect(spots.length).toBeGreaterThanOrEqual(12);
+    const u = zsCaveUnder(t);
+    for (const s of spots) {
+      expect(s.id.startsWith('wild_cave_'), s.id).toBe(true);
+      const fl = caveStandAt(s.x, s.z);
+      expect(fl, s.id).not.toBeNull();
+      expect(u.homeY(s.id, s.x, s.z)).toBeCloseTo(fl!, 3);
+      expect(caveLayer(s.x, fl!, s.z), s.id).toBe(1);
+    }
+    const all = createCaveCreatures();
+    expect(all.filter((c) => c.id.startsWith('wild_cave_'))).toHaveLength(spots.length);
+    expect(all.some((c) => c.id === CAVE_BOSS.id)).toBe(true);
+  });
   it('o chefe (Aberração Fúngica, 1,5× vida) nasce no chão do salão do fundo', () => {
     const b = createCaveBoss()!;
     expect(b.speciesId).toBe('raider_mushroom');
@@ -209,14 +234,14 @@ describe('caverna — camada: ninguém briga através da rocha', () => {
 });
 
 describe('caverna — leve', () => {
-  it('a malha sai da mesma conta (marching cubes) e cabe no orçamento: < 70 mil triângulos, ~40 pedaços', () => {
+  it('a malha sai da mesma conta (marching cubes) e cabe no orçamento: < 90 mil triângulos (túneis maiores + Laranjeiras), < 70 pedaços', () => {
     const job = caveMeshJob(triTable);
     let r = job.next();
     while (!r.done) r = job.next();
     const tris = r.value.reduce((s, x) => s + x.idx.length / 3, 0);
     expect(tris).toBeGreaterThan(20000);
-    expect(tris).toBeLessThan(70000);
-    expect(r.value.length).toBeLessThan(60);
+    expect(tris).toBeLessThan(90000);
+    expect(r.value.length).toBeLessThan(70);
     // as normais apontam pro AR (de dentro da caverna)
     const tile = r.value[0]!;
     let ok = 0;

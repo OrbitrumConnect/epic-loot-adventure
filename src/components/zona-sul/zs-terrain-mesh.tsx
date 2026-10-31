@@ -109,6 +109,10 @@ const caveUniforms = {
   uCaveH: { value: ZS_CAVE_MOUTHS.map((m) => new THREE.Vector3(m.ha, m.hb, CAVE_HOLE_IN / Math.hypot(m.bx - m.ax, m.bz - m.az))) },
 };
 const CAVE_N = ZS_CAVE_MOUTHS.length;
+/** SILHUETA DE LONGE só onde NÃO tem pedaço detalhado (31/10): em vale encostado em morro a silhueta (grade de 32 m)
+ *  fica ACIMA do chão de verdade e cobria o herói (visto no Humaitá e em Laranjeiras). Mesma regra de distância dos
+ *  pedaços (`zsChunkStep`): x0/z0/tamanho do pedaço/alcance; o herói de quando a lista de pedaços foi feita. */
+const farUniforms = { uFarHero: { value: new THREE.Vector2(1e9, 1e9) }, uFarChunk: { value: new THREE.Vector4(0, 0, 1, 0) } };
 let roadRequested = false;
 function requestRoadMask(): void {
   if (roadRequested || typeof window === 'undefined') return;
@@ -128,9 +132,9 @@ function requestRoadMask(): void {
  * RUAS (Pedro: "o correto é ser textura do mapa, não uma chapa em cima"; "outro tom, não asfalto"): ESTRADA DE BARRO cor
  * de areia pintada AQUI pelo mapa das ruas — colada no relevo, borda suave, marcas de pneu, capim só na beirinha.
  */
-function withGroundDetail(m: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+function withGroundDetail(m: THREE.MeshStandardMaterial, far = false): THREE.MeshStandardMaterial {
   m.onBeforeCompile = (s) => {
-    Object.assign(s.uniforms, roadUniforms, caveUniforms);
+    Object.assign(s.uniforms, roadUniforms, caveUniforms, farUniforms, { uFar: { value: far ? 1 : 0 } });
     s.vertexShader = s.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vZsW;\nvarying float vZsUp;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvZsW = (modelMatrix * vec4(position, 1.0)).xyz;\nvZsUp = normal.y;');
@@ -144,10 +148,18 @@ uniform float uRoadOn;
 uniform vec4 uCaveA[${CAVE_N}];
 uniform vec4 uCaveB[${CAVE_N}];
 uniform vec3 uCaveH[${CAVE_N}];
+uniform float uFar;
+uniform vec2 uFarHero;
+uniform vec4 uFarChunk;
 float zsH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float zsN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(zsH(i), zsH(i + vec2(1.0, 0.0)), f.x), mix(zsH(i + vec2(0.0, 1.0)), zsH(i + vec2(1.0, 1.0)), f.x), f.y); }`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+  if (uFar > 0.5) { // silhueta: some onde o pedaço detalhado já desenha
+    vec2 fb0 = uFarChunk.xy + floor((vZsW.xz - uFarChunk.xy) / uFarChunk.z) * uFarChunk.z;
+    vec2 fd = max(max(fb0 - uFarHero, uFarHero - (fb0 + uFarChunk.z)), 0.0);
+    if (length(fd) <= uFarChunk.w) discard;
+  }
   // boca da caverna: dentro do arco do 1º trecho o chão some (o chão do túnel, mais baixo, aparece)
   for (int i = 0; i < ${CAVE_N}; i++) {
     vec2 ca = uCaveA[i].xy, cab = uCaveB[i].xy - ca;
@@ -182,12 +194,15 @@ float zsN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
     }
   }`);
   };
-  m.customProgramCacheKey = () => 'zs-ground-v4';
+  m.customProgramCacheKey = () => 'zs-ground-v5';
   return m;
 }
 
 export function ZsTerrainMesh({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3> }) {
   const material = useMemo(() => { requestRoadMask(); return withGroundDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 })); }, []);
+  const farMaterial = useMemo(() => withGroundDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), true), []);
+  useEffect(() => { farUniforms.uFarChunk.value.set(t.x0, t.z0, ZS_CHUNK * t.cell, ZS_LOD[ZS_LOD.length - 1]!.maxDist); }, [t]);
+  useEffect(() => () => farMaterial.dispose(), [farMaterial]);
   const far = useMemo(() => buildTerrainPatch(t, 0, 0, t.w - 1, t.h - 1, FAR_STEP, FAR_DROP, false), [t]);
   const cache = useRef(new Map<string, THREE.BufferGeometry>());
   const [chunks, setChunks] = useState<ChunkView[]>([]);
@@ -210,6 +225,7 @@ export function ZsTerrainMesh({ t, heroRef }: { t: ZsTerrain; heroRef: React.Mut
     const sig = want.map((w) => w.key).join('|');
     if (sig === last.current) return;
     last.current = sig;
+    farUniforms.uFarHero.value.set(hx, hz); // a silhueta some exatamente onde esta lista de pedaços desenha
     const keep = new Set(want.map((w) => w.key));
     for (const [k, g] of cache.current) if (!keep.has(k)) { g.dispose(); cache.current.delete(k); }
     setChunks(want.map((w) => {
@@ -226,7 +242,7 @@ export function ZsTerrainMesh({ t, heroRef }: { t: ZsTerrain; heroRef: React.Mut
 
   return (
     <group>
-      <mesh geometry={far} material={material} receiveShadow />
+      <mesh geometry={far} material={farMaterial} receiveShadow />
       {chunks.map((c) => <mesh key={c.key} geometry={c.geo} material={material} receiveShadow />)}
     </group>
   );

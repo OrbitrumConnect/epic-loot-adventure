@@ -9,7 +9,25 @@ import type { CreatureState } from '@/game/types';
 import { pickZsCampSites, ZS_HILLTOP_CAMPS, ZS_SAFE, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
 import { type ZsTerrain, zsBounds, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
-import { CAVE_BOSS, zsCaveUnder } from './zs-cave';
+import { CAVE_BOSS, caveEnemySpots, zsCaveUnder } from './zs-cave';
+
+/** Os BICHOS da caverna (31/10): Fauce de Sílex e Aberração nos salões — mesmo formato da fauna (`wild_cave_*` → força
+ *  pela região e renascer iguais aos da mata); nascem no chão da caverna (`homeY`). Precisa do chão ligado (zsCaveUnder). */
+export function createCaveCreatures(): CreatureState[] {
+  const out: CreatureState[] = [];
+  for (const s of caveEnemySpots()) {
+    const def = CREATURES[s.speciesId];
+    if (!def) continue;
+    const hp = scaleEnemyHp(def.maxHp);
+    out.push({
+      id: s.id, speciesId: def.id, name: def.name, hp, maxHp: hp, attackPower: def.attackPower, armor: def.armor,
+      attackCooldown: def.attackCooldown, lastAttackAt: 0, position: { x: s.x, z: s.z }, behavior: 'patrol', lootTable: [], respawnAt: null,
+    });
+  }
+  const boss = createCaveBoss();
+  if (boss) out.push(boss);
+  return out;
+}
 
 /** O CHEFE da caverna (salão do fundo) — mesmo formato da fauna; nasce no chão de lá (`homeY` da camada de baixo). */
 export function createCaveBoss(): CreatureState | null {
