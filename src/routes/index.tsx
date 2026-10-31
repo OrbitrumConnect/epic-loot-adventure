@@ -30,6 +30,7 @@ import { RewardFeed, LevelUpBanner } from '@/components/hud/reward-feed';
 import { HuntBanner } from '@/components/hud/hunt-banner';
 import { PilotWeaponControl } from '@/components/hud/pilot-weapon-control';
 import { CharacterSheet } from '@/components/hud/character-sheet';
+import { AttributesPanel } from '@/components/hud/attributes-panel';
 import { isUnlocked, unlockLevel } from '@/game/systems/unlockSystem';
 import { ITEMS } from '@/game/data/items';
 import { getWeight, getItemCount } from '@/game/systems/inventorySystem';
@@ -596,7 +597,7 @@ function Index() {
   });
 
   const panel = ui.panel;
-  const title = panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? (zs ? 'Zona Sul · Rio' : 'Vale dos Ancestrais') : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : panel === 'ranks' ? 'Ranking' : panel === 'rooms' ? 'Salas' : 'Tribo dos Guardiões';
+  const title = panel === 'attributes' ? 'Atributos' : panel === 'inventory' ? 'Inventário' : panel === 'loot' ? 'Loot da expedição' : panel === 'home' ? 'Base da tribo' : panel === 'base' ? 'Minha base' : panel === 'training' ? 'Centro de treinamento' : panel === 'map' ? (zs ? 'Zona Sul · Rio' : 'Vale dos Ancestrais') : panel === 'raid' ? 'Operações' : panel === 'objectives' ? 'Fila de objetivos' : panel === 'settings' ? 'Preferências' : panel === 'ranks' ? 'Ranking' : panel === 'rooms' ? 'Salas' : 'Tribo dos Guardiões';
 
   // Triggers do mundo (piloto/pegar/atacar/especiais/câmera/casa). Mesma fonte
   // renderizada em dois lugares: sobre o mundo (desktop) e no rodapé ao lado do
@@ -722,7 +723,12 @@ function Index() {
             onClick={toggleSidebar}>
             {ui.sidebarCollapsed ? <Menu /> : <PanelLeftClose />}
           </Button>
-          <div className="player-profile">
+          <div className="player-profile" role="button" tabIndex={0}
+            title="Ver atributos e distribuir pontos"
+            data-haspoints={(player.skillPoints ?? 0) > 0 || undefined}
+            onClick={() => setPanel('attributes')}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPanel('attributes'); } }}>
+            {(player.skillPoints ?? 0) > 0 && <span className="profile-points" aria-label={`${player.skillPoints} pontos de atributo pra distribuir`}>✦ {player.skillPoints}</span>}
             <div className="portrait"><ShieldCheck strokeWidth={1.2} /></div>
             <div>
               <div className="player-name" data-levelup={levelUpFlash}>
@@ -980,7 +986,17 @@ function Index() {
           {!panel && (<div className="world-bottom">
             <div className="world-message">
               <WorldMessage />
-              {ui.chatOpen && <div><time>08:43</time><strong>Tribo</strong> · Canal local aberto. Os Guardiões.</div>}
+              {ui.chatOpen && (
+                <form className="chat-input" onSubmit={e => {
+                  e.preventDefault();
+                  const el = e.currentTarget.elements.namedItem('chatmsg') as HTMLInputElement | null;
+                  const v = el?.value.trim() ?? '';
+                  if (v) { useGameStore.getState().runGmCommand(v); if (el) el.value = ''; }
+                }}>
+                  <strong>Tribo</strong>
+                  <input name="chatmsg" type="text" autoComplete="off" placeholder="Mensagem / comando de GM (ex.: !spawn Jacaré, !goto Colosso, !item Rifle, !start)" aria-label="Chat e comandos" />
+                </form>
+              )}
             </div>
             <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}
@@ -994,13 +1010,14 @@ function Index() {
               <section className="game-panel" data-wide={panel === 'inventory' || panel === 'loot' || (panel === 'map' && zs) || undefined} data-map={panel === 'map' && zs || undefined} role="dialog" aria-modal="true" aria-label={title}>
                 <div className="panel-heading">
                   <div>
-                    <small>{panel === 'map' ? 'Território livre' : panel === 'home' ? 'Os Guardiões' : panel === 'base' ? 'Terreno e muralhas' : panel === 'training' ? 'Tropas e muralhas' : 'TRIBOS'}</small>
+                    <small>{panel === 'attributes' ? 'Pontos de evolução' : panel === 'map' ? 'Território livre' : panel === 'home' ? 'Os Guardiões' : panel === 'base' ? 'Terreno e muralhas' : panel === 'training' ? 'Tropas e muralhas' : 'TRIBOS'}</small>
                     <h2>{title}</h2>
                   </div>
                   <Button variant="ghost" size="icon" title="Fechar" aria-label="Fechar" onClick={() => setPanel(null)}><X /></Button>
                 </div>
 
                 {(panel === 'inventory' || panel === 'loot') && <CharacterSheet onHome={() => open('home')} />}
+                {panel === 'attributes' && <AttributesPanel onClose={() => setPanel(null)} />}
 
                 {panel === 'objectives' && (
                   <>

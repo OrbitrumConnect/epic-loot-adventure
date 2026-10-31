@@ -1234,3 +1234,50 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .zs-mapmark--camp[data-cleared] { background: #6b6b6b; }
 .zs-key-base { background: var(--world-gold); border: 2px solid var(--world-dark); border-radius: 3px; transform: rotate(45deg); }
 .zs-key-camp { background: #c8412f; border: 2px solid var(--world-dark); border-radius: 2px; }
+
+/* ===== Janela de Atributos (abre no card de nível) + selinho de pontos ===== */
+.player-profile { position: relative; cursor: pointer; border-radius: 10px; transition: background .15s; }
+.player-profile:hover { background: color-mix(in oklab, var(--world-light) 10%, transparent); }
+.player-profile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.profile-points {
+  position: absolute; top: -6px; right: -6px; z-index: 2;
+  background: #f59e0b; color: #1a1205; font-weight: 800; font-size: 11px;
+  padding: 1px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+
+.attrp { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px; }
+.attrp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.attrp-ident { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.attrp-ident > strong { font-size: 17px; }
+.attrp-xp { position: relative; width: min(320px, 60vw); height: 16px; border-radius: 8px; overflow: hidden; background: color-mix(in oklab, var(--world-light) 10%, transparent); border: 1px solid var(--border); }
+.attrp-xp > i { position: absolute; inset: 0 auto 0 0; background: var(--primary); opacity: .55; }
+.attrp-xp > span { position: relative; display: block; text-align: center; font-size: 11px; line-height: 16px; }
+.attrp-points { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted-foreground); }
+.attrp-points[data-has] { color: #f59e0b; border-color: color-mix(in oklab, #f59e0b 50%, var(--border)); }
+.attrp-points > b { font-size: 20px; }
+.attrp-hint { font-size: 12.5px; color: var(--muted-foreground); margin: 0; }
+.attrp-list { display: flex; flex-direction: column; gap: 10px; }
+.attrp-row { display: grid; grid-template-columns: minmax(0,1fr) 120px auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); }
+.attrp-label { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.attrp-ic { font-size: 18px; width: 24px; text-align: center; }
+.attrp-label strong { display: block; font-size: 14px; }
+.attrp-label small { display: block; font-size: 11px; color: var(--muted-foreground); }
+.attrp-bar { height: 8px; border-radius: 6px; overflow: hidden; background: color-mix(in oklab, var(--world-light) 10%, transparent); }
+.attrp-bar > i { display: block; height: 100%; background: var(--primary); }
+.attrp-val { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 44px; text-align: right; }
+.attrp-pm { display: flex; gap: 6px; }
+.attrp-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+@media (max-width: 720px) {
+  .attrp-row { grid-template-columns: minmax(0,1fr) auto auto; }
+  .attrp-bar { display: none; }
+  .attrp-xp { width: 46vw; }
+}
+
+/* ===== Input de chat / comandos de GM ===== */
+.chat-input { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.chat-input > strong { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; }
+.chat-input input {
+  flex: 1; min-width: 0; background: color-mix(in oklab, var(--world-light) 8%, transparent);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; color: inherit; font-size: 13px;
+}
+.chat-input input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }

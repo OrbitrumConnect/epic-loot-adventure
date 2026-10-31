@@ -559,6 +559,14 @@ function Character({
     }
     if (paused) return;
     const dt = Math.min(delta, 0.05);
+    const gmTp = useGameStore.getState().gmTeleport;
+    if (gmTp) {
+      body.current.position.set(gmTp.x, terrainHeight(gmTp.x, gmTp.z), gmTp.z);
+      movement.current?.set(gmTp.x, 0, gmTp.z);
+      velocity.current.set(0, 0);
+      useGameStore.setState(s => ({ player: { ...s.player, position: { x: gmTp.x, z: gmTp.z } } }));
+      useGameStore.getState().clearGmTeleport();
+    }
 
     if (ps.dead) {
       // Morto: cai de costas e FICA caído até renascer (Pedro 26/10). Ao renascer o fluxo normal troca o estado.

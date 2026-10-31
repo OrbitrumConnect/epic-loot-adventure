@@ -87,7 +87,7 @@ const SURF_ON = typeof window === 'undefined' || !/[?&]surf=0/.test(window.locat
 import { ZsTerrainMesh } from './zs-terrain-mesh';
 import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
-import { zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
+import { autoFollowDir, zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
 import { CAR, CAR_SEATS, carStep, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
 import { type CarDims, ZsCarView } from './zs-car-view';
 
@@ -210,6 +210,15 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   useFrame((_, dtRaw) => {
     const dt = Math.min(0.05, dtRaw);
     const p = heroRef.current, k = input.keys;
+    // GM: teletransporte pedido por um comando (!start/!goto). Move o herói de VERDADE (posição + alvo do piloto).
+    const gmTp = useGameStore.getState().gmTeleport;
+    if (gmTp) {
+      p.set(gmTp.x, zsHeightAt(t, gmTp.x, gmTp.z), gmTp.z);
+      focusRef.current.copy(p);
+      movement.current.set(gmTp.x, 0, gmTp.z);
+      vy.current = 0; grounded.current = true;
+      useGameStore.getState().clearGmTeleport();
+    }
     // CAVERNA (30/10): dentro dela (ou perto da boca) a caverna desenha; quanto mais fundo, mais escuro (lanterna acende)
     {
       const inside = drive.mode === 'foot' && caveInside(p.x, p.y, p.z), md = caveMouthDist(p.x, p.y, p.z);
@@ -462,6 +471,14 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     let autoRun = false, dodging = false;
     const run = shift && !water0.swimming;
     const wantMove = Math.hypot(wx, wz) > 0.05 && drive.mode === 'foot';
+    // Piloto automático também na ÁGUA: sem input manual, o nado/vadeio segue o alvo do piloto (movement.current),
+    // igual ao branch de TERRA mais abaixo. Sem isto o herói fica boiando preso quando o AUTO manda caçar e ele está
+    // na água (não sai sozinho).
+    let awx = wx, awz = wz, aWantMove = wantMove;
+    if (!wantMove && !dead && drive.mode === 'foot') {
+      const af = autoFollowDir(movement.current.x, movement.current.z, p.x, p.z);
+      if (af.has) { awx = af.x; awz = af.z; aWantMove = true; }
+    }
     let v = (run ? ZS_RUN : ZS_WALK) * (water0.wading ? 0.75 : 1) * moveBonus;
     let moving = wantMove;
     let st;
@@ -508,15 +525,15 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       bodysurf.current = false; tumble.current = 0;
     } else if ((water0.swimming || water0.wading) && drive.mode === 'foot') {
       // NA ÁGUA (nadando ou no raso) com embalo: a velocidade vai suave até a desejada (e desliza ao soltar)
-      const sv = swimVel.current, target = !wantMove ? 0 : water0.swimming ? (shift ? ZS_SWIM_FAST : ZS_SWIM) : v;
+      const sv = swimVel.current, target = !aWantMove ? 0 : water0.swimming ? (shift ? ZS_SWIM_FAST : ZS_SWIM) : v;
       const kk = 1 - Math.exp(-ZS_SWIM_GLIDE * dt);
-      sv.x += (wx * target - sv.x) * kk; sv.y += (wz * target - sv.y) * kk;
+      sv.x += (awx * target - sv.x) * kk; sv.y += (awz * target - sv.y) * kk;
       v = sv.length(); moving = v > 0.35;
       // a onda leva quem está nadando (espuma forte, face média) — somado à braçada. JACARÉ (surf de peito, Pedro 28/10):
       // nadando A FAVOR da onda (rumo à praia) você "pega" ela e vai um pouco mais rápido que ela (corpo desliza pouco)
       let pw = 0;
       if (water0.swimming && zsWaterPushAt(p.x, p.z, HERO_PUSH, p.y + 0.3)) {
-        const pm = Math.hypot(HERO_PUSH.x, HERO_PUSH.z), along = wantMove ? Math.max(0, (wx * HERO_PUSH.x + wz * HERO_PUSH.z) / pm) : 0;
+        const pm = Math.hypot(HERO_PUSH.x, HERO_PUSH.z), along = aWantMove ? Math.max(0, (awx * HERO_PUSH.x + awz * HERO_PUSH.z) / pm) : 0;
         pw = ZS_SWIM_WAVE_CARRY + ZS_BODYSURF_EXTRA * along;
         bodysurf.current = along > 0.5 && pm > 1.2;
       } else bodysurf.current = false;

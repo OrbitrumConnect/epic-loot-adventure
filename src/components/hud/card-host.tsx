@@ -11,6 +11,7 @@ import { dismissCard, inCombat, INFO_TTL_MS, pushCard, useCards } from './card-q
 export function CardHost() {
   const queue = useCards((s) => s.queue);
   const points = useGameStore((s) => s.player.skillPoints ?? 0);
+  const panel = useGameStore((s) => s.ui.panel);
   const [forced, setForced] = useState(false);
   const [, tick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => tick((v) => v + 1), 500); return () => window.clearInterval(id); }, []);
@@ -26,6 +27,9 @@ export function CardHost() {
 
   const st = useGameStore.getState();
   const fighting = inCombat(Date.now(), st.player.lastDamagedAt, st.player.lastAttackAt);
+
+  // A janela de Atributos (card de nível clicável) já cobre os pontos: não flutua a carta/selinho por cima dela.
+  if (panel === 'attributes') return null;
 
   if (!card) {
     // Pontos guardados sem carta na fila (o jogador tocou "depois"): selinho pra reabrir.
