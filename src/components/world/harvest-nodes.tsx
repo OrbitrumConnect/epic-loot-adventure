@@ -13,6 +13,10 @@
  * ordem em que `setMatrixAt(i, ...)` é chamado — é essa tabela que traduz o
  * índice de volta para o id do nó. Nó esgotado vai para o mesh "esgotado" (sem
  * raycast) e sai do vivo, então para de responder a cliques sozinho.
+ *
+ * (1/11) Cada espécie com sombra ganhou um `useFrame` leve: escolhe quais
+ * instâncias tocam a caixa da sombra do sol e copia só essas pra uma cópia
+ * SÓ-SOMBRA do lote (ver "SOMBRA só de quem cai na caixa da sombra do sol").
  */
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
@@ -23,7 +27,7 @@ import { useGameStore } from '@/game/state/game-store';
 import type { HarvestNodeKind, HarvestNodeState } from '@/game/types';
 import { addObjective } from './objective-bridge';
 import { harvestTreeGeometry } from './harvest-tree-geometry';
-import { makeInstanceFadeMaterial, registerInstancedFade, type FadeSphere } from './occlusion';
+import { fadeLoop, makeInstanceFadeMaterial, registerInstancedFade, type FadeSphere } from './occlusion';
 import {
   labelTexture, markPointerConsumed, mixColor, rand, terrainHeight, TREE_HEIGHT_K, type Palette,
 } from './world-kit';
@@ -249,6 +253,60 @@ const noRaycast = () => {};
 
 const dummy = new THREE.Object3D();
 
+/* ------------------------------------------------------------------ *
+ * SOMBRA só de quem cai na caixa da sombra do sol (1/11, desempenho)
+ *
+ * O three corta a sombra por LOTE, não por instância: as 48 árvores de
+ * coleta (8,9 mil triângulos cada) iam TODAS pro passe de sombra, embora a
+ * caixa da sombra só cubra ±45 m em volta do herói (~426 mil triângulos por
+ * quadro). Agora o lote da tela não projeta sombra; uma CÓPIA (mesma malha,
+ * mesmo material → mesma sombra) leva só as instâncias cuja esfera toca a
+ * caixa da sombra (+folga) e desenha só NA SOMBRA (contagem 0 na tela).
+ * Quem está fora da caixa não escreve nada no mapa de sombra → visual igual.
+ * Clique, fade e piloto continuam no lote da tela, sem mudança.
+ * ------------------------------------------------------------------ */
+/** Folga (m) na caixa da sombra: a caixa é a do quadro anterior e o herói anda. */
+const SHADOW_PAD = 8;
+const shadowSunCache: { scene: THREE.Object3D | null; light: THREE.DirectionalLight | null; at: number } = { scene: null, light: null, at: -1e9 };
+/** O sol (ÚNICA luz com sombra, direcional). Outra luz com sombra na cena → null (aí vai tudo pra sombra, como antes).
+ *  Procura de novo a cada 2 s (luz nova/removida). */
+function shadowSun(scene: THREE.Object3D, now: number): THREE.DirectionalLight | null {
+  const c = shadowSunCache;
+  if (c.scene === scene && now - c.at < 2000 && (!c.light || c.light.parent)) return c.light;
+  let found: THREE.Light | null = null, many = false;
+  scene.traverse((o) => {
+    const l = o as THREE.Light;
+    if (!l.isLight || !l.castShadow) return;
+    if (found) many = true; else found = l;
+  });
+  const light = found as THREE.Light | null;
+  c.scene = scene; c.at = now;
+  c.light = !many && light && (light as THREE.DirectionalLight).isDirectionalLight ? (light as THREE.DirectionalLight) : null;
+  return c.light;
+}
+const shFrustum = new THREE.Frustum();
+const shProj = new THREE.Matrix4();
+const shSphere = new THREE.Sphere();
+const shM = new THREE.Matrix4();
+const shV = new THREE.Vector3();
+
+/* ------------------------------------------------------------------ *
+ * RECORTE PELA CÂMERA (1/11, desempenho)
+ *
+ * O lote inteiro (48 árvores) era desenhado todo quadro, até as de trás da
+ * câmera — o three corta o LOTE, não cada instância. Medido: a câmera vê de
+ * 0 a 13 delas. Agora as que tocam a visão da câmera (+ folga) vão pro
+ * começo do lote e só elas são desenhadas/clicáveis; `ids` segue a mesma
+ * ordem (clique certo). Só quando NENHUM fade está rodando (Zona Sul): com
+ * fade (Vale) a opacidade mora no índice da instância → ordem original.
+ * ------------------------------------------------------------------ */
+/** Folga do recorte: metros + fração da distância (~8°) — câmera girando rápido não deixa árvore de fora. */
+const VIEW_PAD = 3, VIEW_PAD_K = 0.15;
+const vFrustum = new THREE.Frustum();
+const vProj = new THREE.Matrix4();
+/** Matrizes e ids na ordem ORIGINAL (todas as vivas) — a fonte; o lote da tela recebe a parte visível. */
+type LiveBase = { m: Float32Array; ids: string[]; n: number };
+
 function KindInstances({
   kind, nodes, assets, deadMat, hover,
 }: {
@@ -262,6 +320,14 @@ function KindInstances({
   const cap = Math.max(1, mine.length);
   const liveRef = useRef<THREE.InstancedMesh>(null);
   const deadRef = useRef<THREE.InstancedMesh>(null);
+  /** Cópia SÓ-SOMBRA do lote vivo (ver "SOMBRA só de quem cai na caixa"). */
+  const shadowRef = useRef<THREE.InstancedMesh>(null);
+  /** Esfera de cada instância viva (x, y, z, raio) e o que está na cópia de sombra agora. */
+  const spheres = useRef<Float32Array>(new Float32Array(0));
+  const inShadow = useRef({ n: 0, idx: new Int32Array(Math.max(1, nodes.length)), dirty: true });
+  /** Ordem original (fonte) + o que está no lote da tela agora (recorte pela câmera). */
+  const base = useRef<LiveBase>({ m: new Float32Array(0), ids: [], n: 0 });
+  const view = useRef({ k: 0, order: new Int32Array(Math.max(1, nodes.length)), culled: false });
   /** `ids[i]` = id do nó na instância `i` do mesh VIVO. */
   const ids = useRef<string[]>([]);
   const tv = useTerrainVersion(); // reassenta na superfície do GLB quando ele carrega
@@ -311,7 +377,97 @@ function KindInstances({
     // volume da montagem anterior.
     live.boundingSphere = null;
     dead.boundingSphere = null;
-  }, [mine, cap, kind, tv]);
+    // esferas das instâncias vivas (pra escolher quem vai pra sombra) — a cópia de sombra se refaz no próximo quadro
+    if (!assets.live.boundingSphere) assets.live.computeBoundingSphere();
+    const bs = assets.live.boundingSphere!;
+    const sp = new Float32Array(li * 4);
+    for (let i = 0; i < li; i++) {
+      live.getMatrixAt(i, shM);
+      shV.copy(bs.center).applyMatrix4(shM);
+      sp[i * 4] = shV.x; sp[i * 4 + 1] = shV.y; sp[i * 4 + 2] = shV.z; sp[i * 4 + 3] = bs.radius * shM.getMaxScaleOnAxis();
+    }
+    spheres.current = sp;
+    if (inShadow.current.idx.length < cap) inShadow.current.idx = new Int32Array(cap);
+    inShadow.current.dirty = true;
+    // fonte na ordem original; o lote da tela está inteiro agora (o recorte refaz no próximo quadro)
+    base.current = { m: (live.instanceMatrix.array as Float32Array).slice(0, li * 16), ids: list.slice(), n: li };
+    live.userData['harvestBase'] = base.current; // (testes de tela: desenhar o lote inteiro pra comparar)
+    if (view.current.order.length < cap) view.current.order = new Int32Array(cap);
+    view.current.k = li; view.current.culled = false;
+    for (let i = 0; i < li; i++) view.current.order[i] = i;
+  }, [mine, cap, kind, tv, assets]);
+
+  // Cópia de sombra: na TELA desenha 0 instâncias; só no passe de sombra desenha as escolhidas.
+  useLayoutEffect(() => {
+    const sh = shadowRef.current;
+    if (!sh) return;
+    sh.count = 0;
+    sh.onBeforeShadow = () => { sh.count = inShadow.current.n; };
+    sh.onAfterShadow = () => { sh.count = 0; };
+    inShadow.current.dirty = true;
+  }, [cap]);
+
+  useFrame(({ scene, camera }) => {
+    const live = liveRef.current;
+    if (!live) return;
+    const B = base.current, sp = spheres.current, n = Math.min(B.n, sp.length / 4);
+    // 1) RECORTE PELA CÂMERA (só sem fade rodando): quem a câmera vê vai pro começo do lote
+    {
+      const V = view.current;
+      let k = 0, changed = false;
+      if (fadeLoop.mounted === 0) {
+        camera.updateMatrixWorld();
+        vProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+        vFrustum.setFromProjectionMatrix(vProj);
+        const cp = camera.position;
+        for (let i = 0; i < n; i++) {
+          const x = sp[i * 4]!, y = sp[i * 4 + 1]!, z = sp[i * 4 + 2]!;
+          shSphere.center.set(x, y, z);
+          shSphere.radius = sp[i * 4 + 3]! + VIEW_PAD + Math.hypot(x - cp.x, y - cp.y, z - cp.z) * VIEW_PAD_K;
+          if (!vFrustum.intersectsSphere(shSphere)) continue;
+          if (V.order[k] !== i) { V.order[k] = i; changed = true; }
+          k++;
+        }
+        if (k !== V.k || !V.culled) changed = true;
+        V.culled = true;
+      } else if (V.culled) { // fade voltou a rodar: ordem original, lote inteiro
+        for (let i = 0; i < n; i++) V.order[i] = i;
+        k = n; changed = true; V.culled = false;
+      }
+      if (changed) {
+        const dst = live.instanceMatrix.array as Float32Array, list: string[] = [];
+        for (let j = 0; j < k; j++) { const o = V.order[j]!; dst.set(B.m.subarray(o * 16, o * 16 + 16), j * 16); list[j] = B.ids[o]!; }
+        ids.current = list;
+        live.count = k; V.k = k;
+        live.instanceMatrix.needsUpdate = true;
+        live.boundingSphere = null;
+      }
+    }
+    // 2) SOMBRA: quem toca a caixa da sombra do sol (a do quadro anterior + folga) vai pra cópia de sombra
+    const sh = shadowRef.current;
+    if (!sh) return;
+    const st = inShadow.current;
+    const sun = shadowSun(scene, performance.now());
+    const cam = sun?.shadow.camera;
+    const ready = !!sun && !!sun.shadow.map; // antes do 1º passe de sombra a caixa ainda não existe
+    if (ready) { shProj.multiplyMatrices(cam!.projectionMatrix, cam!.matrixWorldInverse); shFrustum.setFromProjectionMatrix(shProj); }
+    let k = 0, changed = st.dirty;
+    for (let i = 0; i < n; i++) {
+      if (ready) {
+        shSphere.center.set(sp[i * 4]!, sp[i * 4 + 1]!, sp[i * 4 + 2]!);
+        shSphere.radius = sp[i * 4 + 3]! + SHADOW_PAD;
+        if (!shFrustum.intersectsSphere(shSphere)) continue;
+      }
+      if (st.idx[k] !== i) { st.idx[k] = i; changed = true; }
+      k++;
+    }
+    if (k !== st.n) changed = true;
+    if (!changed) return;
+    const src = B.m, dst = sh.instanceMatrix.array as Float32Array;
+    for (let j = 0; j < k; j++) dst.set(src.subarray(st.idx[j]! * 16, st.idx[j]! * 16 + 16), j * 16);
+    st.n = k; st.dirty = false;
+    sh.instanceMatrix.needsUpdate = true;
+  });
 
   // Fade por instância do lote vivo: recria o atributo se o mesh foi remontado.
   useLayoutEffect(() => {
@@ -358,12 +514,22 @@ function KindInstances({
         key={`live-${cap}`}
         ref={liveRef}
         args={[assets.live, assets.liveMat, cap]}
-        castShadow={assets.castShadow}
+        castShadow={false}
         receiveShadow
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerOut={onPointerOut}
       />
+      {assets.castShadow && (
+        <instancedMesh
+          key={`shadow-${cap}`}
+          ref={shadowRef}
+          args={[assets.live, assets.liveMat, cap]}
+          castShadow
+          frustumCulled={false}
+          raycast={noRaycast}
+        />
+      )}
       <instancedMesh
         key={`dead-${cap}`}
         ref={deadRef}

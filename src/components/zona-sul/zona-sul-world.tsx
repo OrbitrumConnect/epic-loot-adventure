@@ -126,6 +126,20 @@ const ATTACK_S = 0.45, SPIN_S = 0.45;
 const AIM_DIST = 1.7, AIM_DIST_TOUCH = 3.2, AIM_SHOULDER = 0.75, AIM_FOV = 52, AIM_FOV_TOUCH = 58;
 const SUN = new THREE.Vector3(-0.55, 0.62, -0.45).normalize();
 const FOG = '#bcd0dc';
+/** CAVERNA lá no fundo (`zsCave.dark` acima disto): o sol já está apagado → zera de vez e PARA de redesenhar a sombra dele
+ *  (1/11: ~1,3 mi de triângulos por quadro que ninguém via). A luz fica na cena (regra de 30/10: ligar/desligar luz faz o
+ *  three recompilar tudo) — só o mapa de sombra para; saiu do fundo, volta a atualizar no mesmo quadro. */
+const SUN_OFF_DARK = 0.999;
+/** Sol/luar do relógio do jogo em cima do herói (a caixa da sombra segue ele). */
+function followSun(sun: THREE.DirectionalLight, p: THREE.Vector3) {
+  const sd = zsSun.dir;
+  sun.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120);
+  sun.target.position.set(p.x, p.y, p.z); sun.target.updateMatrixWorld();
+  const off = zsCave.dark > SUN_OFF_DARK;
+  sun.intensity = off ? 0 : zsSun.intensity * (1 - zsCave.dark);
+  sun.shadow.autoUpdate = !off;
+  sun.color.copy(zsSun.color);
+}
 
 type Hud = { x: number; z: number; y: number; state: string; near: string; overview: boolean; car?: string | undefined; canPop?: boolean };
 /** Entrada + câmera. `overview` (tecla K): câmera de CIMA solta do boneco — WASD move a vista, Shift acelera,
@@ -361,11 +375,11 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6; if (cyy < gcam) cyy = gcam;
       camera.position.set(cx, cyy, cz); camera.lookAt(tx, ty, tz);
       }
-      if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity * (1 - zsCave.dark); sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
+      if (sun.current) followSun(sun.current, p); // sol/luar do relógio do jogo
       hudAcc.current += dt;
       if (hudAcc.current > 0.25) {
         hudAcc.current = 0;
-        const cd = Math.max(0, Math.ceil((car.cooldownUntil - now) / 1000)), en = Math.ceil(car.energy);
+        const cd =Math.max(0, Math.ceil((car.cooldownUntil - now) / 1000)), en = Math.ceil(car.energy);
         const voo = cd > 0 ? 'recarga do voo ' + cd + ' s' : 'Espaço sobe · C desce · energia ' + en + ' s · Shift turbo';
         onHud({ x: car.x, z: car.z, y: car.y, state: 'dirigindo · ' + Math.round(Math.abs(car.speed) * 3.6) + ' km/h · altura ' + car.altitude.toFixed(1) + ' m' + (car.overWater ? ' · sobre a água' : ''), near: '', overview: false, car: voo + ' · V câmera ' + (inside ? 'de fora' : 'de dentro') + ' · E sai (a qualquer hora — no ar você cai)' });
       }
@@ -445,7 +459,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         let cy2 = ct.y + Math.sin(input.pitch) * dist; const gc = Math.max(zsHeightAt(t, cx2, cz2), ZS_WATER_Y) + 0.6; if (cy2 < gc) cy2 = gc;
         const persp = camera as THREE.PerspectiveCamera; if (Math.abs(persp.fov - CHASE_FOV) > 0.05) { persp.fov = CHASE_FOV; persp.updateProjectionMatrix(); }
         camera.position.set(cx2, cy2, cz2); camera.lookAt(ct.x, ct.y, ct.z);
-        if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity * (1 - zsCave.dark); sun.current.color.copy(zsSun.color); }
+        if (sun.current) followSun(sun.current, p);
         boardRef.current.visible = false;
         audioManager.setFootsteps(false);
         hudAcc.current += dt;
@@ -687,7 +701,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const shake = impactShake(); // soco de impacto quando um golpe acerta
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.3; camera.position.y += (Math.random() - 0.5) * shake * 0.3; camera.position.z += (Math.random() - 0.5) * shake * 0.3; }
     // sol + sombra seguem o herói
-    if (sun.current) { const sd = zsSun.dir; sun.current.position.set(p.x + sd.x * 120, p.y + sd.y * 120, p.z + sd.z * 120); sun.current.target.position.set(p.x, p.y, p.z); sun.current.target.updateMatrixWorld(); sun.current.intensity = zsSun.intensity * (1 - zsCave.dark); sun.current.color.copy(zsSun.color); } // sol/luar do relógio do jogo
+    if (sun.current) followSun(sun.current, p); // sol/luar do relógio do jogo
     hudAcc.current += dt;
     if (hudAcc.current > 0.25) {
       hudAcc.current = 0;
@@ -1042,9 +1056,11 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
               por um instante — o React esconde até a rede mais próxima) e proteção contra modelo quebrado (igual ao Vale) */}
           {ready && (
             <AssetBoundary label="ZsCombate" fallback={null}>
-              <Suspense fallback={null}><Camps c={c} /></Suspense>
+              {/* acampamentos e recursos são da SUPERFÍCIE: no fundo da caverna somem junto com ela (1/11: as 48 árvores de
+                  coleta eram desenhadas embaixo da rocha — 851 mil triângulos que ninguém via) */}
+              <Suspense fallback={null}><ZsSurface><Camps c={c} /></ZsSurface></Suspense>
               {/* recursos de colher (madeira na mata, pedra no campo — PR #14): a mesma peça do Vale, VISÍVEIS */}
-              <Suspense fallback={null}><HarvestNodes c={c} /></Suspense>
+              <Suspense fallback={null}><ZsSurface><HarvestNodes c={c} /></ZsSurface></Suspense>
               <Suspense fallback={null}><Enemies c={c} playerRef={playerRef} cameraMode="third" /></Suspense>
               <Suspense fallback={null}><CombatFeedback /></Suspense>
               <Suspense fallback={null}><Projectiles /></Suspense>

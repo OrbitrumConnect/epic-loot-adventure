@@ -132,9 +132,25 @@ type InstEntry = {
   cur: Float32Array;
   tgt: Float32Array;
   dirty: boolean;
+  /** Quadros já passados pelo laço (os primeiros desenham em 2 passadas pra deixar esse shader pronto na carga). */
+  warm: number;
 };
 
+/**
+ * UMA PASSADA quando ninguém do lote está apagado (1/11, desempenho). Material transparente + dupla face (árvore de
+ * coleta) o three desenha DUAS vezes (faces de trás, depois as da frente) — 48 árvores = 851 mil triângulos por
+ * quadro em vez de 426 mil. Com opacidade 100% o pixel final é o mesmo nas duas formas (fica o mais perto, a luz da
+ * face de trás é a mesma), então só volta pras 2 passadas enquanto alguma instância estiver apagada (aí a ordem
+ * importa). Na Zona Sul o fade não roda → sempre 1 passada.
+ */
+const WARM_FRAMES = 60;
+const singlePassable = (m: THREE.Material | THREE.Material[]): m is THREE.Material => !Array.isArray(m) && m.side === THREE.DoubleSide;
+
 const batches = new Set<InstEntry>();
+/** Quantos `OcclusionFader` estão montados (1/11): com 0 (Zona Sul) nenhum lote apaga → quem é dono do lote pode
+ *  reordenar as instâncias à vontade (ex.: recorte pela câmera nos nós de coleta). Com fade rodando, a ordem é sagrada:
+ *  a opacidade de cada instância mora no índice dela. */
+export const fadeLoop = { mounted: 0 };
 
 /**
  * Patch do material: lê `aFade` (por instância) e multiplica o alfa. O
@@ -173,7 +189,10 @@ export function registerInstancedFade(
     cur: new Float32Array(cap).fill(1),
     tgt: new Float32Array(cap).fill(1),
     dirty: false,
+    warm: 0,
   };
+  // começa tudo a 100% → uma passada (o laço do fade, quando roda, volta pras 2 enquanto alguém estiver apagado)
+  if (singlePassable(mesh.material)) mesh.material.forceSinglePass = true;
   batches.add(entry);
   return () => { batches.delete(entry); };
 }
@@ -284,6 +303,14 @@ export function updateOcclusion(camera: THREE.Camera, player: THREE.Object3D, dt
       fading++;
     }
     if (changed) b.attr.needsUpdate = true;
+    const mat = b.mesh.material;
+    if (singlePassable(mat)) {
+      let faded = false;
+      for (let i = 0; i < n; i++) if (b.cur[i]! < 1) { faded = true; break; }
+      const single = b.warm >= WARM_FRAMES && !faded;
+      if (b.warm < WARM_FRAMES) b.warm++;
+      if (mat.forceSinglePass !== single) mat.forceSinglePass = single;
+    }
   }
 
   occlusionStats.ms = performance.now() - t0;
