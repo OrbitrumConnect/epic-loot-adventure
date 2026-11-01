@@ -886,7 +886,9 @@ function Controls() {
     // não saía. "mousedown" avisa cada botão.
     const mdown = (e: MouseEvent) => {
       if (ui(e)) return;
-      if (e.button === 2 && drive.mode === 'sailing') { input.cannonAim = true; return; } // navio: segura o direito = mira dos canhões
+      // navio: segura o direito = mira dos canhões — com o mouse PRESO como na mira a pé (Pedro 01/11: "a seta do mouse
+      // aparecendo fica ruim pra jogar"): some a seta e o movimento gira a mira/elevação
+      if (e.button === 2 && drive.mode === 'sailing') { input.cannonAim = true; if (!zsPause.on) el.requestPointerLock?.(); return; }
       if (e.button === 2) { if (canFight()) { setAiming(true); el.requestPointerLock?.(); } return; } // MIRA: segura o direito
       if (e.button !== 0) return;
       if (locked() || useAim.getState().active) { fire(); return; } // mirando: clicou, atirou

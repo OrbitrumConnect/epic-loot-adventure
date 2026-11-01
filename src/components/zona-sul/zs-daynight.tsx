@@ -26,10 +26,11 @@ const MOON_DIR = new THREE.Vector3(0.35, 0.8, 0.45).normalize();
 // luar prateado forte, céu/névoa azul-acinzentados (não preto), sombras do luar visíveis.
 const HEMI_DAY = new THREE.Color('#eef4f8'), HEMI_NIGHT = new THREE.Color('#9fb3e6');
 const GROUND_DAY = new THREE.Color('#6b7a4a'), GROUND_NIGHT = new THREE.Color('#2c3448');
-const MOON_LIGHT = new THREE.Color('#c9d8ff'), NIGHT_FOG = new THREE.Color('#3b4a6e');
+// 01/11 (Pedro: "a noite dá pra escurecer mais uns 10–15%"): céu/névoa da noite 12% mais escuros (era #3b4a6e)
+const MOON_LIGHT = new THREE.Color('#c9d8ff'), NIGHT_FOG = new THREE.Color('#344161');
 /** intensidades da NOITE (lua cheia): luar, céu (hemisfério), ambiente. Pedro 30/10: "pode escurecer uns 10–15%"
- *  → 13% abaixo de antes (1,25 / 0,85 / 0,3). */
-export const NIGHT_LIGHT = { moon: 1.09, hemi: 0.74, amb: 0.26 } as const;
+ *  → 13% abaixo de antes (1,25 / 0,85 / 0,3); 01/11, de novo "mais uns 10–15%" → mais 12% (1,09 / 0,74 / 0,26). */
+export const NIGHT_LIGHT = { moon: 0.96, hemi: 0.65, amb: 0.23 } as const;
 const tmpC = new THREE.Color(), sunV = new THREE.Vector3();
 /** CAVERNA (30/10): lá no fundo o céu/ambiente quase somem e a névoa vira breu (o herói tem a lanterna). */
 const CAVE_FOG = new THREE.Color('#07090c'), CAVE_HEMI = 0.1, CAVE_AMB = 0.5;

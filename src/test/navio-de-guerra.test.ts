@@ -74,7 +74,8 @@ describe('navio de guerra — canhões', () => {
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
     expect(zs).toMatch(/if \(!isUnlocked\(WARSHIP\.UNLOCK_ID, lvl\)\) useGameStore\.getState\(\)\.setMessage\(lockedMessage\('O navio de guerra', WARSHIP\.UNLOCK_ID\)\);/);
     expect(zs).toMatch(/if \(drive\.mode === 'sailing' && !zsPause\.on\) \{ input\.cannonFire = 'aim'; return; \}/);
-    expect(zs).toMatch(/if \(e\.button === 2 && drive\.mode === 'sailing'\) \{ input\.cannonAim = true; return; \}/);
+    // mira dos canhões com o mouse PRESO (01/11: "a seta do mouse aparecendo fica ruim pra jogar")
+    expect(zs).toMatch(/if \(e\.button === 2 && drive\.mode === 'sailing'\) \{ input\.cannonAim = true; if \(!zsPause\.on\) el\.requestPointerLock\?\.\(\); return; \}/);
     expect(zs).toMatch(/ship\.reload\[sd\] = WARSHIP\.RELOAD_S;/);
     const view = fs.readFileSync('src/components/zona-sul/zs-warship-view.tsx', 'utf8');
     expect(view).toMatch(/useGameStore\.getState\(\)\.cannonHit\(\{ x: fb\.land\.x, z: fb\.land\.z \}, WARSHIP\.SPLASH_R\);/);
