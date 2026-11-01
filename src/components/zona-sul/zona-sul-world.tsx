@@ -67,7 +67,9 @@ import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-pro
 import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
 import { createCaveCreatures, zsQuery, zsWorldProfile } from './zs-world-profile';
-import { zsAttack, zsCave, zsCtx } from './zs-context';
+import { useZsTouch, zsAttack, zsCave, zsCtx } from './zs-context';
+import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
+import { ArrowDown, ArrowDownToLine, ArrowUp, Car, Gauge, LogOut } from 'lucide-react';
 import { CAVE_MOUTH_ZONE, caveCamFit, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
 import { ZsCave } from './zs-cave-view';
 import { layers, resetLayers, sameLayerAsPlayer } from '@/game/systems/layerSystem';
@@ -282,6 +284,11 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     posAcc.current += dt;
     if (posAcc.current > 0.15) { posAcc.current = 0; const cur = gs.player.position; if (cur.x !== p.x || cur.z !== p.z) useGameStore.setState(s => ({ player: { ...s.player, position: { x: p.x, z: p.z } } })); }
     zsCtx.driving = drive.mode === 'driving';
+    {
+      const tc = useZsTouch.getState(), drv = drive.mode === 'driving', wet = zsCtx.inWater && drive.mode === 'foot';
+      const near = !!car && drive.mode === 'foot' && !dead && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
+      if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet });
+    }
     ambAcc.current += dt;
     if (ambAcc.current > 0.1) { ambAcc.current = 0; zsAmbience.update(ambienceAt(t, p, car, ride.current?.mode === 'ride' ? ride.current.speed : 0)); }
     // E: entra (perto do carro) / sai A QUALQUER MOMENTO (Pedro 31/10: "no carro apertar e em qualquer momento pode sair
@@ -892,15 +899,41 @@ function saveZsPos(p: THREE.Vector3) {
   try { localStorage.setItem(POS_KEY, JSON.stringify({ x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10, ...(layers.inside ? { y: Math.round(p.y * 100) / 100 } : {}) })); } catch { /* sem storage */ }
 }
 
+/** Teclas que um botão de SEGURAR do arco está apertando agora (soltas à força se o botão sumir com o dedo em cima). */
+const ARC_HELD = new Set<string>();
 /** Botão de SEGURAR (celular): enquanto o dedo está nele, a tecla fica apertada. */
-function HoldKey({ code, label, title }: { code: string; label: string; title: string }) {
-  const up = () => input.keys.delete(code);
-  return (
-    <button type="button" className="zs-btn" title={title} aria-label={title}
-      onPointerDown={(e) => { e.preventDefault(); input.keys.add(code); }} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}>
-      {label}
-    </button>
-  );
+function holdBtn(id: string, label: string, icon: React.ReactNode, code: string): ArcButton {
+  return {
+    id, label, icon,
+    onPress: () => { input.keys.add(code); ARC_HELD.add(code); },
+    onRelease: () => { if (ARC_HELD.delete(code)) input.keys.delete(code); },
+  };
+}
+const carBtn = (label: string, icon: React.ReactNode): ArcButton => ({ id: 'zs-car', label, icon, onPress: () => { input.eTap = true; } });
+
+/** CELULAR (31/10, Pedro: "os botões do carro grandes, retangulares, em cima dos outros — horrível; no mesmo sistema dos
+ *  poderes, embaixo"): os comandos da Zona Sul entram no ARCO, redondos, e só quando servem. Dirigindo, o anel de dentro
+ *  vira o painel do carro (Subir · Descer · Turbo — segurar — e Sair); a pé, "Carro" perto do carro e "Mergulhar" nadando,
+ *  na frente do anel de fora. Correr a pé = empurrar o joystick até a borda (25/10). */
+function ZsTouchArc() {
+  const driving = useZsTouch(s => s.driving), nearCar = useZsTouch(s => s.nearCar), inWater = useZsTouch(s => s.inWater);
+  useEffect(() => {
+    if (driving) {
+      useArcExtras.setState({
+        inner: [holdBtn('zs-up', 'Subir', <ArrowUp />, 'Space'), holdBtn('zs-down', 'Descer', <ArrowDown />, 'KeyC'),
+          holdBtn('zs-turbo', 'Turbo', <Gauge />, 'ShiftLeft'), carBtn('Sair do carro', <LogOut />)],
+        outer: [],
+      });
+    } else {
+      useArcExtras.setState({
+        inner: null,
+        outer: [...(nearCar ? [carBtn('Entrar no carro', <Car />)] : []), ...(inWater ? [holdBtn('zs-dive', 'Mergulhar', <ArrowDownToLine />, 'KeyC')] : [])],
+      });
+    }
+    // trocou o momento com o dedo num botão de segurar: a tecla não fica presa
+    return () => { for (const k of ARC_HELD) input.keys.delete(k); ARC_HELD.clear(); useArcExtras.setState({ inner: null, outer: [] }); };
+  }, [driving, nearCar, inWater]);
+  return null;
 }
 
 function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack?: () => void }) {
@@ -1039,13 +1072,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       <ZsHudView touch={touch} />
       <ZsWarmOverlay />
       <div ref={perfRef} className="zs-perf" style={{ display: 'none' }} />
-      {touch && t && !paused && (
-        <div className="zs-touch">
-          <button type="button" className="zs-btn" title="Entrar / sair do carro" aria-label="Entrar / sair do carro" onPointerDown={() => { input.eTap = true; }}>Carro</button>
-          <HoldKey code="ShiftLeft" label="Correr" title="Correr / remar forte / turbo" />
-          <HoldKey code="KeyC" label="Descer" title="Mergulhar / descer o carro" />
-        </div>
-      )}
+      {touch && t && !paused && <ZsTouchArc />}
       <div className="zs-credit">Relevo: AWS Terrain Tiles (SRTM) · Mapa: © OpenStreetMap contributors (ODbL)</div>
       {!t && !err && <div className="world-loading">Chegando na Zona Sul…</div>}
       {err && <div className="world-loading" style={{ color: '#ef4444' }}>Erro: {err}</div>}

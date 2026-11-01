@@ -11,6 +11,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronsUp, Crosshair, Swords } from 'lucide-react';
+import { create } from 'zustand';
 import { aimFire, setAiming, useAim } from './aim';
 import { addVirtualLook, clearVirtualMove, setTouchLayout, setVirtualMove } from './virtual-input';
 import { useGameStore } from '@/game/state/game-store';
@@ -57,8 +58,13 @@ export function arcLayout(n: number, radius: number, from = ARC_FROM, to = ARC_T
   });
 }
 
-/** Botão de poder/especial vindo da tela principal (mesma ação do rodapé). */
-export type ArcButton = { id: string; label: string; icon: ReactNode; onPress: () => void; cooldown?: number };
+/** Botão de poder/especial vindo da tela principal (mesma ação do rodapé). `onRelease` = botão de SEGURAR (solta o dedo). */
+export type ArcButton = { id: string; label: string; icon: ReactNode; onPress: () => void; onRelease?: () => void; cooldown?: number };
+
+/** Botões que o MAPA põe no arco conforme o momento (31/10, Pedro: "os do carro grandes, retangulares, em cima dos outros
+ *  — horrível; no mesmo sistema dos poderes, embaixo"). `inner` não nulo SUBSTITUI o anel de dentro (dirigindo = painel
+ *  do carro); `outer` entra na frente dos poderes do anel de fora ("Carro" perto do carro, "Mergulhar" na água). */
+export const useArcExtras = create<{ inner: ArcButton[] | null; outer: ArcButton[] }>(() => ({ inner: null, outer: [] }));
 
 type Stick = { bx: number; by: number; kx: number; ky: number };
 
@@ -138,12 +144,14 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
   };
 
   // Anel de dentro: Pular, Mirar (3ª pessoa) e os especiais Q/R; anel de fora: poderes liberados.
-  const inner: ArcButton[] = [
+  // O mapa pode trocar o anel de dentro (dirigindo) e pôr botões do momento na frente do anel de fora (useArcExtras).
+  const extras = useArcExtras();
+  const inner: ArcButton[] = extras.inner ?? [
     { id: 'jump', label: 'Pular', icon: <ChevronsUp />, onPress: () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })) },
     ...powers.filter((p) => p.id === 'Q' || p.id === 'R' || p.id === 'Y'), // Y = Esquiva (26/10) no anel de dentro
     ...(canAim ? [{ id: 'aim', label: 'Mirar', icon: <Crosshair />, onPress: () => setAiming(!useAim.getState().active) }] : []),
   ];
-  const outer = powers.filter((p) => p.id !== 'Q' && p.id !== 'R' && p.id !== 'Y');
+  const outer = [...extras.outer, ...powers.filter((p) => p.id !== 'Q' && p.id !== 'R' && p.id !== 'Y')];
   const innerR = arcRadius(inner.length, ARC_INNER);
   const outerR = arcRadius(outer.length, Math.max(ARC_OUTER, innerR + ARC_RING_GAP), ARC_FROM + 4, ARC_TO - 4);
   const innerPos = arcLayout(inner.length, innerR);
@@ -158,7 +166,8 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
     <button key={b.id} type="button" aria-label={b.label}
       className={`mobile-btn mobile-btn--arc${b.id === 'aim' && aiming ? ' is-on' : ''}${b.cooldown ? ' is-cd' : ''}`}
       style={{ transform: `translate(${pos.dx}px, ${pos.dy}px)` }}
-      onPointerDown={(e) => { e.preventDefault(); if (b.id === 'jump') jump(e); else if (b.id === 'aim') toggleAim(e); else b.onPress(); }}>
+      onPointerDown={(e) => { e.preventDefault(); if (b.id === 'jump') jump(e); else if (b.id === 'aim') toggleAim(e); else b.onPress(); }}
+      onPointerUp={b.onRelease} onPointerCancel={b.onRelease} onPointerLeave={b.onRelease}>
       {b.icon}{b.cooldown ? <span className="mobile-cd">{b.cooldown}</span> : null}
     </button>
   );
