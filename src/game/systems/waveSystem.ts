@@ -21,6 +21,9 @@ export const INITIAL_WAVE: WaveState = { phase: 'idle', wave: 0, phaseEndsAt: 0,
 
 export const PEACE_MS = 60_000;      // 1 min de preparo ENTRE ondas (até a onda 10)
 export const FIRST_PEACE_MS = 300_000; // 5 min após FECHAR a base, antes da 1ª horda
+/** ZONA SUL (Pedro 31/10: "mapa maior, mais jogabilidade — hordas 5 a 8 min a mais"): +5 min em TODA paz, inclusive
+ *  a 1ª (fica 10 min). Só lá; o Vale segue igual. Um número só: +8 é trocar este. "Chamar a horda agora" segue valendo. */
+export const ZS_EXTRA_PEACE_MS = 5 * 60_000;
 
 /**
  * Tempo de PAZ após repelir a onda `wave`, escalando com o progresso (Pedro):
@@ -134,6 +137,8 @@ export function tickWaves(
   baseExists: boolean,
   aliveWaveEnemies: number,
   baseEnclosed: boolean = true,
+  /** paz a mais em toda paz (Zona Sul: `ZS_EXTRA_PEACE_MS`) */
+  extraPeaceMs: number = 0,
 ): WaveTick {
   if (!baseExists) return { state: INITIAL_WAVE, startedWave: null, repelledWave: null, message: null };
 
@@ -145,10 +150,10 @@ export function tickWaves(
       // Base fechada → PAZ LONGA (5 min) antes da 1ª horda. Depois que arma, o
       // ciclo continua por `baseExists` mesmo se a base for furada no combate.
       return {
-        state: { phase: 'peace', wave: 0, phaseEndsAt: now + FIRST_PEACE_MS, spawnPending: 0 },
+        state: { phase: 'peace', wave: 0, phaseEndsAt: now + FIRST_PEACE_MS + extraPeaceMs, spawnPending: 0 },
         startedWave: null,
         repelledWave: null,
-        message: '🛡️ Base fechada! A primeira horda vem em ~5 min — prepare as defesas.',
+        message: `🛡️ Base fechada! A primeira horda vem em ~${Math.round((FIRST_PEACE_MS + extraPeaceMs) / 60_000)} min — prepare as defesas.`,
       };
 
     case 'peace':
@@ -167,7 +172,7 @@ export function tickWaves(
     case 'combat':
       if (state.spawnPending <= 0 && aliveWaveEnemies <= 0) {
         return {
-          state: { phase: 'peace', wave: state.wave, phaseEndsAt: now + peaceDurationMs(state.wave), spawnPending: 0 },
+          state: { phase: 'peace', wave: state.wave, phaseEndsAt: now + peaceDurationMs(state.wave) + extraPeaceMs, spawnPending: 0 },
           startedWave: null,
           repelledWave: state.wave, // onda vencida → oferece as cartas de evolução
           message: `✅ Onda ${state.wave} repelida! Escolha uma evolução pra base.`,

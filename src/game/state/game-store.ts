@@ -69,7 +69,7 @@ import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem'
 import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createNightPigeons, createNightZombies, createWildCreatures, NIGHT_FLOCK_PREFIX, NIGHT_ZOMBIE_PREFIX, nightFlockAction } from '../systems/wildlifeSystem';
-import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, applyHordeCall, hordeCallBonus, type WaveState } from '../systems/waveSystem';
+import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, applyHordeCall, hordeCallBonus, ZS_EXTRA_PEACE_MS, type WaveState } from '../systems/waveSystem';
 import { eliteLoot, eliteXp } from '../systems/difficultySystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
 import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, tornadoPositions, tornadoCount, tornadoDamage, TORNADO_HIT_RADIUS, TORNADO_PUSH, TORNADO_BASE_WAVES, TORNADO_EXTEND_WAVES, dist2, type Vec2 } from '../systems/powerSystem';
@@ -2608,7 +2608,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       const aliveWave = ticked.creatures.filter(
         (c) => c.id.startsWith('wave') && c.hp > 0 && c.behavior !== 'dead' && isMyWave(c.id),
       ).length;
-      const wt = tickWaves(state.wave, now, center != null, aliveWave, state.playerBase?.enclosed === true);
+      // Zona Sul: +5 min em toda paz (mapa maior — 1/11); o Vale segue igual
+      const wt = tickWaves(state.wave, now, center != null, aliveWave, state.playerBase?.enclosed === true, WORLD.id === 'zona-sul' ? ZS_EXTRA_PEACE_MS : 0);
       waveState = wt.state;
       const guest = !canSimulateSharedWorld();
       if (wt.startedWave && center) {
