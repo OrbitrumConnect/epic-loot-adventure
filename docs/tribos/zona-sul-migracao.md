@@ -135,7 +135,7 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [x] (31/10) Bug antigo: a silhueta de longe cobria o herói em vale encostado em morro (`6056e0d`)
 - [ ] Caverna online: mandar altura/camada na rede (hoje quem está dentro aparece na superfície pros outros) — junto da Fase 5
   - [x] (31/10) feito junto da Fase 4: pose com altura na rede, IA/torre/tropa/PvP por camada (`738d29f`)
-- [ ] (31/10) Hordas mais espaçadas na Zona Sul: "5–8 min a mais, mapa maior" → proposta +5 min em toda paz (ver visao-master-play.md §3.2)
+- [x] (31/10) Hordas mais espaçadas na Zona Sul: "5–8 min a mais, mapa maior" → proposta +5 min em toda paz (ver visao-master-play.md §3.2) — 01/11: feito, +5 (1ª em 10 min; `ZS_EXTRA_PEACE_MS`)
 - [ ] (31/10) Base: muro NÃO encurtou (11 × 2 m desde 13/10); "a boa seria 13–14" → proposta 13 (ímpar) no pacote base elite — "ok por hora"
 - [ ] (31/10) Futuro: 4–6 torres FORA do muro defendendo o perímetro + modo livre depois do Lv1 ("pode ser, talvez"; não pesar, não bugar)
 - [ ] (31/10) Pensar o nível do carro e do skate (andam bem pelo mapa) → medir tempo até o nível; proposta skate 20 / carro 30
@@ -147,11 +147,17 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [ ] (31/10) Carro voador: amigo/aliado junto puxa a arma e atira do carro (depende do carro online, Fase 5)
 - [ ] (31/10) Carro: modo de dano, explodir, talvez farmável; carro = nível + recurso pra construir (explodiu → farmar outro) (§3.8)
 - [ ] (31/10) TUBARÃO GLB animado com ataque (Pedro manda) + 2 NAVIOS (escolher o melhor) (visao-master-play.md §3.9)
-- [ ] (31/10) Nível 80 libera NAVIO DE GUERRA que ataca outro navio (PvP naval)
+- [ ] (31/10) Nível 80 libera NAVIO DE GUERRA que ataca outro navio (PvP naval) — 01/11 Pedro: **nível 70**; bala de canhão mirando (proposta no diário 01/11 §3); navio A (galeão com canhões)
 - [ ] (31/10) Experiência MULTIPLAYER 100% na Zona Sul — roteiro do teste com 2 em §3.10 (achado: veículo do outro jogador não aparece, só o herói)
 - [ ] (31/10) Elite escalável SEM perder FPS — medido: ~2 mi de triângulos/quadro (teto 600 mil); sombra na caverna, árvores de coleta e acampamentos de longe = os 3 maiores, cortáveis sem mudar visual (§3.11)
 - [x] (31/10) Fork do Caio: Colosso não nasce do outro lado da água (`88e8cd4`), janela de Atributos (`2fc883b`), piloto sai da água no AUTO (`e886ea1` + ajuste `b324071`: só com o AUTO ligado)
 - [ ] (31/10) GM do Caio (`!item/!spawn/!goto/!start`) SEGURADO no ramo dele: libera pelo nome "Joel" (nome livre na conta) → decidir só local ou pela conta
+- [x] (01/11) Desempenho com o MESMO desenho (A/B pixel a pixel): ~2 mi → ~1,1 mi na superfície, 1,44 mi → 0,09 mi na caverna — sombra do sol parada no fundo da caverna, sombra das árvores de coleta só na caixa do sol, 1 passada, recorte pela câmera, acampamentos/recursos somem no fundo da caverna (diário 01/11 §1). Acampamento leve de longe NÃO (mudava pixels)
+- [x] (01/11) Escolhido o navio A (galeão com canhões) pro navio de guerra; tubarão = só clipe de nado (mordida por código no osso da mandíbula)
+- [ ] (01/11) Carro com barra de vida IGUAL à do herói (junto do item da vida do carro)
+- [ ] (01/11) Tubarão: perto dos picos de surf (na área por onde se chega remando, não em cima do drop) + alguns soltos pelo mar
+- [ ] (01/11) Mais inimigos que atiram nos morros: acima da Gávea, Vista Chinesa, Rocinha, Vidigal — quantos cabem (medir)
+- [ ] (01/11) Árvores menos "low poly feias" (galhos/braços, folhagem simples, detalhes leves) + grama leve nas áreas verdes fora da pista/areia — proposta medida antes de mexer
 
 ## Decisões do Pedro antes de começar
 1. **Um personagem só nos dois mapas?** (recomendado: sim — mesmo save)

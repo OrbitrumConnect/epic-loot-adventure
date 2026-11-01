@@ -260,7 +260,7 @@ de 600 mil e caber o tubarão, os navios e 8 jogadores, entra o resto da lista a
 
 **Jogabilidade (visão master play)**
 - [ ] Quadro de missões v1: até 10 por dia, automáticas no idle + manuais valendo mais, recompensa no armazém
-- [ ] Hordas: +5 min em toda paz na Zona Sul (ou +8, um número)
+- [x] Hordas: +5 min em toda paz na Zona Sul (ou +8, um número) — 01/11: +5 (`ZS_EXTRA_PEACE_MS`)
 - [ ] Níveis: medir tempo até nv 15/20/25/30 → decidir skate/carro (proposta 20/30)
 - [x] Celular: Carro/Correr/Descer menores, embaixo, no esquema dos poderes; aparecem só quando servem (`b92547e`, 31/10:
   dentro do arco — dirigindo = Subir/Descer/Turbo/Sair; a pé = Carro perto do carro, Mergulhar nadando)
@@ -271,8 +271,13 @@ de 600 mil e caber o tubarão, os navios e 8 jogadores, entra o resto da lista a
 - [ ] Carro: vida, dano (topos armados), explosão; "farmável" = destroços devolvem recurso? ou loot no PvP? (decidir)
 - [ ] Carro: construir com nível + recurso do armazém; explodiu → farmar outro (save em chave opcional)
 - [ ] Tubarão (GLB do Pedro, animado com ataque) no mar fundo — onde exatamente: decidir
-- [ ] Escolher 1 dos 2 navios novos (foto + triângulos)
+- [x] Escolher 1 dos 2 navios novos (foto + triângulos) — 01/11: **A** (galeão com canhões no costado), 45 mil triângulos
 - [ ] Navio de guerra no nv 80 que ataca outro navio (PvP naval) — etapa da guerra, depois do online redondo
+      (01/11 Pedro: **nível 70**; bala de canhão MIRANDO — proposta no diário 01/11 §3)
+- [ ] (01/11) Carro com barra de vida IGUAL à do herói (junto da vida do carro)
+- [ ] (01/11) Tubarão: perto dos picos de surf (onde se chega remando, não em cima do drop) + alguns pelo mar
+- [ ] (01/11) Mais inimigos que atiram nos morros (acima da Gávea, Vista Chinesa, Rocinha, Vidigal) — quantos cabem
+- [ ] (01/11) Árvores com galhos/folhagem melhores + grama leve nas áreas verdes (fora de pista/areia) — proposta medida
 
 **Online 100%** — roteiro em §3.10
 - [ ] Teste com 2 jogadores, item por item
@@ -281,9 +286,10 @@ de 600 mil e caber o tubarão, os navios e 8 jogadores, entra o resto da lista a
 - [ ] Medir tráfego da sala na Zona Sul
 
 **Desempenho (medido 31/10: ~2 mi de triângulos/quadro, teto 600 mil)** — §3.11
-- [ ] Sombra do sol parada enquanto o sol está apagado na caverna (−1,3 mi na caverna, visual igual)
-- [ ] Árvores de coleta: sombra só nas de perto (−400 mil, visual igual)
-- [ ] Acampamentos: modelo leve de longe (−170 mil)
+- [x] Sombra do sol parada enquanto o sol está apagado na caverna (−1,3 mi na caverna, visual igual) — 01/11
+- [x] Árvores de coleta: sombra só nas de perto (−400 mil, visual igual) — 01/11: só as que tocam a caixa da sombra; e
+      mais 2 achados medindo: desenhadas 2× (transparente + dupla face → 1 passada) e todas, até atrás da câmera (recorte)
+- [ ] Acampamentos: modelo leve de longe (−170 mil) — 01/11: testado, muda pixels (160–600 a 250–400 m) → NÃO ligado
 - [ ] Volta de medição como comando fixo; número antes/depois de cada coisa nova no diário
 - [ ] Topos com acampamento (22–31 FPS): medir de novo depois dos 3 itens acima
 
