@@ -282,6 +282,18 @@ export const CAMPS: Record<string, CampDefinition> = {
 
 export const CAMP_IDS = Object.keys(CAMPS);
 
+/**
+ * FOLGA DOS INIMIGOS no acampamento (Pedro 01/11: "o círculo do acampamento tá muito limitado — dá pra aumentar o raio
+ * mais uns 5–8 m, dar folga pra eles andarem"): nos mapas novos (Zona Sul) a área dos inimigos vai até `radius +
+ * CAMP_ROAM_EXTRA` — os postos se abrem nessa proporção e o anel no chão acompanha. O acampamento em si (tendas, GLB,
+ * fogueira) fica do MESMO tamanho; o Vale (mapa antigo) não muda.
+ */
+export const CAMP_ROAM_EXTRA = 6;
+/** Quanto os postos se abrem: o mais longe (no raio) vai pro raio + `CAMP_ROAM_EXTRA`. */
+export function campRoamScale(def: CampDefinition): number {
+  return (def.radius + CAMP_ROAM_EXTRA) / def.radius;
+}
+
 /** Onde cada acampamento fica no mundo. O tier 1 é o mais perto do nascedouro. */
 export const CAMP_PLACEMENTS: CampPlacement[] = [
   { id: 'raider_outpost', defId: 'raider_outpost', position: { x: 28, z: -21 } }, // movido de (23,7): caía dentro do lago do GLB (Y=-2.6); (28,-21) é seco (Y~0.3)

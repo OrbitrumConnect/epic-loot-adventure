@@ -26,6 +26,8 @@ import { WatchtowerModel } from './glb-watchtower';
 import { useGameStore } from '@/game/state/game-store';
 import { lightAllowed, useLightId } from './light-budget';
 import { requestLight } from './light-pool';
+import { CAMP_ROAM_EXTRA } from '@/game/data/camps';
+import { isClassicWorld } from '@/game/data/world-profile';
 
 /** Distância² (m²) além da qual a luz da fogueira do acampamento sai do shader. */
 const CAMP_LIGHT_D2 = 26 * 26;
@@ -397,6 +399,8 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
   const banner = useRef<THREE.Mesh>(null);
 
   const radius = useMemo(() => campRadius(camp), [camp.defId, camp.tier]);
+  // anel no chão = área dos inimigos (nos mapas novos ela vai além do acampamento — CAMP_ROAM_EXTRA, Pedro 01/11)
+  const ringR = radius + (isClassicWorld() ? 0 : CAMP_ROAM_EXTRA);
 
   const scenery = !CAMP_NO_SCENERY.has(camp.id);
   const structures = useMemo(() => {
@@ -436,7 +440,7 @@ export function Camp({ camp, c }: { camp: CampState; c: Palette }) {
         position={[0, markerY + 0.045, 0]}
         onPointerDown={queueClear}
       >
-        <ringGeometry args={[radius - 0.7, radius, 48]} />
+        <ringGeometry args={[ringR - 0.7, ringR, 48]} />
         <meshBasicMaterial
           color={camp.cleared ? c['rock-light'] : c.cloak}
           transparent

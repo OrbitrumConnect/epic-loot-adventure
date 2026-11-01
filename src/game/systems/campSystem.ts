@@ -1,5 +1,5 @@
 import type { CampDefinition, CampState, CreatureState, Position } from '../types';
-import { CAMPS, CAMP_PLACEMENTS, WORLD_HALF, type CampPlacement } from '../data/camps';
+import { CAMPS, CAMP_PLACEMENTS, campRoamScale, WORLD_HALF, type CampPlacement } from '../data/camps';
 import { clampX, clampZ, WORLD } from '../data/world-profile';
 import { CREATURES, ENEMY_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { getDistance } from './combatSystem';
@@ -40,6 +40,18 @@ export function getSpawnPosition(campPosition: Position, offset: Position): Posi
   };
 }
 
+/**
+ * Posto de um inimigo do acampamento: no Vale, o da definição; nos mapas novos, ABERTO (`campRoamScale` — Pedro 01/11:
+ * "folga pra eles andarem"). Se o posto aberto cair onde não se pisa (água, pedra fora do mapa), fica o original.
+ */
+export function campPostPosition(def: CampDefinition, campPosition: Position, offset: Position): Position {
+  const base = getSpawnPosition(campPosition, offset);
+  if (WORLD.id === 'classic') return base;
+  const k = campRoamScale(def);
+  const wide = getSpawnPosition(campPosition, { x: offset.x * k, z: offset.z * k });
+  return !WORLD.walkable || WORLD.walkable(wide.x, wide.z) ? wide : base;
+}
+
 /** Id determinístico: mesmo acampamento e mesmo índice de spawn sempre dão o mesmo id. */
 export function getSpawnCreatureId(campId: string, spawnIndex: number): string {
   return `${campId}_e${spawnIndex}`;
@@ -71,7 +83,7 @@ function buildCreature(
     armor: species.armor,
     attackCooldown: species.attackCooldown,
     lastAttackAt: 0,
-    position: getSpawnPosition(campPosition, spawn.offset),
+    position: campPostPosition(def, campPosition, spawn.offset),
     behavior: spawn.guard ? 'patrol' : 'idle',
     lootTable: [],
     respawnAt: null,
