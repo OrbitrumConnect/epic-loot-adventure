@@ -72,7 +72,8 @@ describe('navio de guerra — canhões', () => {
   });
   it('no jogo: E embarca (cadeado antes do 70), clique = salva, botão direito = mira, impacto = dano em área', () => {
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
-    expect(zs).toMatch(/if \(!isUnlocked\(WARSHIP\.UNLOCK_ID, lvl\)\) useGameStore\.getState\(\)\.setMessage\(lockedMessage\('O navio de guerra', WARSHIP\.UNLOCK_ID\)\);/);
+    // 01/11: SUBIR a bordo é livre (pirataria); PILOTAR (E no timão) é que pede o nível 70
+    expect(zs).toMatch(/if \(!isUnlocked\(WARSHIP\.UNLOCK_ID, lvl\)\) useGameStore\.getState\(\)\.setMessage\(lockedMessage\('Pilotar o navio de guerra', WARSHIP\.UNLOCK_ID\)\);/);
     expect(zs).toMatch(/if \(drive\.mode === 'sailing' && !zsPause\.on\) \{ input\.cannonFire = 'aim'; return; \}/);
     // mira dos canhões com o mouse PRESO (01/11: "a seta do mouse aparecendo fica ruim pra jogar")
     expect(zs).toMatch(/if \(e\.button === 2 && drive\.mode === 'sailing'\) \{ input\.cannonAim = true; if \(!zsPause\.on\) el\.requestPointerLock\?\.\(\); return; \}/);

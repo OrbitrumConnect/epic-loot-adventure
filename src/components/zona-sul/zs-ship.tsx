@@ -38,6 +38,9 @@ export type ShipCollider = {
   u0: number; v0: number; nu: number; nv: number; cell: number;
   /** altura do convés por célula (NaN = fora do casco) */
   deck: Float32Array;
+  /** NAVIO QUE SE MEXE (navio de guerra, 01/11): `deck` é relativo à quilha; soma `y0` (quilha no mundo agora) e o
+   *  adernar/arfar do quadro (`tiltU` × u + `tiltV` × v). Galeão parado: ausentes (0). */
+  y0?: number; tiltU?: number; tiltV?: number;
   /** prancha em coordenadas do MUNDO: A = ponta no convés, B = ponta na areia */
   plank: { ax: number; az: number; ay: number; bx: number; bz: number; by: number; halfW: number } | null;
   /** escada de corda (navio longe da areia): A = no bordo, B = 1,8 m pra fora, na água; y = altura do convés */
@@ -75,8 +78,9 @@ export function shipGround(c: ShipCollider | null, x: number, z: number, feetY: 
   }
   const i = Math.floor((u - c.u0) / c.cell), j = Math.floor((v - c.v0) / c.cell);
   if (i < 0 || j < 0 || i >= c.nu || j >= c.nv) return null;
-  const d = c.deck[j * c.nu + i]!;
-  if (Number.isNaN(d)) return null;
+  const d0 = c.deck[j * c.nu + i]!;
+  if (Number.isNaN(d0)) return null;
+  const d = d0 + (c.y0 ?? 0) + u * (c.tiltU ?? 0) + v * (c.tiltV ?? 0);
   return feetY >= d - SHIP_STEP ? { y: d } : { wall: true };
 }
 

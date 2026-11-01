@@ -7,11 +7,13 @@
  */
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
+import { type ShipCollider, shipGround } from './zs-ship';
 import { useGameStore } from '@/game/state/game-store';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
-import { ballAt, type CannonBall, WARSHIP, type ZsWarship } from './zs-warship';
+import { ballAt, type CannonBall, WARSHIP, warshipLocal, warshipWorld, type ZsWarship } from './zs-warship';
 import { zsWaterYAt } from './zs-terrain-data';
 
 const URL = '/zona-sul/warship.glb';
@@ -24,6 +26,92 @@ export const HELM_U = -0.36;
 
 /** Altura do convés/canhões acima da quilha (m) — preenchida quando o modelo carrega. */
 export const warshipDims = { gunY: 4.2, helmY: 4.9, height: 18 };
+
+/**
+ * CONVÉS ANDÁVEL (Pedro 01/11: "o player nada dentro do navio — sem colisão, não consigo andar em cima dele"; "aperta E
+ * sobe no navio, na parte de trás acessa e dirige; amigos e inimigos sobem também — pirataria"). Igual ao galeão
+ * encalhado (`zs-ship`): o modelo é escaneado UMA vez com raios de cima pra baixo (grade de 1 m, árvore de raio = ms) →
+ * mapa de altura do convés relativo à QUILHA. Todo quadro o mundo põe a pose do navio (posição, giro, balanço) no
+ * colisor (`syncWarshipDeck`) — o mesmo `shipGround` do galeão vale: convés = chão, casco = parede pra quem vem da água,
+ * mastro/amurada = obstáculo (mais alto que um degrau).
+ */
+export const zsWarshipDeck: { c: ShipCollider | null; main: number } = { c: null, main: 0 };
+/** raios saem desta fração da altura do modelo (acima do convés de popa ~0,27, abaixo das vergas/velas) */
+const DECK_TOP_K = 0.36;
+const DECK_CELL = 1;
+
+/** Balanço do navio no tempo `t` (s): o MESMO no desenho e no colisor (quem está no convés sobe e desce junto). */
+export function warshipPose(s: ZsWarship, t: number): { y0: number; roll: number; pitch: number } {
+  return { y0: zsWaterYAt(s.x, s.z) - WARSHIP_DRAFT + Math.sin(t * 0.7) * 0.15, roll: s.roll + Math.sin(t * 0.6 + 1) * 0.02, pitch: Math.sin(t * 0.5) * 0.012 };
+}
+/** Põe a pose do quadro no colisor do convés (centro, giro, quilha, adernar/arfar). */
+export function syncWarshipDeck(s: ZsWarship, t: number): void {
+  const c = zsWarshipDeck.c;
+  if (!c) return;
+  const ps = warshipPose(s, t);
+  c.cx = s.x; c.cz = s.z; c.cos = Math.cos(s.yaw); c.sin = Math.sin(s.yaw);
+  c.y0 = ps.y0; c.tiltU = Math.sin(ps.roll); c.tiltV = -Math.sin(ps.pitch);
+}
+
+/** Meia boca do convés escaneado (m) — pra "perto do casco". */
+export function warshipHalfBeam(): number { return zsWarshipDeck.c ? -zsWarshipDeck.c.u0 - 0.5 : WARSHIP.LENGTH * 0.12; }
+
+/** Altura CRUA do convés (relativa à quilha) na célula sob (x, z); NaN = fora do navio. */
+function deckCell(c: ShipCollider, s: ZsWarship, x: number, z: number): number {
+  const { u, v } = warshipLocal(s, x, z);
+  const i = Math.floor((u - c.u0) / c.cell), j = Math.floor((v - c.v0) / c.cell);
+  return i < 0 || j < 0 || i >= c.nu || j >= c.nv ? NaN : c.deck[j * c.nu + i]!;
+}
+
+/** SUBIR A BORDO (E perto do casco): o ponto do convés PRINCIPAL mais perto de quem chegou — do lado dele, longe da
+ *  amurada, fora de mastro/canhão. `y` = altura do convés lá agora. */
+export function warshipBoardSpot(s: ZsWarship, x: number, z: number): { x: number; z: number; y: number } | null {
+  const c = zsWarshipDeck.c;
+  if (!c) return null;
+  const { u, v } = warshipLocal(s, x, z);
+  const inU = Math.max(0.5, warshipHalfBeam() - 1.4), vMax = WARSHIP.LENGTH / 2 - 5;
+  const u0 = Math.sign(u || 1) * Math.min(Math.abs(u), inU), v0 = Math.max(-vMax, Math.min(vMax, v));
+  for (const dv of [0, 1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8]) for (const uu of [u0, u0 * 0.5, 0]) {
+    const p = warshipWorld(s, uu, v0 + dv), d = deckCell(c, s, p.x, p.z);
+    if (Number.isNaN(d) || Math.abs(d - zsWarshipDeck.main) > 0.6) continue;
+    const g = shipGround(c, p.x, p.z, 1e6);
+    if (g && 'y' in g) return { x: p.x, z: p.z, y: g.y };
+  }
+  return null;
+}
+
+/** Escaneia o convés do modelo já montado (quilha em y = 0, meio no centro, proa pro +Z). */
+function scanWarshipDeck(holder: THREE.Object3D, height: number): { c: ShipCollider; main: number } {
+  holder.updateMatrixWorld(true);
+  const meshes: THREE.Mesh[] = [];
+  holder.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const g = m.geometry as THREE.BufferGeometry & { boundsTree?: unknown };
+    if (!g.boundsTree) computeBoundsTree.call(g);
+    m.raycast = acceleratedRaycast; meshes.push(m);
+  });
+  const box = new THREE.Box3().setFromObject(holder);
+  const halfU = Math.max(Math.abs(box.min.x), Math.abs(box.max.x)) + 0.5, halfV = WARSHIP.LENGTH / 2 + 0.5;
+  const nu = Math.ceil((halfU * 2) / DECK_CELL), nv = Math.ceil((halfV * 2) / DECK_CELL);
+  const deck = new Float32Array(nu * nv).fill(NaN);
+  const top = height * DECK_TOP_K;
+  const ray = new THREE.Raycaster(), o = new THREE.Vector3(), down = new THREE.Vector3(0, -1, 0);
+  (ray as THREE.Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true;
+  ray.far = top + 0.5;
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
+    o.set(-halfU + (i + 0.5) * DECK_CELL, top, -halfV + (j + 0.5) * DECK_CELL);
+    ray.set(o, down);
+    const hit = ray.intersectObjects(meshes, false)[0];
+    if (hit && hit.point.y > WARSHIP_DRAFT + 0.3) deck[j * nu + i] = hit.point.y; // acima da linha d'água: é navio
+  }
+  for (const m of meshes) m.raycast = () => {}; // de volta: o navio não pega clique
+  // convés principal = a altura MAIS COMUM (mediana); costado inclinado bem abaixo dela vira borda do convés (como o galeão)
+  const ys = Array.from(deck).filter((y) => !Number.isNaN(y)).sort((a, b) => a - b);
+  const main = ys.length ? ys[Math.floor(ys.length / 2)]! : height * 0.23;
+  for (let n = 0; n < deck.length; n++) if (deck[n]! < main - 0.8) deck[n] = main;
+  return { c: { cx: 0, cz: 0, cos: 1, sin: 0, u0: -halfU, v0: -halfV, nu, nv, cell: DECK_CELL, deck, plank: null, ladder: null, y0: 0, tiltU: 0, tiltV: 0 }, main };
+}
 
 /** Balas no ar (o mundo empurra ao atirar; o desenho anima e resolve o impacto). */
 export type FlyingBall = { b: CannonBall; t0: number; land: { x: number; y: number; z: number; t: number }; hit: boolean };
@@ -49,8 +137,13 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
     const h = b1.max.y - b1.min.y;
     warshipDims.height = h; warshipDims.gunY = h * GUNWALE_K; warshipDims.helmY = h * HELM_DECK_K;
     const holder = new THREE.Group(); holder.add(r);
-    return holder;
+    return { holder, scan: scanWarshipDeck(holder, h) };
   }, [scene]);
+  // o colisor do convés vale enquanto o navio está na cena (montar/desmontar do React não perde o escaneamento)
+  useEffect(() => {
+    zsWarshipDeck.c = model.scan.c; zsWarshipDeck.main = model.scan.main;
+    return () => { if (zsWarshipDeck.c === model.scan.c) zsWarshipDeck.c = null; };
+  }, [model]);
   const ship = useRef<THREE.Group>(null);
   const balls = useRef<THREE.InstancedMesh>(null);
   const splashes = useRef<THREE.InstancedMesh>(null);
@@ -64,10 +157,10 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
     const s = shipRef.current, g = ship.current;
     if (!s || !g) return;
     const now = performance.now(), t = state.clock.elapsedTime;
-    // ── o navio: na água (com a onda), balanço leve + adernar na curva ───────────────────────────────────
-    const wy = zsWaterYAt(s.x, s.z);
-    g.position.set(s.x, wy - WARSHIP_DRAFT + Math.sin(t * 0.7) * 0.15, s.z);
-    g.rotation.set(Math.sin(t * 0.5) * 0.012, s.yaw, s.roll + Math.sin(t * 0.6 + 1) * 0.02, 'YXZ');
+    // ── o navio: na água (com a onda), balanço leve + adernar na curva (a MESMA pose do colisor do convés) ──
+    const ps = warshipPose(s, t);
+    g.position.set(s.x, ps.y0, s.z);
+    g.rotation.set(ps.pitch, s.yaw, ps.roll, 'YXZ');
     // ── balas no ar + impacto ────────────────────────────────────────────────────────────────────────────
     const bm = balls.current;
     let nb = 0;
@@ -113,7 +206,7 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
 
   return (
     <>
-      <group ref={ship}><primitive object={model} /></group>
+      <group ref={ship}><primitive object={model.holder} /></group>
       <instancedMesh ref={balls} args={[undefined, undefined, MAX_BALLS]} frustumCulled={false}>
         <sphereGeometry args={[0.45, 10, 8]} />
         <meshStandardMaterial color="#1c1c1e" roughness={0.6} metalness={0.4} />

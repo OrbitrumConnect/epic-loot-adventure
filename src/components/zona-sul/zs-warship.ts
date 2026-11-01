@@ -20,6 +20,8 @@ export const WARSHIP = {
   MIN_DEPTH: 3.2,                   // fundura mínima embaixo do casco (m)
   SCRAPE_DRAG: 0.9,                 // raspando na margem perde ~60% do embalo por segundo (mas segue)
   BOARD_DIST: 16,                   // E embarca a até isto do centro (m)
+  BOARD_MARGIN: 4,                  // E sobe a bordo a até isto do CASCO (m) — nadando do lado ou na proa/popa
+  HELM_REACH: 3.5,                  // no convés, E perto do timão (m) = pilotar
   // canhões
   BALL_SPEED: 52, GRAVITY: 9.8,
   ELEV_MIN: 0.04, ELEV_MAX: 0.62,   // elevação (rad): ~25 m … ~270 m de alcance
@@ -44,6 +46,27 @@ export type WarshipInput = { throttle: number; steer: number };
 
 export function newWarship(x: number, z: number, yaw: number): ZsWarship {
   return { x, z, yaw, speed: 0, yawRate: 0, roll: 0, reload: { port: 0, starboard: 0 } };
+}
+
+/** Coordenadas DO NAVIO: u = pro lado (boreste +), v = ao longo (proa +). Mesmo giro do three.js em Y. */
+export function warshipLocal(s: { x: number; z: number; yaw: number }, x: number, z: number): { u: number; v: number } {
+  const dx = x - s.x, dz = z - s.z, c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
+  return { u: dx * c - dz * sn, v: dx * sn + dz * c };
+}
+/** Do navio pro mundo (inverso de `warshipLocal`). */
+export function warshipWorld(s: { x: number; z: number; yaw: number }, u: number, v: number): { x: number; z: number } {
+  const c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
+  return { x: s.x + u * c + v * sn, z: s.z - u * sn + v * c };
+}
+/** Perto do CASCO (não só do centro — o navio tem 32 m): dentro do retângulo do navio com `margin` m de folga. */
+export function nearWarshipHull(s: { x: number; z: number; yaw: number }, x: number, z: number, halfBeam: number, margin: number): boolean {
+  const { u, v } = warshipLocal(s, x, z);
+  return Math.abs(u) <= halfBeam + margin && Math.abs(v) <= WARSHIP.LENGTH / 2 + margin;
+}
+/** Quem está no convés vai JUNTO quando o navio anda/gira: (x, z) na pose `a` → mesma posição no navio na pose `b`. */
+export function carryOnDeck(a: { x: number; z: number; yaw: number }, b: { x: number; z: number; yaw: number }, x: number, z: number): { x: number; z: number } {
+  const l = warshipLocal(a, x, z);
+  return warshipWorld(b, l.u, l.v);
 }
 
 /** O casco cabe em (x, z, yaw)? Proa, popa, meio e as bordas (1/4 da boca) em mar fundo. */
