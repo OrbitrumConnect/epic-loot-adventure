@@ -25,7 +25,7 @@ import { selectedItemId } from '@/components/world/held-weapon';
 import { HANG_GLIDER_ID, HOVER_SKATE_ID, SURFBOARD_ID } from '@/game/systems/zonaSulKit';
 import { canOpenGlider, GLIDE, glideStep, type GlideState, newGlide, newSkate, SKATE, skateStep, type SkateState } from './zs-glide';
 import { ZsGearView } from './zs-gear-view';
-import { isUnlocked, lockedMessage } from '@/game/systems/unlockSystem';
+import { isUnlocked, lockedMessage, unlockLevel } from '@/game/systems/unlockSystem';
 import { useTouchScreen } from '@/hooks/use-mobile';
 // COMBATE (29/10, Pedro: "usar armas, tiro pro elite… ligar tudo 100%"): as MESMAS peças e regras do Vale
 import { HeldItem } from '@/components/world/held-weapon';
@@ -68,10 +68,10 @@ import { createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsShar
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
-import { createCaveCreatures, zsQuery, zsWorldProfile } from './zs-world-profile';
+import { createCaveCreatures, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
 import { useZsTouch, zsAttack, zsCave, zsCtx } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
-import { ArrowDown, ArrowDownToLine, ArrowUp, Car, Gauge, LogOut } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, Gauge, LogOut, Ship } from 'lucide-react';
 import { CAVE_MOUTH_ZONE, caveCamFit, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
 import { ZsCave } from './zs-cave-view';
 import { layers, resetLayers, sameLayerAsPlayer } from '@/game/systems/layerSystem';
@@ -93,6 +93,8 @@ import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
 import { autoFollowDir, zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
 import { CAR, CAR_SEATS, carStep, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
+import { ballLanding, cannonElevation, cannonSalvo, cannonSide, findWarshipDock, newWarship, WARSHIP, type WarshipSide, warshipStep, type ZsWarship } from './zs-warship';
+import { HELM_U, WARSHIP_DRAFT, warshipAim, warshipDims, warshipFx, ZsWarshipView } from './zs-warship-view';
 import { type CarDims, ZsCarView } from './zs-car-view';
 
 /** Clips extras do herói só na Zona Sul (Mixamo do Pedro): dirigir, abrir a porta, nadar, boiar. */
@@ -119,7 +121,7 @@ const TUBE_CAM_DIST = 1.7, TUBE_CAM_PITCH = 0.06;
 /** Quanto o corpo acompanha a inclinação da prancha no carving. */
 const LEAN_BODY = 0.8;
 /** a pé → abrindo a porta (ENTER_MS) → dirigindo. E entra/sai. */
-const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving', enterAt: 0 };
+const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving' | 'sailing', enterAt: 0 };
 const ENTER_MS = 1100;
 
 /** Golpe/tiro: quanto dura a animação de ataque (s) — o herói PARA pra atacar (igual ao Vale). Giro do especial R. */
@@ -168,7 +170,9 @@ const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch:
   /** botão LEVANTAR na tela (celular) */
   popTap: false,
   /** tecla P: mostrador de FPS / desenhos / triângulos */
-  perf: false };
+  perf: false,
+  /** NAVIO DE GUERRA: segurando a mira (botão direito) · pedido de tiro ('aim' = lado pra onde a câmera olha) */
+  cannonAim: false, cannonFire: null as WarshipSide | 'aim' | null };
 /** Altura do OLHO do motorista sentado acima do pé (m) e campo de visão de dentro (mais aberto). */
 const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
@@ -204,7 +208,7 @@ function attackYaw(px: number, pz: number, fallback: number): number {
   return best ? Math.atan2(best.x - px, best.z - pz) : fallback;
 }
 
-function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRef, movement, c, gearRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose>; playerRef: React.MutableRefObject<THREE.Group | null>; movement: React.MutableRefObject<THREE.Vector3>; c: Palette; gearRef: { glider: BoardPose; skate: BoardPose } }) {
+function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRef, movement, c, gearRef, shipRef }: { shipRef: React.MutableRefObject<ZsWarship | null>; t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3>; focusRef: React.MutableRefObject<THREE.Vector3>; onHud: (h: Hud) => void; carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null>; boardRef: React.MutableRefObject<BoardPose>; playerRef: React.MutableRefObject<THREE.Group | null>; movement: React.MutableRefObject<THREE.Vector3>; c: Palette; gearRef: { glider: BoardPose; skate: BoardPose } }) {
   const group = useRef<THREE.Group>(null);
   /** combate: tique do último ataque visto, tempo de animação restante, especial, giro do R, coice, mira (0..1) */
   const atkTick = useRef(-1), atkT = useRef(0), specTick = useRef(-1), spinT = useRef(0);
@@ -240,6 +244,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
   const camTarget = useRef(new THREE.Vector3());
+  /** mar fundo o bastante pro casco do navio de guerra */
+  const shipSwim = useMemo(() => (x: number, z: number) => zsSwimmable(t, x, z, WARSHIP.MIN_DEPTH), [t]);
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(0.05, dtRaw);
@@ -277,7 +283,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     }
     if (wasOverview.current) { wasOverview.current = false; fog.near = 200; fog.far = 2200; }
     { const d2 = zsCave.dark * zsCave.dark; fog.near = 200 + (5 - 200) * d2; fog.far = 2200 + (75 - 2200) * d2; } // caverna: breu ao longe
-    const car = carRef.current, now = performance.now();
+    const car = carRef.current, ship = shipRef.current, now = performance.now();
     const gs = useGameStore.getState();
     // ONLINE (igual ao Vale): a pose vai pra rede COM A ALTURA — quem está na caverna aparece NA caverna pros outros
     broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs));
@@ -319,7 +325,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     {
       const tc = useZsTouch.getState(), drv = drive.mode === 'driving', wet = zsCtx.inWater && drive.mode === 'foot';
       const near = !!car && drive.mode === 'foot' && !dead && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
-      if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet });
+      const sail = drive.mode === 'sailing', nearSh = !near && !!ship && drive.mode === 'foot' && !dead && Math.hypot(ship.x - p.x, ship.z - p.z) < WARSHIP.BOARD_DIST;
+      if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet || tc.sailing !== sail || tc.nearShip !== nearSh) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet, sailing: sail, nearShip: nearSh });
     }
     ambAcc.current += dt;
     if (ambAcc.current > 0.1) { ambAcc.current = 0; zsAmbience.update(ambienceAt(t, p, car, ride.current?.mode === 'ride' ? ride.current.speed : 0)); }
@@ -343,6 +350,21 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         // rente ao chão: desce do lado, em pé (igual antes); no ar: sai na altura do banco e CAI (o carro vazio desce sozinho)
         if (car.altitude < CAR.EXIT_MAX_ALT || seatY <= g + 0.3) { p.y = g; grounded.current = true; }
         else { p.y = seatY; grounded.current = false; }
+      } else if (drive.mode === 'foot' && !dead && ship && Math.hypot(ship.x - p.x, ship.z - p.z) < WARSHIP.BOARD_DIST) {
+        // NAVIO DE GUERRA (01/11): embarca no timão (nível 70)
+        if (!isUnlocked(WARSHIP.UNLOCK_ID, lvl)) useGameStore.getState().setMessage(lockedMessage('O navio de guerra', WARSHIP.UNLOCK_ID));
+        else {
+          drive.mode = 'sailing'; ride.current = null; dive.current = 0; swimVel.current.set(0, 0); vy.current = 0;
+          camTarget.current.set(ship.x, p.y + 6, ship.z);
+          useGameStore.getState().setMessage('⚓ Navio de guerra! W/S vela · A/D leme · segure o botão direito pra mirar · clique = canhões · E desembarca');
+        }
+      } else if (drive.mode === 'sailing' && ship) {
+        // desembarca: cai na água do lado de boreste, nadando
+        drive.mode = 'foot'; warshipAim.on = false; input.cannonAim = false;
+        const side = WARSHIP.LENGTH * 0.12 + 3;
+        p.x = ship.x + Math.cos(ship.yaw) * side; p.z = ship.z - Math.sin(ship.yaw) * side; p.y = zsWaterYAt(p.x, p.z);
+        movement.current.set(p.x, 0, p.z); facing.current = ship.yaw; grounded.current = false;
+        if (group.current) { group.current.visible = true; group.current.rotation.set(0, ship.yaw, 0); }
       } else if (drive.mode === 'foot' && !dead) useGameStore.getState().collectNearest(); // longe do carro: E = pegar/colher (igual ao Vale)
     }
     if (drive.mode === 'entering' && now - drive.enterAt >= ENTER_MS) { drive.mode = 'driving'; input.dist = Math.max(input.dist, 12); if (car) camTarget.current.set(car.x, car.y + 1.8, car.z); }
@@ -403,6 +425,59 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       }
       return;
     }
+    // ===== NAVIO DE GUERRA (01/11) — parado: só perde o embalo; navegando: modo próprio, como o carro (encerra o quadro) =====
+    if (ship && drive.mode !== 'sailing') warshipStep(shipSwim, ship, { throttle: 0, steer: 0 }, dt);
+    if (ship && drive.mode === 'sailing') {
+      const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
+      const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
+      warshipStep(shipSwim, ship, { throttle: Math.max(-1, Math.min(1, throttle)), steer: Math.max(-1, Math.min(1, steer)) }, dt);
+      const wy = zsWaterYAt(ship.x, ship.z), keelY = wy - WARSHIP_DRAFT, fx = Math.sin(ship.yaw), fz = Math.cos(ship.yaw);
+      // herói no TIMÃO (popa), em pé, olhando pra frente
+      const hu = HELM_U * WARSHIP.LENGTH, hx = ship.x + fx * hu, hz = ship.z + fz * hu, hy = keelY + warshipDims.helmY;
+      p.set(hx, hy, hz); focusRef.current.copy(p);
+      if (group.current) { group.current.position.set(hx, hy, hz); group.current.rotation.set(0, ship.yaw, 0); group.current.visible = true; }
+      action.current = 'idle'; speed.current = 0; yawNow.current = ship.yaw;
+      // câmera: atrás do navio, alto e longe (o navio tem 32 m); mirando, fica onde você pôs (escolhe o costado)
+      const aiming = input.cannonAim || touchLayout.on;
+      if (!input.cannonAim && now - input.lookAt > 2500) { let d = ship.yaw + Math.PI - input.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; input.yaw += d * Math.min(1, dt * 1.2); }
+      const ct = camTarget.current, follow = 1 - Math.exp(-5 * dt);
+      ct.x += (ship.x - ct.x) * follow; ct.y += (keelY + 9 - ct.y) * follow; ct.z += (ship.z - ct.z) * follow;
+      const dist = Math.max(34, input.dist * 3.2), cp = Math.cos(input.pitch);
+      const cx = ct.x + Math.sin(input.yaw) * cp * dist, cz = ct.z + Math.cos(input.yaw) * cp * dist;
+      let cyy = ct.y + Math.sin(input.pitch) * dist;
+      const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.8; if (cyy < gcam) cyy = gcam;
+      const persp = camera as THREE.PerspectiveCamera; if (Math.abs(persp.fov - CHASE_FOV) > 0.05) { persp.fov = CHASE_FOV; persp.updateProjectionMatrix(); }
+      camera.position.set(cx, cyy, cz); camera.lookAt(ct.x, ct.y, ct.z);
+      // MIRA: o costado sai de pra onde a câmera olha; a inclinação dela dá o alcance (arco + anel de onde cai)
+      const side = cannonSide(ship.yaw, input.yaw + Math.PI), elev = cannonElevation(input.pitch);
+      const gunY = keelY + warshipDims.gunY;
+      const surfaceAt = (x: number, z: number) => Math.max(zsHeightAt(t, x, z), zsWaterYAt(x, z));
+      if (aiming) { const mid = cannonSalvo(ship, side, elev, gunY)[1]!; warshipAim.on = true; warshipAim.ball = mid; warshipAim.land = ballLanding(mid, surfaceAt); }
+      else warshipAim.on = false;
+      // TIRO: salva de 3 balas do costado (recarga por lado)
+      if (input.cannonFire) {
+        const sd: WarshipSide = input.cannonFire === 'aim' ? side : input.cannonFire;
+        input.cannonFire = null;
+        const nome = sd === 'port' ? 'bombordo' : 'boreste';
+        if (ship.reload[sd] > 0) useGameStore.getState().setMessage(`🔄 Canhões de ${nome} recarregando (${Math.ceil(ship.reload[sd])} s).`);
+        else {
+          const salvo = cannonSalvo(ship, sd, elev, gunY);
+          salvo.forEach((b, i) => { warshipFx.balls.push({ b, t0: now + i * WARSHIP.SALVO_GAP_MS, land: ballLanding(b, surfaceAt), hit: false }); });
+          ship.reload[sd] = WARSHIP.RELOAD_S;
+          for (let i = 0; i < salvo.length; i++) window.setTimeout(() => audioManager.playWorld('tower', 1), i * WARSHIP.SALVO_GAP_MS);
+          useGameStore.getState().setMessage(`💥 Fogo de ${nome}!`);
+        }
+      }
+      if (sun.current) followSun(sun.current, p);
+      hudAcc.current += dt;
+      if (hudAcc.current > 0.25) {
+        hudAcc.current = 0;
+        const rl = (s: WarshipSide) => (ship.reload[s] > 0 ? Math.ceil(ship.reload[s]) + ' s' : 'pronto');
+        onHud({ x: ship.x, z: ship.z, y: wy, state: 'navio de guerra · ' + Math.round(Math.abs(ship.speed) * 3.6) + ' km/h · bombordo ' + rl('port') + ' · boreste ' + rl('starboard'), near: '', overview: false, car: 'W/S vela · A/D leme · segure o botão direito = mira (o lado pra onde a câmera olha; mais alto = mais longe) · clique = canhões · E desembarca' });
+      }
+      return;
+    }
+    warshipAim.on = false;
     if (drive.mode === 'entering') { action.current = 'open_door'; speed.current = 0; }
     focusRef.current.copy(p);
     const caveNow = zsCave.inCave;
@@ -727,10 +802,11 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
       if (zsCave.inCave) best = `${caveRoomName(p.x, p.z)} (caverna, ${Math.max(0, Math.round(zsHeightAt(t, p.x, p.z) - p.y))} m de rocha em cima)`;
       const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
+      const nearShip = !nearCar && ship && drive.mode === 'foot' && Math.hypot(ship.x - p.x, ship.z - p.z) < WARSHIP.BOARD_DIST;
       const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
         : rm === 'popup' ? 'levantando…' : rm === 'ride' && ride.current ? (ride.current.trickT > 0 ? ride.current.trick.toUpperCase() + ' · ' : '') + (ride.current.air ? 'NO AR! segure A ou D pra girar' : 'SURFANDO ' + Math.round(ride.current.speed * 3.6) + ' km/h · A/D vira (carving) · W acelera · S freia · Shift = boost · desça a face = ganha velocidade · suba rápido no lip = aéreo') + (ride.current.airs ? ' · aéreos: ' + ride.current.airs : '')
         : rolling ? 'tomou a vaca! girando com a espuma…' : '';
-      onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : undefined });
+      onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : nearShip ? 'E = embarcar no navio de guerra (nível ' + unlockLevel(WARSHIP.UNLOCK_ID) + ')' : undefined });
     }
   });
 
@@ -789,7 +865,8 @@ function Controls() {
     let press: { x: number; y: number; at: number } | null = null;
     const locked = () => document.pointerLockElement === el;
     const canFight = () => !zsPause.on && drive.mode === 'foot' && !input.overview;
-    const fire = () => { if (!canFight()) return; if (!(useAim.getState().active && aimFire())) zsAttack.fn?.(); };
+    // NAVIO DE GUERRA (01/11): clique = salva de canhão pro lado pra onde a câmera olha (o quadro do herói resolve)
+    const fire = () => { if (drive.mode === 'sailing' && !zsPause.on) { input.cannonFire = 'aim'; return; } if (!canFight()) return; if (!(useAim.getState().active && aimFire())) zsAttack.fn?.(); };
     // o MUNDO inteiro (canvas + plaquinhas de vida/nome em HTML por cima): clicar num bicho com plaquinha na frente
     // também ataca (29/10: o clique caía na plaquinha e o golpe não saía). Botões/campos da tela ficam de fora.
     const host = (el.parentElement ?? el) as HTMLElement;
@@ -799,13 +876,14 @@ function Controls() {
     // não saía. "mousedown" avisa cada botão.
     const mdown = (e: MouseEvent) => {
       if (ui(e)) return;
+      if (e.button === 2 && drive.mode === 'sailing') { input.cannonAim = true; return; } // navio: segura o direito = mira dos canhões
       if (e.button === 2) { if (canFight()) { setAiming(true); el.requestPointerLock?.(); } return; } // MIRA: segura o direito
       if (e.button !== 0) return;
       if (locked() || useAim.getState().active) { fire(); return; } // mirando: clicou, atirou
       press = { x: e.clientX, y: e.clientY, at: performance.now() };
     };
     const mup = (e: MouseEvent) => {
-      if (e.button === 2) { setAiming(false); if (locked()) document.exitPointerLock(); }
+      if (e.button === 2) { input.cannonAim = false; setAiming(false); if (locked()) document.exitPointerLock(); }
       if (e.button === 0 && press && performance.now() - press.at < 350) fire(); // clique curto (sem arrastar) = ataque
       if (e.button === 0) press = null;
     };
@@ -958,8 +1036,17 @@ const carBtn = (label: string, icon: React.ReactNode): ArcButton => ({ id: 'zs-c
  *  na frente do anel de fora. Correr a pé = empurrar o joystick até a borda (25/10). */
 function ZsTouchArc() {
   const driving = useZsTouch(s => s.driving), nearCar = useZsTouch(s => s.nearCar), inWater = useZsTouch(s => s.inWater);
+  const sailing = useZsTouch(s => s.sailing), nearShip = useZsTouch(s => s.nearShip);
   useEffect(() => {
-    if (driving) {
+    if (sailing) {
+      // NAVIO DE GUERRA (01/11): canhões de cada costado + desembarcar; o joystick é o leme/vela; a mira aparece sozinha
+      const fire = (side: WarshipSide): ArcButton['onPress'] => () => { input.cannonFire = side; };
+      useArcExtras.setState({
+        inner: [{ id: 'zs-cannon-port', label: 'Canhões ⟵', icon: <ArrowLeft />, onPress: fire('port') },
+          { id: 'zs-cannon-star', label: 'Canhões ⟶', icon: <ArrowRight />, onPress: fire('starboard') }, carBtn('Desembarcar', <LogOut />)],
+        outer: [],
+      });
+    } else if (driving) {
       useArcExtras.setState({
         inner: [holdBtn('zs-up', 'Subir', <ArrowUp />, 'Space'), holdBtn('zs-down', 'Descer', <ArrowDown />, 'KeyC'),
           holdBtn('zs-turbo', 'Turbo', <Gauge />, 'ShiftLeft'), carBtn('Sair do carro', <LogOut />)],
@@ -968,12 +1055,12 @@ function ZsTouchArc() {
     } else {
       useArcExtras.setState({
         inner: null,
-        outer: [...(nearCar ? [carBtn('Entrar no carro', <Car />)] : []), ...(inWater ? [holdBtn('zs-dive', 'Mergulhar', <ArrowDownToLine />, 'KeyC')] : [])],
+        outer: [...(nearCar ? [carBtn('Entrar no carro', <Car />)] : []), ...(nearShip ? [carBtn('Embarcar no navio', <Ship />)] : []), ...(inWater ? [holdBtn('zs-dive', 'Mergulhar', <ArrowDownToLine />, 'KeyC')] : [])],
       });
     }
     // trocou o momento com o dedo num botão de segurar: a tecla não fica presa
     return () => { for (const k of ARC_HELD) input.keys.delete(k); ARC_HELD.clear(); useArcExtras.setState({ inner: null, outer: [] }); };
-  }, [driving, nearCar, inWater]);
+  }, [driving, nearCar, inWater, sailing, nearShip]);
   return null;
 }
 
@@ -999,13 +1086,15 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   /** Carro voador: nasce do seu lado (Pedro: "joga lá perto do Arpoador onde eu testo"). */
   const carRef = useRef<ZsCar | null>(null);
   const dimsRef = useRef<CarDims | null>(null);
+  /** NAVIO DE GUERRA (01/11): ancorado no mar fundo perto do Arpoador (lado de Ipanema, fora da onda) */
+  const shipRef = useRef<ZsWarship | null>(null);
   const boardRef = useRef<BoardPose>(newBoardPose());
   /** poses da ASA-DELTA e do SKATE (o herói escreve; as vistas leem) */
   const gliderPose = useRef<BoardPose>(newBoardPose()), skatePose = useRef<BoardPose>(newBoardPose());
   const gearRef = useMemo(() => ({ get glider() { return gliderPose.current; }, get skate() { return skatePose.current; } }), []);
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip, warship: shipRef, drive, input, aim: warshipAim };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -1023,6 +1112,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       heroRef.current.set(at.x, at.y ?? zsHeightAt(tt, at.x, at.z), at.z); focusRef.current.copy(heroRef.current);
       movement.current.set(at.x, 0, at.z);
       carRef.current = newCar(at.x + 3, at.z - 2, 0, tt);
+      { const dock = findWarshipDock((x, z) => zsSwimmable(tt, x, z, WARSHIP.MIN_DEPTH), WARSHIP.DOCK_NEAR); shipRef.current = dock ? newWarship(dock.x, dock.z, dock.yaw) : null; }
       // o JOGO passa a viver na Zona Sul: chão/terra/limites/zona segura/acampamentos dela + a fauna por região
       const prof = zsWorldProfile(tt);
       setWorldProfile(prof);
@@ -1061,6 +1151,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
             {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
             <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
+            {/* NAVIO DE GUERRA (nível 70, 01/11): ancorado perto do Arpoador; E embarca, canhões no botão direito/clique */}
+            <AssetBoundary label="ZsNavioGuerra" fallback={null}><Suspense fallback={null}><ZsWarshipView shipRef={shipRef} heroRef={heroRef} /></Suspense></AssetBoundary>
             <ZsTerrainMesh t={t} heroRef={focusRef} />
             <ZsSea>
               <ZsWater t={t} />
@@ -1072,7 +1164,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           </ZsSurface>
           {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}
           <ZsCave t={t} heroRef={heroRef} />
-          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} />
+          <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} shipRef={shipRef} />
           {/* COMBATE — as mesmas peças do Vale, no chão da Zona Sul (perfil do mapa) */}
           {/* cada peça com a sua rede de carregamento (29/10: um bicho novo carregando o modelo ESCONDIA o mundo inteiro
               por um instante — o React esconde até a rede mais próxima) e proteção contra modelo quebrado (igual ao Vale) */}

@@ -274,7 +274,8 @@ de 600 mil e caber o tubarão, os navios e 8 jogadores, entra o resto da lista a
       picos (anel em volta do drop) + 3 soltos no mar; mordida 50; só caça quem está na água
 - [x] (01/11) Remada e nado +25% (Pedro: "tá meio lento") — `2ff2926`
 - [x] (01/11) Recursos de farm fora de pista/água (6 m) + folha da árvore de farm no tom da mata — `1eb4b60`
-- [ ] (01/11) NAVIO DE GUERRA v1 nv 70 (embarcar, dirigir, canhões mirando) — em andamento (diário 01/11 §7)
+- [x] (01/11) NAVIO DE GUERRA v1 nv 70 (embarcar, dirigir, canhões mirando) — diário 01/11 §7; falta navio × navio
+      de outro jogador + vida do navio (precisa do online com 2)
 - [x] Escolher 1 dos 2 navios novos (foto + triângulos) — 01/11: **A** (galeão com canhões no costado), 45 mil triângulos
 - [ ] Navio de guerra no nv 80 que ataca outro navio (PvP naval) — etapa da guerra, depois do online redondo
       (01/11 Pedro: **nível 70**; bala de canhão MIRANDO — proposta no diário 01/11 §3)

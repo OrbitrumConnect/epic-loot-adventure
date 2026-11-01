@@ -157,7 +157,8 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [ ] (01/11) Carro com barra de vida IGUAL à do herói (junto do item da vida do carro)
 - [x] (01/11) Tubarão: perto dos picos de surf (na área por onde se chega remando, não em cima do drop) + alguns soltos pelo mar — `2ff2926` (mordida 50; só na água funda; escala pelos ossos)
 - [x] (01/11) Remada e nado +25% — `2ff2926` · recursos de farm fora de pista/água + folha no tom da mata — `1eb4b60`
-- [ ] (01/11) NAVIO DE GUERRA v1 (nv 70): embarcar, dirigir, canhões mirando, dano em área — em andamento
+- [x] (01/11) NAVIO DE GUERRA v1 (nv 70): embarcar, dirigir, canhões mirando, dano em área — testado (diário 01/11 §7)
+- [ ] (01/11) Navio × navio de OUTRO jogador (PvP naval) + vida do navio/afundar — depois do veículo do outro na rede
 - [ ] (01/11) Mais inimigos que atiram nos morros: acima da Gávea, Vista Chinesa, Rocinha, Vidigal — quantos cabem (medir)
 - [ ] (01/11) Árvores menos "low poly feias" (galhos/braços, folhagem simples, detalhes leves) + grama leve nas áreas verdes fora da pista/areia — proposta medida antes de mexer
 

@@ -7,7 +7,7 @@ import { create } from 'zustand';
 export const zsCtx = { inWater: false, driving: false };
 /** CELULAR (31/10): o momento que muda os botões do arco (dirigindo / perto do carro / nadando). O herói escreve só
  *  quando MUDA — a tela não re-renderiza por quadro. */
-export const useZsTouch = create<{ driving: boolean; nearCar: boolean; inWater: boolean }>(() => ({ driving: false, nearCar: false, inWater: false }));
+export const useZsTouch = create<{ driving: boolean; nearCar: boolean; inWater: boolean; sailing: boolean; nearShip: boolean }>(() => ({ driving: false, nearCar: false, inWater: false, sailing: false, nearShip: false }));
 /** CAVERNA (30/10): o herói escreve todo quadro. `dark` 0..1 = quão fundo (escurece o mundo, liga a lanterna);
  *  `near` = perto de uma boca ou dentro (a caverna desenha); `deep` = tão fundo que a superfície nem desenha. */
 export const zsCave = { inCave: false, dark: 0, near: false, deep: false,

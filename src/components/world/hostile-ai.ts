@@ -283,6 +283,10 @@ export type HostileTuning = {
   swimDepth?: number;
 };
 
+/** Até quantos metros ACIMA da superfície o bicho aquático alcança (nadando/remando/surfando sim; convés do navio, carro
+ *  voando, não). */
+export const AQUATIC_REACH_UP = 1.2;
+
 /** Passo de quem NADA (tubarão): igual ao `walkStep`, mas a área é a água funda — desliza no eixo livre, nunca sai dela. */
 export function swimStep(swimmable: (x: number, z: number) => boolean, ox: number, oz: number, nx: number, nz: number): [number, number] {
   if (swimmable(nx, nz)) return [nx, nz];
@@ -531,7 +535,9 @@ export function useHostileAI(opts: HostileOptions) {
     // Alvo: eu (solo) — ou, sendo HOST, o jogador MAIS PERTO entre mim e os convidados.
     let px = player.position.x;
     let pz = player.position.z;
-    const localValid = localOk && (!water || water.swimmable(px, pz));
+    // ...e NA ALTURA da água (nadando/remando/surfando): no convés do navio ou voando, o tubarão não alcança
+    const atWater = (x: number, z: number, y: number | undefined) => !water || (water.swimmable(x, z) && (y === undefined || y <= water.surfaceY(x, z) + AQUATIC_REACH_UP));
+    const localValid = localOk && atWater(px, pz, player.position.y);
     const distToLocal = localValid ? Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz)) : Infinity;
     let targetRemoteId: string | null = null;
     if (!mirror) {
@@ -539,7 +545,7 @@ export function useHostileAI(opts: HostileOptions) {
       for (const r of remoteTargets()) {
         // convidado na OUTRA camada (caverna × superfície, pela altura dele que vem da rede): não se enxergam
         if (under && (r.y !== undefined ? under.layer(r.x, r.y, r.z) : 0) !== myLayer) continue;
-        if (water && !water.swimmable(r.x, r.z)) continue; // tubarão: convidado fora d'água não é alvo
+        if (!atWater(r.x, r.z, r.y)) continue; // tubarão: convidado fora d'água (ou no convés/no ar) não é alvo
         const d = Math.sqrt((r.x - wx) * (r.x - wx) + (r.z - wz) * (r.z - wz));
         if (d < best) { best = d; px = r.x; pz = r.z; targetRemoteId = r.id; }
       }

@@ -59,11 +59,12 @@ export function zsWalkable(t: ZsTerrain, x: number, z: number): boolean {
   return zsHeightAt(t, x, z) > ZS_WATER_Y + 0.25;
 }
 
-/** MAR FUNDO pra bicho aquático (tubarão, 01/11): dentro do mapa, chão de MAR (não Lagoa) e fundura mínima. */
-export function zsSwimmable(t: ZsTerrain, x: number, z: number): boolean {
+/** MAR FUNDO pra bicho aquático (tubarão, 01/11): dentro do mapa, chão de MAR (não Lagoa) e fundura mínima. O navio de
+ *  guerra usa a mesma regra com a fundura dele (`minDepth`). */
+export function zsSwimmable(t: ZsTerrain, x: number, z: number, minDepth: number = ZS_SHARK_MIN_DEPTH): boolean {
   const b = zsBounds(t);
   if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return false;
-  return zsSurfAt(t, x, z) === ZS_SURF.sea && zsHeightAt(t, x, z) <= ZS_WATER_Y - ZS_SHARK_MIN_DEPTH;
+  return zsSurfAt(t, x, z) === ZS_SURF.sea && zsHeightAt(t, x, z) <= ZS_WATER_Y - minDepth;
 }
 
 export function zsWorldProfile(t: ZsTerrain, q: ZsQuery = zsQuery(t)): WorldProfile {

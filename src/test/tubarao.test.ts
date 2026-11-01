@@ -54,7 +54,9 @@ describe('tubarão', () => {
   it('a IA: só quem está sobre o mar fundo é alvo; corpo na superfície da água; areia e Vale intocados', () => {
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
     expect(ai).toMatch(/const water = CREATURES\[creature\.speciesId\]\?\.aquatic \? WORLD\.water : null;/);
-    expect(ai).toMatch(/const localValid = localOk && \(!water \|\| water\.swimmable\(px, pz\)\);/);
+    // só quem está SOBRE o mar fundo e NA ALTURA da água (nadando/remando/surfando) — no convés do navio, a salvo
+    expect(ai).toMatch(/water\.swimmable\(x, z\) && \(y === undefined \|\| y <= water\.surfaceY\(x, z\) \+ AQUATIC_REACH_UP\)/);
+    expect(ai).toMatch(/const localValid = localOk && atWater\(px, pz, player\.position\.y\);/);
     expect(ai).toMatch(/g\.position\.y = water\.surfaceY\(g\.position\.x, g\.position\.z\) - \(tuning\.swimDepth \?\? 0\);/);
     const prof = fs.readFileSync('src/components/zona-sul/zs-world-profile.ts', 'utf8');
     expect(prof).toMatch(/water: \{ swimmable: \(x, z\) => zsSwimmable\(t, x, z\), surfaceY: \(x, z\) => zsWaterYAt\(x, z\) \}/);

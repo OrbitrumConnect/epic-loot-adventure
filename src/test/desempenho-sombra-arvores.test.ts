@@ -66,7 +66,7 @@ describe('Zona Sul: caverna lá no fundo', () => {
     expect(src).toMatch(/const SUN_OFF_DARK = 0\.999;/);
     expect(src).toMatch(/sun\.intensity = off \? 0 : zsSun\.intensity \* \(1 - zsCave\.dark\);/);
     expect(src).toMatch(/sun\.shadow\.autoUpdate = !off;/);
-    expect(src.match(/followSun\(sun\.current, p\)/g)?.length).toBe(3);
+    expect(src.match(/followSun\(sun\.current, p\)/g)?.length).toBe(4); // a pé, carro, asa/skate e (01/11) navio de guerra
   });
   it('acampamentos e recursos somem junto com a superfície', () => {
     expect(src).toMatch(/<ZsSurface><Camps c=\{c\} \/><\/ZsSurface>/);

@@ -184,6 +184,9 @@ type GameActions = {
    *  torre e mostra o projétil. O dano vai pela rede (quem decide é o alvo). false = sem bala. */
   towerFireAtPlayer: (tower: TowerSource, to: Position, toY: number | undefined, now: number) => boolean;
   specialAttack: (kind: 'jump' | 'spin') => void;
+  /** BALA DE CANHÃO do navio de guerra (Zona Sul, 01/11) caiu em `at`: dano em área `radius` (mesmo caminho do especial:
+   *  armadura, crítico, número na tela, XP/loot ao matar). Devolve quantos acertou. */
+  cannonHit: (at: Position, radius: number) => number;
   /** Chuva de Flechas: poder de longe, flechas caem do céu e dão dano em ÁREA (raio escala
    *  com o nível, 5 m → 18 m; cooldown 15 s → 5 s). Precisa de arma de longe equipada.
    *  `auto` (piloto idle): silencioso — não escreve mensagem quando ainda não pode disparar. */
@@ -648,6 +651,9 @@ function heroStrike(st: GameState, hits: Map<string, { power: number; push: Vec2
   });
   return { player, creatures, deathBags: bags, feedback: pushEvents(st.feedback, drafts, Date.now()) };
 }
+
+/** Bala de canhão do navio de guerra = isto × o golpe base do herói (o especial de salto é 1,8×). */
+export const CANNON_POWER = 2.5;
 
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
   player: createInitialPlayer(),
@@ -1291,6 +1297,35 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       specialKind: kind,
       ui: { ...state.ui, message: hits > 0 ? `Especial! ${hits} atingido(s).` : 'Especial (nada no alcance).' },
     });
+  },
+
+  cannonHit: (at, radius) => {
+    const state = get();
+    if (state.player.dead) return 0;
+    // bala de canhão = 2,5× o golpe base do herói (nível + equipamento), com os multiplicadores dele
+    const power = Math.round((playerBaseAttack(state.player.level) + equipmentStats(state.player).damage) * CANNON_POWER * damageMultiplier(state.player));
+    const critStats = playerCritStats(state.player);
+    const drafts: FeedbackDraft[] = [];
+    let updatedPlayer: PlayerState = state.player;
+    let updatedBags = state.deathBags;
+    let hits = 0;
+    const creatures = state.creatures.map(c => {
+      if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
+      if (getDistance(at, c.position) > radius) return c;
+      hits += 1;
+      const result = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
+      drafts.push(damageEvent(c.id, result.damage, c.position, { critical: !!result.critical }));
+      if (result.targetDied) {
+        const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);
+        updatedPlayer = reward.player;
+        updatedBags = reward.bags;
+        return deadCreature(c, Date.now(), Math.random);
+      }
+      return { ...c, hp: result.targetHp, behavior: 'chase' as const };
+    });
+    if (hits === 0) return 0;
+    set({ player: updatedPlayer, creatures, deathBags: updatedBags, feedback: pushEvents(state.feedback, drafts, Date.now()), ui: { ...state.ui, message: `💥 Canhão! ${hits} atingido(s).` } });
+    return hits;
   },
 
   boostFire: (auto = false) => {
