@@ -180,7 +180,7 @@ const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
 /** SOM do mundo em volta do herói (mar, arrebentação, carro, vento) — 10×/s. */
 const AMB: AmbienceState = { sea: 0, surf: 0, car: false, carSpeed: 0, carAlt: 0, wind: 0 };
-function ambienceAt(t: ZsTerrain, p: THREE.Vector3, car: ZsCar | null, rideSpeed: number): AmbienceState {
+function ambienceAt(t: ZsTerrain, p: THREE.Vector3, car: ZsCar | null, rideSpeed: number, shipSpeed = 0): AmbienceState {
   let sea = 0;
   for (let a = 0; a < 8; a++) { const ang = (a / 8) * Math.PI * 2; if (zsSurfAt(t, p.x + Math.sin(ang) * 60, p.z + Math.cos(ang) * 60) === ZS_SURF.sea) sea++; }
   AMB.sea = zsCtx.inWater ? 1 : (sea / 8) * Math.max(0, 1 - Math.max(0, p.y) / 45);
@@ -190,6 +190,9 @@ function ambienceAt(t: ZsTerrain, p: THREE.Vector3, car: ZsCar | null, rideSpeed
   AMB.car = drive.mode === 'driving' && !!car;
   AMB.carSpeed = car?.speed ?? 0; AMB.carAlt = car?.altitude ?? 0;
   AMB.wind = AMB.car ? Math.min(1, AMB.carAlt / 25 + Math.abs(AMB.carSpeed) / 60) : Math.min(1, (rideSpeed / 14) * 0.6);
+  // NAVIO (pilotando ou em pé no convés): a água no casco + o vento nas velas, com a velocidade
+  AMB.ship = Math.min(1, Math.abs(shipSpeed) / WARSHIP.MAX);
+  if (AMB.ship > 0) { AMB.wind = Math.max(AMB.wind, AMB.ship * 0.55); AMB.sea = Math.max(AMB.sea, 0.6); }
   // caverna: lá dentro o mar e o vento somem (a rocha abafa)
   const muffle = 1 - zsCave.dark; AMB.sea *= muffle; AMB.surf *= muffle; AMB.wind *= muffle;
   return AMB;
@@ -341,7 +344,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet || tc.sailing !== sail || tc.nearShip !== nearSh || tc.shipAct !== act) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet, sailing: sail, nearShip: nearSh, shipAct: act });
     }
     ambAcc.current += dt;
-    if (ambAcc.current > 0.1) { ambAcc.current = 0; zsAmbience.update(ambienceAt(t, p, car, ride.current?.mode === 'ride' ? ride.current.speed : 0)); }
+    if (ambAcc.current > 0.1) { ambAcc.current = 0; zsAmbience.update(ambienceAt(t, p, car, ride.current?.mode === 'ride' ? ride.current.speed : 0, ship && (drive.mode === 'sailing' || onDeck.current) ? ship.speed : 0)); }
     // E: entra (perto do carro) / sai A QUALQUER MOMENTO (Pedro 31/10: "no carro apertar e em qualquer momento pode sair
     // dele; se estiver voando cai do alto e desce normal, então só esperar") — no ar o herói cai com a gravidade de sempre
     if (input.eTap) {
@@ -473,6 +476,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       p.set(hx, hy, hz); focusRef.current.copy(p);
       if (group.current) { group.current.position.set(hx, hy, hz); group.current.rotation.set(0, ship.yaw, 0); group.current.visible = true; }
       action.current = 'idle'; speed.current = 0; yawNow.current = ship.yaw;
+      audioManager.setFootsteps(false); // no timão não é caminhada (os passos ficavam ligados de quando andava no convés)
       // câmera: atrás do navio, alto e longe (o navio tem 32 m); mirando, fica onde você pôs (escolhe o costado)
       const aiming = input.cannonAim || touchLayout.on;
       if (!input.cannonAim && now - input.lookAt > 2500) { let d = ship.yaw + Math.PI - input.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; input.yaw += d * Math.min(1, dt * 1.2); }

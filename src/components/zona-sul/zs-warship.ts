@@ -10,7 +10,7 @@
  */
 
 export const WARSHIP = {
-  LENGTH: 32,                       // m (o encalhado tem 38)
+  LENGTH: 36.8,                     // m (o encalhado tem 38) — Pedro 01/11: "aumentar o navio uns 15%" (era 32)
   // Pedro 01/11: "mais leve pra dirigir, tá meio lento, engessado" → era 9 m/s, acel. 1,5, giro 0,3 rad/s (resp. 1,4)
   MAX: 12, REVERSE: 3.5,            // m/s (12 ≈ 43 km/h)
   ACCEL: 3.2, BRAKE: 4.5, COAST: 0.18,

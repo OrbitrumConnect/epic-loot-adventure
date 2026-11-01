@@ -30,13 +30,17 @@ export const ROCK_LANDMARKS = [{ name: 'Pedra do Arpoador', height: 10, extendSe
 // encalhando na entrada do canal"): BOCA EM FUNIL nas duas pontas — no mar abre da linha d'água (z 378) até +16 m onde o
 // mar já é fundo (z 400; medido: entre os dois o mar tem 1–3 m); na Lagoa abre desde a saída do canal (z 262) — +4 m no
 // lóbulo (sem encostar na ilha dos Caiçaras, x ≥ −192) até +12 m no meio. O trecho estreito (avenidas e areia) fica igual.
+// 3ª (Pedro 01/11: "navio 15% maior e a lateral do canal afundar um pouco mais"): fundo chato 3,7 → 5 m de cada lado do
+// eixo (casco agora 8,8 m de boca: ~15 m navegáveis, ~3 m de folga de cada lado).
 export const CANAL_ALAH = {
   path: [[-180, 150, 12], [-200, 200, 9], [-206, 240, 4], [-205, 262, 0], [-205, 268, 0], [-205, 280, 0], [-223, 340, 0], [-223, 372, 0], [-223, 378, 0], [-224, 400, 16], [-224, 430, 16]],
-  bottom: 10, flat: 3.7, slope: 3.0,
+  bottom: 10, flat: 5.0, slope: 3.0,
 };
-/** Fundura máxima da LAGOA Rodrigo de Freitas (m). Era 3 — o navio precisa de 3,2 + folga → o MEIO fica navegável (a
- *  fundura cresce 0,1 m por m da margem: até 27 m da beira nada muda). Laguinhos/represas seguem com 3. */
-export const LAGOA_MAX_DEPTH = 5;
+/** LAGOA Rodrigo de Freitas: fundura cresce `LAGOA_SLOPE` m por m da margem, até `LAGOA_MAX_DEPTH`. 1ª (01/11): máx.
+ *  3 → 5 (o meio navegável). 2ª (Pedro 01/11: "afundar a Lagoa TODA pro barco navegar"): 0,1 → 0,3 m por m e máx. 6 —
+ *  dá 3,2 m (o navio) a ~10 m da margem (antes ~29 m). Laguinhos/represas seguem como eram (0,1 por m, máx. 3). */
+export const LAGOA_MAX_DEPTH = 6;
+export const LAGOA_SLOPE = 0.3;
 /** Relevo: tiles terrarium z14 (~9,6 m por pixel aqui; a origem SRTM é ~30 m). */
 export const DEM_Z = 14;
 /** Escala horizontal do jogo: 1 m no jogo = SCALE m reais. Pedro 28/10: 1º "15 min pra atravessar" → 1:3; depois de

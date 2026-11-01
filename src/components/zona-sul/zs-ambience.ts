@@ -22,6 +22,9 @@ export type AmbienceState = {
   carAlt: number;
   /** 0..1 — vento (voo/surf rápido) */
   wind: number;
+  /** 0..1 — NAVIO andando (fração da velocidade máxima): a água correndo no casco (01/11, Pedro: "dirigindo o barco sai
+   *  som de caminhada e não de navegação") */
+  ship?: number;
 };
 
 type Chain = { gain: GainNode; filter: BiquadFilterNode };
@@ -32,6 +35,8 @@ class ZsAmbience {
   private sea: Chain | null = null;
   private surf: Chain | null = null;
   private wind: Chain | null = null;
+  /** casco do navio: "chuáá" da água na proa/costado (ruído em faixa, sobe com a velocidade) + balanço lento */
+  private hull: Chain | null = null;
   private car: { gain: GainNode; filter: BiquadFilterNode; o1: OscillatorNode; o2: OscillatorNode; whine: OscillatorNode; whineGain: GainNode } | null = null;
   private seaLfo: OscillatorNode | null = null;
 
@@ -79,6 +84,11 @@ class ZsAmbience {
     this.seaLfo = lfo;
     this.surf = this.chain(ctx, 'lowpass', 180, 1.2);
     this.wind = this.chain(ctx, 'bandpass', 600, 0.6);
+    this.hull = this.chain(ctx, 'bandpass', 700, 0.5);
+    // a proa sobe e desce na onda: o "chuáá" vai e vem (~3 s)
+    const hl = ctx.createOscillator(), hlg = ctx.createGain();
+    hl.frequency.value = 0.33; hlg.gain.value = 220;
+    hl.connect(hlg).connect(this.hull.filter.frequency); hl.start();
     const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
     o1.type = 'sawtooth'; o2.type = 'square'; o1.frequency.value = 55; o2.frequency.value = 27.5; o2.detune.value = 8;
     filter.type = 'lowpass'; filter.frequency.value = 380; gain.gain.value = 0;
@@ -101,6 +111,11 @@ class ZsAmbience {
       this.wind.gain.gain.setTargetAtTime(m * 0.12 * s.wind, t, r);
       this.wind.filter.frequency.setTargetAtTime(400 + s.wind * 900, t, r);
     }
+    if (this.hull) {
+      const k = s.ship ?? 0;
+      this.hull.gain.gain.setTargetAtTime(m * (k > 0.02 ? 0.05 + 0.17 * k : 0), t, r);
+      this.hull.filter.frequency.setTargetAtTime(450 + k * 900, t, r);
+    }
     const c = this.car;
     if (c) {
       const sp = Math.abs(s.carSpeed);
@@ -115,7 +130,7 @@ class ZsAmbience {
 
   /** Saiu da Zona Sul: silencia (o contexto fica, barato, pra voltar sem estalo). */
   mute(): void {
-    this.update({ sea: 0, surf: 0, car: false, carSpeed: 0, carAlt: 0, wind: 0 });
+    this.update({ sea: 0, surf: 0, car: false, carSpeed: 0, carAlt: 0, wind: 0, ship: 0 });
   }
 }
 

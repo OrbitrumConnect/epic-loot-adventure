@@ -90,7 +90,8 @@ describe('canal do Jardim de Alah navegável', () => {
   /** eixo do canal no trecho estreito (das avenidas do Jardim de Alah até a areia) */
   const axisX = (z: number) => (z <= 280 ? -205 : z <= 340 ? -205 + (z - 280) * (-18 / 60) : -223);
 
-  it('"um navio por vez com sobrinha": no trecho estreito (entre as avenidas e na praia) a água navegável tem ~2 m de folga de cada lado do casco e a água à vista fica em ~16–19 m (não arromba)', () => {
+  // 01/11 (2ª): navio 15% maior (casco 8,8 m) e "a lateral do canal afundar um pouco mais" → ~3 m de folga de cada lado
+  it('"um navio por vez com sobrinha": no trecho estreito (entre as avenidas e na praia) a água navegável tem ~3 m de folga de cada lado do casco e a água à vista fica em ~19–23 m (não arromba)', () => {
     const beam = WARSHIP.LENGTH * 0.12 * 2; // a boca que o casco confere (7,7 m)
     let navMin = Infinity, wetMax = 0, wetSum = 0, n = 0;
     for (let z = 276; z <= 368; z += 2) {
@@ -102,9 +103,9 @@ describe('canal do Jardim de Alah navegável', () => {
       }
       navMin = Math.min(navMin, nav); wetMax = Math.max(wetMax, wet); wetSum += wet; n++;
     }
-    expect(navMin).toBeGreaterThanOrEqual(beam + 2 * 2); // medido: 12,25 m (casco 7,7 → 2,3 m de cada lado)
-    expect(wetMax).toBeLessThanOrEqual(20);              // medido: 19,25 no pior ponto (a grade de 4 m na diagonal)
-    expect(wetSum / n).toBeLessThanOrEqual(18);          // medido: ~17 m em média
+    expect(navMin).toBeGreaterThanOrEqual(beam + 2 * 2.8); // medido: 14,75 m (casco 8,8 → ~3 m de cada lado)
+    expect(wetMax).toBeLessThanOrEqual(23.5);              // medido: 22,75 no pior ponto (a grade de 4 m na diagonal)
+    expect(wetSum / n).toBeLessThanOrEqual(21.5);          // medido: ~20 m em média
   });
 
   it('tubarão continua só no mar (canal e Lagoa não são dele); a margem da Lagoa segue rasa como era', () => {
@@ -112,8 +113,9 @@ describe('canal do Jardim de Alah navegável', () => {
     expect(zsSurfAt(t, -213, 320)).toBe(ZS_SURF.lagoon);
     expect(zsSwimmable(t, -150, 120)).toBe(false);
     expect(zsNavigable(t, -150, 120, WARSHIP.MIN_DEPTH)).toBe(true);
-    // beirinha da Lagoa (a ~6 m da margem oeste, longe do canal): fundura de antes (≤ 1,2 m)
-    expect(-zsHeightAt(t, -226, 150)).toBeLessThan(1.6);
+    // 01/11 (2ª, Pedro: "afundar a Lagoa TODA pro barco navegar"): a ~14 m da margem já passa o navio
+    expect(zsNavigable(t, -212, 150, WARSHIP.MIN_DEPTH)).toBe(true);
+    expect(-zsHeightAt(t, -228, 150)).toBeLessThan(2.5); // a beirinha continua rasa
   });
 
   it('não sobra rua pintada no fundo do canal (a pista para antes da beira d\'água)', () => {

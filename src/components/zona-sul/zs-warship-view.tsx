@@ -17,8 +17,8 @@ import { ballAt, type CannonBall, WARSHIP, warshipLocal, warshipWorld, type ZsWa
 import { zsWaterYAt } from './zs-terrain-data';
 
 const URL = '/zona-sul/warship.glb';
-/** quilha abaixo da superfície (m) */
-export const WARSHIP_DRAFT = 2.0;
+/** quilha abaixo da superfície (m) — 01/11: navio 15% maior → calado junto (era 2,0) */
+export const WARSHIP_DRAFT = 2.3;
 /** costado (onde ficam os canhões) e convés de popa (timão), em fração da altura do modelo — medidos */
 const GUNWALE_K = 0.23, HELM_DECK_K = 0.27;
 /** timão: fração do comprimento atrás do meio (popa) */

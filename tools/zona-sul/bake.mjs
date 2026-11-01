@@ -11,7 +11,7 @@
 //     LAGOA (água do OSM) com fundo próprio; PRAIA = declive suave até a água.
 import fs from 'node:fs';
 import sharp from 'sharp';
-import { APRON_PX, BBOX, CANAL_ALAH, ISLAND_BEACH, LAGOA_MAX_DEPTH, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
+import { APRON_PX, BBOX, CANAL_ALAH, ISLAND_BEACH, LAGOA_MAX_DEPTH, LAGOA_SLOPE, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
 import { loadDem } from './dem.mjs';
 import { buildMasks, joinRings } from './masks.mjs';
 import { buildRoads, MAX_GRADE, rasterRoadMask } from './roads.mjs';
@@ -124,7 +124,7 @@ for (let p = 0; p < W * H; p++) {
   const dm = dLand[p] * CELL; // m (jogo) água adentro
   // fundo desce 12 cm/m (era 6): nada a ~7 m da areia (Pedro: "fiquei lento na água" — 40 m adentro ainda dava pé)
   if (sea[p]) { hg[p] = -Math.min(12, 0.35 + dm * 0.12); surf[p] = SURF.sea; continue; }
-  if (water[p]) { hg[p] = -Math.min(lagoaMask[p] ? LAGOA_MAX_DEPTH : 3, 0.3 + dm * 0.1); surf[p] = SURF.lagoon; continue; } // Lagoa: meio navegável (01/11)
+  if (water[p]) { hg[p] = -(lagoaMask[p] ? Math.min(LAGOA_MAX_DEPTH, 0.3 + dm * LAGOA_SLOPE) : Math.min(3, 0.3 + dm * 0.1)); surf[p] = SURF.lagoon; continue; } // Lagoa toda navegável (01/11)
   let h = e[p] / SCALE * RELIEF;
   const dw = dWater[p] * CELL; // m (jogo) até a água
   // praia: terra baixa perto da água desce suave até 0,15 m acima da água (costão alto fica como está)
