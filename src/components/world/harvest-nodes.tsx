@@ -106,6 +106,8 @@ const cyl = (rt: number, rb: number, h: number, seg: number) => new THREE.Cylind
 
 type KindAssets = {
   live: THREE.BufferGeometry;
+  /** versão de LONGE (só a árvore): desenhada além de `harvestLod.d` m da câmera quando o lote é recortado (Zona Sul) */
+  far?: THREE.BufferGeometry;
   dead: THREE.BufferGeometry;
   liveMat: THREE.Material;
   /** Altura do rótulo flutuante. */
@@ -139,6 +141,7 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
 
   const tree: KindAssets = {
     live: harvestTreeGeometry(c),
+    far: harvestTreeGeometry(c, true),
     dead: bake([
       { g: cyl(0.3, 0.4, 0.5, 7), color: c.trunk, pos: [0, 0.25, 0] },
       { g: cyl(0.26, 0.26, 0.05, 7), color: c['ground-light'], pos: [0, 0.52, 0] },
@@ -302,6 +305,13 @@ const shV = new THREE.Vector3();
  * ------------------------------------------------------------------ */
 /** Folga do recorte: metros + fração da distância (~8°) — câmera girando rápido não deixa árvore de fora. */
 const VIEW_PAD = 3, VIEW_PAD_K = 0.15;
+/**
+ * ÁRVORE DE LONGE (01/11 — Pedro: "falta árvore de farm"; 108 → 258 recursos): além de `d` m da câmera a árvore de
+ * coleta vai pro lote LEVE (mesma copa, ~2 mil triângulos em vez de ~8,9 mil — `harvestTreeGeometry(c, true)`). Medido:
+ * do nascedouro a câmera via 124 árvores (1,86 mi de triângulos). Só com o recorte ligado (Zona Sul, sem fade).
+ */
+export const harvestLod = { d: 120 };
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __harvestLod?: unknown }).__harvestLod = harvestLod; // testes de tela (A/B)
 const vFrustum = new THREE.Frustum();
 const vProj = new THREE.Matrix4();
 /** Matrizes e ids na ordem ORIGINAL (todas as vivas) — a fonte; o lote da tela recebe a parte visível. */
@@ -330,6 +340,10 @@ function KindInstances({
   const view = useRef({ k: 0, order: new Int32Array(Math.max(1, nodes.length)), culled: false });
   /** `ids[i]` = id do nó na instância `i` do mesh VIVO. */
   const ids = useRef<string[]>([]);
+  /** Lote de LONGE (árvore leve — `harvestLod`): o que está nele agora e os ids das instâncias dele. */
+  const farRef = useRef<THREE.InstancedMesh>(null);
+  const farView = useRef({ k: 0, order: new Int32Array(Math.max(1, nodes.length)) });
+  const farIds = useRef<string[]>([]);
   const tv = useTerrainVersion(); // reassenta na superfície do GLB quando ele carrega
 
   useLayoutEffect(() => {
@@ -395,7 +409,18 @@ function KindInstances({
     if (view.current.order.length < cap) view.current.order = new Int32Array(cap);
     view.current.k = li; view.current.culled = false;
     for (let i = 0; i < li; i++) view.current.order[i] = i;
+    // lote de longe: vazio até o próximo recorte (que redistribui perto/longe)
+    if (farView.current.order.length < cap) farView.current.order = new Int32Array(cap);
+    farView.current.k = 0; farIds.current = [];
+    if (farRef.current) farRef.current.count = 0;
   }, [mine, cap, kind, tv, assets]);
+
+  // lote de longe usa o MESMO material da árvore (mesma luz/cor/1 passada); o alfa por instância fica sempre 100%
+  useLayoutEffect(() => {
+    if (!assets.far) return;
+    assets.far.setAttribute('aFade', new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(1), 1));
+    if (farRef.current) farRef.current.count = 0;
+  }, [cap, assets]);
 
   // Cópia de sombra: na TELA desenha 0 instâncias; só no passe de sombra desenha as escolhidas.
   useLayoutEffect(() => {
@@ -413,26 +438,37 @@ function KindInstances({
     const B = base.current, sp = spheres.current, n = Math.min(B.n, sp.length / 4);
     // 1) RECORTE PELA CÂMERA (só sem fade rodando): quem a câmera vê vai pro começo do lote
     {
-      const V = view.current;
+      const V = view.current, F = farView.current, far = farRef.current;
       let k = 0, changed = false;
       if (fadeLoop.mounted === 0) {
         camera.updateMatrixWorld();
         vProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
         vFrustum.setFromProjectionMatrix(vProj);
         const cp = camera.position;
+        const lodD = far && assets.far ? harvestLod.d : Infinity;
+        let kf = 0, farChanged = false;
         for (let i = 0; i < n; i++) {
           const x = sp[i * 4]!, y = sp[i * 4 + 1]!, z = sp[i * 4 + 2]!;
+          const dist = Math.hypot(x - cp.x, y - cp.y, z - cp.z);
           shSphere.center.set(x, y, z);
-          shSphere.radius = sp[i * 4 + 3]! + VIEW_PAD + Math.hypot(x - cp.x, y - cp.y, z - cp.z) * VIEW_PAD_K;
+          shSphere.radius = sp[i * 4 + 3]! + VIEW_PAD + dist * VIEW_PAD_K;
           if (!vFrustum.intersectsSphere(shSphere)) continue;
+          if (dist > lodD) { if (F.order[kf] !== i) { F.order[kf] = i; farChanged = true; } kf++; continue; } // longe: árvore leve
           if (V.order[k] !== i) { V.order[k] = i; changed = true; }
           k++;
         }
         if (k !== V.k || !V.culled) changed = true;
         V.culled = true;
+        if (far && (farChanged || kf !== F.k)) {
+          const dst = far.instanceMatrix.array as Float32Array, list: string[] = [];
+          for (let j = 0; j < kf; j++) { const o = F.order[j]!; dst.set(B.m.subarray(o * 16, o * 16 + 16), j * 16); list[j] = B.ids[o]!; }
+          farIds.current = list; far.count = kf; F.k = kf;
+          far.instanceMatrix.needsUpdate = true; far.boundingSphere = null;
+        }
       } else if (V.culled) { // fade voltou a rodar: ordem original, lote inteiro
         for (let i = 0; i < n; i++) V.order[i] = i;
         k = n; changed = true; V.culled = false;
+        if (far) { far.count = 0; F.k = 0; farIds.current = []; }
       }
       if (changed) {
         const dst = live.instanceMatrix.array as Float32Array, list: string[] = [];
@@ -476,9 +512,10 @@ function KindInstances({
     return registerInstancedFade(live, assets.fade);
   }, [cap, assets]);
 
-  const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
+  // clique/hover: o lote de perto e o de longe (cada um com os ids das SUAS instâncias)
+  const onDown = (list: React.RefObject<string[]>) => (e: ThreeEvent<PointerEvent>) => {
     if (e.button !== 0 || e.instanceId === undefined) return;
-    const id = ids.current[e.instanceId];
+    const id = list.current[e.instanceId];
     if (!id) return;
     e.stopPropagation();
     markPointerConsumed(e.nativeEvent);
@@ -489,10 +526,9 @@ function KindInstances({
     // A mensagem de ferramenta ausente (ou de sucesso) vem da store.
     useGameStore.getState().harvestAt(id);
   };
-
-  const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
+  const onMove = (list: React.RefObject<string[]>) => (e: ThreeEvent<PointerEvent>) => {
     if (e.instanceId === undefined) return;
-    const id = ids.current[e.instanceId];
+    const id = list.current[e.instanceId];
     if (!id) return;
     e.stopPropagation();
     if (hover.current.id !== id) {
@@ -500,9 +536,10 @@ function KindInstances({
       document.body.style.cursor = 'pointer';
     }
   };
+  const onPointerDown = onDown(ids), onPointerMove = onMove(ids);
 
   const onPointerOut = () => {
-    if (hover.current.id && ids.current.includes(hover.current.id)) {
+    if (hover.current.id && (ids.current.includes(hover.current.id) || farIds.current.includes(hover.current.id))) {
       hover.current.id = null;
       document.body.style.cursor = '';
     }
@@ -520,6 +557,19 @@ function KindInstances({
         onPointerMove={onPointerMove}
         onPointerOut={onPointerOut}
       />
+      {assets.far && (
+        <instancedMesh
+          key={`far-${cap}`}
+          ref={farRef}
+          args={[assets.far, assets.liveMat, cap]}
+          count={0}
+          castShadow={false}
+          receiveShadow
+          onPointerDown={onDown(farIds)}
+          onPointerMove={onMove(farIds)}
+          onPointerOut={onPointerOut}
+        />
+      )}
       {assets.castShadow && (
         <instancedMesh
           key={`shadow-${cap}`}

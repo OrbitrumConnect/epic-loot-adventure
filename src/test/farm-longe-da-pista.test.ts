@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { createZsHarvestNodes, ZS_NODE_CLEAR } from '@/game/systems/zsHarvestSystem';
+import { createZsHarvestNodes, ZS_FARM_EXTRA, ZS_NODE_CLEAR } from '@/game/systems/zsHarvestSystem';
 import { SURF, type ZsQuery } from '@/game/systems/zsSpawnSystem';
 
 /* Pedro 01/11: árvore/pedra de coleta "em cima da estrada" e "dentro da Lagoa" → folga de pista e de água. Medido no mapa:
@@ -19,8 +19,12 @@ describe('recursos de coleta longe da pista e da água', () => {
     expect(zs).toMatch(/leaf: zsFarmLeaf\(c\.leaf, ZS_MATA_LEAF\), 'leaf-light': zsFarmLeaf\(c\['leaf-light'\], ZS_MATA_LEAF_LIGHT\)/);
     const nodes = createZsHarvestNodes(q);
     expect(createZsHarvestNodes(q)).toEqual(nodes);
-    expect(nodes.filter((n) => n.kind === 'tree').length).toBe(48);
-    expect(nodes.filter((n) => n.kind === 'rock').length).toBe(36);
+    // 1ª leva (48/24/36) + 2ª leva (01/11, Pedro: "falta árvore e pedra de farm"): todas couberam neste mapa
+    const extra = (k: string) => ZS_FARM_EXTRA.filter((e) => e.kind === k).reduce((s, e) => s + e.count, 0);
+    expect(nodes.filter((n) => n.kind === 'tree').length).toBe(48 + extra('tree'));
+    expect(nodes.filter((n) => n.kind === 'rock').length).toBe(36 + extra('rock'));
+    expect(nodes.filter((n) => n.kind === 'pebble').length).toBe(24 + extra('pebble'));
+    expect(new Set(nodes.map((n) => n.id)).size).toBe(nodes.length);
     for (const n of nodes) {
       for (let a = 0; a < 32; a++) for (const r of [1, 2, 3, 4, 4.5]) {
         const ang = (a / 32) * Math.PI * 2, s = surf(n.position.x + Math.sin(ang) * r, n.position.z + Math.cos(ang) * r);

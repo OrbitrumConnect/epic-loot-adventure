@@ -2,27 +2,35 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { rand, type Palette } from './world-kit';
 
-/** One colored geometry keeps the harvest instance/id contract and draw budget. */
-export function harvestTreeGeometry(c: Palette): THREE.BufferGeometry {
+/**
+ * One colored geometry keeps the harvest instance/id contract and draw budget.
+ * `far` (01/11 — mais farm na Zona Sul, Pedro: "falta árvore de farm"): a MESMA árvore pra DE LONGE — mesmo tronco,
+ * mesmos 16 galhos (menos lados), sem galhinhos/raízes/marca de machado (somem na distância) e 1 de cada 3 folhas de
+ * cada copa, nos MESMOS lugares, 1,7× maiores (cobrem a mesma área) → ~2 mil triângulos em vez de ~8,9 mil.
+ * Sem `far` a árvore sai idêntica à de sempre.
+ */
+export function harvestTreeGeometry(c: Palette, far = false): THREE.BufferGeometry {
   const pieces: THREE.BufferGeometry[] = [];
   const bark = new THREE.Color(c.trunk);
   const barkLight = bark.clone().lerp(new THREE.Color(c['ground-light']), 0.24);
   const foliage = new THREE.Color(c.leaf);
   const foliageLight = new THREE.Color(c['leaf-light']);
   const color = new THREE.Color();
-  const branch = (points: THREE.Vector3[], radius: number, segments = 7) => {
+  const radial = far ? 4 : 7;
+  const branch = (points: THREE.Vector3[], radius: number, segments0 = 7) => {
+    const segments = far ? Math.min(segments0, 3) : segments0;
     const curve = new THREE.CatmullRomCurve3(points);
-    const tube = new THREE.TubeGeometry(curve, segments, radius, 7, false);
+    const tube = new THREE.TubeGeometry(curve, segments, radius, radial, false);
     const p = tube.getAttribute('position');
     const colors: number[] = [];
     for (let i = 0; i < p.count; i++) {
-      const t = Math.floor(i / 8) / segments;
+      const t = Math.floor(i / (radial + 1)) / segments;
       const center = curve.getPointAt(t);
       const taper = 1 - t * 0.84;
       p.setXYZ(i, center.x + (p.getX(i) - center.x) * taper,
         center.y + (p.getY(i) - center.y) * taper,
         center.z + (p.getZ(i) - center.z) * taper);
-      color.copy(bark).lerp(barkLight, (i % 8) % 3 === 0 ? 0.8 : 0.15);
+      color.copy(bark).lerp(barkLight, (i % (radial + 1)) % 3 === 0 ? 0.8 : 0.15);
       colors.push(color.r, color.g, color.b);
     }
     tube.computeVertexNormals();
@@ -33,11 +41,12 @@ export function harvestTreeGeometry(c: Palette): THREE.BufferGeometry {
   };
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
   branch([v(0, 0, 0), v(0.04, 1.3, -0.03), v(-0.08, 2.7, 0.04), v(0.05, 4.4, 0)], 0.25, 12);
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 6 && !far; i++) {
     const a = i * Math.PI / 3;
     branch([v(Math.cos(a) * 0.42, 0.025, Math.sin(a) * 0.42),
       v(Math.cos(a) * 0.18, 0.13, Math.sin(a) * 0.18), v(0, 0.68, 0)], 0.095, 4);
   }
+  const LEAF_STEP = far ? 3 : 1, LEAF_K = far ? Math.sqrt(3) : 1;
   const positions: number[] = [];
   const colors: number[] = [];
   for (let i = 0; i < 16; i++) {
@@ -47,18 +56,18 @@ export function harvestTreeGeometry(c: Palette): THREE.BufferGeometry {
     const reach = (4.9 - h) * (0.43 + rand(seed + 2) * 0.15);
     const end = v(Math.cos(a) * reach, h, Math.sin(a) * reach);
     branch([v(0, h - 0.8, 0), v(end.x * 0.48, h - 0.25, end.z * 0.48), end], 0.07);
-    for (let fork = 0; fork < 2; fork++) {
+    for (let fork = 0; fork < 2 && !far; fork++) {
       const angle = a + (fork === 0 ? -0.6 : 0.6);
       branch([end.clone().multiplyScalar(0.78), end.clone(),
         end.clone().add(v(Math.cos(angle) * 0.3, 0.24, Math.sin(angle) * 0.3))], 0.024, 4);
     }
-    for (let j = 0; j < 78; j++) {
+    for (let j = 0; j < 78; j += LEAF_STEP) {
       const k = seed + j * 7.137;
       const theta = rand(k + 3) * Math.PI * 2;
       const spread = Math.sqrt(rand(k + 4));
       const center = end.clone().add(v(Math.cos(theta) * spread * 0.56,
         (rand(k + 5) - 0.3) * 0.7, Math.sin(theta) * spread * 0.56));
-      const length = 0.11 + rand(k + 6) * 0.09;
+      const length = (0.11 + rand(k + 6) * 0.09) * LEAF_K;
       const width = length * 0.48;
       const along = v(Math.cos(theta), (rand(k + 10) - 0.5) * 0.9, Math.sin(theta)).normalize().multiplyScalar(length);
       const across = v(-Math.sin(theta), 0.2, Math.cos(theta)).multiplyScalar(width);
@@ -79,6 +88,11 @@ export function harvestTreeGeometry(c: Palette): THREE.BufferGeometry {
   leaves.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   leaves.computeVertexNormals();
   pieces.push(leaves);
+  if (far) {
+    const geometry = mergeGeometries(pieces, false)!;
+    pieces.forEach(piece => piece.dispose());
+    return geometry;
+  }
   // A pale axe scar keeps the resource legible beside decorative trees.
   const scar = new THREE.BoxGeometry(0.24, 0.13, 0.04).toNonIndexed();
   scar.translate(0, 1.2, 0.19);
