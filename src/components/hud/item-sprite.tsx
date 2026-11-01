@@ -72,8 +72,10 @@ export const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGE
   Bow: BowIcon, Pistol: PistolIcon, Rifle: RifleIcon, Surfboard: SurfboardIcon, Glider: GliderIcon, Hoverboard: HoverboardIcon,
 };
 
-/** Itens que não têm sprite webp: renderizam o ícone direto (sem 404). */
-const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor', 'surfboard', 'hang_glider', 'hover_skate']);
+/** Itens que não têm sprite webp: renderizam o ícone direto (sem 404).
+ *  01/11 (Pedro: "a imagem boa deles em vez da tosca"): prancha, asa-delta e skate ganharam sprite — foto dos PRÓPRIOS
+ *  modelos 3D do jogo (3/4, fundo transparente, 256 px) em /assets/items; saíram desta lista (o SVG fica de reserva). */
+const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor']);
 
 export type ItemSpriteProps = {
   itemId: string | null | undefined;
