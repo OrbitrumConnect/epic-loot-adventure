@@ -26,8 +26,12 @@ export const ROCK_LANDMARKS = [{ name: 'Pedra do Arpoador', height: 10, extendSe
  *  Navio (casco 7,7 m de boca, precisa de 3,2 m de água): fundura 3,2 a ±6 m do eixo = ~12 m navegáveis, ~2 m de folga
  *  de cada lado; a água aparece até ±~8 m (a 1ª versão, rampa 1,45, mostrava ~20 m — a grade de 4 m alarga a rampa
  *  rasa; parede mais em pé = mesma largura pro navio, menos avenida comida). A rua some onde virou água. */
+// 3º número de cada ponto = largura EXTRA (m, de cada lado) ali, variando ao longo do trecho. 2ª versão (Pedro 01/11: "tô
+// encalhando na entrada do canal"): BOCA EM FUNIL nas duas pontas — no mar abre da linha d'água (z 378) até +16 m onde o
+// mar já é fundo (z 400; medido: entre os dois o mar tem 1–3 m); na Lagoa abre desde a saída do canal (z 262) — +4 m no
+// lóbulo (sem encostar na ilha dos Caiçaras, x ≥ −192) até +12 m no meio. O trecho estreito (avenidas e areia) fica igual.
 export const CANAL_ALAH = {
-  path: [[-180, 150], [-200, 200], [-206, 240], [-205, 268], [-205, 280], [-223, 340], [-223, 372], [-224, 420]],
+  path: [[-180, 150, 12], [-200, 200, 9], [-206, 240, 4], [-205, 262, 0], [-205, 268, 0], [-205, 280, 0], [-223, 340, 0], [-223, 372, 0], [-223, 378, 0], [-224, 400, 16], [-224, 430, 16]],
   bottom: 10, flat: 3.7, slope: 3.0,
 };
 /** Fundura máxima da LAGOA Rodrigo de Freitas (m). Era 3 — o navio precisa de 3,2 + folga → o MEIO fica navegável (a

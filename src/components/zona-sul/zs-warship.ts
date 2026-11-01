@@ -18,6 +18,7 @@ export const WARSHIP = {
   TURN_STOPPED: 0.25,               // parado ainda gira um pouco (fração do giro) — não fica "engessado"
   AIM_SWING: 0.87,                  // a mira gira até ±50° pra frente/trás do través (segue a câmera)
   MIN_DEPTH: 3.2,                   // fundura mínima embaixo do casco (m)
+  SCRAPE_DRAG: 0.9,                 // raspando na margem perde ~60% do embalo por segundo (mas segue)
   BOARD_DIST: 16,                   // E embarca a até isto do centro (m)
   // canhões
   BALL_SPEED: 52, GRAVITY: 9.8,
@@ -68,10 +69,32 @@ export function warshipStep(swimmable: (x: number, z: number) => boolean, s: ZsW
   const ny = s.yaw + s.yawRate * dt;
   const nx = s.x + Math.sin(ny) * v * dt, nz = s.z + Math.cos(ny) * v * dt;
   if (hullFits(swimmable, nx, nz, ny)) { s.x = nx; s.z = nz; s.yaw = ny; }
+  else if (Math.abs(v) > 0.05 && scrape(swimmable, s, nx, nz, ny, dt)) v *= Math.exp(-WARSHIP.SCRAPE_DRAG * dt); // raspou e seguiu
   else if (hullFits(swimmable, s.x, s.z, ny)) { s.yaw = ny; v *= 0.3; }   // não passa: gira no lugar e perde o embalo
   else { v *= 0.3; s.yawRate *= 0.5; }
   s.speed = v;
   s.roll += (-s.yawRate * Math.min(1, sp / WARSHIP.MAX) * 0.6 - s.roll) * Math.min(1, dt * 1.5);
+}
+
+/**
+ * RASPAR NA PAREDE (Pedro 01/11: "tô encalhando na entrada do canal"): o passo não coube → tenta o MESMO passo com o
+ * casco empurrado um pouco pro lado e/ou a proa virando um pouco (o menor ajuste primeiro, pra onde a água deixa) — o
+ * navio desliza pela margem e se alinha com o canal em vez de travar (como barco em jogo: encosta, raspa e segue).
+ * Ajustes por quadro proporcionais ao dt (no máx. ~0,5 m e ~0,03 rad a 30 FPS).
+ */
+const SCRAPE_TRIES: readonly (readonly [number, number])[] = (() => {
+  const out: [number, number][] = [];
+  for (const lat of [0, 0.15, -0.15, 0.3, -0.3, 0.5, -0.5]) for (const dy of [0, 0.015, -0.015, 0.03, -0.03]) if (lat || dy) out.push([lat, dy]);
+  return out.sort((a, b) => Math.abs(a[0]) + Math.abs(a[1]) * 15 - (Math.abs(b[0]) + Math.abs(b[1]) * 15));
+})();
+function scrape(swimmable: (x: number, z: number) => boolean, s: ZsWarship, nx: number, nz: number, ny: number, dt: number): boolean {
+  const k = Math.min(2, dt * 30);
+  for (const [lat, dy] of SCRAPE_TRIES) {
+    const yaw = ny + dy * k, rx = Math.cos(yaw), rz = -Math.sin(yaw); // direita do navio
+    const x = nx + rx * lat * k, z = nz + rz * lat * k;
+    if (hullFits(swimmable, x, z, yaw)) { s.x = x; s.z = z; s.yaw = yaw; return true; }
+  }
+  return false;
 }
 
 /** Lado do costado pra onde a câmera olha (yaw da VISÃO, câmera → alvo). Direita do navio = (cos yaw, −sin yaw). */

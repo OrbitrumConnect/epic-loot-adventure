@@ -180,13 +180,13 @@ console.log(JSON.stringify({ ruas: RD.roads.length, km_jogo: +RD.km.toFixed(2), 
 
 // CANAL DO JARDIM DE ALAH NAVEGÁVEL (01/11, ver CANAL_ALAH): depois das ruas (o nivelamento delas não mexe no canal).
 // Só abaixa: altura = mín(chão, perfil do canal). O que virou água vira LAGOA (água de dentro — o tubarão é só do mar).
-/** distância (m do jogo) de (x, z) ao eixo do canal */
+/** distância (m do jogo) de (x, z) ao eixo do canal, descontada a largura extra do trecho (boca em funil) */
 const canalDist = (x, z) => {
   let best = Infinity; const P = CANAL_ALAH.path;
   for (let k = 0; k + 1 < P.length; k++) {
-    const [ax, az] = P[k], [bx, bz] = P[k + 1], vx = bx - ax, vz = bz - az, l2 = vx * vx + vz * vz || 1;
+    const [ax, az, ea = 0] = P[k], [bx, bz, eb = 0] = P[k + 1], vx = bx - ax, vz = bz - az, l2 = vx * vx + vz * vz || 1;
     const u = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / l2));
-    best = Math.min(best, Math.hypot(x - ax - vx * u, z - az - vz * u));
+    best = Math.min(best, Math.hypot(x - ax - vx * u, z - az - vz * u) - (ea + (eb - ea) * u));
   }
   return best;
 };

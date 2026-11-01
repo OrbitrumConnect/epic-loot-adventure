@@ -60,6 +60,26 @@ describe('canal do Jardim de Alah navegável', () => {
     expect(r, JSON.stringify(r)).toMatchObject({ ok: true });
   });
 
+  it('chegando TORTO do mar e pilotando "no olho" (sem antecipar a curva) não encalha: boca em funil + casco raspa e segue', () => {
+    // piloto desajeitado: mira SÓ o próximo ponto (sem olhar à frente) e vem 28 m de lado, em diagonal
+    const swim = (x: number, z: number) => zsNavigable(t, x, z, WARSHIP.MIN_DEPTH);
+    const pts: [number, number][] = [[-223, 395], [-223, 372], [-223, 340], [-205, 280], [-205, 262], [-206, 240], [-200, 200], [-180, 150]];
+    const s = newWarship(-195, 455, Math.PI + 0.45);
+    expect(hullFits(swim, s.x, s.z, s.yaw)).toBe(true);
+    let i = 0, stuck = 0, worstStuck = 0;
+    const dt = 1 / 30;
+    for (let k = 0; k < 400 / dt && i < pts.length; k++) {
+      const [tx, tz] = pts[i]!;
+      if (Math.hypot(tx - s.x, tz - s.z) < 9) { i++; continue; }
+      let diff = Math.atan2(tx - s.x, tz - s.z) - s.yaw; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      const x0 = s.x, z0 = s.z;
+      warshipStep(swim, s, { throttle: 1, steer: diff > 0.05 ? -1 : diff < -0.05 ? 1 : 0 }, dt);
+      if (Math.hypot(s.x - x0, s.z - z0) < 0.01) { stuck++; worstStuck = Math.max(worstStuck, stuck); } else stuck = 0;
+    }
+    expect(i, `parou antes do ponto ${i} em (${s.x.toFixed(1)}, ${s.z.toFixed(1)})`).toBe(pts.length);
+    expect(worstStuck * dt).toBeLessThan(2); // nunca fica mais de 2 s parado
+  });
+
   it('e volta da Lagoa pro mar', () => {
     const back = [...ROUTE].reverse() as [number, number][];
     const [ax, az] = back[0]!, [bx, bz] = back[1]!;
