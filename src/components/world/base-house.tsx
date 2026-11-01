@@ -197,6 +197,7 @@ function BaseHouseInner({
       halfZ: prepared.halfZ,
       floorY,
       wallSegs: prepared.wallSegs,
+      topY: baseGroundY(ctr.x, ctr.z) + TARGET_H * VSTRETCH, // topo da casa (tiro por cima passa — 01/11)
       ...(prepared.levels ? { baseY: baseGroundY(ctr.x, ctr.z), levels: prepared.levels, floorMesh: prepared.floorMesh } : {}),
     };
     return () => {

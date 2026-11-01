@@ -25,6 +25,8 @@ export type HouseCollider = {
    */
   baseY?: number;
   levels?: import('./house-levels').HouseLevels;
+  /** Y mundial do TOPO da casa (01/11): linha de tiro acima disto passa por cima (casa de madeira, sem fatias). */
+  topY?: number;
   floorMesh?: import('three').Mesh | null;
 };
 

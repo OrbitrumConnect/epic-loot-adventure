@@ -114,8 +114,9 @@ export function factoryRoofCutY(px: number, pz: number): number | null {
   return null;
 }
 
-/** O segmento AB (chão, XZ) cruza algum segmento de parede (relativo a cx,cz)? */
-function crossesSegs(ax: number, az: number, bx: number, bz: number, cx: number, cz: number, segs: number[]): boolean {
+/** O segmento AB (chão, XZ) cruza algum segmento de parede (relativo a cx,cz)? `accept(t)` (opcional): só conta o
+ *  cruzamento no ponto `t` (0..1 ao longo de AB) que ele aceitar. */
+function crossesSegs(ax: number, az: number, bx: number, bz: number, cx: number, cz: number, segs: number[], accept?: (t: number) => boolean): boolean {
   const rx = bx - ax, rz = bz - az;
   for (let i = 0; i < segs.length; i += 4) {
     const px = cx + segs[i]!, pz = cz + segs[i + 1]!;
@@ -124,20 +125,62 @@ function crossesSegs(ax: number, az: number, bx: number, bz: number, cx: number,
     if (Math.abs(den) < 1e-9) continue; // paralelos
     const t = ((px - ax) * sz - (pz - az) * sx) / den;
     const u = ((px - ax) * rz - (pz - az) * rx) / den;
-    if (t > 0 && t < 1 && u >= 0 && u <= 1) return true;
+    if (t > 0 && t < 1 && u >= 0 && u <= 1 && (!accept || accept(t))) return true;
   }
   return false;
 }
 
+/** Passo (m) da linha de tiro dentro da casa de 2 andares (testa a parede da altura de cada trecho). */
+const SHOT_STEP_IN_HOUSE = 0.4;
+
 /**
  * Linha de tiro: parede GRANDE no caminho? Casa (pedra/metal) e fábricas bloqueiam; muro/torre
  * da base (finos) deixam passar — decisão do Pedro (22/10). Pela porta/abertura passa.
+ * COM ALTURA (01/11, Pedro: "atirando, a bala vai lá e mal pega — nem tá tão longe"; ele atirava da VARANDA/2º andar
+ * do Salão da Tribo): antes a conta era só no chão (2D) com a parede do TÉRREO — de cima, todo tiro pra fora "batia"
+ * nela e virava tiro no vazio (a bala desenhava, sem dano). Com `ay`/`by` (altura de quem atira e do alvo): na casa de
+ * 2 andares vale a parede DA ALTURA por onde a linha passa (janela e porta deixam passar; por cima do telhado passa);
+ * na de madeira, só bloqueia abaixo do topo dela. Sem altura: como antes.
  */
-export function bigWallBetween(ax: number, az: number, bx: number, bz: number): boolean {
+export function bigWallBetween(ax: number, az: number, bx: number, bz: number, ay?: number, by?: number): boolean {
   const h = houseCollider.current;
-  if (h && HOUSE_WALLS_SOLID && crossesSegs(ax, az, bx, bz, h.cx, h.cz, h.wallSegs)) return true;
+  if (h && HOUSE_WALLS_SOLID) {
+    const has3d = ay !== undefined && by !== undefined && Number.isFinite(ay) && Number.isFinite(by);
+    if (has3d && h.levels && h.baseY !== undefined) {
+      if (shotCrossesHouseLevels(h.levels, h.baseY, h.cx, h.cz, h.halfX, h.halfZ, ax, ay!, az, bx, by!, bz)) return true;
+    } else if (has3d && h.topY !== undefined) {
+      if (crossesSegs(ax, az, bx, bz, h.cx, h.cz, h.wallSegs, (t) => ay! + (by! - ay!) * t < h.topY!)) return true;
+    } else if (crossesSegs(ax, az, bx, bz, h.cx, h.cz, h.wallSegs)) return true;
+  }
   if (FACTORY_WALLS_SOLID) {
     for (const f of factoryColliders) if (crossesSegs(ax, az, bx, bz, f.cx, f.cz, f.wallSegs)) return true;
+  }
+  return false;
+}
+
+/** A linha 3D A→B cruza uma parede da casa de 2 andares NA ALTURA em que passa? Anda em trechos de
+ *  `SHOT_STEP_IN_HOUSE` só dentro do retângulo da casa (+1 m); cada trecho testa a fatia de parede da altura dele. */
+export function shotCrossesHouseLevels(
+  levels: { step: number; segs: number[][] }, baseY: number, cx: number, cz: number, halfX: number, halfZ: number,
+  ax: number, ay: number, az: number, bx: number, by: number, bz: number,
+): boolean {
+  // recorta A→B no retângulo da casa (+1 m) — fora dele não há parede
+  const dx = bx - ax, dz = bz - az;
+  let t0 = 0, t1 = 1;
+  for (const [p, d, lo, hi] of [[ax, dx, cx - halfX - 1, cx + halfX + 1], [az, dz, cz - halfZ - 1, cz + halfZ + 1]] as const) {
+    if (Math.abs(d) < 1e-9) { if (p < lo || p > hi) return false; continue; }
+    let ta = (lo - p) / d, tb = (hi - p) / d;
+    if (ta > tb) [ta, tb] = [tb, ta];
+    t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+    if (t0 > t1) return false;
+  }
+  const len = Math.hypot(dx, dz) * (t1 - t0);
+  const n = Math.max(1, Math.ceil(len / SHOT_STEP_IN_HOUSE));
+  for (let k = 0; k < n; k++) {
+    const s0 = t0 + ((t1 - t0) * k) / n, s1 = t0 + ((t1 - t0) * (k + 1)) / n, sm = (s0 + s1) / 2;
+    const slice = levels.segs[Math.round((ay + (by - ay) * sm - baseY) / levels.step)];
+    if (!slice || slice.length === 0) continue; // acima do telhado / abaixo do piso / vão
+    if (crossesSegs(ax + dx * s0, az + dz * s0, ax + dx * s1, az + dz * s1, cx, cz, slice)) return true;
   }
   return false;
 }

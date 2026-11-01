@@ -96,7 +96,8 @@ export function creatureBody(a: { y: number; top: number; r?: number }): { cy: n
 /** Coisa GRANDE no caminho (morro/mapa/labirinto, casa, fábrica)? Muro/torre da base passam. */
 function shotBlocked(origin: THREE.Vector3, p: THREE.Vector3): boolean {
   const me = useGameStore.getState().player.position;
-  if (bigWallBetween(me.x, me.z, p.x, p.z)) return true;
+  // com ALTURA (01/11): da varanda/2º andar da casa, a parede do térreo não segura o tiro (ver bigWallBetween)
+  if (bigWallBetween(me.x, me.z, p.x, p.z, origin.y, p.y)) return true;
   // A câmera fica atrás do ombro: ignora o trecho câmera→herói (barranco atrás das costas).
   const skip = Math.hypot(origin.x - me.x, origin.z - me.z) + 0.3;
   return worldBlocksShot(origin, p, skip);
