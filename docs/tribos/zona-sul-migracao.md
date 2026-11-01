@@ -155,7 +155,9 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [x] (01/11) Desempenho com o MESMO desenho (A/B pixel a pixel): ~2 mi → ~1,1 mi na superfície, 1,44 mi → 0,09 mi na caverna — sombra do sol parada no fundo da caverna, sombra das árvores de coleta só na caixa do sol, 1 passada, recorte pela câmera, acampamentos/recursos somem no fundo da caverna (diário 01/11 §1). Acampamento leve de longe NÃO (mudava pixels)
 - [x] (01/11) Escolhido o navio A (galeão com canhões) pro navio de guerra; tubarão = só clipe de nado (mordida por código no osso da mandíbula)
 - [ ] (01/11) Carro com barra de vida IGUAL à do herói (junto do item da vida do carro)
-- [ ] (01/11) Tubarão: perto dos picos de surf (na área por onde se chega remando, não em cima do drop) + alguns soltos pelo mar
+- [x] (01/11) Tubarão: perto dos picos de surf (na área por onde se chega remando, não em cima do drop) + alguns soltos pelo mar — `2ff2926` (mordida 50; só na água funda; escala pelos ossos)
+- [x] (01/11) Remada e nado +25% — `2ff2926` · recursos de farm fora de pista/água + folha no tom da mata — `1eb4b60`
+- [ ] (01/11) NAVIO DE GUERRA v1 (nv 70): embarcar, dirigir, canhões mirando, dano em área — em andamento
 - [ ] (01/11) Mais inimigos que atiram nos morros: acima da Gávea, Vista Chinesa, Rocinha, Vidigal — quantos cabem (medir)
 - [ ] (01/11) Árvores menos "low poly feias" (galhos/braços, folhagem simples, detalhes leves) + grama leve nas áreas verdes fora da pista/areia — proposta medida antes de mexer
 
