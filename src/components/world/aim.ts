@@ -14,7 +14,7 @@ import { bigWallBetween } from './base-collision';
 import { glbSurfaceY, worldBlocksShot, worldShotHitDistance } from './terrain-collision';
 import { isHostileBaseOwner, STRIKABLE_REMOTE, strikeRemotePiece, strikeRemoteTroop } from './remote-base-strike';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
-import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
+import { aimedRangeFor, weaponFor, weaponRangeFor } from '@/game/data/weapons';
 
 /** Item na mão (igual `held-weapon.selectedItemId` — sem importar modelos 3D: este módulo carrega
  *  ANTES do login e não pode puxar GLB). */
@@ -161,7 +161,7 @@ export function missPoint(camera: THREE.Camera): { x: number; z: number; y: numb
   const st = useGameStore.getState();
   const me = st.player.position;
   const skip = Math.hypot(o.x - me.x, o.z - me.z) + 0.3; // trecho câmera→ombro
-  const far = skip + weaponRangeFor(heldId(st), st.player.level);
+  const far = skip + aimedRangeFor(heldId(st), st.player.level); // mirado: o alcance real da arma (01/11)
   const dist = worldShotHitDistance(o, d, far, skip) ?? far;
   const p = o.addScaledVector(d, dist);
   return { x: p.x, z: p.z, y: p.y };
@@ -181,7 +181,8 @@ export function aimFire(): boolean {
     // Espada/corpo a corpo: o do centro só se estiver NO ALCANCE; senão cai no ataque normal (o mais perto
     // no alcance) e, sem ninguém, golpe no ar. Antes: 'longe demais' e nem balançava (Pedro 25/10).
     if (meleeOutOfReach(t.id)) return false;
-    useGameStore.getState().attack(t.id);
+    // MIRADO (01/11): o que está sob o pontinho e você enxerga, a bala alcança (alcance real da arma)
+    useGameStore.getState().attack(t.id, false, true);
     return true;
   }
   if (t.kind === 'piece') {
@@ -192,6 +193,6 @@ export function aimFire(): boolean {
     strikeRemoteTroop(t.ownerId, t.troopId);
     return true;
   }
-  if (pvpStrike(t.name, t.x, t.z, 0.6, (raw) => broadcastPlayerHit(t.id, raw))) markPvpHit(t.id);
+  if (pvpStrike(t.name, t.x, t.z, 0.6, (raw) => broadcastPlayerHit(t.id, raw), false, true)) markPvpHit(t.id);
   return true;
 }

@@ -5,7 +5,7 @@
  * (`pvpSystem`). Dispara a animação de ataque do herói.
  */
 import { useGameStore } from '@/game/state/game-store';
-import { weaponFor, weaponRangeFor } from '@/game/data/weapons';
+import { aimedDamageScale, aimedRangeFor, weaponFor, weaponRangeFor } from '@/game/data/weapons';
 import { damageMultiplier } from '@/game/systems/attributesSystem';
 import { playerBaseAttack } from '@/game/systems/progressionSystem';
 import { getItemCount, removeItem } from '@/game/systems/inventorySystem';
@@ -28,7 +28,7 @@ export function hitRecently(id: string, windowMs = 6000): boolean {
 
 /** Tenta golpear um alvo em (tx,tz). `extraRange` folga pro tamanho do alvo. true = golpe saiu.
  *  `quiet`: golpe automático do alvo travado — sem mensagem de "longe demais". */
-export function pvpStrike(targetName: string, tx: number, tz: number, extraRange: number, send: (raw: number) => void, quiet = false): boolean {
+export function pvpStrike(targetName: string, tx: number, tz: number, extraRange: number, send: (raw: number) => void, quiet = false, aimed = false): boolean {
   const store = useGameStore.getState();
   const me = store.player;
   if (me.dead) return false;
@@ -36,7 +36,9 @@ export function pvpStrike(targetName: string, tx: number, tz: number, extraRange
   const prof = weaponFor(heldId);
   const now = Date.now() / 1000;
   if (now - me.lastAttackAt < prof.cooldown) return false; // cadência da arma (sem spam)
-  const range = weaponRangeFor(heldId, me.level);
+  // MIRADO (pontinho, 01/11): alcance REAL da arma — no PvP o que você vê e mira, a bala alcança; dano cai além do curto
+  const nearRange = weaponRangeFor(heldId, me.level);
+  const range = aimed ? aimedRangeFor(heldId, me.level) : nearRange;
   const dist = Math.hypot(me.position.x - tx, me.position.z - tz);
   if (dist > range + extraRange) {
     if (!quiet) store.setMessage(`${targetName} está longe demais (${range.toFixed(1)}m).`);
@@ -48,7 +50,8 @@ export function pvpStrike(targetName: string, tx: number, tz: number, extraRange
     lockedTarget = null;
     return false;
   }
-  const raw = Math.max(1, Math.round((playerBaseAttack(me.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0)) * damageMultiplier(me)));
+  const farK = aimed && prof.ranged ? aimedDamageScale(dist, nearRange, range) : 1;
+  const raw = Math.max(1, Math.round((playerBaseAttack(me.level) + (heldId ? (ITEMS[heldId]?.attackPower ?? 0) : 0)) * damageMultiplier(me) * farK));
   useGameStore.setState((s) => ({
     player: { ...s.player, lastAttackAt: now, inventory: ammoItem ? removeItem(s.player.inventory, ammoItem, 1) : s.player.inventory },
     attackTick: s.attackTick + 1,

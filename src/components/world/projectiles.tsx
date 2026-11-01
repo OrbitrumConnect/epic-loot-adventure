@@ -22,7 +22,9 @@ function ArrowAssetLoader({ onReady }: { onReady: (a: { geometry: THREE.BufferGe
 }
 
 const POOL = 16;
-const SPEED = 40; // m/s
+const SPEED = 40; // m/s — flecha (dá pra ver voando)
+/** BALA (01/11): 40 m/s levava ~4 s a 150 m ("parece que a bala não chega") → 220 m/s, quase na hora, como tiro de verdade. */
+const BULLET_SPEED = 220;
 
 type Shot = {
   active: boolean;
@@ -78,7 +80,7 @@ export function Projectiles() {
     if (ev.hero && heroMuzzleFresh()) s.from.set(heroMuzzle.x, heroMuzzle.y, heroMuzzle.z);
     else s.from.set(ev.position.x, ground(ev.position.x, ev.position.z) + (ev.sourceHeight ?? 1.1), ev.position.z);
     s.to.set(ev.to.x, ev.toY ?? ground(ev.to.x, ev.to.z) + 0.8, ev.to.z);
-    s.dur = Math.max(0.05, s.from.distanceTo(s.to) / SPEED);
+    s.dur = Math.max(0.05, s.from.distanceTo(s.to) / (ev.projectile === 'bullet' ? BULLET_SPEED : SPEED));
     s.t = 0;
     s.active = true;
     if (m) {
@@ -91,7 +93,7 @@ export function Projectiles() {
       mat.color.set(bullet ? '#ffe08a' : '#caa36a');
       mat.emissive.set(bullet ? '#ffb020' : '#000000');
       mat.emissiveIntensity = bullet ? 1.4 : 0;
-      m.scale.set(bullet ? 0.7 : 1, bullet ? 0.5 : 1, bullet ? 0.7 : 1);
+      m.scale.set(bullet ? 0.7 : 1, bullet ? 4 : 1, bullet ? 0.7 : 1); // bala rápida = risco de luz de ~2 m (traçante)
       m.visible = true;
       m.position.copy(s.from);
       m.lookAt(s.to);

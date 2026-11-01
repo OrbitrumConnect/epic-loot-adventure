@@ -7,7 +7,7 @@ import type {
 import { combineStorage, hordeStorageLoss, splitSpend } from '../systems/baseStorageSystem';
 import { ITEMS } from '../data/items';
 import { slotForItem, ringSlotForEquipment, type EquipmentKey } from '../systems/equipmentSlots';
-import { weaponFor, weaponRangeFor } from '../data/weapons';
+import { aimedDamageScale, aimedRangeFor, weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
 import { audioManager, distanceGain } from '../audio/audio-manager';
 import { noteShotAt } from '../systems/shotFacing';
@@ -172,7 +172,9 @@ type GameActions = {
   upgradeTower: (pieceId: string) => void;
   /** Aplica o dano dos powers orbitais (bumerangues) na horda. Throttled. */
   tickPowers: (now: number) => void;
-  attack: (targetId: string, fromBurst?: boolean) => void;
+  /** `aimed` = tiro pelo PONTINHO da mira (3ª pessoa/PvP): alcance real da arma (`aimedRangeFor`), dano caindo além do
+   *  alcance curto. Sem ele (piloto/idle, clique no bicho): o alcance curto de sempre. */
+  attack: (targetId: string, fromBurst?: boolean, aimed?: boolean) => void;
   /** Tiro NO VAZIO (mira em 3ª pessoa, pontinho sem alvo — igual CS): arma de longe gasta
    *  munição/cadência, toca o som e o projétil sai rumo a `toward`. Não acerta ninguém.
    *  Retorna false se a arma na mão não é de longe (aí o chamador usa o ataque de sempre). */
@@ -984,7 +986,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     return true;
   },
 
-  attack: (targetId: string, fromBurst = false) => {
+  attack: (targetId: string, fromBurst = false, aimed = false) => {
     const state = get();
     const creature = state.creatures.find(c => c.id === targetId);
     if (!creature || creature.behavior === 'dead') return;
@@ -1012,7 +1014,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst, boostK)) return;
 
     const dist = getDistance(state.player.position, creature.position);
-    const reach = weaponRangeFor(heldItemId, state.player.level);
+    const nearReach = weaponRangeFor(heldItemId, state.player.level);
+    const reach = aimed ? aimedRangeFor(heldItemId, state.player.level) : nearReach;
     if (dist > reach) {
       // Pedro 26/10 ("só consigo atirar perto"): arma de longe + alvo além do alcance → o tiro SAI na direção dele e
       // cai no limite do alcance (gasta bala, sem dano). Antes não acontecia nada. Corpo a corpo: aviso, como antes.
@@ -1043,7 +1046,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (breakGrab(targetId)) set(s => ({ ui: { ...s.ui, message: '💪 Você se soltou do jacaré!' } }));
     // Daqui o tiro SAI: gatilho do rifle abre a rajada (os próximos tiros repetem este mesmo ataque).
     if (!fromBurst && burstN > 1) {
-      startBurst(burstN, () => { const b = get().player.lastAttackAt; get().attack(targetId, true); return get().player.lastAttackAt !== b; }, Date.now(), BURST_GAP * boostK);
+      startBurst(burstN, () => { const b = get().player.lastAttackAt; get().attack(targetId, true, aimed); return get().player.lastAttackAt !== b; }, Date.now(), BURST_GAP * boostK);
     }
 
     // Poder da arma ATIVA = a que está na MÃO (hotbar), não o slot
@@ -1062,7 +1065,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       : base + heldWeaponPower;
 
     // Atributo de dano (%): multiplica o poder final. Nível 1 sem equip = ×1 (sem mudança).
-    const finalPower = Math.round((totalPower + equipmentStats(state.player).damage) * damageMultiplier(state.player));
+    // Tiro MIRADO além do alcance curto: o dano cai até 60% no máximo (aimedDamageScale).
+    const farK = aimed && usingRanged ? aimedDamageScale(dist, nearReach, reach) : 1;
+    const finalPower = Math.round((totalPower + equipmentStats(state.player).damage) * damageMultiplier(state.player) * farK);
 
     // Em sala convidada o inimigo pertence ao anfitrião. O convidado conserva
     // apenas o próprio cooldown/munição e envia a intenção do golpe; a vida

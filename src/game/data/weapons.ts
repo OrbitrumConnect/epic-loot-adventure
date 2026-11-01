@@ -49,6 +49,25 @@ export function weaponRangeFor(itemId: string | null | undefined, level = 1): nu
   return Math.round(Math.min(MAX_WEAPON_RANGE, scaled) * 10) / 10;
 }
 
+/**
+ * MIRANDO NA MÃO (pontinho da mira, 3ª pessoa com a câmera no ombro, PvP — Pedro 01/11: "um tiro de fuzil pega longe;
+ * no PvP o jogador não pode ter a sensação de que atira e a bala não chega; no idle curto fica legal, visível"):
+ * alcance REAL da arma. O piloto/idle e o clique sem mira seguem o curto (`weaponRangeFor`).
+ * Equilíbrio: dano cheio até o alcance curto; além dele cai até `AIMED_FAR_DAMAGE` no máximo (não vira sniper de 1 tiro).
+ */
+export const AIMED_RANGE: Readonly<Record<string, number>> = { rifle: 150, pistol: 60, bow: 80 };
+export const AIMED_FAR_DAMAGE = 0.6;
+export function aimedRangeFor(itemId: string | null | undefined, level = 1): number {
+  const prof = weaponFor(itemId), near = weaponRangeFor(itemId, level);
+  if (!prof.ranged) return near;
+  return Math.max(near, AIMED_RANGE[prof.type] ?? near);
+}
+/** Fator de dano do tiro mirado a `dist` m: 1 até o curto (`near`), caindo até AIMED_FAR_DAMAGE no máximo (`far`). */
+export function aimedDamageScale(dist: number, near: number, far: number): number {
+  if (dist <= near) return 1;
+  return 1 - (1 - AIMED_FAR_DAMAGE) * Math.min(1, (dist - near) / Math.max(1, far - near));
+}
+
 /** Perfil da arma de um item (ou o melee padrão). */
 export function weaponFor(itemId: string | null | undefined): WeaponProfile {
   return (itemId ? WEAPONS[itemId] : undefined) ?? DEFAULT_MELEE;
