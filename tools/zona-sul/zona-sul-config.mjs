@@ -18,6 +18,21 @@ export const ISLAND_BEACH = 10;
 export const PEAK_BOOST = { Corcovado: 1.12 };
 // Pedro 28/10: "a pedra do Arpoador um pouco mais alta e mais pra dentro do mar" → 7 → 10 m e +30 m mar adentro
 export const ROCK_LANDMARKS = [{ name: 'Pedra do Arpoador', height: 10, extendSea: 30 }];
+/** CANAL DO JARDIM DE ALAH NAVEGÁVEL (Pedro 01/11: "mais fundo, mais água pra passar o navio — não precisa arrombar, passa
+ *  um navio por vez com uma sobrinha normal boa"). Era 1 célula (4 m) com < 1 m de água e a boca fechada por areia.
+ *  Eixo (coordenadas do jogo, x leste, z sul) do MEIO da Lagoa → lóbulo sudoeste (entre a margem e a ilha) → entre as
+ *  duas avenidas do Jardim de Alah → praia → mar fundo. Perfil atravessado: fundo chato de `bottom` m até `flat` m do
+ *  eixo, depois sobe `slope` m por m (parede de canal) até encontrar o chão — só ABAIXA (nunca levanta nada fora).
+ *  Navio (casco 7,7 m de boca, precisa de 3,2 m de água): fundura 3,2 a ±6 m do eixo = ~12 m navegáveis, ~2 m de folga
+ *  de cada lado; a água aparece até ±~8 m (a 1ª versão, rampa 1,45, mostrava ~20 m — a grade de 4 m alarga a rampa
+ *  rasa; parede mais em pé = mesma largura pro navio, menos avenida comida). A rua some onde virou água. */
+export const CANAL_ALAH = {
+  path: [[-180, 150], [-200, 200], [-206, 240], [-205, 268], [-205, 280], [-223, 340], [-223, 372], [-224, 420]],
+  bottom: 10, flat: 3.7, slope: 3.0,
+};
+/** Fundura máxima da LAGOA Rodrigo de Freitas (m). Era 3 — o navio precisa de 3,2 + folga → o MEIO fica navegável (a
+ *  fundura cresce 0,1 m por m da margem: até 27 m da beira nada muda). Laguinhos/represas seguem com 3. */
+export const LAGOA_MAX_DEPTH = 5;
 /** Relevo: tiles terrarium z14 (~9,6 m por pixel aqui; a origem SRTM é ~30 m). */
 export const DEM_Z = 14;
 /** Escala horizontal do jogo: 1 m no jogo = SCALE m reais. Pedro 28/10: 1º "15 min pra atravessar" → 1:3; depois de

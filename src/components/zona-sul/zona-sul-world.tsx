@@ -68,7 +68,7 @@ import { createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsShar
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
-import { createCaveCreatures, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
+import { createCaveCreatures, zsNavigable, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
 import { useZsTouch, zsAttack, zsCave, zsCtx } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, Gauge, LogOut, Ship } from 'lucide-react';
@@ -246,8 +246,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   useEffect(() => { scene.fog = fog; return () => { scene.fog = null; }; }, [scene, fog]);
   const wasOverview = useRef(false);
   const camTarget = useRef(new THREE.Vector3());
-  /** mar fundo o bastante pro casco do navio de guerra */
-  const shipSwim = useMemo(() => (x: number, z: number) => zsSwimmable(t, x, z, WARSHIP.MIN_DEPTH), [t]);
+  /** água funda o bastante pro casco do navio de guerra: mar, canal do Jardim de Alah e Lagoa (01/11) */
+  const shipSwim = useMemo(() => (x: number, z: number) => zsNavigable(t, x, z, WARSHIP.MIN_DEPTH), [t]);
 
   useFrame((_, dtRaw) => {
     const dt = Math.min(0.05, dtRaw);

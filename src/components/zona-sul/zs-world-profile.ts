@@ -60,11 +60,21 @@ export function zsWalkable(t: ZsTerrain, x: number, z: number): boolean {
 }
 
 /** MAR FUNDO pra bicho aquático (tubarão, 01/11): dentro do mapa + a faixa de mar além da borda (`ZS_SEA_BAND`), chão
- *  de MAR (não Lagoa) e fundura mínima. O navio de guerra usa a mesma regra com a fundura dele (`minDepth`). */
+ *  de MAR (não Lagoa) e fundura mínima. */
 export function zsSwimmable(t: ZsTerrain, x: number, z: number, minDepth: number = ZS_SHARK_MIN_DEPTH): boolean {
   const b = zsSeaBounds(t);
   if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return false;
   return zsSurfAt(t, x, z) === ZS_SURF.sea && zsHeightAt(t, x, z) <= ZS_WATER_Y - minDepth;
+}
+
+/** ÁGUA NAVEGÁVEL pro navio de guerra (01/11, Pedro: "o canal do Jardim de Alah mais fundo pra passar o navio"): mar,
+ *  canal e Lagoa — qualquer água com a fundura do casco (`minDepth`). Pela ALTURA (bilinear), não pelo tipo da célula
+ *  mais perto: na beira do canal (célula de 4 m) a água funda vai até onde o fundo sobe de verdade. Chão abaixo da água
+ *  só existe dentro d'água (a terra mais baixa do mapa fica a +0,15 m). */
+export function zsNavigable(t: ZsTerrain, x: number, z: number, minDepth: number): boolean {
+  const b = zsSeaBounds(t);
+  if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return false;
+  return zsHeightAt(t, x, z) <= ZS_WATER_Y - minDepth;
 }
 
 export function zsWorldProfile(t: ZsTerrain, q: ZsQuery = zsQuery(t)): WorldProfile {

@@ -11,7 +11,7 @@
 //     LAGOA (água do OSM) com fundo próprio; PRAIA = declive suave até a água.
 import fs from 'node:fs';
 import sharp from 'sharp';
-import { APRON_PX, BBOX, ISLAND_BEACH, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
+import { APRON_PX, BBOX, CANAL_ALAH, ISLAND_BEACH, LAGOA_MAX_DEPTH, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
 import { loadDem } from './dem.mjs';
 import { buildMasks, joinRings } from './masks.mjs';
 import { buildRoads, MAX_GRADE, rasterRoadMask } from './roads.mjs';
@@ -124,7 +124,7 @@ for (let p = 0; p < W * H; p++) {
   const dm = dLand[p] * CELL; // m (jogo) água adentro
   // fundo desce 12 cm/m (era 6): nada a ~7 m da areia (Pedro: "fiquei lento na água" — 40 m adentro ainda dava pé)
   if (sea[p]) { hg[p] = -Math.min(12, 0.35 + dm * 0.12); surf[p] = SURF.sea; continue; }
-  if (water[p]) { hg[p] = -Math.min(3, 0.3 + dm * 0.1); surf[p] = SURF.lagoon; continue; }
+  if (water[p]) { hg[p] = -Math.min(lagoaMask[p] ? LAGOA_MAX_DEPTH : 3, 0.3 + dm * 0.1); surf[p] = SURF.lagoon; continue; } // Lagoa: meio navegável (01/11)
   let h = e[p] / SCALE * RELIEF;
   const dw = dWater[p] * CELL; // m (jogo) até a água
   // praia: terra baixa perto da água desce suave até 0,15 m acima da água (costão alto fica como está)
@@ -178,6 +178,29 @@ const RD = buildRoads({ osm, toPx, W, H, CELL, hg, surf, SURF, gameX, gameZ, min
 fs.mkdirSync('public/zona-sul', { recursive: true });
 console.log(JSON.stringify({ ruas: RD.roads.length, km_jogo: +RD.km.toFixed(2), nivelados_px: RD.graded, maiorMudanca_m: +RD.maxDelta.toFixed(2), trava_m: MAX_GRADE }));
 
+// CANAL DO JARDIM DE ALAH NAVEGÁVEL (01/11, ver CANAL_ALAH): depois das ruas (o nivelamento delas não mexe no canal).
+// Só abaixa: altura = mín(chão, perfil do canal). O que virou água vira LAGOA (água de dentro — o tubarão é só do mar).
+/** distância (m do jogo) de (x, z) ao eixo do canal */
+const canalDist = (x, z) => {
+  let best = Infinity; const P = CANAL_ALAH.path;
+  for (let k = 0; k + 1 < P.length; k++) {
+    const [ax, az] = P[k], [bx, bz] = P[k + 1], vx = bx - ax, vz = bz - az, l2 = vx * vx + vz * vz || 1;
+    const u = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / l2));
+    best = Math.min(best, Math.hypot(x - ax - vx * u, z - az - vz * u));
+  }
+  return best;
+};
+const canalProfile = (d) => -CANAL_ALAH.bottom + Math.max(0, d - CANAL_ALAH.flat) * CANAL_ALAH.slope;
+const CANAL_REACH = CANAL_ALAH.flat + CANAL_ALAH.bottom / CANAL_ALAH.slope + 6; // além disto o perfil já passou de +4 m
+let canalPx = 0;
+for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+  const d = canalDist(gameX(i + 0.5), gameZ(j + 0.5)); if (d > CANAL_REACH) continue;
+  const p = j * W + i, c = canalProfile(d); if (c >= hg[p]) continue;
+  hg[p] = c; canalPx++;
+  if (c < 0 && surf[p] !== SURF.sea && surf[p] !== SURF.lagoon) surf[p] = SURF.lagoon;
+}
+console.log(JSON.stringify({ canalJardimDeAlah_px: canalPx }));
+
 // ESTENDER ATÉ A ÁGUA (Pedro: "você deve apenas estender até a água; o resto não remover"): o mapa ganha uma faixa NOVA
 // de APRON_PX em volta. Terra que chegava na borda continua pra fora DESCENDO (pedra/encosta) até uma praia no pé e o
 // mar; mar na borda continua mar. Nada dentro do mapa muda. Coordenadas do jogo iguais (faixa simétrica).
@@ -213,6 +236,22 @@ await sharp(img, { raw: { width: W2, height: H2, channels: 3 } }).png({ compress
 
 // RUAS como TEXTURA do chão: grade de 1 m cobrindo o mapa inteiro (com a faixa)
 const ROAD_RES = 1, RM = rasterRoadMask(RD.roads, { minX: -W2 * CELL / 2, minZ: -H2 * CELL / 2, sizeX: W2 * CELL, sizeZ: H2 * CELL, res: ROAD_RES });
+// CANAL (01/11): a rua some onde o chão virou água (senão a terra da pista aparece no fundo do canal). Só na faixa do canal.
+{
+  const hgAt = (x, z) => { // bilinear entre os centros das células (igual zsHeightAt no jogo)
+    const fx = Math.max(0, Math.min(W2 - 1.001, x / CELL + W2 / 2 - 0.5)), fz = Math.max(0, Math.min(H2 - 1.001, z / CELL + H2 / 2 - 0.5));
+    const i = Math.floor(fx), j = Math.floor(fz), ax = fx - i, az = fz - j, p = j * W2 + i;
+    return (HG[p] * (1 - ax) + HG[p + 1] * ax) * (1 - az) + (HG[p + W2] * (1 - ax) + HG[p + W2 + 1] * ax) * az;
+  };
+  let cleared = 0;
+  for (let v = 0; v < RM.MH; v++) for (let u = 0; u < RM.MW; u++) {
+    const q = v * RM.MW + u; if (RM.buf[q * 3] === 0) continue;
+    const x = -W2 * CELL / 2 + (u + 0.5) * ROAD_RES, z = -H2 * CELL / 2 + (v + 0.5) * ROAD_RES;
+    if (canalDist(x, z) > CANAL_REACH || hgAt(x, z) >= 0.5) continue; // 0,5: a pista para um palmo antes da beira d'água
+    RM.buf[q * 3] = 0; RM.buf[q * 3 + 1] = 128; cleared++;
+  }
+  console.log(JSON.stringify({ canal_rua_tirada_m2: cleared }));
+}
 await sharp(RM.buf, { raw: { width: RM.MW, height: RM.MH, channels: 3 } }).png({ compressionLevel: 9 }).toFile('public/zona-sul/roads-mask.png');
 console.log(JSON.stringify({ mapaDasRuas: `${RM.MW}x${RM.MH} (${ROAD_RES} m)`, kb: Math.round(fs.statSync('public/zona-sul/roads-mask.png').size / 1024) }));
 
