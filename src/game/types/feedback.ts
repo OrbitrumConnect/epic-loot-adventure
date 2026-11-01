@@ -46,6 +46,8 @@ export type FeedbackEvent = {
   /** `shot`: altura ABSOLUTA (mundo) do destino — tiro da mira segue o pontinho pra cima/baixo.
    *  Ausente: peito do alvo (chão + 0,8). */
   toY?: number;
+  /** `shot`: tiro do HERÓI local — nasce da boca da arma (`world/muzzle.ts`) e, se for bala, um instante depois do clique. */
+  hero?: boolean;
   createdAt: number;
   /** Duração em milissegundos antes de sumir. */
   ttl: number;

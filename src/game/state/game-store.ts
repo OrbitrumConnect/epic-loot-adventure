@@ -76,7 +76,7 @@ import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TI
 import { restoreWave, SAVE_KEY } from '../systems/persistenceSystem';
 import {
   damageEvent, deathEvent, harvestEvent, healEvent, levelUpEvent, lootEvent, pruneEvents, pushEvent,
-  pushEvents, shotEvent, xpEvent,
+  pushEvents, shotEvent, xpEvent, HERO_SHOT_DELAY_MS,
 } from '../systems/feedbackSystem';
 import type { FeedbackDraft } from '../systems/feedbackSystem';
 import { broadcastCreatureHit, broadcastPlayerHit, broadcastWaveSpawn, canSimulateSharedWorld, isMyWave, useNet } from '@/net/multiplayer';
@@ -654,6 +654,8 @@ function heroStrike(st: GameState, hits: Map<string, { power: number; push: Vec2
 
 /** Bala de canhão do navio de guerra = isto × o golpe base do herói (o especial de salto é 1,8×). */
 export const CANNON_POWER = 2.5;
+/** Som do tiro de ARMA DE FOGO do herói: junto com a bala que sai da boca da arma (`HERO_SHOT_DELAY_MS` após o clique). */
+function heroGunSound(): void { setTimeout(() => audioManager.playGunShot(), HERO_SHOT_DELAY_MS); }
 
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
   player: createInitialPlayer(),
@@ -947,11 +949,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (!fromBurst && burstN > 1) {
       startBurst(burstN, () => { const b = get().player.lastAttackAt; get().fireMiss(toward, towardY, true); return get().player.lastAttackAt !== b; }, Date.now(), BURST_GAP * boostK);
     }
-    if (heldItemId === 'bow') audioManager.playShot(); else audioManager.playGunShot();
+    if (heldItemId === 'bow') audioManager.playShot(); else heroGunSound();
     set({
       player: { ...state.player, lastAttackAt: now, inventory: removeItem(state.player.inventory, ammoItem, 1) },
       attackTick: state.attackTick + 1,
-      feedback: pushEvent(state.feedback, shotEvent(state.player.position, toward, prof.projectile, undefined, towardY), Date.now()),
+      feedback: pushEvent(state.feedback, shotEvent(state.player.position, toward, prof.projectile, undefined, towardY, true), Date.now()),
     });
     return true;
   },
@@ -1070,7 +1072,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       // O tiro/golpe aparece e soa NA HORA pra quem atira (antes o convidado não via nada
       // sair — parecia que não atirava); a vida do bicho volta no snapshot do host.
       if (heldItemId === 'bow') audioManager.playShot();
-      else if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
+      else if (heldItemId === 'pistol' || heldItemId === 'rifle') heroGunSound();
       else if (!usingRanged) audioManager.playMelee();
       set({
         player: {
@@ -1080,7 +1082,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         },
         attackTick: state.attackTick + 1,
         feedback: usingRanged && prof.projectile
-          ? pushEvent(state.feedback, shotEvent(state.player.position, creature.position, prof.projectile), Date.now())
+          ? pushEvent(state.feedback, shotEvent(state.player.position, creature.position, prof.projectile, undefined, undefined, true), Date.now())
           : state.feedback,
         ui: { ...state.ui, message: `Atacando ${creature.name}.` },
       });
@@ -1112,11 +1114,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     ];
     // Ranged: projétil visual do jogador até o alvo.
     if (usingRanged && prof.projectile) {
-      drafts.push(shotEvent(state.player.position, creature.position, prof.projectile));
+      drafts.push(shotEvent(state.player.position, creature.position, prof.projectile, undefined, undefined, true));
     }
     // Áudio por arma: arco = flecha, pistola/rifle = tiro, senão melee.
     if (heldItemId === 'bow') audioManager.playShot();
-    else if (heldItemId === 'pistol' || heldItemId === 'rifle') audioManager.playGunShot();
+    else if (heldItemId === 'pistol' || heldItemId === 'rifle') heroGunSound();
     else if (!usingRanged) audioManager.playMelee();
 
     if (result.targetDied) {
@@ -1304,6 +1306,25 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (state.player.dead) return 0;
     // bala de canhão = 2,5× o golpe base do herói (nível + equipamento), com os multiplicadores dele
     const power = Math.round((playerBaseAttack(state.player.level) + equipmentStats(state.player).damage) * CANNON_POWER * damageMultiplier(state.player));
+    // ONLINE (Pedro 01/11: "jogador na praia, horda, qualquer coisa toma dano"): jogador no raio leva o golpe pelo
+    // caminho do PvP (quem leva confere a inimizade e aplica a armadura)
+    const net = useNet.getState();
+    let hitPlayers = 0;
+    if (net.connected) {
+      for (const r of Object.values(net.players)) {
+        if (r.hp > 0 && Math.hypot(r.x - at.x, r.z - at.z) <= radius) { broadcastPlayerHit(r.id, power, `Canhão de ${net.selfName}`); hitPlayers++; }
+      }
+    }
+    // convidado: o mundo (bichos) é do anfitrião — manda o golpe em cada bicho do raio, igual ao ataque normal
+    if (!canSimulateSharedWorld()) {
+      let n = hitPlayers;
+      for (const c of state.creatures) {
+        if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id) || getDistance(at, c.position) > radius) continue;
+        broadcastCreatureHit({ targetId: c.id, source: at, damage: power }); n++;
+      }
+      if (n > 0) set(s => ({ ui: { ...s.ui, message: `💥 Canhão! ${n} atingido(s).` } }));
+      return n;
+    }
     const critStats = playerCritStats(state.player);
     const drafts: FeedbackDraft[] = [];
     let updatedPlayer: PlayerState = state.player;
@@ -1323,9 +1344,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
-    if (hits === 0) return 0;
-    set({ player: updatedPlayer, creatures, deathBags: updatedBags, feedback: pushEvents(state.feedback, drafts, Date.now()), ui: { ...state.ui, message: `💥 Canhão! ${hits} atingido(s).` } });
-    return hits;
+    if (hits === 0) {
+      if (hitPlayers > 0) set(s => ({ ui: { ...s.ui, message: `💥 Canhão! ${hitPlayers} jogador(es) no raio.` } }));
+      return hitPlayers;
+    }
+    set({ player: updatedPlayer, creatures, deathBags: updatedBags, feedback: pushEvents(state.feedback, drafts, Date.now()), ui: { ...state.ui, message: `💥 Canhão! ${hits + hitPlayers} atingido(s).` } });
+    return hits + hitPlayers;
   },
 
   boostFire: (auto = false) => {

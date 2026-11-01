@@ -67,17 +67,19 @@ const lagoonShore = (q: ZsQuery, x: number, z: number) =>
 const cityGround = (q: ZsQuery, x: number, z: number) =>
   (q.surf(x, z) === SURF.road || q.surf(x, z) === SURF.land) && q.slope(x, z) < 12 && q.height(x, z) < 40 && !near(q, x, z, SURF.beach, 20);
 
+// Pedro 01/11: "dá pra aumentar mais bichos — já estão bem espalhados, +20% nas áreas espalhadas" → 123 → 149
+// (era 12/8/8/8/18/14/8/36/7/4)
 export const ZS_FAUNA: ZsRule[] = [
-  { speciesId: 'boar', count: 12, ok: lagoonShore, spacing: 14 },        // Jacaré — beira da Lagoa
-  { speciesId: 'goose', count: 8, ok: lagoonShore, spacing: 10 },        // Ganso — beira da Lagoa
-  { speciesId: 'wolf_alpha', count: 8, ok: openField, spacing: 30 },     // Leoa — campo aberto
-  { speciesId: 'bear', count: 8, ok: openField, spacing: 30 },           // Búfalo — campo aberto
-  { speciesId: 'deer', count: 18, ok: lowForest, spacing: 18 },          // Cervo — mata baixa
-  { speciesId: 'rabbit', count: 14, ok: lowForest, spacing: 12 },        // Coelho
-  { speciesId: 'pheasant', count: 8, ok: lowForest, spacing: 14 },       // Faisão
-  { speciesId: 'pigeon', count: 36, ok: cityGround, spacing: 8 },        // Pombo — pistas e campo da cidade
-  { speciesId: 'monster', count: 7, ok: highForest, spacing: 40 },       // Aberração — mata alta
-  { speciesId: 'flintmaw', count: 4, ok: highForest, spacing: 50 },      // Fauce de Sílex — mata alta
+  { speciesId: 'boar', count: 14, ok: lagoonShore, spacing: 14 },        // Jacaré — beira da Lagoa
+  { speciesId: 'goose', count: 10, ok: lagoonShore, spacing: 10 },       // Ganso — beira da Lagoa
+  { speciesId: 'wolf_alpha', count: 10, ok: openField, spacing: 30 },    // Leoa — campo aberto
+  { speciesId: 'bear', count: 10, ok: openField, spacing: 30 },          // Búfalo — campo aberto
+  { speciesId: 'deer', count: 22, ok: lowForest, spacing: 18 },          // Cervo — mata baixa
+  { speciesId: 'rabbit', count: 17, ok: lowForest, spacing: 12 },        // Coelho
+  { speciesId: 'pheasant', count: 10, ok: lowForest, spacing: 14 },      // Faisão
+  { speciesId: 'pigeon', count: 43, ok: cityGround, spacing: 8 },        // Pombo — pistas e campo da cidade
+  { speciesId: 'monster', count: 8, ok: highForest, spacing: 40 },       // Aberração — mata alta
+  { speciesId: 'flintmaw', count: 5, ok: highForest, spacing: 50 },      // Fauce de Sílex — mata alta
 ];
 
 /** Mulberry32 — o mesmo gerador do resto do jogo. */

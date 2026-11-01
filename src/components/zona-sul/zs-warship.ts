@@ -11,9 +11,12 @@
 
 export const WARSHIP = {
   LENGTH: 32,                       // m (o encalhado tem 38)
-  MAX: 9, REVERSE: 2.5,             // m/s (9 ≈ 32 km/h)
-  ACCEL: 1.5, BRAKE: 2.4, COAST: 0.12,
-  TURN: 0.3, TURN_RESP: 1.4,        // giro máx. (rad/s, só andando) e resposta (1/s)
+  // Pedro 01/11: "mais leve pra dirigir, tá meio lento, engessado" → era 9 m/s, acel. 1,5, giro 0,3 rad/s (resp. 1,4)
+  MAX: 12, REVERSE: 3.5,            // m/s (12 ≈ 43 km/h)
+  ACCEL: 3.2, BRAKE: 4.5, COAST: 0.18,
+  TURN: 0.55, TURN_RESP: 3,         // giro máx. (rad/s) e resposta (1/s)
+  TURN_STOPPED: 0.25,               // parado ainda gira um pouco (fração do giro) — não fica "engessado"
+  AIM_SWING: 0.87,                  // a mira gira até ±50° pra frente/trás do través (segue a câmera)
   MIN_DEPTH: 3.2,                   // fundura mínima embaixo do casco (m)
   BOARD_DIST: 16,                   // E embarca a até isto do centro (m)
   // canhões
@@ -58,9 +61,9 @@ export function warshipStep(swimmable: (x: number, z: number) => boolean, s: ZsW
   if (inp.throttle > 0) v += WARSHIP.ACCEL * inp.throttle * Math.max(0, 1 - v / WARSHIP.MAX) * dt;
   else if (inp.throttle < 0) v = v > 0.2 ? Math.max(0, v - WARSHIP.BRAKE * -inp.throttle * dt) : Math.max(-WARSHIP.REVERSE, v + WARSHIP.ACCEL * 0.5 * inp.throttle * dt);
   else v *= Math.exp(-WARSHIP.COAST * dt);
-  // leme: só vira andando (um navio parado não gira no lugar); de ré inverte
+  // leme: andando vira tudo; parado ainda gira um pouco (TURN_STOPPED); de ré inverte
   const sp = Math.abs(v), dir = v >= 0 ? 1 : -1;
-  const want = -inp.steer * WARSHIP.TURN * Math.min(1, sp / 2.5) * dir;
+  const want = -inp.steer * WARSHIP.TURN * Math.min(1, WARSHIP.TURN_STOPPED + sp / 2.5) * dir;
   s.yawRate += (want - s.yawRate) * Math.min(1, WARSHIP.TURN_RESP * dt);
   const ny = s.yaw + s.yawRate * dt;
   const nx = s.x + Math.sin(ny) * v * dt, nz = s.z + Math.cos(ny) * v * dt;
@@ -85,15 +88,27 @@ export function cannonElevation(camPitch: number): number {
 
 export type CannonBall = { ox: number; oy: number; oz: number; vx: number; vy: number; vz: number };
 
-/** As balas de uma salva: saem do costado `side`, perpendicular ao navio, com a elevação dada. `deckY` = altura dos canhões. */
-export function cannonSalvo(s: ZsWarship, side: WarshipSide, elevation: number, deckY: number): CannonBall[] {
+/** Quanto a mira gira pra frente/trás do través (rad, ±AIM_SWING) pra seguir a câmera: `viewYaw` = pra onde ela olha. */
+export function cannonSwing(s: ZsWarship, side: WarshipSide, viewYaw: number): number {
+  const out = s.yaw + (side === 'starboard' ? Math.PI / 2 : -Math.PI / 2); // yaw do través (pra fora)
+  let d = viewYaw - out;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return Math.max(-WARSHIP.AIM_SWING, Math.min(WARSHIP.AIM_SWING, d));
+}
+
+/** As balas de uma salva: saem do costado `side`, pra fora do navio (girado `swing` pra frente/trás do través), com a
+ *  elevação dada. `deckY` = altura dos canhões. */
+export function cannonSalvo(s: ZsWarship, side: WarshipSide, elevation: number, deckY: number, swing = 0): CannonBall[] {
   const fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
-  const sgn = side === 'starboard' ? 1 : -1, ox = Math.cos(s.yaw) * sgn, oz = -Math.sin(s.yaw) * sgn; // pra fora do costado
+  const sgn = side === 'starboard' ? 1 : -1;
+  const outYaw = s.yaw + sgn * Math.PI / 2 + swing, ox = Math.sin(outYaw), oz = Math.cos(outYaw); // pra fora do costado
+  const bx = Math.cos(s.yaw) * sgn, bz = -Math.sin(s.yaw) * sgn; // a boca do canhão fica no costado (sem girar)
   const beam = WARSHIP.LENGTH * 0.1, h = Math.cos(elevation) * WARSHIP.BALL_SPEED, up = Math.sin(elevation) * WARSHIP.BALL_SPEED;
   const out: CannonBall[] = [];
   for (let i = 0; i < WARSHIP.SALVO; i++) {
     const u = (i - (WARSHIP.SALVO - 1) / 2) * WARSHIP.SALVO_SPREAD;
-    out.push({ ox: s.x + fx * u + ox * beam, oy: deckY, oz: s.z + fz * u + oz * beam, vx: ox * h + fx * s.speed, vy: up, vz: oz * h + fz * s.speed });
+    out.push({ ox: s.x + fx * u + bx * beam, oy: deckY, oz: s.z + fz * u + bz * beam, vx: ox * h + fx * s.speed, vy: up, vz: oz * h + fz * s.speed });
   }
   return out;
 }

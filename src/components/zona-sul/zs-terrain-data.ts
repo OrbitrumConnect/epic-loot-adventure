@@ -89,6 +89,17 @@ export function zsBounds(t: ZsTerrain) {
   return { minX: t.x0, maxX: t.x0 + (t.w - 1) * t.cell, minZ: t.z0, maxZ: t.z0 + (t.h - 1) * t.cell };
 }
 
+/** MAR ALÉM DA BORDA (Pedro 01/11: "com navio, atrás da pedra do Arpoador fica bem curto — aumentar o mar uns 20–30 m pra
+ *  passar 2 barcos, em fuga não travar na pedra"): faixa de mar FUNDO em volta do mapa só pra quem NAVEGA (navio de
+ *  guerra, tubarão). O mapa em si não muda (refazer maior mudaria a coordenada de tudo — o mapa é centrado). Medido:
+ *  atrás da pedra (x ≈ 120) sobravam 26 m de mar fundo até a borda sul; agora 56 m. A borda é água em todo o contorno (a
+ *  faixa APRON do bake desce a terra até o mar), e a altura fora do mapa é a da borda. */
+export const ZS_SEA_BAND = 30;
+export function zsSeaBounds(t: ZsTerrain) {
+  const b = zsBounds(t);
+  return { minX: b.minX - ZS_SEA_BAND, maxX: b.maxX + ZS_SEA_BAND, minZ: b.minZ - ZS_SEA_BAND, maxZ: b.maxZ + ZS_SEA_BAND };
+}
+
 /** Inclinação (graus) em (x, z), pela diferença central. */
 export function zsSlopeDeg(t: ZsTerrain, x: number, z: number): number {
   const d = t.cell;

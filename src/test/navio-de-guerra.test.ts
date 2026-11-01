@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ballLanding, cannonElevation, cannonSalvo, cannonSide, findWarshipDock, hullFits, newWarship, WARSHIP, warshipStep } from '@/components/zona-sul/zs-warship';
+import { ballLanding, cannonElevation, cannonSalvo, cannonSide, cannonSwing, findWarshipDock, hullFits, newWarship, WARSHIP, warshipStep } from '@/components/zona-sul/zs-warship';
 import { isUnlocked, UNLOCK_LEVEL } from '@/game/systems/unlockSystem';
 
 /* NAVIO DE GUERRA (Pedro 01/11: "pega acima do nível 70; ataca com bola de canhão, mirando"). */
@@ -12,10 +12,13 @@ describe('navio de guerra — dirigir', () => {
     expect(isUnlocked('war_ship', 69)).toBe(false);
     expect(isUnlocked('war_ship', 70)).toBe(true);
   });
-  it('vela acelera devagar até ~32 km/h; leme só vira andando', () => {
+  it('vela acelera até ~43 km/h; leme vira bem andando e um pouco parado (Pedro: "mais leve, tava engessado")', () => {
+    expect(WARSHIP.MAX).toBe(12);
     const s = newWarship(0, 200, 0);
-    warshipStep(sea, s, { throttle: 0, steer: 1 }, 1);
-    expect(s.yaw).toBe(0); // parado não gira no lugar
+    for (let i = 0; i < 60; i++) warshipStep(sea, s, { throttle: 0, steer: 1 }, 1 / 60);
+    const parado = Math.abs(s.yaw);
+    expect(parado).toBeGreaterThan(0);                 // parado ainda gira um pouco
+    expect(parado).toBeLessThan(WARSHIP.TURN * 0.5);   // …bem menos que andando
     for (let i = 0; i < 60 * 30; i++) warshipStep(sea, s, { throttle: 1, steer: 0 }, 1 / 60);
     expect(s.speed).toBeGreaterThan(WARSHIP.MAX * 0.9);
     expect(s.speed).toBeLessThanOrEqual(WARSHIP.MAX + 1e-6);
@@ -51,6 +54,14 @@ describe('navio de guerra — canhões', () => {
     expect(near).toBeGreaterThan(15);
     expect(far).toBeGreaterThan(200);
   });
+  it('a mira gira pra frente/trás do través seguindo a câmera (até ±50°)', () => {
+    const s = newWarship(0, 0, 0); // proa pra +z; boreste = +x
+    expect(cannonSwing(s, 'starboard', Math.PI / 2)).toBeCloseTo(0);            // olhando reto pro través
+    expect(cannonSwing(s, 'starboard', Math.PI / 2 - 0.5)).toBeCloseTo(-0.5);   // 0,5 rad pra proa
+    expect(cannonSwing(s, 'starboard', 0)).toBeCloseTo(-WARSHIP.AIM_SWING);     // olhando pra frente: trava em 50°
+    const reto = cannonSalvo(s, 'starboard', 0.2, 4, 0)[1]!, frente = cannonSalvo(s, 'starboard', 0.2, 4, -0.5)[1]!;
+    expect(frente.vz).toBeGreaterThan(reto.vz); // girada pra proa (+z)
+  });
   it('salva de 3 balas do costado escolhido, espalhadas ao longo do navio, pra fora dele', () => {
     const s = newWarship(10, 20, 0);
     const salvo = cannonSalvo(s, 'starboard', 0.2, 4);
@@ -73,5 +84,36 @@ describe('navio de guerra — canhões', () => {
     // tubarão não morde quem está no convés (só quem está na altura da água)
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
     expect(ai).toMatch(/export const AQUATIC_REACH_UP = 1\.2;/);
+  });
+  it('canhão: o som do Pedro em cada bala; jogador no raio leva golpe PvP; convidado manda o golpe pro anfitrião', () => {
+    const audio = fs.readFileSync('src/game/audio/audio-manager.ts', 'utf8');
+    expect(audio).toMatch(/cannon: \{ url: '\/audio\/cannon\.mp3'/);
+    expect(fs.existsSync('public/audio/cannon.mp3')).toBe(true);
+    const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
+    expect(zs).toMatch(/for \(let i = 0; i < salvo\.length; i\+\+\) window\.setTimeout\(\(\) => audioManager\.playWorld\('cannon', 1\), i \* WARSHIP\.SALVO_GAP_MS\)/);
+    const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
+    expect(store).toMatch(/broadcastPlayerHit\(r\.id, power, `Canhão de \$\{net\.selfName\}`\)/);
+    expect(store).toMatch(/broadcastCreatureHit\(\{ targetId: c\.id, source: at, damage: power \}\)/);
+  });
+  it('rastro na água: navio (da popa) e prancha em pé (da rabeta)', () => {
+    const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
+    expect(zs).toMatch(/<ZsWake look=\{WAKE_SHIP\}/);
+    expect(zs).toMatch(/<ZsWake look=\{WAKE_BOARD\} source=\{\(\) => zsBoardWake\} \/>/);
+    expect(zs).toMatch(/if \(r\.mode === 'ride' && !r\.air\) \{/);
+  });
+});
+
+describe('tiro do herói sai da BOCA da arma (Pedro 01/11)', () => {
+  it('a arma na mão marca a ponta; o projétil do herói nasce dela, a bala junto do braço (90 ms)', () => {
+    const held = fs.readFileSync('src/components/world/held-weapon.tsx', 'utf8');
+    expect(held).toMatch(/const muzzle = itemId === undefined \? MUZZLE_OFFSET\[kind\] : undefined;/);
+    const proj = fs.readFileSync('src/components/world/projectiles.tsx', 'utf8');
+    expect(proj).toMatch(/if \(ev\.hero && heroMuzzleFresh\(\)\) s\.from\.set\(heroMuzzle\.x, heroMuzzle\.y, heroMuzzle\.z\);/);
+    expect(proj).toMatch(/if \(ev\.hero && ev\.projectile === 'bullet'\) \{/);
+    const fb = fs.readFileSync('src/game/systems/feedbackSystem.ts', 'utf8');
+    expect(fb).toMatch(/export const HERO_SHOT_DELAY_MS = 90;/);
+    const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
+    expect(store.match(/heroGunSound\(\)/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(store.match(/prof\.projectile, undefined, (towardY|undefined), true\)/g)?.length).toBe(3);
   });
 });

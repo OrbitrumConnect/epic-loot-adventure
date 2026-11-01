@@ -22,6 +22,7 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mixColor, type Palette } from './world-kit';
 import { requestLight } from './light-pool';
+import { heroMuzzle, MUZZLE_OFFSET } from './muzzle';
 
 const tmpTorchV = new THREE.Vector3();
 
@@ -257,10 +258,29 @@ function Rifle({ k }: { k: Kit }) {
   );
 }
 
+/** Ponto invisível na PONTA da arma do herói local: escreve a posição no mundo todo quadro (o tiro nasce daí). */
+const tmpMuzzleV = new THREE.Vector3();
+function MuzzleMark({ at }: { at: [number, number, number] }) {
+  const ref = useRef<THREE.Object3D>(null);
+  useFrame(() => {
+    const o = ref.current;
+    if (!o) return;
+    o.getWorldPosition(tmpMuzzleV);
+    heroMuzzle.x = tmpMuzzleV.x; heroMuzzle.y = tmpMuzzleV.y; heroMuzzle.z = tmpMuzzleV.z; heroMuzzle.at = performance.now();
+  });
+  return <object3D ref={ref} position={at} />;
+}
+
 /** `itemId` definido = arma de OUTRO jogador (online); sem ele, a do jogador local. */
 export function HeldItem({ c, itemId }: { c: Palette; itemId?: string | null }) {
   const localKind = useGameStore(s => heldKindFor(selectedItemId(s)));
   const kind = itemId === undefined ? localKind : heldKindFor(itemId);
+  const model = <HeldModel c={c} kind={kind} />;
+  const muzzle = itemId === undefined ? MUZZLE_OFFSET[kind] : undefined;
+  return muzzle ? <>{model}<MuzzleMark at={muzzle} /></> : model;
+}
+
+function HeldModel({ c, kind }: { c: Palette; kind: ReturnType<typeof heldKindFor> }) {
   const k = kitFor(c);
   switch (kind) {
     case 'sword': return <Sword k={k} />;

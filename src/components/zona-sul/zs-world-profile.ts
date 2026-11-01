@@ -7,7 +7,7 @@ import type { WorldProfile } from '@/game/data/world-profile';
 import { CREATURES, scaleEnemyHp } from '@/game/data/creatures';
 import type { CreatureState } from '@/game/types';
 import { pickZsCampSites, ZS_HILLTOP_CAMPS, ZS_SAFE, ZS_SHARK_MIN_DEPTH, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
-import { type ZsTerrain, zsBounds, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterYAt } from './zs-terrain-data';
+import { type ZsTerrain, zsBounds, zsHeightAt, zsSeaBounds, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterYAt } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
 import { CAVE_BOSS, caveEnemySpots, zsCaveUnder } from './zs-cave';
 
@@ -59,10 +59,10 @@ export function zsWalkable(t: ZsTerrain, x: number, z: number): boolean {
   return zsHeightAt(t, x, z) > ZS_WATER_Y + 0.25;
 }
 
-/** MAR FUNDO pra bicho aquático (tubarão, 01/11): dentro do mapa, chão de MAR (não Lagoa) e fundura mínima. O navio de
- *  guerra usa a mesma regra com a fundura dele (`minDepth`). */
+/** MAR FUNDO pra bicho aquático (tubarão, 01/11): dentro do mapa + a faixa de mar além da borda (`ZS_SEA_BAND`), chão
+ *  de MAR (não Lagoa) e fundura mínima. O navio de guerra usa a mesma regra com a fundura dele (`minDepth`). */
 export function zsSwimmable(t: ZsTerrain, x: number, z: number, minDepth: number = ZS_SHARK_MIN_DEPTH): boolean {
-  const b = zsBounds(t);
+  const b = zsSeaBounds(t);
   if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return false;
   return zsSurfAt(t, x, z) === ZS_SURF.sea && zsHeightAt(t, x, z) <= ZS_WATER_Y - minDepth;
 }

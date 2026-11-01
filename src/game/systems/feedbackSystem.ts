@@ -71,7 +71,11 @@ export function damageEvent(
   };
 }
 
-export function shotEvent(from: Position, to: Position, projectile: 'arrow' | 'bullet', sourceHeight?: number, toY?: number): FeedbackDraft {
+/** Tiro de ARMA DE FOGO do herói: a bala (e o som) saem isto depois do clique — o tempo da transição pro clipe de tiro
+ *  (o braço chega na mira). O dano continua na hora. (Pedro 01/11: "o tiro sai mais rápido que a mão".) */
+export const HERO_SHOT_DELAY_MS = 90;
+
+export function shotEvent(from: Position, to: Position, projectile: 'arrow' | 'bullet', sourceHeight?: number, toY?: number, hero = false): FeedbackDraft {
   return {
     kind: 'shot',
     position: { ...from },
@@ -79,6 +83,7 @@ export function shotEvent(from: Position, to: Position, projectile: 'arrow' | 'b
     projectile,
     sourceHeight: sourceHeight ?? 1.1,
     ...(toY !== undefined && Number.isFinite(toY) ? { toY } : {}),
+    ...(hero ? { hero: true } : {}),
     targetId: '',
     label: '',
     amount: 0,
