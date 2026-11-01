@@ -58,3 +58,14 @@ export function zsStep(t: ZsTerrain, x: number, z: number, dx: number, dz: numbe
   const ground = zsHeightAt(t, nx, nz);
   return { x: nx, z: nz, ground, ...zsWaterState(ground) };
 }
+
+/**
+ * Direção normalizada de (px,pz) até o alvo do piloto (tx,tz). Sem input manual, o nado/vadeio segue isto
+ * (igual ao branch de terra) pra sair da água rumo à caça. `has` false = alvo coincide/muito perto (fica parado).
+ */
+export function autoFollowDir(tx: number, tz: number, px: number, pz: number, minDist = 0.15):
+  { x: number; z: number; has: boolean } {
+  const dx = tx - px, dz = tz - pz, d = Math.hypot(dx, dz);
+  if (d <= minDist) return { x: 0, z: 0, has: false };
+  return { x: dx / d, z: dz / d, has: true };
+}
