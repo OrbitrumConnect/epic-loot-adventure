@@ -136,7 +136,8 @@ export const BEASTS: Record<string, BeastSpec> = {
     ears: 'cone', earColor: '#3d2a1b', tail: 'stub', tailColor: '#3d2a1b', eyes: '#d84a28',
     extras: ['tusks', 'mane'], extraColor: '#e8e0c8', labelHeight: 1.9, ringRadius: 3.3,
     // 26/10: ×1,5 → alcance da mordida acompanha (do centro do corpo; senão o herói ficava "dentro" do jacaré).
-    tuning: { ...hostileBase, speed: 4.1, aggroRange: 7, attackRange: 3.6, leashRange: 16, hitVerb: 'investiu' },
+    // 01/11: o JACARÉ nada (persegue na Lagoa, só as costas pra fora)
+    tuning: { ...hostileBase, speed: 4.1, aggroRange: 7, attackRange: 3.6, leashRange: 16, hitVerb: 'investiu', landSwim: 0.55 },
   },
   bear: {
     scale: 1, body: [0.85, 0.75, 1.35], bodyColor: '#4b3424', legLen: 0.45, legThick: 0.2, legColor: '#3a281a',
@@ -144,7 +145,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     snout: { size: [0.26, 0.2, 0.24], color: '#8a7058', pos: [0, 0.1, 1.2] },
     ears: 'round', earColor: '#3a281a', tail: 'stub', tailColor: '#3a281a', eyes: '#1a0f08',
     extras: ['hump'], extraColor: '#4b3424', labelHeight: 3.6, ringRadius: 2.5,
-    tuning: { ...hostileBase, speed: 3.3, aggroRange: 8, attackRange: 3.6, leashRange: 16, chaseTimeout: 14, walkSpeedChase: 11, walkSpeedIdle: 6, hitVerb: 'rasgou' },
+    tuning: { ...hostileBase, speed: 3.3, aggroRange: 8, attackRange: 3.6, leashRange: 16, chaseTimeout: 14, walkSpeedChase: 11, walkSpeedIdle: 6, hitVerb: 'rasgou', landSwim: 1.0 }, // búfalo nada (01/11)
   },
   wolf_alpha: {
     scale: 1, body: [0.55, 0.6, 1.2], bodyColor: '#3a3d44', legLen: 0.4, legThick: 0.14, legColor: '#2a2c32',
@@ -152,7 +153,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     snout: { size: [0.26, 0.2, 0.28], color: '#7a7e88', pos: [0, 0.12, 1.2] },
     ears: 'cone', earColor: '#2a2c32', tail: 'long', tailColor: '#2a2c32', eyes: '#ff5a1f',
     extras: ['mane'], extraColor: '#8a8f9a', labelHeight: 2.4, ringRadius: 1.4,
-    tuning: { ...WOLF_TUNING, speed: 4.4, aggroRange: 11, attackRange: 3.2, leashRange: 28, hitVerb: 'dilacerou' },
+    tuning: { ...WOLF_TUNING, speed: 4.4, aggroRange: 11, attackRange: 3.2, leashRange: 28, hitVerb: 'dilacerou', landSwim: 0.8 }, // leoa nada (01/11)
   },
   // Pombo Bravo: ave HOSTIL que mergulha no jogador (usa o clip de voo do GLB).
   // Rápida, alcance curto, fraca. Corpo procedural só é usado se o GLB falhar.

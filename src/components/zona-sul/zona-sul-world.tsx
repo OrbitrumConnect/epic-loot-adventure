@@ -64,7 +64,7 @@ import { AssetBoundary } from '@/components/world/asset-boundary';
 import { HarvestNodes } from '@/components/world/harvest-nodes';
 import { SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
-import { createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
+import { createZsBandits, createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
@@ -1176,7 +1176,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       setWorldProfile(prof);
       const query = zsQuery(tt);
       useGameStore.getState().enterWorld('zona-sul', {
-        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(tt))],
+        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(tt)), ...createZsBandits(query, prof.camps)],
         harvestNodes: createZsHarvestNodes(query),
         position: { x: at.x, z: at.z },
       });

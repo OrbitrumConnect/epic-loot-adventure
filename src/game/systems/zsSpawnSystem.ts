@@ -68,18 +68,18 @@ const cityGround = (q: ZsQuery, x: number, z: number) =>
   (q.surf(x, z) === SURF.road || q.surf(x, z) === SURF.land) && q.slope(x, z) < 12 && q.height(x, z) < 40 && !near(q, x, z, SURF.beach, 20);
 
 // Pedro 01/11: "dá pra aumentar mais bichos — já estão bem espalhados, +20% nas áreas espalhadas" → 123 → 149
-// (era 12/8/8/8/18/14/8/36/7/4)
+// (era 12/8/8/8/18/14/8/36/7/4); 01/11 (2ª): "uns 10% mais de inimigos e animais" → 149 → 164 (era 14/10/10/10/22/17/10/43/8/5)
 export const ZS_FAUNA: ZsRule[] = [
-  { speciesId: 'boar', count: 14, ok: lagoonShore, spacing: 14 },        // Jacaré — beira da Lagoa
-  { speciesId: 'goose', count: 10, ok: lagoonShore, spacing: 10 },       // Ganso — beira da Lagoa
-  { speciesId: 'wolf_alpha', count: 10, ok: openField, spacing: 30 },    // Leoa — campo aberto
-  { speciesId: 'bear', count: 10, ok: openField, spacing: 30 },          // Búfalo — campo aberto
-  { speciesId: 'deer', count: 22, ok: lowForest, spacing: 18 },          // Cervo — mata baixa
-  { speciesId: 'rabbit', count: 17, ok: lowForest, spacing: 12 },        // Coelho
-  { speciesId: 'pheasant', count: 10, ok: lowForest, spacing: 14 },      // Faisão
-  { speciesId: 'pigeon', count: 43, ok: cityGround, spacing: 8 },        // Pombo — pistas e campo da cidade
-  { speciesId: 'monster', count: 8, ok: highForest, spacing: 40 },       // Aberração — mata alta
-  { speciesId: 'flintmaw', count: 5, ok: highForest, spacing: 50 },      // Fauce de Sílex — mata alta
+  { speciesId: 'boar', count: 15, ok: lagoonShore, spacing: 14 },        // Jacaré — beira da Lagoa
+  { speciesId: 'goose', count: 11, ok: lagoonShore, spacing: 10 },       // Ganso — beira da Lagoa
+  { speciesId: 'wolf_alpha', count: 11, ok: openField, spacing: 30 },    // Leoa — campo aberto
+  { speciesId: 'bear', count: 11, ok: openField, spacing: 30 },          // Búfalo — campo aberto
+  { speciesId: 'deer', count: 24, ok: lowForest, spacing: 18 },          // Cervo — mata baixa
+  { speciesId: 'rabbit', count: 19, ok: lowForest, spacing: 12 },        // Coelho
+  { speciesId: 'pheasant', count: 11, ok: lowForest, spacing: 14 },      // Faisão
+  { speciesId: 'pigeon', count: 47, ok: cityGround, spacing: 8 },        // Pombo — pistas e campo da cidade
+  { speciesId: 'monster', count: 9, ok: highForest, spacing: 40 },       // Aberração — mata alta
+  { speciesId: 'flintmaw', count: 6, ok: highForest, spacing: 50 },      // Fauce de Sílex — mata alta
 ];
 
 /** Mulberry32 — o mesmo gerador do resto do jogo. */
@@ -272,6 +272,52 @@ export const ZS_HILLTOP_CAMPS: readonly CampPlacement[] = [
   { id: 'zs_top_gavea', defId: 'blackclaw_camp', position: { x: -484, z: 151 } },
   { id: 'zs_top_rocinha', defId: 'raider_outpost', position: { x: -690, z: 320 } },
 ];
+
+/**
+ * BANDIDOS ARMADOS ESPALHADOS (Pedro 01/11: "vejo poucos inimigos espalhados pelo mato no alto — não digo acampamento;
+ * no Rio, no morro tem comunidade armada; mais inimigos armados espalhados pelo mato, no topo, Laranjeiras, Flamengo,
+ * Gávea, Vista Chinesa, Rocinha, Vidigal"). DUPLAS de piratas de FUZIL (o mesmo atirador dos acampamentos —
+ * `CAMP_GUNNERS`) no MATO ALTO (≥ 45 m, encosta andável), espalhadas pelos morros: âncoras a ≥ 150 m umas das outras,
+ * longe dos acampamentos e do nascedouro. Ids `wild_bandit_<n>` (perigo pela região e renascer iguais aos da fauna).
+ */
+export const ZS_BANDIT_PREFIX = 'wild_bandit_';
+export const ZS_BANDIT_GROUPS = 8;
+export const ZS_BANDITS_PER_GROUP = 2;
+const BANDIT_GROUP_SPACING = 150;
+export const isZsBandit = (id: string) => id.startsWith(ZS_BANDIT_PREFIX);
+const banditGround = (q: ZsQuery, x: number, z: number) =>
+  (q.surf(x, z) === SURF.forest || q.surf(x, z) === SURF.land) && q.height(x, z) >= 45 && q.slope(x, z) < 28;
+
+export function createZsBandits(q: ZsQuery, camps: CampPlacement[] = [], seed = 20261102, groups = ZS_BANDIT_GROUPS): CreatureState[] {
+  const def = CREATURES['raider_scout'];
+  if (!def) return [];
+  const rand = rng32(seed);
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const anchors: Position[] = [];
+  for (let tries = 0; anchors.length < groups && tries < 30000; tries++) {
+    const p = { x: Math.round(minX + 30 + rand() * (maxX - minX - 60)), z: Math.round(minZ + 30 + rand() * (maxZ - minZ - 60)) };
+    if (!banditGround(q, p.x, p.z) || !freeOfSpawn(q, p.x, p.z)) continue;
+    if (anchors.some((a) => d2(a, p) < BANDIT_GROUP_SPACING * BANDIT_GROUP_SPACING)) continue;
+    if (camps.some((c) => d2(c.position, p) < ((CAMPS[c.defId]?.radius ?? 10) + 30) ** 2)) continue;
+    anchors.push(p);
+  }
+  const out: CreatureState[] = [];
+  for (const a of anchors) {
+    let n = 0;
+    for (let tries = 0; n < ZS_BANDITS_PER_GROUP && tries < 200; tries++) {
+      const r = 4 + rand() * 6, ang = rand() * Math.PI * 2;
+      const p = { x: Math.round((a.x + Math.sin(ang) * r) * 100) / 100, z: Math.round((a.z + Math.cos(ang) * r) * 100) / 100 };
+      if (!banditGround(q, p.x, p.z) || out.some((o) => d2(o.position, p) < 9)) continue;
+      const hp = scaleEnemyHp(def.maxHp);
+      out.push({
+        id: `${ZS_BANDIT_PREFIX}${out.length}`, speciesId: def.id, name: def.name, hp, maxHp: hp, attackPower: def.attackPower, armor: def.armor,
+        attackCooldown: def.attackCooldown, lastAttackAt: 0, position: p, behavior: 'patrol', lootTable: [], respawnAt: null,
+      });
+      n++;
+    }
+  }
+  return out;
+}
 
 /** Clareira de acampamento: chão PLANO no raio todo (5 pontos), terra seca, encostada na MATA. */
 function campSiteOk(q: ZsQuery, x: number, z: number, r: number): boolean {

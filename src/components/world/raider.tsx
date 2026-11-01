@@ -19,6 +19,7 @@ import { deathGroundTime, GlbHeroMixamo, type DeathClip } from './glb-hero-mixam
 import { GlbStaticBoss } from './glb-static-boss';
 import { GlbCreature } from './glb-creature';
 import { isCampSpawn } from '@/game/systems/difficultySystem';
+import { isZsBandit } from '@/game/systems/zsSpawnSystem';
 import { campChaseScale, HORDE_RUN_FROM, hordeSpeedScale } from '@/game/systems/waveSystem';
 
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
@@ -127,6 +128,9 @@ const base = {
   leashRange: 14,
   chaseTimeout: 13,
 } as const;
+/** Saqueador NADA (01/11, Pedro: "inimigos vêm atrás de mim na água mas bugam porque não nadam"): o pé 1,3 m abaixo da
+ *  superfície (cabeça e ombros pra fora). Os chefes gigantes não (só no raso — nadando pareceriam andar na água). */
+const SWIM = 1.3;
 
 export const RAIDER_SPECIES: Record<string, Species> = {
   raider_scout: {
@@ -135,7 +139,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     tuning: {
       ...base, speed: 4.6, aggroRange: 12, attackRange: 2.2, leashRange: 16,
       chaseTimeout: 15, provokeRange: 22, walkSpeedChase: 18, walkSpeedIdle: 9,
-      hitVerb: 'cortou',
+      hitVerb: 'cortou', landSwim: SWIM,
     },
   },
   raider_warrior: {
@@ -144,7 +148,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     tuning: {
       ...base, speed: 3.8, aggroRange: 11, attackRange: 2.5, leashRange: 14,
       chaseTimeout: 13, provokeRange: 20, walkSpeedChase: 16, walkSpeedIdle: 8,
-      hitVerb: 'golpeou',
+      hitVerb: 'golpeou', landSwim: SWIM,
     },
   },
   raider_brute: {
@@ -153,7 +157,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     tuning: {
       ...base, speed: 3.0, aggroRange: 9, attackRange: 2.9, leashRange: 11,
       chaseTimeout: 16, provokeRange: 18, walkSpeedChase: 11, walkSpeedIdle: 6,
-      hitVerb: 'esmagou',
+      hitVerb: 'esmagou', landSwim: SWIM * 1.32, // brutamontes (1,32× maior)
     },
   },
   raider_shaman: {
@@ -162,7 +166,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     tuning: {
       ...base, speed: 3.4, aggroRange: 15, attackRange: 10, leashRange: 16,
       chaseTimeout: 12, provokeRange: 24, walkSpeedChase: 14, walkSpeedIdle: 7,
-      hitVerb: 'flechou', // arqueiro: ataca de LONGE (10m)
+      hitVerb: 'flechou', landSwim: SWIM, // arqueiro: ataca de LONGE (10m)
     },
   },
   // Puglin (kit Bestiary, esqueleto Unreal → anima com a UAL igual o warlord):
@@ -174,7 +178,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
     tuning: {
       ...base, speed: 3.6, aggroRange: 10, attackRange: 2.2, leashRange: 15,
       chaseTimeout: 13, provokeRange: 20, walkSpeedChase: 15, walkSpeedIdle: 8,
-      hitVerb: 'mordeu',
+      hitVerb: 'mordeu', landSwim: SWIM,
     },
   },
   // Mini-boss: 2,5× o brutamontes (1.32 → 3.3). Caça pelo mapa (leash longo),
@@ -394,8 +398,9 @@ function RaiderImpl({
   const sizeK = isCampSpawn(creatureId) ? (CAMP_SCALE_BY[speciesId] ?? CAMP_SCALE) : 1;
   const hordeRuns = hordeSpeedScale(creatureId, speciesId) >= HORDE_RUN_FROM;
   const campRuns = campChaseScale(isCampSpawn(creatureId), speciesId) > 1;
-  // Pirata de ACAMPAMENTO atira de fuzil (Pedro 25–26/10); na horda/mapa segue na faca.
-  const gunner = isCampSpawn(creatureId) && CAMP_GUNNERS.has(speciesId);
+  // Pirata de ACAMPAMENTO atira de fuzil (Pedro 25–26/10); na horda segue na faca. 01/11: os BANDIDOS armados soltos nos
+  // morros da Zona Sul (`wild_bandit_`) também.
+  const gunner = (isCampSpawn(creatureId) || isZsBandit(creatureId)) && CAMP_GUNNERS.has(speciesId);
   const tuning = useMemo(() => (gunner ? campGunnerTuning(spec.tuning, sizeK) : spec.tuning), [gunner, spec.tuning, sizeK]);
   const bodyRadius = mxBody ? mxBody.height * sizeK * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
 

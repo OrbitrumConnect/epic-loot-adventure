@@ -21,7 +21,7 @@ import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
 import { WORLD } from '@/game/data/world-profile';
 import { blockedByWall, caveStep, glbSurfaceY, groundUnder } from './terrain-collision';
-import { walkStep } from './map-walk';
+import { isWalkable, walkStep } from './map-walk';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { isBuildActive } from './build-mode';
@@ -281,11 +281,42 @@ export type HostileTuning = {
   /** AQUÁTICO (tubarão, 01/11): o pé do bicho fica a esta fundura (m) abaixo da superfície da água. Só vale pra espécie
    *  `aquatic` num mapa com água funda (`WORLD.water`); ausente = bicho de terra. */
   swimDepth?: number;
+  /** BICHO DE TERRA QUE NADA (01/11): no fundo, o pé fica esta fundura (m) abaixo da superfície (só cabeça/costas pra
+   *  fora). Ausente = só entra no RASO (até `WADE_DEPTH`). Só no mapa com água (Zona Sul). */
+  landSwim?: number;
 };
 
 /** Até quantos metros ACIMA da superfície o bicho aquático alcança (nadando/remando/surfando sim; convés do navio, carro
  *  voando, não). */
 export const AQUATIC_REACH_UP = 1.2;
+
+/**
+ * BICHO DE TERRA NA ÁGUA (Pedro 01/11: "alguns inimigos vêm atrás de mim na água mas bugam porque não nadam"). Antes o
+ * bicho parava na beirada e ficava correndo no lugar / raspando a margem. Agora, como no ARK:
+ *  - no RASO (até `WADE_DEPTH` m) todo bicho entra andando, mais devagar (`WATER_SLOW`);
+ *  - quem NADA (`landSwim`: jacaré, búfalo, leoa, piratas) entra no fundo, corpo afundado, devagar;
+ *  - quem não nada para na beira OLHANDO pra você (sem correr no lugar) e desiste depois de `LAND_STUCK_GIVEUP` s.
+ * Só no mapa com água (`WORLD.water` + `WORLD.height`); o Vale fica como era.
+ */
+export const WADE_DEPTH = 0.9;
+export const WATER_SLOW = 0.6;
+export const LAND_STUCK_GIVEUP = 3;
+/** Pode ficar em (x, z)? Terra firme, ou água rasa, ou (quem nada) água funda — dentro do mapa. `depth` = fundura da
+ *  água ali (≤ 0 = seco). */
+export function landWaterOk(walkable: (x: number, z: number) => boolean, depth: (x: number, z: number) => number, inBounds: (x: number, z: number) => boolean, canSwim: boolean, x: number, z: number): boolean {
+  if (walkable(x, z)) return true;
+  if (!inBounds(x, z)) return false;
+  const d = depth(x, z);
+  return d <= WADE_DEPTH || canSwim;
+}
+/** Passo com a regra acima (igual ao `walkStep`: desliza no eixo livre; já fora da área = deixa mover). */
+export function landStep(ok: (x: number, z: number) => boolean, ox: number, oz: number, nx: number, nz: number): [number, number] {
+  if (ok(nx, nz)) return [nx, nz];
+  if (!ok(ox, oz)) return [nx, nz];
+  if (ok(nx, oz)) return [nx, oz];
+  if (ok(ox, nz)) return [ox, nz];
+  return [ox, oz];
+}
 
 /** Passo de quem NADA (tubarão): igual ao `walkStep`, mas a área é a água funda — desliza no eixo livre, nunca sai dela. */
 export function swimStep(swimmable: (x: number, z: number) => boolean, ox: number, oz: number, nx: number, nz: number): [number, number] {
@@ -409,6 +440,8 @@ export function useHostileAI(opts: HostileOptions) {
   const baseScale = useRef<THREE.Vector3 | null>(null);
   const death = useRef({ startedAt: -Infinity, y: 0, hold: 0 });
   const lod = useRef({ frame: Math.floor(Math.random() * AI_FAR_EVERY), acc: 0 }); // espalha os de longe entre quadros
+  /** s parado na beira d'água perseguindo quem não alcança (bicho de terra) — passa de LAND_STUCK_GIVEUP, desiste */
+  const stuckT = useRef(0);
 
   useEffect(() => () => {
     creatureAnchors.delete(creatureId); anchor.current = null;
@@ -807,6 +840,24 @@ export function useHostileAI(opts: HostileOptions) {
       g.position.z = targetZ;
       g.position.y = water.surfaceY(g.position.x, g.position.z) - (tuning.swimDepth ?? 0);
     } else {
+    // BICHO DE TERRA NA ÁGUA (01/11, ver `landWaterOk`): no mapa com água entra no raso (quem nada, no fundo), mais devagar
+    const wet = WORLD.water && WORLD.height && myLayer === 0 ? { water: WORLD.water, height: WORLD.height } : null;
+    const depthAt = wet ? (x: number, z: number) => wet.water.surfaceY(x, z) - wet.height(x, z) : null;
+    if (wet && depthAt && !mirror) {
+      if (depthAt(wx, wz) > 0.4) { targetX = wx + (targetX - wx) * WATER_SLOW; targetZ = wz + (targetZ - wz) * WATER_SLOW; }
+      const wantX = targetX, wantZ = targetZ, b = WORLD.bounds;
+      const ok = (x: number, z: number) => landWaterOk(isWalkable, depthAt, (xx, zz) => xx >= b.minX && xx <= b.maxX && zz >= b.minZ && zz <= b.maxZ, !!tuning.landSwim, x, z);
+      [targetX, targetZ] = landStep(ok, g.position.x, g.position.z, targetX, targetZ);
+      // perseguindo quem está onde ele não chega (água funda pra quem não nada): PARA olhando, sem correr no lugar; desiste
+      const want = Math.hypot(wantX - wx, wantZ - wz), got = Math.hypot(targetX - wx, targetZ - wz);
+      if (chasing && want > 1e-4 && got < want * 0.25) {
+        moving = false; stuckT.current += dt;
+        const face = Math.atan2(px - wx, pz - wz);
+        let dd = face - currentRotY.current; while (dd > Math.PI) dd -= Math.PI * 2; while (dd < -Math.PI) dd += Math.PI * 2;
+        currentRotY.current += dd * Math.min(6 * dt, 1);
+        if (stuckT.current > LAND_STUCK_GIVEUP) chaseTimer.current = tuning.chaseTimeout;
+      } else stuckT.current = 0;
+    } else if (!(wet && mirror)) // (convidado no mapa com água: o host já resolveu o passo — repetir travaria quem nada)
     // Mesmo limite do herói (área andável, 28/10): persegue lá fora, mas nunca passa da beirada da ilha.
     [targetX, targetZ] = walkStep(g.position.x, g.position.z, targetX, targetZ);
     // Parede de caverna: igual ao herói — não "sobe" a montanha ao encostar na parede do túnel.
@@ -822,6 +873,8 @@ export function useHostileAI(opts: HostileOptions) {
       g.position.x, g.position.z, g.position.y,
       Math.max(terrainHeight(g.position.x, g.position.z), houseFloorSurfaceY(g.position.x, g.position.z)),
     );
+    // NADANDO (bicho de terra que nada, no fundo): o corpo fica na superfície, afundado `landSwim` (só cabeça/costas)
+    if (wet && tuning.landSwim) g.position.y = Math.max(g.position.y, wet.water.surfaceY(g.position.x, g.position.z) - tuning.landSwim);
     }
 
     const behavior: CreatureBehavior = flee

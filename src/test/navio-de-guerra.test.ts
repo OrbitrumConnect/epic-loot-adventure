@@ -8,9 +8,10 @@ describe('navio de guerra — dirigir', () => {
   // mar fundo pra z > 50 (praia/raso antes)
   const sea = (x: number, z: number) => z > 50 && Math.abs(x) < 2000;
   it('libera no nível 70 (fonte única)', () => {
-    expect(UNLOCK_LEVEL['war_ship']).toBe(70);
-    expect(isUnlocked('war_ship', 69)).toBe(false);
-    expect(isUnlocked('war_ship', 70)).toBe(true);
+    // 01/11 (Pedro: "melhor o navio no nível 45 pra não demorar muito — a galera brincar"): era 70
+    expect(UNLOCK_LEVEL['war_ship']).toBe(45);
+    expect(isUnlocked('war_ship', 44)).toBe(false);
+    expect(isUnlocked('war_ship', 45)).toBe(true);
   });
   it('vela acelera até ~43 km/h; leme vira bem andando e um pouco parado (Pedro: "mais leve, tava engessado")', () => {
     expect(WARSHIP.MAX).toBe(12);
