@@ -11,7 +11,9 @@ export const ZS_RUN = 5.2;           // m/s — era 4,32 (igual ao jogo), mas co
 export const ZS_SWIM_K = 0.55;       // (antigo) nadando: 55% da velocidade de andar — trocado pelo nado com embalo abaixo
 /** NADO (Pedro 28/10: "afundei e fiquei lento demais; Shift nada mais rápido; não agarrar tanto na água, mais fluido"):
  *  velocidade própria com EMBALO (acelera/freia suave, desliza ao soltar), mais rápido que andar; Shift = braçada forte. */
-export const ZS_SWIM = 2.4, ZS_SWIM_FAST = 4.2, ZS_SWIM_GLIDE = 2.2;
+// Pedro 01/11: "a natação pode aumentar um pouco, tá meio lento" → +25% (era 2,4 / 4,2). O ritmo dos braços segue a
+// velocidade real (HERO_CUT.swim.sync). O tubarão (4,1 m/s) pega quem nada normal, não pega quem nada forte.
+export const ZS_SWIM = 3.0, ZS_SWIM_FAST = 5.2, ZS_SWIM_GLIDE = 2.2;
 export const ZS_SWIM_DEPTH = 1.2;    // água mais funda que isso = nada
 export const ZS_SWIM_SINK = 0.35;    // BOIANDO parado (em pé na água): o pé fica isto abaixo da superfície (cabeça e ombros pra fora — conferido na foto)
 export const ZS_SWIM_SINK_MOVE = 0.1;  // NADANDO (corpo deitado na braçada): rente à superfície — 0,55 ainda afundava (foto)

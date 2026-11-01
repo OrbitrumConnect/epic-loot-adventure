@@ -18,7 +18,7 @@ import { loadZsTerrain, type ZsTerrain, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WAT
 import { SurfBreak } from './surf/surf-break';
 import { SorrisoBreak } from './surf/sorriso-break';
 import { nearestSurfZone, surfZoneAt } from './surf/surf-zones';
-import { SURF } from './surf/surf-wave';
+import { ARPOADOR, SURF } from './surf/surf-wave';
 import { canPop, newRide, RIDE, rideStep, type RideState, type RideWater } from './surf/surf-ride';
 import { useGameStore } from '@/game/state/game-store';
 import { selectedItemId } from '@/components/world/held-weapon';
@@ -64,7 +64,9 @@ import { AssetBoundary } from '@/components/world/asset-boundary';
 import { HarvestNodes } from '@/components/world/harvest-nodes';
 import { SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
-import { createZsWildlife, ZS_FAUNA } from '@/game/systems/zsSpawnSystem';
+import { createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
+import { findSurfFrame } from './surf/surf-frame';
+import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
 import { createCaveCreatures, zsQuery, zsWorldProfile } from './zs-world-profile';
 import { useZsTouch, zsAttack, zsCave, zsCtx } from './zs-context';
@@ -128,6 +130,16 @@ const SUN = new THREE.Vector3(-0.55, 0.62, -0.45).normalize();
 const FOG = '#bcd0dc';
 /** Verdes da copa da mata (zs-vegetation, dossel) — o alvo do tom da árvore de farm na Zona Sul. */
 const ZS_MATA_LEAF = '#2f5d2a', ZS_MATA_LEAF_LIGHT = '#3b6b31';
+/** TUBARÕES (01/11): o ponto do DROP de cada pico sai dos MESMOS achadores que a onda usa (o tubarão acompanha a onda de
+ *  verdade): pico + eixo q × BREAK_Q (onde ela quebra). */
+function zsSharkPeaks(t: ZsTerrain): ZsSharkPeak[] {
+  const out: ZsSharkPeak[] = [];
+  const a = findSurfFrame(t, ZS_SPAWN.x, ZS_SPAWN.z);
+  if (a) out.push({ id: 'arpoador', x: a.px + a.qx * ARPOADOR.BREAK_Q, z: a.pz + a.qz * ARPOADOR.BREAK_Q, ...ZS_SHARK_PEAKS.arpoador });
+  const s = findSorrisoFrame(t);
+  if (s) out.push({ id: 'sorriso', x: s.px + s.qx * SORRISO.BREAK_Q, z: s.pz + s.qz * SORRISO.BREAK_Q, ...ZS_SHARK_PEAKS.sorriso });
+  return out;
+}
 /** Folha da árvore de farm na Zona Sul: metade do caminho entre a cor do jogo e o verde da mata. */
 function zsFarmLeaf(game: string, mata: string, k = 0.5): string {
   return '#' + new THREE.Color(game).lerp(new THREE.Color(mata), k).getHexString();
@@ -1016,7 +1028,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       setWorldProfile(prof);
       const query = zsQuery(tt);
       useGameStore.getState().enterWorld('zona-sul', {
-        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures()],
+        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(tt))],
         harvestNodes: createZsHarvestNodes(query),
         position: { x: at.x, z: at.z },
       });

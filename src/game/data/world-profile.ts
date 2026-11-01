@@ -35,10 +35,23 @@ export type UnderLayer = {
   homeY: (id: string, x: number, z: number) => number | null;
 };
 
+/**
+ * ÁGUA FUNDA (01/11 — tubarão da Zona Sul): onde bicho AQUÁTICO nada e a altura da superfície (com a onda). Sem (Vale):
+ * null — bicho aquático não existe lá, nada muda pros outros.
+ */
+export type WaterLayer = {
+  /** dá pra bicho aquático nadar em (x, z)? (mar com fundura mínima, dentro do mapa) */
+  swimmable: (x: number, z: number) => boolean;
+  /** altura da superfície da água em (x, z) agora (onda incluída) */
+  surfaceY: (x: number, z: number) => number;
+};
+
 export type WorldProfile = {
   id: MapId;
   /** mundo sob o chão (caverna); null/ausente = não tem */
   under?: UnderLayer | null;
+  /** água funda (bicho aquático); null/ausente = não tem */
+  water?: WaterLayer | null;
   bounds: WorldBounds;
   spawn: Position;
   safeZone: { x: number; z: number; radius: number };
@@ -65,13 +78,14 @@ const CLASSIC: WorldProfile = {
 };
 
 /** O mapa ativo (lido por todo mundo; trocado só por `setWorldProfile`). */
-export const WORLD: { id: MapId; bounds: WorldBounds; height: WorldProfile['height']; walkable: WorldProfile['walkable']; zoneRadii: readonly number[]; under: UnderLayer | null } = {
-  id: 'classic', bounds: { ...CLASSIC.bounds }, height: null, walkable: null, zoneRadii: CLASSIC.zoneRadii, under: null,
+export const WORLD: { id: MapId; bounds: WorldBounds; height: WorldProfile['height']; walkable: WorldProfile['walkable']; zoneRadii: readonly number[]; under: UnderLayer | null; water: WaterLayer | null } = {
+  id: 'classic', bounds: { ...CLASSIC.bounds }, height: null, walkable: null, zoneRadii: CLASSIC.zoneRadii, under: null, water: null,
 };
 
 export function setWorldProfile(p: WorldProfile): void {
   WORLD.id = p.id;
   WORLD.under = p.under ?? null;
+  WORLD.water = p.water ?? null;
   WORLD.bounds = { ...p.bounds };
   WORLD.height = p.height;
   WORLD.walkable = p.walkable;

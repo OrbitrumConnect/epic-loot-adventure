@@ -189,6 +189,75 @@ export function createZsWildlife(q: ZsQuery, seed = 20261029, rules: ZsRule[] = 
 }
 
 /**
+ * TUBARÕES (Pedro 01/11, GLB dele: "ficam mais próximos aos picos de surf — não exatamente onde dropa, mais próximos,
+ * colado na região que chega lá — e alguns pelo mar"). Cada pico entra com o ponto do DROP (onde a onda quebra) e um
+ * ANEL em volta dele (`rMin`..`rMax`): nunca em cima do drop, mas na área por onde se chega remando. O resto ("alguns
+ * pelo mar") vai solto no mar fundo, longe dos picos. Sempre em MAR com fundura mínima, afastado da pedra/areia e da
+ * praia de partida. Ids `wild_shark_<n>` (perigo pela região e renascer iguais aos da fauna).
+ */
+export const ZS_SHARK_MIN_DEPTH = 2.5;
+export type ZsSharkPeak = { id: string; x: number; z: number; count: number; rMin: number; rMax: number };
+/** Quantos por pico e o anel em volta do DROP (m). Arpoador: o lado aberto é o de Ipanema (a pedra fecha o outro). */
+export const ZS_SHARK_PEAKS: Record<'arpoador' | 'sorriso', { count: number; rMin: number; rMax: number }> = {
+  arpoador: { count: 2, rMin: 30, rMax: 80 },
+  sorriso: { count: 3, rMin: 35, rMax: 110 },
+};
+export const ZS_SHARKS_OPEN_SEA = 3;
+/** a praia de partida (Arpoador) fica calma: nenhum tubarão nasce a menos disto do nascedouro (m) */
+export const ZS_SHARK_CLEAR_SPAWN = 90;
+const SHARK_SPACING = 28;
+const SHARK_OPEN_SPACING = 110;
+const SHARK_OPEN_FROM_PEAK = 150;
+const SHARK_OPEN_DEPTH = 6;
+
+/** Mar fundo de verdade, sem pedra/areia a menos de 6 m (o tubarão não fica raspando na costa). */
+export function sharkWater(q: ZsQuery, x: number, z: number, depth = ZS_SHARK_MIN_DEPTH): boolean {
+  if (x < q.bounds.minX + 6 || x > q.bounds.maxX - 6 || z < q.bounds.minZ + 6 || z > q.bounds.maxZ - 6) return false;
+  if (q.surf(x, z) !== SURF.sea || q.height(x, z) > -depth) return false;
+  for (let a = 0; a < 8; a++) {
+    const ang = (a / 8) * Math.PI * 2;
+    if (q.height(x + Math.sin(ang) * 6, z + Math.cos(ang) * 6) > -1) return false;
+  }
+  return d2({ x, z }, ZS_SAFE) >= ZS_SHARK_CLEAR_SPAWN * ZS_SHARK_CLEAR_SPAWN;
+}
+
+export function createZsSharks(q: ZsQuery, peaks: readonly ZsSharkPeak[], seed = 20261101, openSea = ZS_SHARKS_OPEN_SEA): CreatureState[] {
+  const def = CREATURES['shark'];
+  if (!def) return [];
+  const rand = rng32(seed);
+  const at: Position[] = [];
+  const mk = (p: Position): CreatureState => {
+    const hp = scaleEnemyHp(def.maxHp);
+    return {
+      id: `wild_shark_${at.length - 1}`, speciesId: 'shark', name: def.name, hp, maxHp: hp, attackPower: def.attackPower, armor: def.armor,
+      attackCooldown: def.attackCooldown, lastAttackAt: 0, position: p, behavior: 'patrol', lootTable: [], respawnAt: null,
+    };
+  };
+  const out: CreatureState[] = [];
+  // perto dos picos: anel em volta do drop
+  for (const pk of peaks) {
+    let n = 0;
+    for (let tries = 0; n < pk.count && tries < 6000; tries++) {
+      const r = pk.rMin + rand() * (pk.rMax - pk.rMin), ang = rand() * Math.PI * 2;
+      const p = { x: Math.round((pk.x + Math.sin(ang) * r) * 100) / 100, z: Math.round((pk.z + Math.cos(ang) * r) * 100) / 100 };
+      if (!sharkWater(q, p.x, p.z) || at.some((o) => d2(o, p) < SHARK_SPACING * SHARK_SPACING)) continue;
+      at.push(p); out.push(mk(p)); n++;
+    }
+  }
+  // "alguns pelo mar": soltos no mar fundo, longe dos picos e uns dos outros
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  let m = 0;
+  for (let tries = 0; m < openSea && tries < 20000; tries++) {
+    const p = { x: Math.round(minX + rand() * (maxX - minX)), z: Math.round(minZ + rand() * (maxZ - minZ)) };
+    if (!sharkWater(q, p.x, p.z, SHARK_OPEN_DEPTH)) continue;
+    if (peaks.some((pk) => d2(p, pk) < SHARK_OPEN_FROM_PEAK * SHARK_OPEN_FROM_PEAK)) continue;
+    if (at.some((o) => d2(o, p) < SHARK_OPEN_SPACING * SHARK_OPEN_SPACING)) continue;
+    at.push(p); out.push(mk(p)); m++;
+  }
+  return out;
+}
+
+/**
  * TOPOS ARMADOS (Pedro 31/10: "no topo de alguns locais como Sumaré, ali pra subida de Laranjeiras; no Horto, que é no
  * Jardim Botânico; Gávea; Rocinha — pôr mais inimigos armados: eles atiram quando passo voando com o carro"). O ponto é
  * o topo PLANO mais perto do morro de cada nome no OSM (medido no relevo): Morro do Sumaré, Morro do Horto, Morro da

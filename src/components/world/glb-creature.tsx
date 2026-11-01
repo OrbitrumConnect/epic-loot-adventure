@@ -143,7 +143,11 @@ export function GlbCreature({
   groundBias = 0,
   fixedScale,
   autoGround = false,
+  onFrame,
 }: {
+  /** Chamado todo quadro DEPOIS da animação (ex.: a mordida do tubarão abre o osso da mandíbula por cima do clipe).
+   *  Ausente = nada muda (todos os outros bichos). */
+  onFrame?: ((model: THREE.Object3D) => void) | undefined;
   /** Assenta pelo corpo ANIMADO (mede o pé mais baixo a cada ~0,3 s, perto do jogador) — pra modelos
    *  cujo bind-pose ≠ animação (o ajuste fixo "oscila"). groundBias vira só o ponto de partida. */
   autoGround?: boolean;
@@ -307,6 +311,7 @@ export function GlbCreature({
       if (actions[want]) actions[want]!.reset().setLoop(THREE.LoopRepeat, Infinity).fadeIn(0.18).play();
       current.current = want;
     }
+    onFrame?.(model);
   });
 
   return (

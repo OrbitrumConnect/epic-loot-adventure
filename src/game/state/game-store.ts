@@ -2814,7 +2814,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         position: n.position,
         depleted: n.depleted,
       })),
-      creatures: state.creatures.filter(c => sameLayerAsPlayer(c.id)).map(c => ({
+      // tubarão (aquático, 01/11): o piloto só enxerga com o herói SOBRE o mar fundo (não sai nadando atrás dele da areia)
+      creatures: state.creatures.filter(c => sameLayerAsPlayer(c.id)
+        && (!CREATURES[c.speciesId]?.aquatic || !!WORLD.water?.swimmable(state.player.position.x, state.player.position.z))).map(c => ({
         id: c.id,
         position: c.position,
         behavior: c.behavior,

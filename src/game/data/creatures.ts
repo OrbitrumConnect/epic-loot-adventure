@@ -467,6 +467,28 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 
+  // TUBARÃO (Pedro 01/11, GLB dele): grande-branco de ~4,5 m no MAR FUNDO da Zona Sul — perto dos picos de surf (na
+  // área por onde se chega remando, não em cima do drop) e alguns soltos pelo mar. Só caça quem está na água.
+  // Drop com itens que já existem (carne, presa/dente, tendão). Pedro 01/11: "tira 50 de vida cada mordida, é forte".
+  shark: {
+    id: 'shark',
+    name: 'Tubarão',
+    maxHp: 260,
+    attackPower: 50,
+    armor: 4,
+    attackCooldown: 1.8,
+    attackRange: 3.0,
+    aggroRange: 16,
+    lootTable: [
+      { itemId: 'raw_meat', quantity: 4, chance: 0.8 },
+      { itemId: 'wolf_fang', quantity: 2, chance: 0.75 },
+      { itemId: 'sinew', quantity: 1, chance: 0.4 },
+    ],
+    icon: 'PawPrint',
+    peaceful: false,
+    aquatic: true,
+  },
+
   wolf_alpha: {
     id: 'wolf_alpha',
     name: 'Leoa',

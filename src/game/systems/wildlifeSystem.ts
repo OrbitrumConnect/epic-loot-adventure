@@ -179,8 +179,9 @@ export function createNightPigeons(center: Position, rng: () => number = Math.ra
  * some bicho solto/inicial de espécie que não nasce mais; entra o que é novo (id que existe agora e não está na foto).
  */
 export function mergeResumedWorld(snapshot: CreatureState[], current: CreatureState[]): CreatureState[] {
+  // (01/11) o TUBARÃO (aquático) só nasce na Zona Sul e não está nesta tabela do Vale — não conta como "saiu do jogo"
   const gone = (c: CreatureState) =>
-    (c.id.startsWith('wild_') && !NIGHT_PREFIXES.some((p) => c.id.startsWith(p)) && (WILD_SPAWN_COUNTS[c.speciesId] ?? 0) === 0)
+    (c.id.startsWith('wild_') && !NIGHT_PREFIXES.some((p) => c.id.startsWith(p)) && (WILD_SPAWN_COUNTS[c.speciesId] ?? (CREATURES[c.speciesId]?.aquatic ? 1 : 0)) === 0)
     || (c.speciesId === 'wolf' && /^wolf_\d+$/.test(c.id)); // as 3 raposas fixas do início
   const kept = snapshot.filter((c) => !gone(c));
   const have = new Set(kept.map((c) => c.id));

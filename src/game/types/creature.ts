@@ -36,4 +36,7 @@ export type CreatureDefinition = {
   icon: string;
   /** Pacífica foge do jogador; hostil ataca. O mundo 3D lê esta flag. */
   peaceful: boolean;
+  /** Vive na ÁGUA FUNDA (tubarão, 01/11): só nada onde o mapa diz que dá (`WORLD.water`), na superfície, e só caça quem
+   *  está na água. Ausente = bicho de terra (todos os outros, nada muda). */
+  aquatic?: boolean;
 };

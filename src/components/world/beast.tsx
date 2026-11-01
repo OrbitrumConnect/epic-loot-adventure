@@ -57,7 +57,20 @@ const GLB_CREATURE: Record<string, { url: string; height?: number; yaw?: number;
   zombie: { url: '/models/animals/zombie.glb', fixedScale: 0.57, yaw: 0, groundBias: 0.4, tint: '#7a8a66' },     // tint esverdeado
   pelter: { url: '/models/animals/pelter.glb', fixedScale: 0.57, yaw: Math.PI, groundBias: -1.1, autoGround: true }, // mech: bind ≠ anim → assenta pelo corpo ANIMADO (Pedro 23/10: não andava no piso); -1.1 = ponto de partida
   flintmaw: { url: '/models/animals/flintmaw.glb', fixedScale: 1.1, yaw: 0, groundBias: 0.3 }, // yaw 0 = vira de frente (vinha de costas ao atacar); voa ~1m (Pedro aprovou)
+  // TUBARÃO (GLB do Pedro, 01/11): nariz pro +Z (yaw 0). Escala ABSOLUTA medida: a normalização por `height` deixava o
+  // modelo com 0,14 m (nó do FBX com escala 0,01 + pele) → medido pelos OSSOS (nariz → ponta do rabo 0,137 m na escala 1)
+  // e pela malha (0,175 de comprimento × 0,0826 de altura): ×25,7 = ~4,5 m de comprimento, 2,12 m de altura c/ barbatana.
+  shark: { url: '/models/animals/shark.glb', fixedScale: 25.7, yaw: 0, groundBias: 0 },
 };
+
+/** NADADORES (tubarão, 01/11): o clipe do GLB é só NADO (8,3 s; a boca abre 5,6° no máximo) — a MORDIDA sai por código:
+ *  o osso da mandíbula abre `biteDeg` no eixo medido do osso (−Z local) por cima do clipe, e o corpo dá o BOTE
+ *  (`lunge` m pra frente, `rise` m pra cima) no tempo do golpe (swing 0,35 s). */
+const SWIMMERS: Record<string, { jaw: string; axis: [number, number, number]; biteDeg: number; chaseDeg: number; lunge: number; rise: number }> = {
+  shark: { jaw: 'PA_SharkJawJnt_011', axis: [0, 0, -1], biteDeg: 28, chaseDeg: 5, lunge: 1.2, rise: 0.55 },
+};
+const tmpJawQ = new THREE.Quaternion();
+const tmpJawAxis = new THREE.Vector3();
 
 type V3 = [number, number, number];
 
@@ -149,6 +162,17 @@ export const BEASTS: Record<string, BeastSpec> = {
     ears: 'cone', earColor: '#8a8f98', tail: 'stub', tailColor: '#8a8f98', eyes: '#d84a28',
     extraColor: '#000000', labelHeight: 3.2, ringRadius: 0.4, // barra acima do voo (a mira usa a altura dela)
     tuning: { ...hostileBase, speed: 5.2, aggroRange: 9, attackRange: 1.8, leashRange: 20, chaseTimeout: 10, walkSpeedChase: 18, walkSpeedIdle: 10, hitVerb: 'bicou' },
+  },
+  // TUBARÃO (01/11): corpo procedural só se o GLB falhar. Persegue a 4,1 m/s (×0,9): pega quem nada normal (2,4),
+  // quase alcança quem nada rápido (4,2), não pega quem rema forte (6,1) nem quem está na onda. Sente quem está na água
+  // a 16 m; ferido de longe vem de até 30 m; não larga a "casa" mais que 50 m (não segue até a areia). Nada com o pé
+  // 1,36 m abaixo da superfície: dorso logo embaixo d'água, ~0,75 m de barbatana pra fora.
+  shark: {
+    scale: 1, body: [0.9, 0.9, 3.6], bodyColor: '#7c8a90', legLen: 0.05, legThick: 0.05, legColor: '#7c8a90',
+    head: [0.7, 0.6, 0.9], headColor: '#8d999e', headPos: [0, 0, 1.9],
+    ears: 'cone', earColor: '#7c8a90', tail: 'long', tailColor: '#7c8a90', eyes: '#101418',
+    extraColor: '#000000', labelHeight: 2.6, ringRadius: 2.2,
+    tuning: { ...hostileBase, speed: 4.6, wanderSpeed: 1.6, aggroRange: 16, attackRange: 3.0, leashRange: 50, chaseTimeout: 14, provokeRange: 30, hitVerb: 'mordeu', swimDepth: 1.36 },
   },
 };
 
@@ -293,6 +317,23 @@ function BeastImpl({
   const flyer = FLYERS[speciesId];
   const flyRef = useRef<THREE.Group>(null);
   const onClick = useEnemyClick(creatureId, name);
+  // NADADOR (tubarão): golpe/perseguição da IA → mandíbula (por cima do clipe) e bote do corpo
+  const swimmer = SWIMMERS[speciesId];
+  const swimState = useRef({ swing: 0, chasing: false, base: new THREE.Quaternion(), applied: new THREE.Quaternion(), has: false, jaw: null as THREE.Object3D | null, phase: Math.random() * 6 });
+  const onModelFrame = swimmer ? (model: THREE.Object3D) => {
+    const st = swimState.current;
+    if (!st.jaw) st.jaw = model.getObjectByName(swimmer.jaw) ?? null;
+    const jaw = st.jaw;
+    if (!jaw) return;
+    // o mixer escreveu a pose do clipe neste quadro? (≠ do que eu deixei) → é a nova base; senão reusa (sem acumular)
+    if (!st.has || !jaw.quaternion.equals(st.applied)) st.base.copy(jaw.quaternion);
+    st.has = true;
+    const u = st.swing > 0 ? 1 - Math.min(1, st.swing / 0.35) : -1;
+    const deg = u >= 0 ? swimmer.biteDeg * Math.sin(u * Math.PI) : st.chasing ? swimmer.chaseDeg : 0;
+    tmpJawAxis.set(swimmer.axis[0], swimmer.axis[1], swimmer.axis[2]);
+    jaw.quaternion.copy(st.base).multiply(tmpJawQ.setFromAxisAngle(tmpJawAxis, (deg * Math.PI) / 180));
+    st.applied.copy(jaw.quaternion);
+  } : undefined;
 
   useHostileAI({
     creatureId,
@@ -311,6 +352,14 @@ function BeastImpl({
         const want = flyLift(flyer, anim, performance.now() / 1000);
         const y = flyRef.current.position.y;
         flyRef.current.position.y = y + (want - y) * (anim.swing > 0 ? 0.35 : 0.08); // mergulho rápido, subida suave
+      }
+      // NADADOR: bote no golpe (pra frente e pra cima, em arco) + balanço leve da água
+      if (swimmer && flyRef.current) {
+        const st = swimState.current;
+        st.swing = anim.swing; st.chasing = anim.chasing;
+        const k = anim.swing > 0 ? Math.sin((1 - Math.min(1, anim.swing / 0.35)) * Math.PI) : 0;
+        flyRef.current.position.z = swimmer.lunge * k;
+        flyRef.current.position.y = swimmer.rise * k + Math.sin(performance.now() / 1000 * 1.3 + st.phase) * 0.06;
       }
       // GIRO DA MORTE (jacaré, grabSystem): rola em volta do PRÓPRIO corpo (eixo a ~0,45 m), não do pé.
       if (GRAB_SPECIES.has(speciesId) && flyRef.current) {
@@ -356,7 +405,7 @@ function BeastImpl({
       <SelectionRing ring={ring} radius={spec.ringRadius} c={c} />
       <EnemyLabel name={name} height={spec.labelHeight} hpGroup={hpGroup} label={label} hpFill={hpFill} c={c} />
       {glb && <group ref={flyRef}>
-        <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} fixedScale={glb.fixedScale} autoGround={glb.autoGround ?? false} />
+        <GlbCreature url={glb.url} movingRef={movingRef} height={glb.height} yaw={glb.yaw ?? Math.PI} tint={glb.tint} groundBias={glb.groundBias ?? 0} fixedScale={glb.fixedScale} autoGround={glb.autoGround ?? false} onFrame={onModelFrame} />
       </group>}
       {/* 27/10: com GLB o corpo procedural (~20 peças) ficava montado e escondido só pra servir de área de clique (o
           three.js clica em objeto invisível) — mas pagava o cálculo de matriz todo quadro. Vira UMA caixa invisível

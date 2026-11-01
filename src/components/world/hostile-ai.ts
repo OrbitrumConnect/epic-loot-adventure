@@ -278,7 +278,19 @@ export type HostileTuning = {
   /** Atirador (pirata de acampamento, Pedro 25/10): cada golpe sai como TIRO — rastro de bala + som pela distância.
    *  `height` = altura do cano (m). Ausente = golpe normal (todos os outros, números intactos). */
   shot?: { height: number; burst?: number };
+  /** AQUÁTICO (tubarão, 01/11): o pé do bicho fica a esta fundura (m) abaixo da superfície da água. Só vale pra espécie
+   *  `aquatic` num mapa com água funda (`WORLD.water`); ausente = bicho de terra. */
+  swimDepth?: number;
 };
+
+/** Passo de quem NADA (tubarão): igual ao `walkStep`, mas a área é a água funda — desliza no eixo livre, nunca sai dela. */
+export function swimStep(swimmable: (x: number, z: number) => boolean, ox: number, oz: number, nx: number, nz: number): [number, number] {
+  if (swimmable(nx, nz)) return [nx, nz];
+  if (!swimmable(ox, oz)) return [nx, nz]; // nasceu/foi empurrado pra fora: deixa voltar
+  if (swimmable(nx, oz)) return [nx, oz];
+  if (swimmable(ox, nz)) return [ox, nz];
+  return [ox, oz];
+}
 
 /** Pancada do giro da morte no herói local (mesma regra da mordida: armadura + morte). */
 function hurtPlayerFromGrab(name: string, raw: number, at: { x: number; z: number }): void {
@@ -514,21 +526,25 @@ export function useHostileAI(opts: HostileOptions) {
     // + búfalo/pombo mais rápidos à NOITE (até +30%, wildlifeSystem.nightSpeedScale; só eles leem o relógio).
     const chaseSpeed = tuning.speed * CREATURE_SPEED_SCALE * (creature.elite ? ELITE_SPEED : 1) * hordeSpeedScale(creatureId, creature.speciesId)
       * (NIGHT_SPEED[creature.speciesId] ? nightSpeedScale(creature.speciesId, nightFactor()) : 1);
+    // AQUÁTICO (tubarão, 01/11): só existe com água funda no mapa; só caça quem está SOBRE ela (areia/raso = a salvo)
+    const water = CREATURES[creature.speciesId]?.aquatic ? WORLD.water : null;
     // Alvo: eu (solo) — ou, sendo HOST, o jogador MAIS PERTO entre mim e os convidados.
     let px = player.position.x;
     let pz = player.position.z;
-    const distToLocal = localOk ? Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz)) : Infinity;
+    const localValid = localOk && (!water || water.swimmable(px, pz));
+    const distToLocal = localValid ? Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz)) : Infinity;
     let targetRemoteId: string | null = null;
     if (!mirror) {
       let best = distToLocal;
       for (const r of remoteTargets()) {
         // convidado na OUTRA camada (caverna × superfície, pela altura dele que vem da rede): não se enxergam
         if (under && (r.y !== undefined ? under.layer(r.x, r.y, r.z) : 0) !== myLayer) continue;
+        if (water && !water.swimmable(r.x, r.z)) continue; // tubarão: convidado fora d'água não é alvo
         const d = Math.sqrt((r.x - wx) * (r.x - wx) + (r.z - wz) * (r.z - wz));
         if (d < best) { best = d; px = r.x; pz = r.z; targetRemoteId = r.id; }
       }
     }
-    const distToPlayer = targetRemoteId || localOk ? Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz)) : Infinity;
+    const distToPlayer = targetRemoteId || localValid ? Math.sqrt((px - wx) * (px - wx) + (pz - wz) * (pz - wz)) : Infinity;
 
     let moving = false;
     let targetX = wx;
@@ -777,6 +793,14 @@ export function useHostileAI(opts: HostileOptions) {
     const grabTicks = grabTicksDue(creatureId);
     if (grabTicks > 0) hurtPlayerFromGrab(creature.name, (activeGrab()?.perTick ?? 1) * grabTicks, { x: px, z: pz });
     if (activeGrab()?.creatureId === creatureId) { targetX = wx; targetZ = wz; moving = false; }
+    if (water) {
+      // AQUÁTICO: a área é a água funda (nunca encalha na areia/pedra) e o corpo segue a SUPERFÍCIE (sobe e desce com a
+      // onda), `swimDepth` abaixo dela — a barbatana fica pra fora
+      [targetX, targetZ] = swimStep(water.swimmable, g.position.x, g.position.z, targetX, targetZ);
+      g.position.x = targetX;
+      g.position.z = targetZ;
+      g.position.y = water.surfaceY(g.position.x, g.position.z) - (tuning.swimDepth ?? 0);
+    } else {
     // Mesmo limite do herói (área andável, 28/10): persegue lá fora, mas nunca passa da beirada da ilha.
     [targetX, targetZ] = walkStep(g.position.x, g.position.z, targetX, targetZ);
     // Parede de caverna: igual ao herói — não "sobe" a montanha ao encostar na parede do túnel.
@@ -792,6 +816,7 @@ export function useHostileAI(opts: HostileOptions) {
       g.position.x, g.position.z, g.position.y,
       Math.max(terrainHeight(g.position.x, g.position.z), houseFloorSurfaceY(g.position.x, g.position.z)),
     );
+    }
 
     const behavior: CreatureBehavior = flee
       ? 'flee'

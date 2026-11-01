@@ -6,8 +6,8 @@
 import type { WorldProfile } from '@/game/data/world-profile';
 import { CREATURES, scaleEnemyHp } from '@/game/data/creatures';
 import type { CreatureState } from '@/game/types';
-import { pickZsCampSites, ZS_HILLTOP_CAMPS, ZS_SAFE, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
-import { type ZsTerrain, zsBounds, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
+import { pickZsCampSites, ZS_HILLTOP_CAMPS, ZS_SAFE, ZS_SHARK_MIN_DEPTH, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
+import { type ZsTerrain, zsBounds, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterYAt } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
 import { CAVE_BOSS, caveEnemySpots, zsCaveUnder } from './zs-cave';
 
@@ -59,6 +59,13 @@ export function zsWalkable(t: ZsTerrain, x: number, z: number): boolean {
   return zsHeightAt(t, x, z) > ZS_WATER_Y + 0.25;
 }
 
+/** MAR FUNDO pra bicho aquático (tubarão, 01/11): dentro do mapa, chão de MAR (não Lagoa) e fundura mínima. */
+export function zsSwimmable(t: ZsTerrain, x: number, z: number): boolean {
+  const b = zsBounds(t);
+  if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return false;
+  return zsSurfAt(t, x, z) === ZS_SURF.sea && zsHeightAt(t, x, z) <= ZS_WATER_Y - ZS_SHARK_MIN_DEPTH;
+}
+
 export function zsWorldProfile(t: ZsTerrain, q: ZsQuery = zsQuery(t)): WorldProfile {
   return {
     id: 'zona-sul',
@@ -73,5 +80,7 @@ export function zsWorldProfile(t: ZsTerrain, q: ZsQuery = zsQuery(t)): WorldProf
     zoneRadii: ZS_ZONE_RADII,
     // CAVERNA (30/10): o mundo embaixo do Rebouças/Jardim Botânico/Gávea
     under: zsCaveUnder(t),
+    // MAR FUNDO (01/11): onde o tubarão nada; a superfície sobe e desce com a onda do surf
+    water: { swimmable: (x, z) => zsSwimmable(t, x, z), surfaceY: (x, z) => zsWaterYAt(x, z) },
   };
 }
