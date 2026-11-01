@@ -26,4 +26,8 @@ describe('o branch de água do herói segue o piloto (fiação)', () => {
     expect(src).toMatch(/target = !aWantMove \?/);
     expect(src).toContain('sv.x += (awx * target - sv.x) * kk');
   });
+  it('só com o AUTO ligado (no manual, soltar a tecla nadando não volta pro ponto onde entrou no mar)', () => {
+    const src = readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
+    expect(src).toContain("if (!wantMove && !dead && drive.mode === 'foot' && gs.objectives.mode === 'idle') {");
+  });
 });

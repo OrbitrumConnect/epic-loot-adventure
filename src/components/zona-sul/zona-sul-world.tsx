@@ -471,9 +471,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const wantMove = Math.hypot(wx, wz) > 0.05 && drive.mode === 'foot';
     // Piloto automático também na ÁGUA: sem input manual, o nado/vadeio segue o alvo do piloto (movement.current),
     // igual ao branch de TERRA mais abaixo. Sem isto o herói fica boiando preso quando o AUTO manda caçar e ele está
-    // na água (não sai sozinho).
+    // na água (não sai sozinho). SÓ com o AUTO ligado (31/10): no manual o alvo fica velho na areia (a água não o atualiza)
+    // e soltar a tecla nadando fazia o herói voltar sozinho até onde entrou no mar.
     let awx = wx, awz = wz, aWantMove = wantMove;
-    if (!wantMove && !dead && drive.mode === 'foot') {
+    if (!wantMove && !dead && drive.mode === 'foot' && gs.objectives.mode === 'idle') {
       const af = autoFollowDir(movement.current.x, movement.current.z, p.x, p.z);
       if (af.has) { awx = af.x; awz = af.z; aWantMove = true; }
     }
