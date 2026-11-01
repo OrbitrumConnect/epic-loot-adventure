@@ -262,7 +262,8 @@ de 600 mil e caber o tubarão, os navios e 8 jogadores, entra o resto da lista a
 - [ ] Quadro de missões v1: até 10 por dia, automáticas no idle + manuais valendo mais, recompensa no armazém
 - [ ] Hordas: +5 min em toda paz na Zona Sul (ou +8, um número)
 - [ ] Níveis: medir tempo até nv 15/20/25/30 → decidir skate/carro (proposta 20/30)
-- [ ] Celular: Carro/Correr/Descer menores, embaixo, no esquema dos poderes; aparecem só quando servem
+- [x] Celular: Carro/Correr/Descer menores, embaixo, no esquema dos poderes; aparecem só quando servem (`b92547e`, 31/10:
+  dentro do arco — dirigindo = Subir/Descer/Turbo/Sair; a pé = Carro perto do carro, Mergulhar nadando)
 - [ ] Base elite: lado 13 (ímpar), torres de perímetro (4–6), modo livre depois do Lv1 (teto de peças)
 - [ ] Piloto andar dentro da caverna (pra liberar missão automática lá)
 - [ ] Surf dá XP: em pé na onda por segundo, no TUBO maior (proposta 3×), teto por onda
@@ -296,3 +297,5 @@ de 600 mil e caber o tubarão, os navios e 8 jogadores, entra o resto da lista a
 - [ ] Câmera atrás de morro pode tapar o herói (sem mexer sem pedido)
 - [ ] Carregamento a frio: herói invisível nos 1ºs segundos sem cache
 - [ ] Disco do PC de trabalho em 99% (2,7 GB livres) — liberar antes de build pesado
+- [ ] GM do Caio (`!item/!spawn/!goto/!start`, ramo dele `fc7e474`) SEGURADO: hoje libera pelo NOME "Joel" (nome livre na
+  conta). Decidir: só local (igual F8) ou pela CONTA do Joel. Colosso, Atributos e nado já entraram (31/10).

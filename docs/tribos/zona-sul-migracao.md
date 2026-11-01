@@ -141,7 +141,8 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [ ] (31/10) Pensar o nível do carro e do skate (andam bem pelo mapa) → medir tempo até o nível; proposta skate 20 / carro 30
 - [ ] (31/10) QUADRO DE MISSÕES estilo MIR4: escolhe até 10, o idle faz as automáticas (visao-master-play.md §3.1)
 - [ ] (31/10) Clash ↔ mapa: armazém já é o mesmo (23/10) — conferir na tela da Zona Sul ("não esquecer")
-- [ ] (31/10) Celular: Carro/Correr/Descer grandes em cima não tá bom → menores, embaixo, no esquema dos gatilhos dos poderes
+- [x] (31/10) Celular: Carro/Correr/Descer grandes em cima não tá bom → menores, embaixo, no esquema dos gatilhos dos poderes
+  — DENTRO do arco: dirigindo = Subir/Descer/Turbo/Sair; a pé = Carro perto do carro, Mergulhar nadando (`b92547e`)
 - [ ] (31/10) Surf dá XP quando está na onda; no TUBO um XP maiorzinho (visao-master-play.md §3.7)
 - [ ] (31/10) Carro voador: amigo/aliado junto puxa a arma e atira do carro (depende do carro online, Fase 5)
 - [ ] (31/10) Carro: modo de dano, explodir, talvez farmável; carro = nível + recurso pra construir (explodiu → farmar outro) (§3.8)
@@ -149,6 +150,8 @@ Zona Sul = mapa OFICIAL; o Vale deixa de existir em breve (sai só com o OK dele
 - [ ] (31/10) Nível 80 libera NAVIO DE GUERRA que ataca outro navio (PvP naval)
 - [ ] (31/10) Experiência MULTIPLAYER 100% na Zona Sul — roteiro do teste com 2 em §3.10 (achado: veículo do outro jogador não aparece, só o herói)
 - [ ] (31/10) Elite escalável SEM perder FPS — medido: ~2 mi de triângulos/quadro (teto 600 mil); sombra na caverna, árvores de coleta e acampamentos de longe = os 3 maiores, cortáveis sem mudar visual (§3.11)
+- [x] (31/10) Fork do Caio: Colosso não nasce do outro lado da água (`88e8cd4`), janela de Atributos (`2fc883b`), piloto sai da água no AUTO (`e886ea1` + ajuste `b324071`: só com o AUTO ligado)
+- [ ] (31/10) GM do Caio (`!item/!spawn/!goto/!start`) SEGURADO no ramo dele: libera pelo nome "Joel" (nome livre na conta) → decidir só local ou pela conta
 
 ## Decisões do Pedro antes de começar
 1. **Um personagem só nos dois mapas?** (recomendado: sim — mesmo save)
