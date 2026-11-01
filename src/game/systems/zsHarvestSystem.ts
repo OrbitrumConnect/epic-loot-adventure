@@ -1,8 +1,13 @@
 import type { HarvestNodeState, Position } from '../types';
 import { HARVEST_NODES } from '../data/harvest-nodes';
-import { freeOfSpawn, rng32, SURF, type ZsQuery } from './zsSpawnSystem';
+import { freeOfSpawn, near, rng32, SURF, type ZsQuery } from './zsSpawnSystem';
 
 const NODE_SPACING = 14;
+/** Folga (m) de PISTA e de ÁGUA (Pedro 01/11: "não ficar em cima da estrada, nem dentro da Lagoa"): medido, 4 pedras
+ *  estavam a < 4 m de uma pista — a árvore/pedra é larga, o centro fora da pista não basta. */
+export const ZS_NODE_CLEAR = 6;
+const clearOfRoadAndWater = (q: ZsQuery, x: number, z: number) =>
+  !near(q, x, z, SURF.road, ZS_NODE_CLEAR) && !near(q, x, z, SURF.lagoon, ZS_NODE_CLEAR) && !near(q, x, z, SURF.sea, ZS_NODE_CLEAR);
 const TARGETS = [
   { kind: 'tree' as const, count: 48 },
   { kind: 'pebble' as const, count: 24 },
@@ -28,6 +33,7 @@ export function createZsHarvestNodes(q: ZsQuery, seed = 20261029): HarvestNodeSt
       const z = minZ + 8 + rand() * Math.max(1, maxZ - minZ - 16);
       const forest = q.surf(x, z) === SURF.forest;
       if (!dryGround(q, x, z) || !freeOfSpawn(q, x, z) || (target.kind === 'tree' ? !forest : forest)) continue;
+      if (!clearOfRoadAndWater(q, x, z)) continue;
       const position = { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
       if (nodes.some(n => distance2(n.position, position) < NODE_SPACING ** 2)) continue;
       const ordinal = nodes.filter(n => n.kind === target.kind).length;

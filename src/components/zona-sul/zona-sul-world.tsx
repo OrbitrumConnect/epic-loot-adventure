@@ -126,6 +126,12 @@ const ATTACK_S = 0.45, SPIN_S = 0.45;
 const AIM_DIST = 1.7, AIM_DIST_TOUCH = 3.2, AIM_SHOULDER = 0.75, AIM_FOV = 52, AIM_FOV_TOUCH = 58;
 const SUN = new THREE.Vector3(-0.55, 0.62, -0.45).normalize();
 const FOG = '#bcd0dc';
+/** Verdes da copa da mata (zs-vegetation, dossel) — o alvo do tom da árvore de farm na Zona Sul. */
+const ZS_MATA_LEAF = '#2f5d2a', ZS_MATA_LEAF_LIGHT = '#3b6b31';
+/** Folha da árvore de farm na Zona Sul: metade do caminho entre a cor do jogo e o verde da mata. */
+function zsFarmLeaf(game: string, mata: string, k = 0.5): string {
+  return '#' + new THREE.Color(game).lerp(new THREE.Color(mata), k).getHexString();
+}
 /** CAVERNA lá no fundo (`zsCave.dark` acima disto): o sol já está apagado → zera de vez e PARA de redesenhar a sombra dele
  *  (1/11: ~1,3 mi de triângulos por quadro que ninguém via). A luz fica na cena (regra de 30/10: ligar/desligar luz faz o
  *  three recompilar tudo) — só o mapa de sombra para; saiu do fundo, volta a atualizar no mesmo quadro. */
@@ -967,6 +973,10 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const playerRef = useRef<THREE.Group | null>(null);
   const movement = useRef(new THREE.Vector3(ZS_SPAWN.x, 0, ZS_SPAWN.z));
   const c = useMemo(() => palette(), []);
+  /** Árvore de FARM no tom da mata da Zona Sul (Pedro 01/11: "a cor das de farm um pouco mais no tom das árvores
+   *  originais"): a folha (oliva do Vale) vai 50% pro verde da mata — um pouco mais clara ainda, dá pra achar qual se colhe.
+   *  Só a folha; tronco/pedra/rótulo iguais. */
+  const cFarm = useMemo(() => ({ ...c, leaf: zsFarmLeaf(c.leaf, ZS_MATA_LEAF), 'leaf-light': zsFarmLeaf(c['leaf-light'], ZS_MATA_LEAF_LIGHT) }), [c]);
   const hemiRef = useRef<THREE.HemisphereLight>(null), ambRef = useRef<THREE.AmbientLight>(null), skyRef = useRef<SkyImpl>(null);
   useEffect(() => { zsAttack.fn = onAttack ?? null; return () => { zsAttack.fn = null; }; }, [onAttack]);
   const [err, setErr] = useState('');
@@ -1060,7 +1070,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
                   coleta eram desenhadas embaixo da rocha — 851 mil triângulos que ninguém via) */}
               <Suspense fallback={null}><ZsSurface><Camps c={c} /></ZsSurface></Suspense>
               {/* recursos de colher (madeira na mata, pedra no campo — PR #14): a mesma peça do Vale, VISÍVEIS */}
-              <Suspense fallback={null}><ZsSurface><HarvestNodes c={c} /></ZsSurface></Suspense>
+              <Suspense fallback={null}><ZsSurface><HarvestNodes c={cFarm} /></ZsSurface></Suspense>
               <Suspense fallback={null}><Enemies c={c} playerRef={playerRef} cameraMode="third" /></Suspense>
               <Suspense fallback={null}><CombatFeedback /></Suspense>
               <Suspense fallback={null}><Projectiles /></Suspense>

@@ -70,6 +70,6 @@ describe('Zona Sul: caverna lá no fundo', () => {
   });
   it('acampamentos e recursos somem junto com a superfície', () => {
     expect(src).toMatch(/<ZsSurface><Camps c=\{c\} \/><\/ZsSurface>/);
-    expect(src).toMatch(/<ZsSurface><HarvestNodes c=\{c\} \/><\/ZsSurface>/);
+    expect(src).toMatch(/<ZsSurface><HarvestNodes c=\{cFarm\} \/><\/ZsSurface>/); // 01/11: folha da farm no tom da mata
   });
 });
