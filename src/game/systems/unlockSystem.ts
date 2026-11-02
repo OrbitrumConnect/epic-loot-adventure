@@ -14,8 +14,9 @@ export const UNLOCK_LEVEL: Readonly<Record<string, number>> = {
   flying_car: 25,
   rifle: 35,
   /** NAVIO DE GUERRA da Zona Sul (Pedro 01/11: "pega acima do nível 70"; depois "melhor no nível 45 pra não demorar
-   *  muito — a galera brincar") — veículo do mapa, como o carro. PILOTAR pede o nível; subir a bordo é livre. */
-  war_ship: 45,
+   *  muito — a galera brincar"; 02/11: "descer o nível do navio pra 35, melhor") — veículo do mapa, como o carro.
+   *  PILOTAR pede o nível; subir a bordo é livre. */
+  war_ship: 35,
 };
 
 /** Nível que libera `id` (1 = livre). */

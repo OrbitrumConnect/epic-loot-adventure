@@ -98,6 +98,31 @@ export const CAVE_ENEMIES: readonly (readonly [string, string, number, number])[
   ['poco', 'monster', 0.5, 0.3],
   ['cristais', 'flintmaw', 0.3, 0.4], ['cristais', 'flintmaw', -0.35, -0.45],
   ['cosme', 'monster', 0.35, -0.3], ['cosme', 'flintmaw', -0.4, 0.2],
+  // 02/11 (Pedro: "um pouco mais de inimigo na cave"): +8 — só NO FIM da lista (os ids de cima não mudam); 2–4 por salão,
+  // sem bolo (o que pesa é muitos juntos perto de você, 31/10)
+  ['encruzilhada', 'monster', -0.35, 0.35],
+  ['corcovado', 'monster', 0.05, 0.5],
+  ['agua2', 'monster', 0.45, -0.35],
+  ['grande', 'flintmaw', -0.55, 0.35], ['grande', 'monster', 0.1, -0.55],
+  ['poco', 'flintmaw', -0.45, -0.35],
+  ['cristais', 'monster', 0.05, -0.1],
+  ['cosme', 'flintmaw', 0.1, 0.5],
+];
+
+/** MINÉRIO DE FERRO NA CAVERNA (02/11, Pedro: "minério dentro da cave — exato e um pouco mais"; e a Zona Sul não tinha
+ *  veio de ferro: o skate/carro/navio custam ferro). Igual ARK (metal na caverna): veios no chão dos salões, perto da
+ *  parede — [salão, ângulo (graus, no referencial do salão), fração do raio]. Mais no fundo = mais veio (o salão do
+ *  chefe tem 3). Veio do jogo (12 de ferro, picareta, renasce em 3 min) → 18 × 12 = 216 por volta. */
+export const CAVE_ORE: readonly (readonly [string, number, number])[] = [
+  ['encruzilhada', 200, 0.6],
+  ['corcovado', 20, 0.72], ['corcovado', 150, 0.7], ['corcovado', 260, 0.68],
+  ['agua', 100, 0.72],
+  ['agua2', 300, 0.65],
+  ['grande', 40, 0.72], ['grande', 130, 0.7], ['grande', 220, 0.72], ['grande', 310, 0.68],
+  ['chefe', 60, 0.7], ['chefe', 180, 0.72], ['chefe', 290, 0.7],
+  ['cristais', 80, 0.66], ['cristais', 250, 0.66],
+  ['poco', 160, 0.6],
+  ['cosme', 30, 0.68], ['cosme', 210, 0.66],
 ];
 
 /** O CHEFE mora no salão do fundo: a Aberração Fúngica (o chefão das hordas), com 1,5× a vida — é o fim da caverna. */
@@ -371,6 +396,27 @@ export function caveEnemySpots(): { id: string; speciesId: string; x: number; z:
     }
     return { id: `wild_cave_${room}_${i}`, speciesId, x: r.x, z: r.z };
   });
+}
+/** Raios tentados (fração do pedido): o pedido; um pouco pra fora (salão com POÇA no meio — o seco é a beira); depois
+ *  pro meio. Em cada um, o ângulo pedido e ±25°/±50°. */
+const ORE_K = [1, 1.1, 1.2, 1.3, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3];
+const ORE_DA = [0, 25, -25, 50, -50];
+/** Onde fica cada veio de ferro (`CAVE_ORE`): no chão do salão, seco (fora da poça), com corpo em pé do lado (dá pra
+ *  chegar e bater); se o ponto pedido cair na parede/poça, procura em volta (ORE_K × ORE_DA). Puro. */
+export function caveOreSpots(): { id: string; x: number; z: number; y: number }[] {
+  const out: { id: string; x: number; z: number; y: number }[] = [];
+  CAVE_ORE.forEach(([room, deg, e], i) => {
+    const r = ROOMS.find((q) => q.id === room)!;
+    for (const k of ORE_K) for (const da of ORE_DA) {
+      const a = ((deg + da) * Math.PI) / 180, u = Math.cos(a) * e * k * r.rx, v = Math.sin(a) * e * k * r.rz;
+      const x = Math.round((r.x + u * r.c - v * r.s) * 10) / 10, z = Math.round((r.z + u * r.s + v * r.c) * 10) / 10;
+      const fl = caveStandAt(x, z);
+      if (fl === null || cavePoolY(x, z) !== null) continue;
+      out.push({ id: `zs_cave_ore_${i}`, x, z, y: fl });
+      return;
+    }
+  });
+  return out;
 }
 /** Chão onde cabe um corpo EM PÉ em (x, z) (null = rocha/parede). */
 export function caveStandAt(x: number, z: number): number | null {

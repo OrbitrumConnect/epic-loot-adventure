@@ -5,11 +5,12 @@
  */
 import type { WorldProfile } from '@/game/data/world-profile';
 import { CREATURES, scaleEnemyHp } from '@/game/data/creatures';
-import type { CreatureState } from '@/game/types';
+import type { CreatureState, HarvestNodeState } from '@/game/types';
+import { HARVEST_NODES } from '@/game/data/harvest-nodes';
 import { pickZsCampSites, ZS_HILLTOP_CAMPS, ZS_SAFE, ZS_SHARK_MIN_DEPTH, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
 import { type ZsTerrain, zsBounds, zsHeightAt, zsSeaBounds, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterYAt } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
-import { CAVE_BOSS, caveEnemySpots, zsCaveUnder } from './zs-cave';
+import { CAVE_BOSS, caveEnemySpots, caveLayer, caveOreSpots, zsCaveUnder } from './zs-cave';
 
 /** Os BICHOS da caverna (31/10): Fauce de Sílex e Aberração nos salões — mesmo formato da fauna (`wild_cave_*` → força
  *  pela região e renascer iguais aos da mata); nascem no chão da caverna (`homeY`). Precisa do chão ligado (zsCaveUnder). */
@@ -27,6 +28,16 @@ export function createCaveCreatures(): CreatureState[] {
   const boss = createCaveBoss();
   if (boss) out.push(boss);
   return out;
+}
+
+/** VEIOS DE FERRO da caverna (02/11): nós de coleta comuns (o veio do jogo: picareta, 12 de ferro, renasce em 3 min) na
+ *  CAMADA da caverna e na altura do chão de lá. Precisa do chão ligado (setCaveTerrain). */
+export function createCaveOreNodes(): HarvestNodeState[] {
+  const def = HARVEST_NODES.iron_vein;
+  return caveOreSpots().map((s, i) => ({
+    id: s.id, kind: 'iron_vein' as const, position: { x: s.x, z: s.z }, y: s.y, layer: caveLayer(s.x, s.y, s.z),
+    quantity: def.capacity, maxQuantity: def.capacity, depleted: false, respawnAt: null, seed: ((i * 0.6180339887) % 1),
+  }));
 }
 
 /** O CHEFE da caverna (salão do fundo) — mesmo formato da fauna; nasce no chão de lá (`homeY` da camada de baixo). */

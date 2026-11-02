@@ -45,6 +45,11 @@ const USE_GLB_CRYSTAL = true;
 let cachedArray: HarvestNodeState[] | null = null;
 let cachedMap = new Map<string, HarvestNodeState>();
 
+/** Altura do pé do nó: a guardada (caverna, 02/11) ou o chão do mapa, como sempre. */
+export function harvestNodeY(n: HarvestNodeState): number {
+  return n.y ?? glbSurfaceY(n.position.x, n.position.z, terrainHeight(n.position.x, n.position.z));
+}
+
 export function harvestNodeById(id: string): HarvestNodeState | undefined {
   const arr = useGameStore.getState().harvestNodes;
   if (arr !== cachedArray) {
@@ -117,7 +122,10 @@ type KindAssets = {
   fade: FadeSphere[];
 };
 
-function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>; deadMat: THREE.Material } {
+/** `cave` (02/11): o veio de ferro da CAVERNA — na luz fraca e quente de lá as manchas de metal (cinza-escuro) sumiam e
+ *  o veio lia como pedra marrom. Lá as manchas são prata, um pouco maiores, e o veio cintila fraco (como o de ouro). A
+ *  superfície (Vale) fica igual. */
+function buildAssets(c: Palette, cave = false): { assets: Record<HarvestNodeKind, KindAssets>; deadMat: THREE.Material } {
   const rockDark = mixColor(c.rock, c.dark, 0.35);
   const rubble = mixColor(c.rock, c.ground, 0.45);
   const ironBody = mixColor(c.rock, c.dark, 0.55);
@@ -181,18 +189,20 @@ function buildAssets(c: Palette): { assets: Record<HarvestNodeKind, KindAssets>;
     fade: [[0, 0.6, 0, 1.1]],
   };
 
+  // Manchas metálicas escuras e azuladas (superfície) · prata e maiores (caverna).
+  const fleck = cave ? ['#a9b5c2', '#d3dbe3', '#8c98a6', '#e4eaef'] : ['#2c3138', '#59626e', '#3a424c', '#7a8591'];
+  const fk = cave ? 1.35 : 1;
   const iron: KindAssets = {
     live: bake([
       { g: dodeca(0.9), color: ironBody, pos: [0, 0.55, 0], scale: [1.1, 0.8, 0.95], rot: [0.1, 0.9, 0.05] },
       { g: dodeca(0.45), color: rockDark, pos: [-0.65, 0.25, 0.25] },
-      // Manchas metálicas escuras e azuladas.
-      { g: box(0.22, 0.34, 0.22), color: '#2c3138', pos: [0.45, 0.85, 0.35], rot: [0.3, 0.5, 0.2] },
-      { g: box(0.16, 0.28, 0.16), color: '#59626e', pos: [-0.3, 0.95, 0.4], rot: [0.2, 0.2, -0.3] },
-      { g: box(0.26, 0.18, 0.2), color: '#3a424c', pos: [0.1, 1.0, -0.3], rot: [0.5, 0.1, 0.2] },
-      { g: box(0.14, 0.22, 0.14), color: '#7a8591', pos: [0.75, 0.45, -0.1], rot: [0.1, 0.8, 0.3] },
+      { g: box(0.22 * fk, 0.34 * fk, 0.22 * fk), color: fleck[0]!, pos: [0.45, 0.85, 0.35], rot: [0.3, 0.5, 0.2] },
+      { g: box(0.16 * fk, 0.28 * fk, 0.16 * fk), color: fleck[1]!, pos: [-0.3, 0.95, 0.4], rot: [0.2, 0.2, -0.3] },
+      { g: box(0.26 * fk, 0.18 * fk, 0.2 * fk), color: fleck[2]!, pos: [0.1, 1.0, -0.3], rot: [0.5, 0.1, 0.2] },
+      { g: box(0.14 * fk, 0.22 * fk, 0.14 * fk), color: fleck[3]!, pos: [0.75, 0.45, -0.1], rot: [0.1, 0.8, 0.3] },
     ]),
     dead: bake([...rubbleParts(), { g: box(0.1, 0.07, 0.1), color: '#3a424c', pos: [0.05, 0.19, 0.02], rot: [0.3, 0.5, 0.1] }]),
-    liveMat: fadeMat(mat()),
+    liveMat: fadeMat(cave ? mat('#9fb3c8', 0.14) : mat()),
     labelY: 2.1,
     castShadow: true,
     fade: [[0, 0.6, 0, 1.0]],
@@ -356,7 +366,7 @@ function KindInstances({
     for (const n of mine) {
       const r = rand(n.seed + 17);
       const yaw = rand(n.seed + 3) * Math.PI * 2;
-      const y = glbSurfaceY(n.position.x, n.position.z, terrainHeight(n.position.x, n.position.z));
+      const y = harvestNodeY(n);
       dummy.position.set(n.position.x, y, n.position.z);
       dummy.rotation.set(0, yaw, 0);
       if (n.depleted) {
@@ -603,11 +613,12 @@ function nodeLabelText(n: HarvestNodeState): string {
 }
 
 function HarvestLabel({
-  c, hover, assets,
+  c, hover, assets, layer,
 }: {
   c: Palette;
   hover: React.RefObject<Hover>;
   assets: Record<HarvestNodeKind, KindAssets>;
+  layer: number;
 }) {
   const group = useRef<THREE.Group>(null);
   const mesh = useRef<THREE.Mesh>(null);
@@ -628,14 +639,14 @@ function HarvestLabel({
       }
     }
     const node = id ? harvestNodeById(id) : undefined;
-    if (!node) { g.visible = false; return; }
+    if (!node || (node.layer ?? 0) !== layer) { g.visible = false; return; } // o da outra camada é do outro desenho
     if (node.depleted && hover.current.id === id) {
       // Nó esgotado sob o cursor: some (e não deixa o cursor de "mão" preso).
       hover.current.id = null;
       document.body.style.cursor = '';
     }
     g.visible = true;
-    g.position.set(node.position.x, glbSurfaceY(node.position.x, node.position.z, terrainHeight(node.position.x, node.position.z)) + assets[node.kind].labelY, node.position.z);
+    g.position.set(node.position.x, harvestNodeY(node) + assets[node.kind].labelY, node.position.z);
     g.quaternion.copy(state.camera.quaternion);
     const text = nodeLabelText(node);
     if (text !== lastText.current) {
@@ -659,9 +670,12 @@ function HarvestLabel({
 /* ------------------------------------------------------------------ *
  * Componente público
  * ------------------------------------------------------------------ */
-export function HarvestNodes({ c }: { c: Palette }) {
-  const nodes = useGameStore(s => s.harvestNodes);
-  const built = useMemo(() => buildAssets(c), [c]);
+/** `layer` (02/11, minério da caverna): desenha só os nós desta CAMADA (0 = superfície, como sempre; 1 = caverna — o
+ *  mundo monta um segundo, fora do grupo da superfície). As pedras/cristais em GLB são só da superfície. */
+export function HarvestNodes({ c, layer = 0 }: { c: Palette; layer?: number }) {
+  const all = useGameStore(s => s.harvestNodes);
+  const nodes = useMemo(() => all.filter(n => (n.layer ?? 0) === layer), [all, layer]);
+  const built = useMemo(() => buildAssets(c, layer === 1), [c, layer]);
   const hover = useRef<Hover>({ id: null });
 
   return (
@@ -676,9 +690,9 @@ export function HarvestNodes({ c }: { c: Palette }) {
           hover={hover}
         />
       ))}
-      {USE_GLB_CRYSTAL && <GlbCrystals />}
-      <GlbRocks />
-      <HarvestLabel c={c} hover={hover} assets={built.assets} />
+      {layer === 0 && USE_GLB_CRYSTAL && <GlbCrystals />}
+      {layer === 0 && <GlbRocks />}
+      <HarvestLabel c={c} hover={hover} assets={built.assets} layer={layer} />
     </>
   );
 }

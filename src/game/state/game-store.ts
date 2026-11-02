@@ -1665,7 +1665,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let bestNode: (typeof state.harvestNodes)[number] | null = null;
     let bestNodeDist = Infinity;
     for (const node of state.harvestNodes) {
-      if (node.depleted || layers.player !== 0) continue; // fundo da caverna: os recursos estão lá em cima
+      if (node.depleted || (node.layer ?? 0) !== layers.player) continue; // só o da MESMA camada (minério da caverna: 02/11)
       const def = HARVEST_NODES[node.kind];
       if (!def) continue;
       const d = getDistance(pos, node.position);
@@ -2631,8 +2631,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const node = state.harvestNodes[index]!;
     const def = HARVEST_NODES[node.kind];
 
-    // +0,5 m de folga: o jogador anda entre o clique e a colheita.
-    if (getDistance(state.player.position, node.position) > harvestRangeFor(def.range, state.player.level) + 0.5) {
+    // +0,5 m de folga: o jogador anda entre o clique e a colheita. Outra camada (veio da caverna × herói no morro em
+    // cima dele) = longe, mesmo com x/z perto.
+    if ((node.layer ?? 0) !== layers.player || getDistance(state.player.position, node.position) > harvestRangeFor(def.range, state.player.level) + 0.5) {
       set(s => ({ ui: { ...s.ui, message: `${def.name}: muito longe para colher.` } }));
       return;
     }
@@ -2910,7 +2911,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         };
       })(),
       // caverna (layerSystem): o piloto só vê o que está na MESMA camada do herói
-      harvestNodes: (layers.player === 0 ? state.harvestNodes : []).map(n => ({
+      harvestNodes: state.harvestNodes.filter(n => (n.layer ?? 0) === layers.player).map(n => ({
         id: n.id,
         kind: n.kind,
         position: n.position,

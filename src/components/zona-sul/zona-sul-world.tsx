@@ -69,7 +69,7 @@ import { createZsBandits, createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_P
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
-import { createCaveCreatures, zsNavigable, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
+import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
 import { useZsTouch, zsAttack, zsCave, zsCtx } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, Gauge, LogOut, Ship } from 'lucide-react';
@@ -1306,7 +1306,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       const query = zsQuery(tt);
       useGameStore.getState().enterWorld('zona-sul', {
         creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(tt)), ...createZsBandits(query, prof.camps)],
-        harvestNodes: createZsHarvestNodes(query),
+        harvestNodes: [...createZsHarvestNodes(query), ...createCaveOreNodes()], // + veios de ferro da caverna (02/11)
         position: { x: at.x, z: at.z },
       });
       setT(tt); setReady(true);
@@ -1367,6 +1367,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
               <Suspense fallback={null}><ZsSurface><Camps c={c} /></ZsSurface></Suspense>
               {/* recursos de colher (madeira na mata, pedra no campo — PR #14): a mesma peça do Vale, VISÍVEIS */}
               <Suspense fallback={null}><ZsSurface><HarvestNodes c={cFarm} /></ZsSurface></Suspense>
+              {/* MINÉRIO DA CAVERNA (02/11): os nós da camada de baixo, fora da superfície (que some no fundo da caverna) */}
+              <Suspense fallback={null}><HarvestNodes c={cFarm} layer={1} /></Suspense>
               <Suspense fallback={null}><Enemies c={c} playerRef={playerRef} cameraMode="third" /></Suspense>
               <Suspense fallback={null}><CombatFeedback /></Suspense>
               <Suspense fallback={null}><Projectiles /></Suspense>

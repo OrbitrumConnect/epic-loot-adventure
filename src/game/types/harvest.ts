@@ -53,4 +53,9 @@ export type HarvestNodeState = {
   respawnAt: number | null;
   /** Variação visual estável (tamanho, rotação) derivada do id. */
   seed: number;
+  /** CAMADA (02/11, minério na caverna): ausente/0 = superfície; 1 = caverna (layerSystem). Só se colhe/vê/mira na
+   *  mesma camada do herói. */
+  layer?: number;
+  /** Altura do chão do nó (m) quando NÃO é o chão do mapa (caverna). Ausente = chão do mapa. */
+  y?: number;
 };

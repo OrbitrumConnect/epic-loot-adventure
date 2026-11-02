@@ -3,7 +3,7 @@
  * à base, precisa ter pra buildar"; "skate, asa e prancha ficam no loot; carro e navio buildo, ficam no mundo com vida,
  * explodiu/afundou builda outro com recurso"; depois "recurso pode ser 2× mais, progredindo — os de nível mais alto 3×").
  * Fonte ÚNICA (receitas, construir carro/navio, testes). O NÍVEL que libera cada um continua o do unlockSystem
- * (prancha 5, asa 8, skate 15, carro 25, navio 45) — antes do nível a receita fica travada (não gasta à toa).
+ * (prancha 5, asa 8, skate 15, carro 25, navio 35 — 02/11) — antes do nível a receita fica travada (não gasta à toa).
  * Base da tabela proposta (01/11) × 2 (prancha, asa) · × 2,5 (skate) · × 3 (carro, navio).
  */
 export type Cost = readonly { id: string; n: number }[];
