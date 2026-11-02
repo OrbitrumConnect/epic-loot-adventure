@@ -65,7 +65,7 @@ import { AssetBoundary } from '@/components/world/asset-boundary';
 import { HarvestNodes } from '@/components/world/harvest-nodes';
 import { SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
-import { createZsBandits, createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
+import { createZsBandits, createZsNewAreaCreatures, createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsHarvestNodes, createZsNewAreaTrees } from '@/game/systems/zsHarvestSystem';
@@ -93,6 +93,7 @@ import { ZsTerrainMesh } from './zs-terrain-mesh';
 import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
 import { ZsGrass } from './zs-grass';
+import { rampStep, zsRamp, ZsRampView, zsRampFloor } from './zs-ramp';
 import { autoFollowDir, zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
 import { CAR, CAR_SEATS, carGone, carStep, damageCar, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
 import { costText, VEHICLE_COST } from '@/game/data/vehicle-costs';
@@ -239,6 +240,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const boardYaw = useRef(0), popOk = useRef(false), lean = useRef(0), tubeCam = useRef(0), shiftWas = useRef(false);
   /** agachado, o Espaço levantou: não pula enquanto ele não for solto (02/11) */
   const crouchStand = useRef(false);
+  /** em cima do deck da rampa de voo livre no quadro anterior (02/11) */
+  const onRamp = useRef(false);
   /** caverna: na poça (anda mais devagar) · quanto da distância da câmera cabe sem entrar na rocha (0..1) */
   const caveWade = useRef(false), camFit = useRef(1);
   const action = useRef<HeroAction>('idle');
@@ -842,7 +845,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       // CAVERNA: dentro (ou entrando pela boca) o chão e as paredes são os dela; fora, o mapa como sempre
       const cm = drive.mode === 'foot' && (caveNow || dx || dz) ? caveMove(t, p.x, p.z, p.y, dx, dz) : null;
       caveWade.current = !!cm?.wading;
+      // RAMPA DE VOO LIVRE (02/11): em cima do deck anda livre (o barranco embaixo não é "parede"); o parapeito segura dos lados
+      const onRampNow = !cm && zsRampFloor(p.x, p.z, p.y) > -Infinity;
       st = cm ? { x: cm.x, z: cm.z, ground: cm.ground, swimming: false, wading: cm.wading }
+        : onRampNow && (dx || dz) ? (() => { const q = rampStep(p.x, p.z, dx, dz); return { x: q.x, z: q.z, ground: zsHeightAt(t, q.x, q.z), swimming: false, wading: false }; })()
         : dx || dz ? zsStep(t, p.x, p.z, dx, dz) : { x: p.x, z: p.z, ground: zsHeightAt(t, p.x, p.z), ...water0 };
       moving = Math.hypot(dx, dz) > 0.05 * dt; v = Math.hypot(dx, dz) / dt;
       swimVel.current.set(dx / dt, dz / dt); // entra na água com o embalo de quem vinha
@@ -886,7 +892,11 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const rm = ride.current?.mode, rolling = rm === 'wipe' || tumble.current > 0;
     if (rm) dive.current = 0;
     const waterY = st.swimming ? zsWaterYAt(p.x, p.z, p.y + 0.3) : 0;
-    const floor = !st.swimming ? (!zsCave.inCave ? Math.max(st.ground, houseFloorSurfaceY(p.x, p.z), houseWalkFloorY(p.x, p.z, p.y)) : st.ground)
+    // rampa de voo livre (02/11): o deck é chão; saiu pela PONTA (o chão some lá embaixo) = cai de verdade (a asa abre)
+    const rampY = !st.swimming && !zsCave.inCave ? zsRampFloor(p.x, p.z, p.y) : -Infinity;
+    if (onRamp.current && rampY === -Infinity && grounded.current && st.ground < p.y - 0.8) { grounded.current = false; vy.current = 0; }
+    onRamp.current = rampY > -Infinity;
+    const floor = !st.swimming ? (!zsCave.inCave ? Math.max(st.ground, houseFloorSurfaceY(p.x, p.z), houseWalkFloorY(p.x, p.z, p.y), rampY) : st.ground)
       : rm === 'popup' || rm === 'ride' ? waterY + BOARD_DECK                 // em pé no deck
       : rm === 'paddle' ? waterY + BOARD_DECK + 0.07                         // deitado EM CIMA do deck (acima da água)
       : rolling ? waterY - 0.6                                               // vaca: embaixo da espuma
@@ -1304,7 +1314,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const gearRef = useMemo(() => ({ get glider() { return gliderPose.current; }, get skate() { return skatePose.current; } }), []);
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip, warship: shipRef, drive, input, aim: warshipAim, muzzle: heroMuzzle, warshipDeck: zsWarshipDeck, touch: useZsTouch, net: useNet, remoteDecks };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip, warship: shipRef, drive, input, aim: warshipAim, muzzle: heroMuzzle, warshipDeck: zsWarshipDeck, touch: useZsTouch, net: useNet, remoteDecks, ramp: zsRamp };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -1341,7 +1351,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       const prof = zsWorldProfile(tt, zsQuery(tt), query);
       setWorldProfile(prof);
       useGameStore.getState().enterWorld('zona-sul', {
-        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(st)), ...createZsBandits(query, prof.camps)],
+        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(st)), ...createZsBandits(query, prof.camps),
+          ...createZsNewAreaCreatures(zsQuery(tt), query.bounds, prof.camps)], // + bichos e bandidos da Gávea/São Conrado (02/11)
         // + árvores de farm da área nova (Gávea/São Conrado, no terreno de agora) + veios de ferro da caverna (02/11)
         harvestNodes: (() => { const base = createZsHarvestNodes(query); return [...base, ...createZsNewAreaTrees(zsQuery(tt), query.bounds, base), ...createCaveOreNodes()]; })(),
         position: { x: at.x, z: at.z },
@@ -1394,6 +1405,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             <ZsVegetation t={t} heroRef={focusRef} />
             {/* GRAMA LEVE (02/11): só em volta do herói, no verde; some no fundo da caverna junto com a superfície */}
             <ZsGrass t={t} heroRef={focusRef} />
+            {/* RAMPA DE VOO LIVRE da Pedra Bonita (02/11): deck pisável; saindo pela ponta com a asa-delta ela abre */}
+            <ZsRampView t={t} />
           </ZsSurface>
           {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}
           <ZsCave t={t} heroRef={heroRef} />

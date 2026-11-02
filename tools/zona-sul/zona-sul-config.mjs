@@ -20,6 +20,10 @@ export const EXPAND_TO = { w: -43.298, s: -23.045 };
  *  atrás da Gávea, muito acidentado"); ali vale a mesma FAIXA que desce pro mar das bordas do mapa. A faixa sul (mar até
  *  as Cagarras) entra inteira. */
 export const EXPAND_KEEP = { westNorth: -22.972 };
+/** ILHAS CAGARRAS mais altas (02/11, Pedro: "ilhas mais altas"): o relevo de 30 m do satélite achata ilha pequena (Ilha
+ *  Cagarra ~14 m no jogo; Palmas ~4 m). Como o Cristo (PEAK_BOOST) e a Pedra do Arpoador: realce SÓ dentro do contorno
+ *  de cada ilha do arquipélago (pela costa do OSM), pra aparecerem de Ipanema. Fora do recorte antigo (nada dele muda). */
+export const ISLAND_BOOST = { k: 1.7, names: ['Ilha Cagarra', 'Ilha das Palmas', 'Ilha Comprida', 'Ilhota Cagarra', 'Ilhota Grande', 'Ilhota Pequena', 'Laje da Cagarra'] };
 /** Faixa NOVA em volta do mapa (px de 4 m): a terra da borda desce por ela até uma praia e o mar. */
 export const APRON_PX = 18;
 /** Largura (m no jogo) da praia no pé da descida. */

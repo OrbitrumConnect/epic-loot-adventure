@@ -319,6 +319,30 @@ export function createZsBandits(q: ZsQuery, camps: CampPlacement[] = [], seed = 
   return out;
 }
 
+/**
+ * ÁREA NOVA (02/11 — Gávea, Pedra Bonita, São Conrado; Pedro: "bichos/inimigos na área nova"): o MESMO sorteio da
+ * fauna e dos bandidos, só que no terreno de agora e SÓ FORA do recorte antigo (lá dentro conta como "fora do mapa").
+ * Sorteio próprio (sementes novas) → nada do que existe muda. Ids com `gv` (`wild_deer_gv0`, `wild_bandit_gv0`):
+ * perigo pela região e renascer iguais aos da fauna; o bandido segue atirador (`isZsBandit`).
+ */
+export const ZS_NEW_AREA_FAUNA: ZsRule[] = [
+  { speciesId: 'deer', count: 7, ok: lowForest, spacing: 18 },       // Cervo — mata baixa
+  { speciesId: 'rabbit', count: 6, ok: lowForest, spacing: 12 },     // Coelho
+  { speciesId: 'pheasant', count: 4, ok: lowForest, spacing: 14 },   // Faisão
+  { speciesId: 'monster', count: 4, ok: highForest, spacing: 40 },   // Aberração — mata alta (a Gávea é alta)
+  { speciesId: 'flintmaw', count: 3, ok: highForest, spacing: 50 },  // Fauce de Sílex
+];
+export const ZS_NEW_AREA_BANDIT_GROUPS = 2;
+export function createZsNewAreaCreatures(q: ZsQuery, oldBounds: ZsQuery['bounds'], camps: CampPlacement[] = []): CreatureState[] {
+  const inOld = (x: number, z: number) => x >= oldBounds.minX && x <= oldBounds.maxX && z >= oldBounds.minZ && z <= oldBounds.maxZ;
+  const area: ZsQuery = { ...q, surf: (x, z) => (inOld(x, z) ? SURF.out : q.surf(x, z)) };
+  const tag = (c: CreatureState) => ({ ...c, id: c.id.replace(/_(\d+)$/, '_gv$1') });
+  return [
+    ...createZsWildlife(area, 20261102, ZS_NEW_AREA_FAUNA, camps).map(tag),
+    ...createZsBandits(area, camps, 0x67617665, ZS_NEW_AREA_BANDIT_GROUPS).map(tag),
+  ];
+}
+
 /** Clareira de acampamento: chão PLANO no raio todo (5 pontos), terra seca, encostada na MATA. */
 function campSiteOk(q: ZsQuery, x: number, z: number, r: number): boolean {
   if (!freeOfSpawn(q, x, z) || q.surf(x, z) === SURF.road) return false;

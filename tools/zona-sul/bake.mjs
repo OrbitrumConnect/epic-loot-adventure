@@ -11,7 +11,7 @@
 //     LAGOA (água do OSM) com fundo próprio; PRAIA = declive suave até a água.
 import fs from 'node:fs';
 import sharp from 'sharp';
-import { APRON_PX, BBOX_V1, CANAL_ALAH, EXPAND_KEEP, EXPAND_TO, ISLAND_BEACH, LAGOA_MAX_DEPTH, LAGOA_SLOPE, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
+import { APRON_PX, BBOX_V1, CANAL_ALAH, EXPAND_KEEP, EXPAND_TO, ISLAND_BEACH, ISLAND_BOOST, LAGOA_MAX_DEPTH, LAGOA_SLOPE, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
 import { loadDem } from './dem.mjs';
 import { buildMasks, joinRings } from './masks.mjs';
 import { buildRoads, MAX_GRADE, rasterRoadMask } from './roads.mjs';
@@ -184,6 +184,18 @@ for (const r of ROCK_LANDMARKS) {
   const din = distTo((p) => !mask[p]);
   let maxIn = 0; for (let p = 0; p < W * H; p++) if (mask[p]) maxIn = Math.max(maxIn, din[p]);
   for (let p = 0; p < W * H; p++) if (mask[p]) { hg[p] = Math.max(hg[p], 0.15) + r.height * (0.35 + 0.65 * sstep(0, Math.max(1, maxIn), din[p])); surf[p] = SURF.land; }
+}
+
+// ILHAS CAGARRAS mais altas (02/11, ISLAND_BOOST): só a TERRA dentro do contorno de cada ilha do arquipélago sobe
+{
+  let px = 0, top = 0;
+  for (const el of osm) {
+    if (el.type !== 'way' || !el.geometry || !ISLAND_BOOST.names.includes(el.tags?.name)) continue;
+    const mask = new Uint8Array(W * H);
+    for (const ring of joinRings([el.geometry])) fillPoly(mask, ring.map((g) => toPx(g.lat, g.lon)));
+    for (let p = 0; p < W * H; p++) if (mask[p] && inside[p] && !sea[p] && hg[p] > 0.15) { hg[p] = 0.15 + (hg[p] - 0.15) * ISLAND_BOOST.k; px++; top = Math.max(top, hg[p]); }
+  }
+  console.log(JSON.stringify({ ilhasRealcadas_px: px, ilhaMaisAlta_m: +top.toFixed(1) }));
 }
 
 // FAIXA QUE DESCE PRO MAR (a das bordas do mapa, abaixo; e, desde 02/11, o bloco de FORA da expansão — o maciço da
