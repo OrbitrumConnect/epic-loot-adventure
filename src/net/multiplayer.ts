@@ -14,6 +14,7 @@ import type { PlayerBaseState } from '@/game/types/playerbase';
 import type { CreatureState } from '@/game/types/creature';
 import { setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
 import { createWorldDecoder, createWorldEncoder, type WorldPacket } from './world-delta';
+import { noteHostClock, noteHostEpoch, resetRoomClock, setRoomActive } from './room-clock';
 
 const SUPA_URL = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
 const SUPA_ANON = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
@@ -236,6 +237,7 @@ export const useNet = create<NetState>((set, get) => ({
       // O anfitrião é a autoridade. Ele não deve aceitar um snapshot de convidado.
       if (p.id === selfId || get().isHost) return;
       if (typeof p.epoch === 'number') setWorldEpoch(p.epoch); // dia/noite iguais ao do anfitrião (26/10)
+      if (typeof p.wt === 'number') { noteHostClock(p.wt); if (typeof p.epoch === 'number') noteHostEpoch(p.epoch); } // relógio da sala: as ondas iguais pra todos (02/11)
       const world = worldDecoder.apply(p); // foto completa ou só o que mudou (27/10)
       if (!world) return;
       hadLiveWorld = true;
@@ -329,7 +331,7 @@ export const useNet = create<NetState>((set, get) => ({
     };
     retrack = track;
     const setHost = (host: boolean) => {
-      if (host) worldEncoder = createWorldEncoder(); // virou host: 1º envio = foto completa
+      if (host) { worldEncoder = createWorldEncoder(); resetRoomClock(); } // virou host: 1º envio = foto completa; o relógio da sala é o dele
       else worldDecoder = createWorldDecoder();      // virou convidado: espera a foto do novo host
       set({ isHost: host, ...(host ? { world: null } : {}) });
       track();
@@ -347,11 +349,13 @@ export const useNet = create<NetState>((set, get) => ({
     // Host entra como aliado (não escolhe); convidado (entrou por código/link) declara a
     // postura no card → `sideChosen=false` faz o card aparecer. (fatia 1 do PvP)
     set({ room, connected: false, isHost, players: {}, bases: {}, baseTiers: {}, troops: {}, world: null, selfSide: 'ally', sideChosen: isHost });
+    setRoomActive(true);
     if (isHost) void registerRoom(room); // publica a sala no lobby (aba de salas)
   },
 
   leave: () => {
     retrack = null;
+    setRoomActive(false);
     unregisterRoom();
     if (channel && supabase) { void supabase.removeChannel(channel); channel = null; }
     set({ room: null, connected: false, isHost: false, players: {}, bases: {}, baseTiers: {}, troops: {}, world: null, selfSide: 'ally', sideChosen: false });
@@ -432,7 +436,7 @@ export function broadcastWorld(creatures: CreatureState[]): void {
   const pkt = worldEncoder.encode(creatures, Date.now()); // só o que mudou; foto completa a cada 30 s
   if (!pkt) return;
   const { selfId } = useNet.getState();
-  void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, ...pkt, epoch: worldEpoch() } });
+  void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, ...pkt, epoch: worldEpoch(), wt: Date.now() } });
 }
 
 /** Em uma sala, a simulação pertence ao anfitrião. Fora dela, o jogo continua solo. */

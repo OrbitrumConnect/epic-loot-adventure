@@ -19,7 +19,8 @@ export const KEYFRAME_MS = 30_000;
 
 type Entry = Partial<CreatureState> & { id: string; $u?: string[]; $i?: number };
 export type WorldPacket = {
-  id: string; epoch?: number; k?: number;
+  /** `wt`: hora do anfitrião (relógio de parede, ms) — o convidado acerta o relógio da sala (room-clock.ts) */
+  id: string; epoch?: number; wt?: number; k?: number;
   creatures?: CreatureState[]; p?: number[]; c?: Entry[]; d?: string[];
 };
 

@@ -17,8 +17,16 @@ import { ARPOADOR, BARREL_T, CURL_RAMP, FULL, type Lim, RIPPLE_A, RIPPLE_K, SHOU
 import { type SeriesRule, SERIES, SLOTS, SurfScheduler } from './surf-scheduler';
 import { findSurfFrame, type SurfFrame } from './surf-frame';
 import { nearestSurfZone, registerSurfZone, type SurfZoneInfo } from './surf-zones';
+import { roomActive, roomEpoch, roomNow } from '@/net/room-clock';
+import { worldEpoch } from '@/game/systems/dayNightSystem';
 /** Até que distância (m) da câmera a malha da onda é desenhada. */
 const SURF_DRAW_DIST = 900;
+
+/** Relógio das ondas (s): desde o começo do mundo — numa sala, o do ANFITRIÃO (começo do mundo dele + a hora dele,
+ *  acertada pelo carimbo do pacote do mundo). Sozinho: desde que o jogo abriu (como antes). */
+export function surfWorldSeconds(now: number = Date.now()): number {
+  return (roomNow(now) - (roomEpoch() ?? worldEpoch())) / 1000;
+}
 
 /**
  * Faixa (q) onde a onda DOBRA: do pico até onde a abertura mais lenta (−12%) chega na borda da zona e o tubo termina de
@@ -245,7 +253,8 @@ export function SurfBreak({ t, shoreX, shoreZ, pf = ARPOADOR, frameOf, enabled =
       w[pf === ARPOADOR ? '__zsSurf' : '__zsSurf_' + pf.id] = { scheduler, frame };
     }
     // tecla J: próxima série NO PICO MAIS PERTO da câmera (com dois picos, só o seu)
-    const key = (e: KeyboardEvent) => { if (e.code === 'KeyJ' && !e.repeat && nearestSurfZone(camAt.x, camAt.z) === zone) scheduler.trigger(); };
+    // (online, 02/11: desligada — a série chamada só pra um tiraria as ondas dele do relógio da sala)
+    const key = (e: KeyboardEvent) => { if (e.code === 'KeyJ' && !e.repeat && !roomActive() && nearestSurfZone(camAt.x, camAt.z) === zone) scheduler.trigger(); };
     window.addEventListener('keydown', key);
     return () => { unregister(); zoneRef.current = null; window.removeEventListener('keydown', key); };
   }, [frame, uniforms, scheduler, pf]);
@@ -253,8 +262,9 @@ export function SurfBreak({ t, shoreX, shoreZ, pf = ARPOADOR, frameOf, enabled =
 
   const meshRef = useRef<THREE.Mesh>(null), wasDrawn = useRef(false);
   const camAt = useMemo(() => ({ x: 0, z: 0 }), []);
-  useFrame((state, dt) => {
-    scheduler.advance(dt);
+  useFrame((state) => {
+    // RELÓGIO DA SALA (02/11): todos os jogadores no mesmo instante da agenda → a mesma onda ao mesmo tempo
+    scheduler.syncTo(surfWorldSeconds());
     let any = false;
     for (let i = 0; i < SLOTS; i++) {
       const s = scheduler.states[i]!, v = scheduler.vars[i]!;

@@ -6,6 +6,10 @@
  *  - nunca sobrepõe: cada onda nova só ocupa uma vaga cuja onda antiga já saiu da zona (sem vaga, a série vem menor);
  *  - aba escondida/voltando: o quadro trava o passo (sem "rajada" de séries atrasadas);
  *  - 1ª série logo (pra ver), e `trigger()` chama a próxima na hora (tecla J) se o mar estiver livre.
+ * ONLINE (Pedro 02/11: "uns 7 s de diferença na mesma onda entre dois jogadores"): cada um tinha o seu relógio, começando
+ * do zero ao abrir a página. Agora o jogo chama `syncTo(t)` com o RELÓGIO DA SALA (s desde o começo do mundo do
+ * anfitrião) e a série começa EXATAMENTE na hora marcada (não no quadro que passou dela) → mesma semente + mesmo t = as
+ * mesmas ondas, no mesmo instante, pra todo mundo, qualquer que seja o FPS de cada um.
  */
 import { ARPOADOR, SURF, type SurfProfile, type WaveState, type WaveVar, waveStateAt } from './surf-wave';
 
@@ -37,8 +41,15 @@ export class SurfScheduler {
   readonly vars: WaveVar[] = Array.from({ length: SLOTS }, () => ({ hR: 1, hL: 1, vR: 1, vL: 1 }));
   readonly states: WaveState[] = Array.from({ length: SLOTS }, () => ({ qc: 0, h: 0, peelR: 0, peelL: 0, active: false, peel2R: 0, peel2L: 0, reform: 0 }));
   private rnd: () => number;
-  constructor(seed = 20261028, readonly pf: SurfProfile = ARPOADOR, readonly rule: SeriesRule = SERIES) {
+  constructor(readonly seed = 20261028, readonly pf: SurfProfile = ARPOADOR, readonly rule: SeriesRule = SERIES) {
     this.rnd = mulberry32(seed); this.life = waveLife(pf); this.nextSeriesAt = rule.FIRST_AT;
+  }
+
+  /** Volta ao começo (relógio 0, mesma semente) — pra correr de novo até um instante anterior. */
+  private reset(): void {
+    this.rnd = mulberry32(this.seed); this.clock = 0; this.nextSeriesAt = this.rule.FIRST_AT; this.seriesCount = 0;
+    this.births.fill(-1e9);
+    for (const v of this.vars) { v.hR = 1; v.hL = 1; v.vR = 1; v.vL = 1; }
   }
 
   /** Há alguma onda ainda na zona (nascida e não terminada)? */
@@ -48,11 +59,28 @@ export class SurfScheduler {
 
   /** Avança o relógio (passo travado: aba que volta não dispara séries atrasadas) e atualiza o estado das 5 vagas. */
   advance(dt: number): void {
-    this.clock += Math.max(0, Math.min(this.rule.MAX_DT, dt));
-    if (this.clock >= this.nextSeriesAt && !this.arriving()) {
+    this.stepTo(this.clock + Math.max(0, Math.min(this.rule.MAX_DT, dt)));
+  }
+
+  /** RELÓGIO DA SALA: vai pro instante `t` (s). Pra frente corre as séries que couberem (sem desenhar nada no meio —
+   *  milhares de séries custam < 1 ms); pra trás (entrou na sala de um anfitrião que abriu o jogo depois) recomeça do
+   *  zero e corre até `t`. Pedaço pequeno = igual ao passo de sempre. */
+  syncTo(t: number): void {
+    if (!Number.isFinite(t) || t < 0) return;
+    if (t < this.clock - 1e-6) this.reset();
+    this.stepTo(t);
+  }
+
+  private stepTo(t: number): void {
+    // cada série começa na HORA MARCADA (`nextSeriesAt`), não no quadro que passou dela: a agenda não depende do FPS
+    while (this.nextSeriesAt <= t) {
+      const at = this.nextSeriesAt;
+      this.clock = at;
+      if (this.arriving()) { this.nextSeriesAt = Math.max(...this.births); continue; } // espera a última da série nascer
       if (this.enabled) this.startSeries();
-      else this.nextSeriesAt = this.clock + 1; // desligada: confere de novo daqui a 1 s
+      else this.nextSeriesAt = at + 1; // desligada: confere de novo daqui a 1 s
     }
+    this.clock = t;
     for (let i = 0; i < SLOTS; i++) {
       const st = waveStateAt(this.clock - this.births[i]!, this.vars[i]!, this.pf);
       const o = this.states[i]!; o.qc = st.qc; o.h = st.h; o.peelR = st.peelR; o.peelL = st.peelL; o.active = st.active;
