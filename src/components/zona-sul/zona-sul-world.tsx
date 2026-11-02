@@ -53,7 +53,7 @@ import { RemotePlayers } from '@/components/world/remote-players';
 import { TargetRoute } from '@/components/world/target-route';
 import { houseFloorSurfaceY, houseWalkFloorY, pushOutBasePieces, pushOutHouseWalls } from '@/components/world/base-collision';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
-import { broadcastCannon, broadcastPose, type NetVehicle, registerShipHitHandler, useNet } from '@/net/multiplayer';
+import { broadcastCannon, broadcastPose, type NetVehicle, registerCarHitHandler, registerShipHitHandler, useNet } from '@/net/multiplayer';
 import { remoteDecks, remoteDeckTick, ZsRemoteVehicles } from './zs-remote-vehicles';
 import { CombatFeedback } from '@/components/world/combat-feedback';
 import { Projectiles } from '@/components/world/projectiles';
@@ -94,6 +94,7 @@ import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
 import { ZsGrass } from './zs-grass';
 import { rampStep, zsRamp, ZsRampView, zsRampFloor } from './zs-ramp';
+import { readZsVehicles, restoreCar, restoreWarship, saveZsVehicles } from './zs-vehicle-save';
 import { autoFollowDir, zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
 import { CAR, CAR_SEATS, carGone, carStep, damageCar, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
 import { costText, VEHICLE_COST } from '@/game/data/vehicle-costs';
@@ -1325,10 +1326,20 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       const s = shipRef.current;
       if (!s || s.sinkT !== null) return;
       const sank = damageWarship(s, hit.damage);
-      useGameStore.getState().setMessage(sank ? `🔥 Seu navio AFUNDOU — canhão de ${hit.fromName}! Construa outro na âncora (E).`
-        : `💥 Canhão de ${hit.fromName} no seu navio! −${Math.round(hit.damage)} (casco ${s.hp}/${WARSHIP.HP})`);
+      // 02/11: tiro de ARMA de mão (fuzil/arco/espada pela mira) também tira — a mensagem diz qual foi
+      const what = hit.w === 'gun' ? `tiro de ${hit.fromName}` : `canhão de ${hit.fromName}`;
+      useGameStore.getState().setMessage(sank ? `🔥 Seu navio AFUNDOU — ${what}! Construa outro na âncora (E).`
+        : `💥 ${what[0]!.toUpperCase() + what.slice(1)} no seu navio! −${Math.round(hit.damage)} (casco ${s.hp}/${WARSHIP.HP})`);
     });
-    return () => registerShipHitHandler(null);
+    // CARRO (02/11, Pedro: "fuzil tirando vida do navio/carro"): tiro de jogador INIMIGO no MEU carro (parado ou dirigindo)
+    registerCarHitHandler((hit) => {
+      const c = carRef.current;
+      if (!c || c.wreckT !== null) return;
+      const boom = damageCar(c, hit.damage), st = useGameStore.getState();
+      if (boom) { audioManager.playWorld('cannon', 1); st.setMessage(`🔥 Seu carro EXPLODIU — tiro de ${hit.fromName}! Construa outro na garagem (E).`); }
+      else st.setMessage(`💥 Tiro de ${hit.fromName} no seu carro! −${Math.round(hit.damage)} (carro ${c.hp}/${CAR.HP})`);
+    });
+    return () => { registerShipHitHandler(null); registerCarHitHandler(null); };
   }, []);
   useEffect(() => {
     // entrou no mapa: a pé, câmera no herói; 1ª vez = ganha a prancha
@@ -1343,9 +1354,11 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       const at = readZsPos(tt);
       heroRef.current.set(at.x, at.y ?? zsHeightAt(tt, at.x, at.z), at.z); focusRef.current.copy(heroRef.current);
       movement.current.set(at.x, 0, at.z);
-      carRef.current = newCar(at.x + 3, at.z - 2, 0, tt);
       carGarage.at = { x: at.x + 3, z: at.z - 2, yaw: 0 }; // GARAGEM: onde ele nasce e onde se constrói outro (01/11)
-      { const dock = findWarshipDock((x, z) => zsSwimmable(tt, x, z, WARSHIP.MIN_DEPTH), WARSHIP.DOCK_NEAR); warshipDock.at = dock; shipRef.current = dock ? newWarship(dock.x, dock.z, dock.yaw) : null; }
+      // NAVIO e CARRO SALVOS (02/11): voltam onde estavam, com a vida que tinham (afundou/explodiu = constrói outro)
+      const saved = readZsVehicles();
+      carRef.current = restoreCar(saved?.car, carGarage.at, tt);
+      { const swim = (x: number, z: number) => zsSwimmable(tt, x, z, WARSHIP.MIN_DEPTH), dock = findWarshipDock(swim, WARSHIP.DOCK_NEAR); warshipDock.at = dock; shipRef.current = restoreWarship(saved?.ship, dock, swim); }
       // o JOGO passa a viver na Zona Sul: chão/terra/limites/zona segura/acampamentos dela + a fauna por região
       const query = zsQuery(st); // SORTEIOS no terreno de 28/10 (bichos, farm, acampamentos, bandidos, tubarões)
       const prof = zsWorldProfile(tt, zsQuery(tt), query);
@@ -1359,9 +1372,9 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       });
       setSpawnT(st); setT(tt); setReady(true);
     }).catch((e) => alive && setErr(String(e)));
-    const keep = window.setInterval(() => { if (carRef.current) saveZsPos(heroRef.current); }, 2000);
+    const keep = window.setInterval(() => { if (carRef.current) { saveZsPos(heroRef.current); saveZsVehicles(shipRef.current, carRef.current); } }, 2000);
     return () => {
-      alive = false; window.clearInterval(keep); if (carRef.current) saveZsPos(heroRef.current); zsPause.on = false; input.keys.clear();
+      alive = false; window.clearInterval(keep); if (carRef.current) { saveZsPos(heroRef.current); saveZsVehicles(shipRef.current, carRef.current); } zsPause.on = false; input.keys.clear();
       zsCtx.inWater = false; zsCtx.driving = false; audioManager.setFootsteps(false); zsAmbience.mute();
       resetLayers(); zsCave.inCave = false; zsCave.dark = 0; zsCave.near = false; zsCave.deep = false; zsCave.seaOff = false; setCaveTerrain(null);
       // saiu da Zona Sul (trocou de mapa / cidade): o jogo volta pro Vale (se a troca já não fez isso)

@@ -58,15 +58,29 @@ export type RemotePose = {
  *  `h` = vida do navio (01/11, Pedro: "navio 5k vida") — 0 = afundando. */
 export type NetVehicle = { k: 's' | 'c'; x: number; z: number; yaw: number; y?: number; s?: number; h?: number };
 
-/** Canhão de OUTRO jogador acertou o MEU navio (01/11). O dono do navio valida (inimizade) e aplica. */
-export type ShipHitIntent = { id: string; ownerId: string; damage: number; fromName: string; fromSide: PvpSide };
+/** Canhão de OUTRO jogador acertou o MEU navio (01/11). O dono do navio valida (inimizade) e aplica.
+ *  `w` 'gun' (02/11) = tiro de ARMA de mão (fuzil/pistola/arco/espada pela mira); ausente = canhão (cliente antigo). */
+export type ShipHitIntent = { id: string; ownerId: string; damage: number; fromName: string; fromSide: PvpSide; w?: 'gun' };
 let shipHitHandler: ((intent: ShipHitIntent) => void) | null = null;
 export function registerShipHitHandler(handler: ((intent: ShipHitIntent) => void) | null): void { shipHitHandler = handler; }
-export function broadcastShipHit(ownerId: string, damage: number): void {
+export function broadcastShipHit(ownerId: string, damage: number, w?: 'gun'): void {
   if (!channel || !useNet.getState().connected || !Number.isFinite(damage) || damage <= 0) return;
   const { selfId, selfName, selfSide } = useNet.getState();
   if (ownerId === selfId) return;
-  void channel.send({ type: 'broadcast', event: 'ship-hit', payload: { id: selfId, ownerId, damage: Math.round(damage), fromName: selfName, fromSide: selfSide } satisfies ShipHitIntent });
+  void channel.send({ type: 'broadcast', event: 'ship-hit', payload: { id: selfId, ownerId, damage: Math.round(damage), fromName: selfName, fromSide: selfSide, ...(w ? { w } : {}) } satisfies ShipHitIntent });
+}
+
+/** Tiro de OUTRO jogador no MEU carro voador (02/11, Pedro: "fuzil tirando vida do navio/carro"). O dono valida e aplica. */
+export type CarHitIntent = { id: string; ownerId: string; damage: number; fromName: string; fromSide: PvpSide };
+let carHitHandler: ((intent: CarHitIntent) => void) | null = null;
+export function registerCarHitHandler(handler: ((intent: CarHitIntent) => void) | null): void { carHitHandler = handler; }
+// só em desenvolvimento: testes de tela simulam o tiro de outro jogador CHEGANDO (sem servidor no local)
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zsNetIn?: unknown }).__zsNetIn = { shipHit: (h: ShipHitIntent) => shipHitHandler?.(h), carHit: (h: CarHitIntent) => carHitHandler?.(h) };
+export function broadcastCarHit(ownerId: string, damage: number): void {
+  if (!channel || !useNet.getState().connected || !Number.isFinite(damage) || damage <= 0) return;
+  const { selfId, selfName, selfSide } = useNet.getState();
+  if (ownerId === selfId) return;
+  void channel.send({ type: 'broadcast', event: 'car-hit', payload: { id: selfId, ownerId, damage: Math.round(damage), fromName: selfName, fromSide: selfSide } satisfies CarHitIntent });
 }
 
 /** SALVA DE CANHÃO vista pela rede (01/11, Pedro: "ver o navio dar dano, atacar outro player e ser atacado"): as balas
@@ -287,6 +301,13 @@ export const useNet = create<NetState>((set, get) => ({
       if (hit.ownerId !== selfId || hit.id === selfId || !Number.isFinite(hit.damage)) return;
       if (hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return;
       shipHitHandler?.(hit);
+    });
+    // CARRO (02/11): tiro de outro jogador no MEU carro — mesma regra (só com inimizade)
+    ch.on('broadcast', { event: 'car-hit' }, ({ payload }) => {
+      const hit = payload as CarHitIntent;
+      if (hit.ownerId !== selfId || hit.id === selfId || !Number.isFinite(hit.damage)) return;
+      if (hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return;
+      carHitHandler?.(hit);
     });
 
     // PvP (fatia 2): golpe de outro jogador. Só me interessa o que mira em MIM, e só vale se

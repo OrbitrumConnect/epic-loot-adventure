@@ -7,7 +7,10 @@
 import * as THREE from 'three';
 import { create } from 'zustand';
 import { useGameStore } from '@/game/state/game-store';
-import { broadcastPlayerHit, useNet } from '@/net/multiplayer';
+import { broadcastCarHit, broadcastPlayerHit, broadcastShipHit, type NetVehicle, useNet } from '@/net/multiplayer';
+import { WARSHIP } from '@/components/zona-sul/zs-warship';
+import { CAR } from '@/components/zona-sul/zs-car';
+import { ZS_WATER_Y } from '@/components/zona-sul/zs-terrain-data';
 import { creatureAnchors } from './hostile-ai';
 import { markPvpHit, pvpStrike } from './pvp-attack';
 import { bigWallBetween } from './base-collision';
@@ -63,10 +66,24 @@ export function aimZoomStep(dir: 1 | -1): void {
 let aimCamera: THREE.Camera | null = null;
 /** A câmera do mundo se registra aqui (a mira é o centro da tela dela). */
 export function setAimCamera(c: THREE.Camera | null): void { aimCamera = c; }
+// só em desenvolvimento: testes de tela leem o que está sob o pontinho
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zsAim?: unknown }).__zsAim = { pick: () => (aimCamera ? pickAimTarget(aimCamera) : null), fire: () => aimFire() };
 
 export type AimTarget = { kind: 'creature'; id: string } | { kind: 'player'; id: string; name: string; x: number; z: number }
   | { kind: 'piece'; ownerId: string; pieceId: string }
-  | { kind: 'troop'; ownerId: string; troopId: string };
+  | { kind: 'troop'; ownerId: string; troopId: string }
+  | { kind: 'vehicle'; ownerId: string; name: string; vk: NetVehicle['k']; x: number; z: number };
+
+/** NAVIO/CARRO de jogador INIMIGO na mira (02/11, Pedro: "fuzil tirando vida do navio/carro"): o casco é uma FILEIRA de
+ *  bolas ao longo do comprimento (navio 36,8 m: 5 bolas de ~4 m, do nível da água ao convés; carro 7,4 m: 3 de 1,5 m).
+ *  Frente = (sen yaw, cos yaw), igual ao desenho deles. Afundando/explodido (h 0) não conta. */
+export function vehicleAimSpheres(v: NetVehicle): { x: number; y: number; z: number; r: number }[] {
+  if (v.h !== undefined && v.h <= 0) return [];
+  const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw);
+  if (v.k === 's') return [-0.4, -0.2, 0, 0.2, 0.4].map((a) => ({ x: v.x + fx * a * WARSHIP.LENGTH, y: ZS_WATER_Y + 2.2, z: v.z + fz * a * WARSHIP.LENGTH, r: Math.abs(a) > 0.3 ? 3 : 4.2 }));
+  const y = (Number.isFinite(v.y) ? (v.y as number) : ZS_WATER_Y) + 0.9;
+  return [-0.3, 0, 0.3].map((a) => ({ x: v.x + fx * a * CAR.LENGTH, y, z: v.z + fz * a * CAR.LENGTH, r: 1.5 }));
+}
 
 /** Ímã da mira: QUASE NADA (Pedro, 22/10 — "igual CS"). Só perdoa ~meio grau fora do corpo. */
 export const AIM_ASSIST_DEG = 0.5;
@@ -123,8 +140,17 @@ export function pickAimTarget(camera: THREE.Camera): AimTarget | null {
   }
   const net = useNet.getState();
   for (const r of Object.values(net.players)) {
-    if (r.hp <= 0) continue;
     if (r.side !== 'enemy' && net.selfSide !== 'enemy') continue; // aliado: sem fogo amigo
+    // o NAVIO e o CARRO dele (02/11): a bola do casco mais perto do pontinho (vale mesmo com ele morto)
+    for (const v of r.v ?? []) {
+      let best: { ang: number; p: THREE.Vector3 } | null = null;
+      for (const b of vehicleAimSpheres(v)) {
+        const pb = new THREE.Vector3(b.x, b.y, b.z), sb = aimScore(origin, dir, pb, b.r);
+        if (sb !== null && (!best || sb < best.ang)) best = { ang: sb, p: pb };
+      }
+      if (best) cands.push({ ang: best.ang, t: { kind: 'vehicle', ownerId: r.id, name: r.name, vk: v.k, x: v.x, z: v.z }, p: best.p });
+    }
+    if (r.hp <= 0) continue;
     const y = Number.isFinite(r.y) ? (r.y as number) : 0;
     const body = playerAimBody(r.action);
     const p = new THREE.Vector3(r.x, y + body.cy, r.z);
@@ -198,6 +224,13 @@ export function aimFire(): boolean {
   }
   if (t.kind === 'troop') {
     strikeRemoteTroop(t.ownerId, t.troopId);
+    return true;
+  }
+  if (t.kind === 'vehicle') {
+    // mesmo golpe do PvP (cadência, alcance real da arma, munição); o DONO aplica no casco (só com inimizade)
+    const ship = t.vk === 's';
+    pvpStrike(ship ? `O navio de ${t.name}` : `O carro de ${t.name}`, t.x, t.z, (ship ? WARSHIP.LENGTH : CAR.LENGTH) / 2,
+      (raw) => (ship ? broadcastShipHit(t.ownerId, raw, 'gun') : broadcastCarHit(t.ownerId, raw)), false, true);
     return true;
   }
   if (pvpStrike(t.name, t.x, t.z, 0.6, (raw) => broadcastPlayerHit(t.id, raw), false, true)) markPvpHit(t.id);
