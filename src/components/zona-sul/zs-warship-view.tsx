@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { type ShipCollider, shipGround } from './zs-ship';
 import { useGameStore } from '@/game/state/game-store';
+import { netCannonInbox } from '@/net/multiplayer';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 import { ballAt, type CannonBall, WARSHIP, warshipLocal, warshipWorld, type ZsWarship } from './zs-warship';
 import { zsWaterYAt } from './zs-terrain-data';
@@ -57,7 +58,7 @@ export function syncWarshipDeck(s: ZsWarship, t: number): void {
 export function warshipHalfBeam(): number { return zsWarshipDeck.c ? -zsWarshipDeck.c.u0 - 0.5 : WARSHIP.LENGTH * 0.12; }
 
 /** Altura CRUA do convés (relativa à quilha) na célula sob (x, z); NaN = fora do navio. */
-function deckCell(c: ShipCollider, s: ZsWarship, x: number, z: number): number {
+function deckCell(c: ShipCollider, s: Pick<ZsWarship, 'x' | 'z' | 'yaw'>, x: number, z: number): number {
   const { u, v } = warshipLocal(s, x, z);
   const i = Math.floor((u - c.u0) / c.cell), j = Math.floor((v - c.v0) / c.cell);
   return i < 0 || j < 0 || i >= c.nu || j >= c.nv ? NaN : c.deck[j * c.nu + i]!;
@@ -65,8 +66,7 @@ function deckCell(c: ShipCollider, s: ZsWarship, x: number, z: number): number {
 
 /** SUBIR A BORDO (E perto do casco): o ponto do convés PRINCIPAL mais perto de quem chegou — do lado dele, longe da
  *  amurada, fora de mastro/canhão. `y` = altura do convés lá agora. */
-export function warshipBoardSpot(s: ZsWarship, x: number, z: number): { x: number; z: number; y: number } | null {
-  const c = zsWarshipDeck.c;
+export function warshipBoardSpot(s: Pick<ZsWarship, 'x' | 'z' | 'yaw'>, x: number, z: number, c: ShipCollider | null = zsWarshipDeck.c): { x: number; z: number; y: number } | null {
   if (!c) return null;
   const { u, v } = warshipLocal(s, x, z);
   const inU = Math.max(0.5, warshipHalfBeam() - 1.4), vMax = WARSHIP.LENGTH / 2 - 5;
@@ -113,30 +113,39 @@ function scanWarshipDeck(holder: THREE.Object3D, height: number): { c: ShipColli
   return { c: { cx: 0, cz: 0, cos: 1, sin: 0, u0: -halfU, v0: -halfV, nu, nv, cell: DECK_CELL, deck, plank: null, ladder: null, y0: 0, tiltU: 0, tiltV: 0 }, main };
 }
 
-/** Balas no ar (o mundo empurra ao atirar; o desenho anima e resolve o impacto). */
-export type FlyingBall = { b: CannonBall; t0: number; land: { x: number; y: number; z: number; t: number }; hit: boolean };
+/** Balas no ar (o mundo empurra ao atirar; o desenho anima e resolve o impacto). `remote` = salva de OUTRO jogador
+ *  (online): só desenho/splash/som — o dano já foi resolvido por quem atirou. */
+export type FlyingBall = { b: CannonBall; t0: number; land: { x: number; y: number; z: number; t: number }; hit: boolean; remote?: boolean };
 export const warshipFx: { balls: FlyingBall[]; splashes: { x: number; y: number; z: number; t0: number }[] } = { balls: [], splashes: [] };
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zsWarshipFx?: unknown }).__zsWarshipFx = warshipFx; // testes de tela
 /** Mira (o mundo escreve todo quadro): arco da bala do meio da salva + onde cai. */
 export const warshipAim: { on: boolean; ball: CannonBall | null; land: { x: number; y: number; z: number; t: number } | null } = { on: false, ball: null, land: null };
 
 const MAX_BALLS = 12, MAX_SPLASH = 8, ARC_PTS = 28;
 
+/** Monta o navio a partir do GLB: escala pro comprimento, proa pro +Z, quilha em y = 0, meio no centro (sem pegar
+ *  clique). O MESMO do navio local e do navio de OUTRO jogador (zs-remote-vehicles) — geometria compartilhada. */
+export function buildWarshipModel(scene: THREE.Object3D): { holder: THREE.Group; h: number } {
+  const r = scene.clone(true);
+  r.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.raycast = () => {}; } });
+  r.updateMatrixWorld(true);
+  const b0 = new THREE.Box3().setFromObject(r), s0 = b0.getSize(new THREE.Vector3());
+  const k = WARSHIP.LENGTH / Math.max(s0.z, 1e-6);
+  r.scale.setScalar(k);
+  r.rotation.y = Math.PI; // proa (−Z no arquivo) → +Z (frente do jogo)
+  r.updateMatrixWorld(true);
+  const b1 = new THREE.Box3().setFromObject(r), c1 = b1.getCenter(new THREE.Vector3());
+  r.position.set(-c1.x, -b1.min.y, -c1.z); // quilha em y = 0, meio do navio no centro
+  const holder = new THREE.Group(); holder.add(r);
+  return { holder, h: b1.max.y - b1.min.y };
+}
+export const WARSHIP_URL = URL;
+
 export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefObject<ZsWarship | null>; heroRef: React.MutableRefObject<THREE.Vector3> }) {
   const { scene } = useGLTF(URL);
   const model = useMemo(() => {
-    const r = scene.clone(true);
-    r.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.raycast = () => {}; } });
-    r.updateMatrixWorld(true);
-    const b0 = new THREE.Box3().setFromObject(r), s0 = b0.getSize(new THREE.Vector3());
-    const k = WARSHIP.LENGTH / Math.max(s0.z, 1e-6);
-    r.scale.setScalar(k);
-    r.rotation.y = Math.PI; // proa (−Z no arquivo) → +Z (frente do jogo)
-    r.updateMatrixWorld(true);
-    const b1 = new THREE.Box3().setFromObject(r), c1 = b1.getCenter(new THREE.Vector3());
-    r.position.set(-c1.x, -b1.min.y, -c1.z); // quilha em y = 0, meio do navio no centro
-    const h = b1.max.y - b1.min.y;
+    const { holder, h } = buildWarshipModel(scene);
     warshipDims.height = h; warshipDims.gunY = h * GUNWALE_K; warshipDims.helmY = h * HELM_DECK_K;
-    const holder = new THREE.Group(); holder.add(r);
     return { holder, scan: scanWarshipDeck(holder, h) };
   }, [scene]);
   // o colisor do convés vale enquanto o navio está na cena (montar/desmontar do React não perde o escaneamento)
@@ -161,6 +170,18 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
     const ps = warshipPose(s, t);
     g.position.set(s.x, ps.y0, s.z);
     g.rotation.set(ps.pitch, s.yaw, ps.roll, 'YXZ');
+    // ── salvas de OUTROS jogadores (online): entram como balas "só de desenho" + o estrondo pela distância ──────
+    while (netCannonInbox.length) {
+      const nc = netCannonInbox.shift()!;
+      const h = heroRef.current;
+      nc.b.forEach((a, i) => {
+        const l = nc.l[i];
+        if (!l || a.length < 6 || l.length < 4) return;
+        warshipFx.balls.push({ b: { ox: a[0]!, oy: a[1]!, oz: a[2]!, vx: a[3]!, vy: a[4]!, vz: a[5]! }, t0: now + i * nc.gap, land: { x: l[0]!, y: l[1]!, z: l[2]!, t: l[3]! }, hit: false, remote: true });
+        const g = distanceGain(Math.hypot(a[0]! - h.x, a[2]! - h.z));
+        if (g > 0.01) window.setTimeout(() => audioManager.playWorld('cannon', g), i * nc.gap);
+      });
+    }
     // ── balas no ar + impacto ────────────────────────────────────────────────────────────────────────────
     const bm = balls.current;
     let nb = 0;
@@ -172,7 +193,7 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
         if (!fb.hit) {
           fb.hit = true;
           fx.splashes.push({ x: fb.land.x, y: fb.land.y, z: fb.land.z, t0: now });
-          useGameStore.getState().cannonHit({ x: fb.land.x, z: fb.land.z }, WARSHIP.SPLASH_R);
+          if (!fb.remote) useGameStore.getState().cannonHit({ x: fb.land.x, z: fb.land.z }, WARSHIP.SPLASH_R); // dano: só de quem atirou
           const h = heroRef.current;
           audioManager.playWorld('gun', distanceGain(Math.hypot(fb.land.x - h.x, fb.land.z - h.z)) * 0.8, now);
         }

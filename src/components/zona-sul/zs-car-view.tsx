@@ -18,28 +18,35 @@ export type CarDims = { length: number; width: number; height: number };
 
 const RINGS = 16, RING_LIFE = 1.2, RING_EVERY = 0.08;
 
+/** Monta o carro a partir do GLB: frente no maior eixo, comprimento CAR.LENGTH, base no chão. O MESMO do carro local e
+ *  do carro de OUTRO jogador (zs-remote-vehicles) — geometria compartilhada. */
+export function buildCarModel(scene: THREE.Object3D): { holder: THREE.Group; dims: CarDims } {
+  const m = scene.clone(true);
+  m.traverse((o) => { const mesh = o as THREE.Mesh; if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; } });
+  const holder = new THREE.Group(); holder.add(m);
+  let box = new THREE.Box3().setFromObject(m);
+  const size = box.getSize(new THREE.Vector3());
+  if (size.x > size.z) m.rotation.y = Math.PI / 2; // maior eixo horizontal vira a FRENTE (z)
+  m.rotation.y += CAR_MODEL_YAW;
+  m.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(m);
+  const s2 = box.getSize(new THREE.Vector3());
+  const k = CAR.LENGTH / Math.max(s2.z, 1e-6);
+  m.scale.multiplyScalar(k);
+  m.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(m);
+  const c = box.getCenter(new THREE.Vector3());
+  m.position.sub(new THREE.Vector3(c.x, box.min.y, c.z));
+  const fin = box.getSize(new THREE.Vector3());
+  return { holder, dims: { length: fin.z, width: fin.x, height: fin.y } };
+}
+
 export function ZsCarView({ carRef, dimsRef }: { carRef: React.MutableRefObject<ZsCar | null>; dimsRef: React.MutableRefObject<CarDims | null> }) {
   const { scene } = useGLTF(CAR_URL);
   const group = useRef<THREE.Group>(null);
   const model = useMemo(() => {
-    const m = scene.clone(true);
-    m.traverse((o) => { const mesh = o as THREE.Mesh; if (mesh.isMesh) { mesh.castShadow = true; mesh.receiveShadow = true; } });
-    const holder = new THREE.Group(); holder.add(m);
-    let box = new THREE.Box3().setFromObject(m);
-    const size = box.getSize(new THREE.Vector3());
-    if (size.x > size.z) m.rotation.y = Math.PI / 2; // maior eixo horizontal vira a FRENTE (z)
-    m.rotation.y += CAR_MODEL_YAW;
-    m.updateMatrixWorld(true);
-    box = new THREE.Box3().setFromObject(m);
-    const s2 = box.getSize(new THREE.Vector3());
-    const k = CAR.LENGTH / Math.max(s2.z, 1e-6);
-    m.scale.multiplyScalar(k);
-    m.updateMatrixWorld(true);
-    box = new THREE.Box3().setFromObject(m);
-    const c = box.getCenter(new THREE.Vector3());
-    m.position.sub(new THREE.Vector3(c.x, box.min.y, c.z));
-    const fin = box.getSize(new THREE.Vector3());
-    dimsRef.current = { length: fin.z, width: fin.x, height: fin.y };
+    const { holder, dims } = buildCarModel(scene);
+    dimsRef.current = dims;
     return holder;
   }, [scene, dimsRef]);
 

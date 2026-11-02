@@ -53,7 +53,8 @@ import { RemotePlayers } from '@/components/world/remote-players';
 import { TargetRoute } from '@/components/world/target-route';
 import { houseFloorSurfaceY, houseWalkFloorY, pushOutBasePieces, pushOutHouseWalls } from '@/components/world/base-collision';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
-import { broadcastPose } from '@/net/multiplayer';
+import { broadcastCannon, broadcastPose, type NetVehicle, useNet } from '@/net/multiplayer';
+import { remoteDecks, remoteDeckTick, ZsRemoteVehicles } from './zs-remote-vehicles';
 import { CombatFeedback } from '@/components/world/combat-feedback';
 import { Projectiles } from '@/components/world/projectiles';
 import { HeroPowers } from '@/components/world/hero-powers';
@@ -124,6 +125,8 @@ const TUBE_CAM_DIST = 1.7, TUBE_CAM_PITCH = 0.06;
 const LEAN_BODY = 0.8;
 /** a pé → abrindo a porta (ENTER_MS) → dirigindo. E entra/sai. */
 const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving' | 'sailing', enterAt: 0 };
+/** veículos que vão de carona na pose (reaproveitado — nada criado por quadro) */
+const netVehicles: NetVehicle[] = [];
 const ENTER_MS = 1100;
 
 /** Golpe/tiro: quanto dura a animação de ataque (s) — o herói PARA pra atacar (igual ao Vale). Giro do especial R. */
@@ -237,6 +240,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const grounded = useRef(true);
   /** em pé no CONVÉS do navio de guerra (quadro anterior) — o navio andando/girando leva junto (01/11) */
   const onDeck = useRef(false);
+  /** em pé no convés do navio de OUTRO jogador (id dele) + o tique do "levar junto" já aplicado (online, 01/11) */
+  const onRemoteDeck = useRef<string | null>(null), remoteCarryTick = useRef(-1);
   const facing = useRef(0);
   const hudAcc = useRef(0);
   const sun = useRef<THREE.DirectionalLight>(null);
@@ -293,8 +298,14 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     { const d2 = zsCave.dark * zsCave.dark; fog.near = 200 + (5 - 200) * d2; fog.far = 2200 + (75 - 2200) * d2; } // caverna: breu ao longe
     const car = carRef.current, ship = shipRef.current, now = performance.now();
     const gs = useGameStore.getState();
-    // ONLINE (igual ao Vale): a pose vai pra rede COM A ALTURA — quem está na caverna aparece NA caverna pros outros
-    broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs));
+    // ONLINE (igual ao Vale): a pose vai pra rede COM A ALTURA — quem está na caverna aparece NA caverna pros outros.
+    // 01/11: + o NAVIO e o CARRO de carona (Pedro online: "um no barco, outro na praia — não vejo o barco") — os outros
+    // desenham (zs-remote-vehicles) e podem subir no convés do navio
+    const r2 = (n: number) => Math.round(n * 100) / 100, r3 = (n: number) => Math.round(n * 1000) / 1000;
+    netVehicles.length = 0;
+    if (ship) netVehicles.push({ k: 's', x: r2(ship.x), z: r2(ship.z), yaw: r3(ship.yaw), s: r2(ship.speed) });
+    if (car) netVehicles.push({ k: 'c', x: r2(car.x), z: r2(car.z), yaw: r3(car.yaw), y: r2(car.y) });
+    broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs), netVehicles);
     // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
     if (gs.player.dead && gs.player.respawnAt > 0 && Date.now() >= gs.player.respawnAt) {
       // renasce na CAMA da base, se já tiver uma; senão na zona segura (igual ao Vale)
@@ -331,12 +342,19 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (posAcc.current > 0.15) { posAcc.current = 0; const cur = gs.player.position; if (cur.x !== p.x || cur.z !== p.z) useGameStore.setState(s => ({ player: { ...s.player, position: { x: p.x, z: p.z } } })); }
     zsCtx.driving = drive.mode === 'driving';
     // NAVIO DE GUERRA a pé (01/11): o que o E faz agora — no convés perto do timão = pilotar; no convés longe = descer
-    // (pula na água); fora, perto do CASCO = subir a bordo (qualquer nível: amigo/inimigo sobe — pirataria)
-    const shipAct: 'pilotar' | 'descer' | 'subir' | null = (() => {
-      if (!ship || drive.mode !== 'foot' || dead) return null;
-      if (onDeck.current) { const h = warshipWorld(ship, 0, HELM_U * WARSHIP.LENGTH); return Math.hypot(h.x - p.x, h.z - p.z) < WARSHIP.HELM_REACH ? 'pilotar' : 'descer'; }
-      return nearWarshipHull(ship, p.x, p.z, warshipHalfBeam(), WARSHIP.BOARD_MARGIN) ? 'subir' : null;
+    // (pula na água); fora, perto do CASCO = subir a bordo (qualquer nível: amigo/inimigo sobe — pirataria). Também no
+    // navio de OUTRO jogador (online): sobe e desce (pilotar só o seu — o leme dele está na tela dele). `who` = id dele.
+    const shipSel: { act: 'pilotar' | 'descer' | 'subir'; who: string | null } | null = (() => {
+      if (drive.mode !== 'foot' || dead) return null;
+      if (onDeck.current && ship) { const h = warshipWorld(ship, 0, HELM_U * WARSHIP.LENGTH); return { act: Math.hypot(h.x - p.x, h.z - p.z) < WARSHIP.HELM_REACH ? 'pilotar' : 'descer', who: null }; }
+      if (onRemoteDeck.current) return remoteDecks.has(onRemoteDeck.current) ? { act: 'descer', who: onRemoteDeck.current } : null;
+      if (ship && nearWarshipHull(ship, p.x, p.z, warshipHalfBeam(), WARSHIP.BOARD_MARGIN)) return { act: 'subir', who: null };
+      for (const d of remoteDecks.values()) if (nearWarshipHull(d.pose, p.x, p.z, warshipHalfBeam(), WARSHIP.BOARD_MARGIN)) return { act: 'subir', who: d.id };
+      return null;
     })();
+    const shipAct = shipSel?.act ?? null;
+    /** pose do navio da ação (o meu ou o do outro) */
+    const selPose = shipSel?.who ? remoteDecks.get(shipSel.who)?.pose ?? null : ship;
     {
       const tc = useZsTouch.getState(), drv = drive.mode === 'driving', wet = zsCtx.inWater && drive.mode === 'foot';
       const near = !!car && drive.mode === 'foot' && !dead && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
@@ -365,7 +383,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         // rente ao chão: desce do lado, em pé (igual antes); no ar: sai na altura do banco e CAI (o carro vazio desce sozinho)
         if (car.altitude < CAR.EXIT_MAX_ALT || seatY <= g + 0.3) { p.y = g; grounded.current = true; }
         else { p.y = seatY; grounded.current = false; }
-      } else if (ship && shipAct === 'pilotar') {
+      } else if (ship && shipAct === 'pilotar' && !shipSel?.who) {
         // NAVIO DE GUERRA (01/11): no convés, no TIMÃO (popa) → pilota (nível 70)
         if (!isUnlocked(WARSHIP.UNLOCK_ID, lvl)) useGameStore.getState().setMessage(lockedMessage('Pilotar o navio de guerra', WARSHIP.UNLOCK_ID));
         else {
@@ -373,18 +391,21 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
           camTarget.current.set(ship.x, p.y + 6, ship.z);
           useGameStore.getState().setMessage('⚓ No timão! W/S vela · A/D leme · segure o botão direito pra mirar · clique = canhões · E solta o timão');
         }
-      } else if (ship && shipAct === 'descer') {
-        // no convés, longe do timão → DESCE: pula na água do lado mais perto (fora do casco)
-        const side = Math.sign(warshipLocal(ship, p.x, p.z).u || 1), out = warshipWorld(ship, side * (warshipHalfBeam() + 2.5), warshipLocal(ship, p.x, p.z).v);
-        p.x = out.x; p.z = out.z; vy.current = 2.5; grounded.current = false; onDeck.current = false;
-        movement.current.set(p.x, 0, p.z); facing.current = ship.yaw + side * Math.PI / 2;
-      } else if (ship && shipAct === 'subir') {
+      } else if (selPose && shipAct === 'descer') {
+        // no convés (o meu ou o do outro), longe do timão → DESCE: pula na água do lado mais perto (fora do casco)
+        const lp = warshipLocal(selPose, p.x, p.z), side = Math.sign(lp.u || 1), out = warshipWorld(selPose, side * (warshipHalfBeam() + 2.5), lp.v);
+        p.x = out.x; p.z = out.z; vy.current = 2.5; grounded.current = false; onDeck.current = false; onRemoteDeck.current = null;
+        movement.current.set(p.x, 0, p.z); facing.current = selPose.yaw + side * Math.PI / 2;
+      } else if (selPose && shipAct === 'subir') {
         // SOBE A BORDO (qualquer nível — Pedro: "amigos e inimigos sobem também, pirataria"): no convés, do lado de quem chegou
-        const at = warshipBoardSpot(ship, p.x, p.z);
+        const rd = shipSel?.who ? remoteDecks.get(shipSel.who) : null;
+        const at = rd ? warshipBoardSpot(rd.pose, p.x, p.z, rd.c) : warshipBoardSpot(selPose, p.x, p.z);
         if (at) {
           ride.current = null; dive.current = 0; swimVel.current.set(0, 0); vy.current = 0;
-          p.set(at.x, at.y, at.z); movement.current.set(p.x, 0, p.z); grounded.current = true; onDeck.current = true;
-          useGameStore.getState().setMessage(isUnlocked(WARSHIP.UNLOCK_ID, lvl) ? '⚓ A bordo! Vá até o timão (popa) e aperte E pra pilotar · E longe do timão = descer' : '⚓ A bordo! (pilotar: nível ' + unlockLevel(WARSHIP.UNLOCK_ID) + ') · E = descer');
+          p.set(at.x, at.y, at.z); movement.current.set(p.x, 0, p.z); grounded.current = true;
+          onDeck.current = !rd; onRemoteDeck.current = rd ? rd.id : null;
+          useGameStore.getState().setMessage(rd ? '🏴‍☠️ No navio de outro jogador! E = descer (pula na água)'
+            : isUnlocked(WARSHIP.UNLOCK_ID, lvl) ? '⚓ A bordo! Vá até o timão (popa) e aperte E pra pilotar · E longe do timão = descer' : '⚓ A bordo! (pilotar: nível ' + unlockLevel(WARSHIP.UNLOCK_ID) + ') · E = descer');
         }
       } else if (drive.mode === 'sailing' && ship) {
         // SOLTA O TIMÃO: fica em pé no convés, no timão (o navio segue no embalo e leva quem está nele)
@@ -465,6 +486,17 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         const m = carryOnDeck(before, ship, movement.current.x, movement.current.z); movement.current.set(m.x, 0, m.z);
       }
     }
+    // em pé no convés do navio de OUTRO jogador (online): o navio dele andando leva junto — 1× por tique do desenho dele
+    if (onRemoteDeck.current && drive.mode === 'foot') {
+      const d = remoteDecks.get(onRemoteDeck.current);
+      if (!d) onRemoteDeck.current = null; // ele saiu da sala / o navio sumiu: cai onde está
+      else if (d.tick !== remoteCarryTick.current) {
+        remoteCarryTick.current = d.tick;
+        const c = carryOnDeck(d.prev, d.pose, p.x, p.z), dy = d.pose.yaw - d.prev.yaw;
+        p.x = c.x; p.z = c.z; facing.current += dy; yawNow.current += dy;
+        const m = carryOnDeck(d.prev, d.pose, movement.current.x, movement.current.z); movement.current.set(m.x, 0, m.z);
+      }
+    }
     if (ship && drive.mode === 'sailing') {
       const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
       const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
@@ -493,7 +525,13 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       // a mira GIRA pra frente/trás do través seguindo a câmera (Pedro 01/11: "mirar mais pra frente ou pra trás")
       const swingOf = (sd: WarshipSide) => (sd === side ? cannonSwing(ship, sd, viewYaw) : 0);
       const gunY = keelY + warshipDims.gunY;
-      const surfaceAt = (x: number, z: number) => Math.max(zsHeightAt(t, x, z), zsWaterYAt(x, z));
+      // onde a bala cai: chão/água — e o CONVÉS do navio de outro jogador (online, 01/11: a bala bate no navio inimigo e
+      // o splash acerta quem está nele, em vez de atravessar o casco e cair na água)
+      const surfaceAt = (x: number, z: number) => {
+        let y = Math.max(zsHeightAt(t, x, z), zsWaterYAt(x, z));
+        for (const d of remoteDecks.values()) { const g = shipGround(d.c, x, z, 1e6); if (g && 'y' in g) y = Math.max(y, g.y); }
+        return y;
+      };
       if (aiming) { const mid = cannonSalvo(ship, side, elev, gunY, swingOf(side))[1]!; warshipAim.on = true; warshipAim.ball = mid; warshipAim.land = ballLanding(mid, surfaceAt); }
       else warshipAim.on = false;
       // TIRO: salva de 3 balas do costado (recarga por lado)
@@ -504,7 +542,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         if (ship.reload[sd] > 0) useGameStore.getState().setMessage(`🔄 Canhões de ${nome} recarregando (${Math.ceil(ship.reload[sd])} s).`);
         else {
           const salvo = cannonSalvo(ship, sd, elev, gunY, swingOf(sd));
-          salvo.forEach((b, i) => { warshipFx.balls.push({ b, t0: now + i * WARSHIP.SALVO_GAP_MS, land: ballLanding(b, surfaceAt), hit: false }); });
+          const lands = salvo.map((b) => ballLanding(b, surfaceAt));
+          salvo.forEach((b, i) => { warshipFx.balls.push({ b, t0: now + i * WARSHIP.SALVO_GAP_MS, land: lands[i]!, hit: false }); });
+          // ONLINE (01/11): os outros VEEM e OUVEM a salva (o dano é resolvido aqui, no impacto — cannonHit)
+          broadcastCannon(salvo.map((b) => [b.ox, b.oy, b.oz, b.vx, b.vy, b.vz]), lands.map((l) => [l.x, l.y, l.z, l.t]), WARSHIP.SALVO_GAP_MS);
           ship.reload[sd] = WARSHIP.RELOAD_S;
           for (let i = 0; i < salvo.length; i++) window.setTimeout(() => audioManager.playWorld('cannon', 1), i * WARSHIP.SALVO_GAP_MS); // cada bala, o seu estrondo
           useGameStore.getState().setMessage(`💥 Fogo de ${nome}!`);
@@ -611,7 +652,12 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const sy = Math.sin(input.yaw), cy = Math.cos(input.yaw);
     const wx = ix * cy + iz * sy, wz = -ix * sy + iz * cy; // gira o input pelo yaw da câmera
     // NAVIO: em pé no convés não é "nadar", mesmo com o mar embaixo (zs-ship) — o galeão encalhado e o navio de guerra
-    const deckAt = (x: number, z: number, feetY: number) => shipGround(zsShip.c, x, z, feetY) ?? shipGround(zsWarshipDeck.c, x, z, feetY);
+    const deckAt = (x: number, z: number, feetY: number) => {
+      const a = shipGround(zsShip.c, x, z, feetY) ?? shipGround(zsWarshipDeck.c, x, z, feetY);
+      if (a) return a;
+      for (const d of remoteDecks.values()) { const g = shipGround(d.c, x, z, feetY); if (g) return g; } // navio de outro jogador
+      return null;
+    };
     const deckNow = drive.mode === 'foot' ? deckAt(p.x, p.z, p.y) : null;
     const water0 = caveNow || (deckNow && !('wall' in deckNow)) ? { swimming: false, wading: false } : zsWaterState(zsHeightAt(t, p.x, p.z));
     const shift = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92 || Math.hypot(virtualMove.x, virtualMove.z) > 0.92;
@@ -742,10 +788,14 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       let sg = deckAt(st.x, st.z, p.y);
       if (sg && 'wall' in sg) { st = { ...st, x: p.x, z: p.z }; sg = deckAt(p.x, p.z, p.y); }
       if (sg && !('wall' in sg)) st = { ...st, ground: sg.y, swimming: false, wading: false };
-      // no convés do NAVIO DE GUERRA (não do galeão) = vai junto quando ele anda
-      const war = !!sg && !('wall' in sg) && !shipGround(zsShip.c, st.x, st.z, p.y) && !!shipGround(zsWarshipDeck.c, st.x, st.z, p.y);
-      onDeck.current = war && p.y > ZS_WATER_Y + 0.5;
-    } else if (drive.mode !== 'sailing') onDeck.current = false;
+      // no convés do NAVIO DE GUERRA (não do galeão) = vai junto quando ele anda — o MEU ou o de OUTRO jogador
+      const stand = !!sg && !('wall' in sg) && p.y > ZS_WATER_Y + 0.5 && !shipGround(zsShip.c, st.x, st.z, p.y);
+      const mineG = stand ? shipGround(zsWarshipDeck.c, st.x, st.z, p.y) : null;
+      onDeck.current = !!mineG && !('wall' in mineG);
+      let rem: string | null = null;
+      if (stand && !onDeck.current) for (const d of remoteDecks.values()) { const g = shipGround(d.c, st.x, st.z, p.y); if (g && !('wall' in g)) { rem = d.id; break; } }
+      onRemoteDeck.current = rem;
+    } else if (drive.mode !== 'sailing') { onDeck.current = false; onRemoteDeck.current = null; }
     p.x = st.x; p.z = st.z;
     // caverna: chão bem abaixo do pé (o buraco da boca, a beirada) = cai de verdade; o teto segura o pulo
     if (caveNow || caveInside(p.x, p.y, p.z)) {
@@ -839,7 +889,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       camFit.current = 1;
       let gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6;
       // no convés do navio de guerra: a câmera não desce pra dentro do casco
-      if (onDeck.current) { const dg = shipGround(zsWarshipDeck.c, cx, cz, 1e6); if (dg && 'y' in dg) gcam = Math.max(gcam, dg.y + 0.6); }
+      const camDeck = onDeck.current ? zsWarshipDeck.c : onRemoteDeck.current ? remoteDecks.get(onRemoteDeck.current)?.c ?? null : null;
+      if (camDeck) { const dg = shipGround(camDeck, cx, cz, 1e6); if (dg && 'y' in dg) gcam = Math.max(gcam, dg.y + 0.6); }
       if (cyy < gcam) cyy = gcam;
       camera.position.set(cx, cyy, cz);
     }
@@ -857,7 +908,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
       const shipTxt = nearCar || !shipAct ? '' : shipAct === 'subir' ? 'E = subir no navio de guerra'
         : shipAct === 'pilotar' ? 'E = pilotar (timão' + (isUnlocked(WARSHIP.UNLOCK_ID, gs.player.level) ? '' : ', nível ' + unlockLevel(WARSHIP.UNLOCK_ID)) + ')'
-        : 'no convés · timão na popa · E = descer (pula na água)';
+        : shipSel?.who ? 'no navio de outro jogador · E = descer (pula na água)' : 'no convés · timão na popa · E = descer (pula na água)';
       const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
         : rm === 'popup' ? 'levantando…' : rm === 'ride' && ride.current ? (ride.current.trickT > 0 ? ride.current.trick.toUpperCase() + ' · ' : '') + (ride.current.air ? 'NO AR! segure A ou D pra girar' : 'SURFANDO ' + Math.round(ride.current.speed * 3.6) + ' km/h · A/D vira (carving) · W acelera · S freia · Shift = boost · desça a face = ganha velocidade · suba rápido no lip = aéreo') + (ride.current.airs ? ' · aéreos: ' + ride.current.airs : '')
         : rolling ? 'tomou a vaca! girando com a espuma…' : '';
@@ -1152,7 +1203,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const gearRef = useMemo(() => ({ get glider() { return gliderPose.current; }, get skate() { return skatePose.current; } }), []);
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip, warship: shipRef, drive, input, aim: warshipAim, muzzle: heroMuzzle, warshipDeck: zsWarshipDeck, touch: useZsTouch };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip, warship: shipRef, drive, input, aim: warshipAim, muzzle: heroMuzzle, warshipDeck: zsWarshipDeck, touch: useZsTouch, net: useNet, remoteDecks };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -1211,6 +1262,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
             {/* NAVIO DE GUERRA (nível 70, 01/11): ancorado perto do Arpoador; E embarca, canhões no botão direito/clique */}
             <AssetBoundary label="ZsNavioGuerra" fallback={null}><Suspense fallback={null}><ZsWarshipView shipRef={shipRef} heroRef={heroRef} /></Suspense></AssetBoundary>
+            {/* ONLINE (01/11): o navio e o carro dos OUTROS jogadores (de carona na pose) — e o convés do navio deles */}
+            <AssetBoundary label="ZsVeiculosRemotos" fallback={null}><Suspense fallback={null}><ZsRemoteVehicles myShip={shipRef} myCar={carRef} /></Suspense></AssetBoundary>
             <ZsTerrainMesh t={t} heroRef={focusRef} />
             <ZsSea>
               <ZsWater t={t} />

@@ -48,7 +48,21 @@ export type RemotePose = {
   /** Tropas em campo de quem envia (de carona na pose, 1 a cada 3 envios — sem mensagem nova).
    *  Lista vazia = recolheu. Ausente = sem novidade. */
   tr?: NetTroop[];
+  /** VEÍCULOS de quem envia (01/11, Pedro online: "um no barco, outro na praia — não vejo o barco"): de carona na pose.
+   *  Ausente = cliente antigo / sem veículo. */
+  v?: NetVehicle[];
 };
+
+/** Veículo visto pela rede: `k` 's' = navio de guerra · 'c' = carro voador; `y` = altura (carro); `s` = velocidade. */
+export type NetVehicle = { k: 's' | 'c'; x: number; z: number; yaw: number; y?: number; s?: number };
+
+/** SALVA DE CANHÃO vista pela rede (01/11, Pedro: "ver o navio dar dano, atacar outro player e ser atacado"): as balas
+ *  de quem atirou — saída/velocidade (`b`: ox, oy, oz, vx, vy, vz), onde caem (`l`: x, y, z, t) e o intervalo da
+ *  salva. Os outros só DESENHAM (arco, splash, som); o dano já foi resolvido por quem atirou (cannonHit dele). */
+export type NetCannon = { id: string; b: number[][]; l: number[][]; gap: number };
+/** Salvas recebidas, esperando o desenho do navio pegar (ele esvazia a cada quadro). */
+export const netCannonInbox: NetCannon[] = [];
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zsNetCannon?: unknown }).__zsNetCannon = netCannonInbox; // testes
 
 /** Tropa em campo vista pela rede (forma curta). */
 export type NetTroop = { i: string; u: string; x: number; z: number; r: number; a: string; h: number; m: number };
@@ -187,6 +201,13 @@ export const useNet = create<NetState>((set, get) => ({
       set((s) => ({ players: { ...s.players, [p.id]: p }, troops: applyPoseTroops(s.troops, p.id, p.tr) }));
     });
 
+    ch.on('broadcast', { event: 'cannon' }, ({ payload }) => {
+      const p = payload as NetCannon;
+      if (p.id === selfId || !Array.isArray(p.b) || p.b.length > 6) return;
+      netCannonInbox.push(p);
+      if (netCannonInbox.length > 12) netCannonInbox.splice(0, netCannonInbox.length - 12);
+    });
+
     ch.on('broadcast', { event: 'base' }, ({ payload }) => {
       const p = payload as { id: string; base: PlayerBaseState | null; tier?: number };
       if (p.id === selfId) return;
@@ -319,7 +340,7 @@ export const useNet = create<NetState>((set, get) => ({
 
 /** Envia a pose do jogador local (chamar do loop; throttla sozinho a ~11Hz). */
 let lastSent = 0;
-export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number, y?: number, weapon?: string | null): void {
+export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number, y?: number, weapon?: string | null, vehicles?: NetVehicle[] | null): void {
   if (!channel || !useNet.getState().connected) return;
   const now = performance.now();
   if (now - lastSent < 88) return;
@@ -337,7 +358,18 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
       ...(y !== undefined && Number.isFinite(y) ? { y } : {}),
       ...(weapon ? { w: weapon } : {}),
       ...(troops ? { tr: troops } : {}),
+      ...(vehicles && vehicles.length ? { v: vehicles.map((v) => ({ ...v })) } : {}), // cópia: quem chama reaproveita a lista
     } satisfies RemotePose,
+  });
+}
+
+/** Manda uma salva de canhão pros outros (só desenho/som — o dano é resolvido aqui por quem atirou). */
+export function broadcastCannon(balls: number[][], lands: number[][], gapMs: number): void {
+  if (!channel || !useNet.getState().connected) return;
+  const r = (n: number) => Math.round(n * 100) / 100;
+  void channel.send({
+    type: 'broadcast', event: 'cannon',
+    payload: { id: useNet.getState().selfId, b: balls.map((a) => a.map(r)), l: lands.map((a) => a.map(r)), gap: gapMs } satisfies NetCannon,
   });
 }
 

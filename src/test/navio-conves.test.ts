@@ -51,11 +51,13 @@ describe('navio de guerra — convés', () => {
 
   it('no jogo: E sobe a bordo (qualquer nível), no timão pilota (70), solta o timão no convés, longe dele desce', () => {
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
-    expect(zs).toMatch(/return nearWarshipHull\(ship, p\.x, p\.z, warshipHalfBeam\(\), WARSHIP\.BOARD_MARGIN\) \? 'subir' : null;/);
-    expect(zs).toMatch(/return Math\.hypot\(h\.x - p\.x, h\.z - p\.z\) < WARSHIP\.HELM_REACH \? 'pilotar' : 'descer';/);
-    expect(zs).toMatch(/const at = warshipBoardSpot\(ship, p\.x, p\.z\);/);
+    // (01/11, online: o navio de OUTRO jogador também — sobe e desce; pilotar só o seu)
+    expect(zs).toMatch(/if \(ship && nearWarshipHull\(ship, p\.x, p\.z, warshipHalfBeam\(\), WARSHIP\.BOARD_MARGIN\)\) return \{ act: 'subir', who: null \};/);
+    expect(zs).toMatch(/act: Math\.hypot\(h\.x - p\.x, h\.z - p\.z\) < WARSHIP\.HELM_REACH \? 'pilotar' : 'descer', who: null/);
+    expect(zs).toMatch(/const at = rd \? warshipBoardSpot\(rd\.pose, p\.x, p\.z, rd\.c\) : warshipBoardSpot\(selPose, p\.x, p\.z\);/);
     expect(zs).toMatch(/const c = carryOnDeck\(before, ship, p\.x, p\.z\)/);
     expect(zs).toMatch(/shipGround\(zsShip\.c, x, z, feetY\) \?\? shipGround\(zsWarshipDeck\.c, x, z, feetY\)/);
+    expect(zs).toMatch(/for \(const d of remoteDecks\.values\(\)\) \{ const g = shipGround\(d\.c, x, z, feetY\); if \(g\) return g; \}/);
     const view = fs.readFileSync('src/components/zona-sul/zs-warship-view.tsx', 'utf8');
     expect(view).toMatch(/const ps = warshipPose\(s, t\);/); // o desenho e o colisor usam a MESMA pose
     expect(view).toMatch(/if \(!g\.boundsTree\) computeBoundsTree\.call\(g\);/); // escaneia com árvore de raio (sem travar a tela)

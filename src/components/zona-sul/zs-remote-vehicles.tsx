@@ -1,0 +1,100 @@
+/**
+ * ZONA SUL — VEÍCULOS DOS OUTROS JOGADORES (01/11, Pedro online: "estou com 2 usuários no mesmo servidor, um no barco,
+ * outro na praia — não vejo o barco nem nada, por quê?"). Antes só o BONECO ia pela rede (posição/altura/animação/item):
+ * cada tela tinha o seu navio/carro local e o do outro não aparecia. Agora o navio e o carro de cada um vão de carona na
+ * pose (`RemotePose.v`) e aqui são desenhados (o MESMO modelo do local, geometria compartilhada), com a pose suavizada.
+ *  - Os dois ancorados/estacionados no MESMO lugar (cada um tem o seu, no mesmo ponto): desenha um só (sem piscar).
+ *  - O CONVÉS do navio do outro vira chão (`remoteDecks`, o mesmo escaneamento do meu): dá pra subir no navio do
+ *    amigo/inimigo (pirataria) — e o navio dele andando leva quem está em cima (o mundo aplica a cada tique).
+ */
+import { useGLTF } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import { useNet } from '@/net/multiplayer';
+import { buildWarshipModel, WARSHIP_URL, warshipPose, zsWarshipDeck } from './zs-warship-view';
+import { buildCarModel, CAR_URL } from './zs-car-view';
+import type { ShipCollider } from './zs-ship';
+import type { ZsWarship } from './zs-warship';
+
+type Pose = { x: number; z: number; yaw: number };
+/** Navio de OUTRO jogador agora: pose suavizada (e a do quadro anterior, pra levar junto quem está no convés) + o
+ *  colisor do convés dele. `tick` = quadro em que foi atualizado. */
+export type RemoteDeck = { id: string; c: ShipCollider; pose: Pose; prev: Pose; tick: number };
+export const remoteDecks = new Map<string, RemoteDeck>();
+export const remoteDeckTick = { n: 0 };
+
+/** Suavização da pose (1/s) — a pose chega ~11×/s. */
+const SMOOTH = 10;
+/** Igual ao MEU (os dois ancorados/estacionados no mesmo ponto): desenha um só. */
+export const SAME_SPOT_M = 2.5, SAME_SPOT_YAW = 0.15;
+
+const angDiff = (a: number, b: number) => { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
+export function sameSpot(a: Pose | null, b: Pose): boolean {
+  return !!a && Math.hypot(a.x - b.x, a.z - b.z) < SAME_SPOT_M && Math.abs(angDiff(a.yaw, b.yaw)) < SAME_SPOT_YAW;
+}
+
+type Slot = { kind: 's' | 'c'; obj: THREE.Group; pose: Pose; y: number };
+
+export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefObject<ZsWarship | null>; myCar: React.MutableRefObject<Pose | null> }) {
+  const ship = useGLTF(WARSHIP_URL).scene;
+  const car = useGLTF(CAR_URL).scene;
+  const root = useRef<THREE.Group>(null);
+  const slots = useRef(new Map<string, Slot>());
+  useEffect(() => () => { remoteDecks.clear(); }, []);
+
+  useFrame((state, dtRaw) => {
+    const g = root.current;
+    if (!g) return;
+    const dt = Math.min(0.05, dtRaw), t = state.clock.elapsedTime, k = 1 - Math.exp(-SMOOTH * dt);
+    const players = useNet.getState().players;
+    const live = new Set<string>();
+    remoteDeckTick.n++;
+    for (const id in players) {
+      const vs = players[id]!.v;
+      if (!vs) continue;
+      for (const v of vs) {
+        const key = `${id}:${v.k}`;
+        live.add(key);
+        let s = slots.current.get(key);
+        if (!s) {
+          const obj = v.k === 's' ? buildWarshipModel(ship).holder : buildCarModel(car).holder;
+          g.add(obj);
+          s = { kind: v.k, obj, pose: { x: v.x, z: v.z, yaw: v.yaw }, y: v.y ?? 0 };
+          slots.current.set(key, s);
+        }
+        const far = Math.hypot(v.x - s.pose.x, v.z - s.pose.z) > 25; // teleporte/renasceu: pula direto
+        const kk = far ? 1 : k;
+        s.pose.x += (v.x - s.pose.x) * kk; s.pose.z += (v.z - s.pose.z) * kk;
+        s.pose.yaw += angDiff(v.yaw, s.pose.yaw) * kk;
+        s.y += ((v.y ?? s.y) - s.y) * kk;
+        const mine = v.k === 's' ? myShip.current : myCar.current;
+        const same = sameSpot(mine, s.pose);
+        s.obj.visible = !same;
+        if (v.k === 's') {
+          const ps = warshipPose({ x: s.pose.x, z: s.pose.z, roll: 0 } as ZsWarship, t);
+          s.obj.position.set(s.pose.x, ps.y0, s.pose.z);
+          s.obj.rotation.set(ps.pitch, s.pose.yaw, ps.roll, 'YXZ');
+          // convés do navio dele = chão (a não ser que esteja em cima do meu: aí vale o meu)
+          const base = zsWarshipDeck.c;
+          if (!same && base) {
+            let d = remoteDecks.get(id);
+            if (!d) { d = { id, c: { ...base }, pose: { ...s.pose }, prev: { ...s.pose }, tick: 0 }; remoteDecks.set(id, d); }
+            d.prev = { ...d.pose }; d.pose = { ...s.pose }; d.tick = remoteDeckTick.n;
+            d.c.cx = s.pose.x; d.c.cz = s.pose.z; d.c.cos = Math.cos(s.pose.yaw); d.c.sin = Math.sin(s.pose.yaw);
+            d.c.y0 = ps.y0; d.c.tiltU = Math.sin(ps.roll); d.c.tiltV = -Math.sin(ps.pitch);
+          } else remoteDecks.delete(id);
+        } else {
+          const bob = Math.sin(t * 2.1) * 0.035;
+          s.obj.position.set(s.pose.x, s.y + bob, s.pose.z);
+          s.obj.rotation.set(0, s.pose.yaw, 0);
+        }
+      }
+    }
+    // saiu da sala / parou de mandar: some
+    for (const [key, s] of slots.current) if (!live.has(key)) { g.remove(s.obj); slots.current.delete(key); }
+    for (const id of [...remoteDecks.keys()]) if (!live.has(`${id}:s`)) remoteDecks.delete(id);
+  });
+
+  return <group ref={root} />;
+}
