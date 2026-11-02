@@ -317,10 +317,32 @@ function creatureLevelOf(creature: { level?: number }): number {
  * independentemente do nível dela (não há mais gate de "forte demais").
  *   - `hostileOnly`: ignora pacíficos (cervo/coelho).
  */
+/**
+ * CÍRCULO DO AUTOMÁTICO (Pedro 01/11: "se eu setar a distância 5 m ele não deve ir longe, correto?!"). Antes o raio do
+ * slider contava a partir de onde o herói ESTÁ (ia "somando de bicho em bicho") e, na Zona Sul, ao acabar tudo ele saía
+ * EXPLORANDO o mapa — com 5 m ele podia ir longe. Agora, com o slider ABAIXO do máximo, o piloto ocioso nunca sai do
+ * círculo desse raio em volta do ponto onde ligou o automático (`autoAnchor`): só escolhe o que dá pra alcançar DE
+ * DENTRO dele (arma de longe atira da borda), anda no máximo até a borda, o revide respeita o círculo e não explora.
+ * No MÁXIMO do slider (`AUTO_RADIUS_FREE`) = livre, como antes. Autodefesa (quem está te mordendo), defesa da base na
+ * horda, a fila de ordens do jogador e o recuo com vida baixa não mudam.
+ */
+export const AUTO_RADIUS_FREE = 45;
+type Leash = { at: Position; r: number; reach: number } | null;
+function pilotLeash(snapshot: AutoSnapshot): Leash {
+  const r = snapshot.autoHuntRadius;
+  if (!snapshot.autoAnchor || r === undefined || r >= AUTO_RADIUS_FREE) return null;
+  return { at: snapshot.autoAnchor, r, reach: snapshot.attackRange ?? ATTACK_RANGE };
+}
+/** `p` dá pra alcançar de dentro do círculo (com o alcance `reach`)? Sem círculo: sempre. */
+function inLeash(leash: Leash, p: Position, reach: number): boolean {
+  return !leash || getDistance(leash.at, p) <= leash.r + reach;
+}
+
 function weakestTargetWithin(
   snapshot: AutoSnapshot,
   radius: number,
   hostileOnly: boolean,
+  leash: Leash = null,
 ): AutoSnapshot['creatures'][number] | null {
   let best: AutoSnapshot['creatures'][number] | null = null;
   let bestLevel = Infinity;
@@ -328,6 +350,7 @@ function weakestTargetWithin(
   for (const creature of snapshot.creatures) {
     if (!isCreatureAlive(creature)) continue;
     if (hostileOnly && creature.hostile === false) continue;
+    if (leash && !inLeash(leash, creature.position, leash.reach)) continue;
     const dist = getDistance(snapshot.playerPosition, creature.position);
     if (dist > radius) continue;
     const level = creatureLevelOf(creature);
@@ -392,12 +415,13 @@ function hostileNear(snapshot: AutoSnapshot, at: Position, radius: number): Auto
   return best;
 }
 
-function nearestHostileWithin(snapshot: AutoSnapshot, radius: number): AutoSnapshot['creatures'][number] | null {
+function nearestHostileWithin(snapshot: AutoSnapshot, radius: number, leash: Leash = null): AutoSnapshot['creatures'][number] | null {
   let best: AutoSnapshot['creatures'][number] | null = null;
   let bestDist = Infinity;
   for (const creature of snapshot.creatures) {
     if (!isCreatureAlive(creature)) continue;
     if (creature.hostile === false) continue; // pacífico (cervo/coelho) não defende
+    if (leash && !inLeash(leash, creature.position, leash.reach)) continue;
     const dist = getDistance(snapshot.playerPosition, creature.position);
     if (dist <= radius && dist < bestDist) {
       bestDist = dist;
@@ -413,11 +437,13 @@ function nearestHostileWithin(snapshot: AutoSnapshot, radius: number): AutoSnaps
 function nearestNode(
   snapshot: AutoSnapshot,
   radius: number = FARM_RADIUS,
+  leash: Leash = null,
 ): AutoSnapshot['resources'][number] | null {
   let best: AutoSnapshot['resources'][number] | null = null;
   let bestDist = Infinity;
   for (const node of snapshot.resources) {
     if (node.depleted || node.canCollect === false) continue; // não cabe na bolsa / sem ferramenta
+    if (leash && !inLeash(leash, node.position, node.range ?? GATHER_RANGE)) continue; // colhe de dentro do círculo
     const dist = getDistance(snapshot.playerPosition, node.position);
     if (dist > radius) continue;
     if (dist < bestDist) {
@@ -470,6 +496,7 @@ function engage(
   snapshot: AutoSnapshot,
   creature: { id: string; position: Position },
   label: string,
+  leash: Leash = null,
 ): AutoIntent {
   const dist = getDistance(snapshot.playerPosition, creature.position);
   const range = reachFor(snapshot, dist);
@@ -482,7 +509,15 @@ function engage(
   if (dist <= effectiveRange) {
     return { kind: 'attack', creatureId: creature.id, to: { ...creature.position } };
   }
-  return { kind: 'move', to: { ...creature.position }, reason: label };
+  return { kind: 'move', to: leashClamp(leash, creature.position), reason: label };
+}
+
+/** Destino preso no círculo do automático: além da borda, para NA borda (na direção do alvo). */
+function leashClamp(leash: Leash, to: Position): Position {
+  if (!leash) return { ...to };
+  const dx = to.x - leash.at.x, dz = to.z - leash.at.z, d = Math.hypot(dx, dz);
+  if (d <= leash.r || d < 1e-6) return { ...to };
+  return { x: leash.at.x + (dx / d) * leash.r, z: leash.at.z + (dz / d) * leash.r };
 }
 
 /**
@@ -501,12 +536,14 @@ function stickTarget(
   snapshot: AutoSnapshot,
   candidate: AutoSnapshot['creatures'][number] | null,
   exitRadius: number,
+  leash: Leash = null,
 ): AutoSnapshot['creatures'][number] | null {
   const prev = snapshot.previousIntent;
   const prevId = prev?.kind === 'attack' ? prev.creatureId : null;
   if (prevId == null) return candidate;
   const prevCreature = snapshot.creatures.find(c => c.id === prevId);
   if (!prevCreature || !isCreatureAlive(prevCreature)) return candidate;
+  if (leash && !inLeash(leash, prevCreature.position, leash.reach)) return candidate; // saiu do círculo: solta
   const prevDist = getDistance(snapshot.playerPosition, prevCreature.position);
   if (prevDist > exitRadius) return candidate; // saiu da banda de combate: solta.
   if (!candidate || candidate.id === prevCreature.id) return prevCreature;
@@ -579,11 +616,13 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
   // e há hostil vivo dentro de AGGRO_RESPONSE_RADIUS, REVIDA antes de farmar,
   // independe do `behavior` e do NÍVEL do bicho.
   const dmgAt = snapshot.playerLastDamagedAt;
+  // círculo do automático (slider abaixo do máximo, sem ordem na fila): ver `pilotLeash`
+  const leash = active ? null : pilotLeash(snapshot);
   if (dmgAt != null && now - dmgAt <= RECENT_DAMAGE_WINDOW_MS) {
-    const aggressor = nearestHostileWithin(snapshot, AGGRO_RESPONSE_RADIUS);
+    const aggressor = nearestHostileWithin(snapshot, AGGRO_RESPONSE_RADIUS, leash);
     if (aggressor) {
-      const sticky = stickTarget(snapshot, aggressor, AGGRO_RESPONSE_RADIUS * COMBAT_EXIT_FACTOR);
-      return engage(snapshot, sticky ?? aggressor, 'Revidando o ataque');
+      const sticky = stickTarget(snapshot, aggressor, AGGRO_RESPONSE_RADIUS * COMBAT_EXIT_FACTOR, leash);
+      return engage(snapshot, sticky ?? aggressor, 'Revidando o ataque', leash);
     }
   }
 
@@ -607,38 +646,39 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
     const huntRadius = Math.min(IDLE_HUNT_RADIUS, reachRadius);
 
     // 1. DEFESA: inimigo coladinho → ataca. SÓ hostil.
-    const foe = weakestTargetWithin(snapshot, defendRadius, true);
-    const stickyFoe = stickTarget(snapshot, foe, defendRadius * COMBAT_EXIT_FACTOR);
-    if (stickyFoe) return engage(snapshot, stickyFoe, 'Defendendo a base');
+    const foe = weakestTargetWithin(snapshot, defendRadius, true, leash);
+    const stickyFoe = stickTarget(snapshot, foe, defendRadius * COMBAT_EXIT_FACTOR, leash);
+    if (stickyFoe) return engage(snapshot, stickyFoe, 'Defendendo a base', leash);
 
     // 2. FARM: coleta o nó mais próximo (alcance da própria definição do nó).
-    const node = nearestNode(snapshot, Math.min(FARM_RADIUS, playerRadius));
+    const node = nearestNode(snapshot, Math.min(FARM_RADIUS, playerRadius), leash);
     if (node && snapshot.gatherCapacity !== false) {
       const reach = node.range ?? GATHER_RANGE;
       if (getDistance(snapshot.playerPosition, node.position) <= reach) {
         return { kind: 'gather', nodeId: node.id, to: { ...node.position } };
       }
-      return { kind: 'move', to: { ...node.position }, reason: 'Farmando recurso' };
+      return { kind: 'move', to: leashClamp(leash, node.position), reason: 'Farmando recurso' };
     }
 
     // 3. CAÇA AUTÔNOMA: hostil de menor nível até IDLE_HUNT_RADIUS. Engaja
     // qualquer criatura hostil, por mais forte que seja.
-    const prey = weakestTargetWithin(snapshot, huntRadius, true);
-    const stickyPrey = stickTarget(snapshot, prey, huntRadius * COMBAT_EXIT_FACTOR);
-    if (stickyPrey) return engage(snapshot, stickyPrey, 'Caçando por perto');
+    const prey = weakestTargetWithin(snapshot, huntRadius, true, leash);
+    const stickyPrey = stickTarget(snapshot, prey, huntRadius * COMBAT_EXIT_FACTOR, leash);
+    if (stickyPrey) return engage(snapshot, stickyPrey, 'Caçando por perto', leash);
 
     // 4. CAÇA PACÍFICA (comida) só se o jogador ligou o raio de caça.
     // Pacífico (comida) segue até 35 m no máximo, como antes do slider ir a 45.
     const huntBase = snapshot.autoHuntRadius === undefined ? 0 : Math.min(snapshot.autoHuntRadius, 35);
     if (huntBase > 0) {
-      const quarry = weakestTargetWithin(snapshot, Math.max(huntBase, snapshot.attackRange ?? 0), false);
-      if (quarry) return engage(snapshot, quarry, 'Caçando por perto');
+      const quarry = weakestTargetWithin(snapshot, Math.max(huntBase, snapshot.attackRange ?? 0), false, leash);
+      if (quarry) return engage(snapshot, quarry, 'Caçando por perto', leash);
     }
 
     // 4d. Acabou tudo em volta → VOLTA pro ponto onde ligou o automático (Pedro, 23/10). Ele vai
     // "somando" de bicho em bicho; quando não sobra nada no raio, retorna e espera renascer — e no
     // caminho, se aparecer bicho no raio, os passos acima pegam primeiro (re-decide a cada tique).
-    if (snapshot.autoExplore) {
+    // Com o CÍRCULO (slider abaixo do máximo, 01/11) não explora o mapa: fica no círculo.
+    if (snapshot.autoExplore && !leash) {
       const target = nearestExploreTarget(snapshot);
       if (target) return {
         kind: 'move',

@@ -962,14 +962,14 @@ function Index() {
               {idleMode && pilot.detail ? <em> · {pilot.detail}</em> : null}
             </span>
             {idleMode && (
-              <label className="pilot-hunt" title="Raio que o piloto ocioso usa pra caçar o bicho mais próximo">
+              <label className="pilot-hunt" title="Raio do automático: um círculo em volta de onde você ligou — ele não sai dele (arma de longe atira da borda). No máximo = livre: vai somando e explora o mapa">
                 <Crosshair />
                 <input
                   type="range" min={5} max={45} step={1} value={autoHuntRadius}
                   onChange={e => setAutoHuntRadius(Number(e.target.value))}
                   aria-label="Raio de caça automática"
                 />
-                <span>{autoHuntRadius} m</span>
+                <span>{autoHuntRadius >= 45 ? 'livre' : `${autoHuntRadius} m`}</span>
               </label>
             )}
             {idleMode && <PilotWeaponControl />}
