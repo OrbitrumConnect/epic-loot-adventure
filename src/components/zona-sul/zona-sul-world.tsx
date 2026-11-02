@@ -172,7 +172,8 @@ function followSun(sun: THREE.DirectionalLight, p: THREE.Vector3) {
   sun.color.copy(zsSun.color);
 }
 
-type Hud = { x: number; z: number; y: number; state: string; near: string; overview: boolean; car?: string | undefined; canPop?: boolean };
+/** `carTouch`: a linha de baixo NO CELULAR (sem teclas de PC — lá os comandos são os botões do arco); sem ela, some. */
+type Hud = { x: number; z: number; y: number; state: string; near: string; overview: boolean; car?: string | undefined; carTouch?: string | undefined; canPop?: boolean };
 /** Entrada + câmera. `overview` (tecla K): câmera de CIMA solta do boneco — WASD move a vista, Shift acelera,
  *  arrastar gira, roda sobe/desce; K de novo volta pro herói (o herói fica parado onde estava). */
 const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch: 0.32, dist: 9, overview: false, ov: { x: 0, z: 0, alt: 420, pitch: 1.05 }, eTap: false, lookAt: 0,
@@ -523,7 +524,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         hudAcc.current = 0;
         const cd =Math.max(0, Math.ceil((car.cooldownUntil - now) / 1000)), en = Math.ceil(car.energy);
         const voo = cd > 0 ? 'recarga do voo ' + cd + ' s' : 'Espaço sobe · C desce · energia ' + en + ' s · Shift turbo';
-        onHud({ x: car.x, z: car.z, y: car.y, state: 'dirigindo · ' + Math.round(Math.abs(car.speed) * 3.6) + ' km/h · altura ' + car.altitude.toFixed(1) + ' m' + (car.overWater ? ' · sobre a água' : ''), near: '', overview: false, car: voo + ' · V câmera ' + (inside ? 'de fora' : 'de dentro') + ' · E sai (a qualquer hora — no ar você cai)' });
+        onHud({ x: car.x, z: car.z, y: car.y, state: 'dirigindo · ' + Math.round(Math.abs(car.speed) * 3.6) + ' km/h · altura ' + car.altitude.toFixed(1) + ' m' + (car.overWater ? ' · sobre a água' : ''), near: '', overview: false, car: voo + ' · V câmera ' + (inside ? 'de fora' : 'de dentro') + ' · E sai (a qualquer hora — no ar você cai)', carTouch: cd > 0 ? 'recarga do voo ' + cd + ' s' : 'energia do voo ' + en + ' s' });
       }
       return;
     }
@@ -975,7 +976,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
         : rm === 'popup' ? 'levantando…' : rm === 'ride' && ride.current ? (ride.current.trickT > 0 ? ride.current.trick.toUpperCase() + ' · ' : '') + (ride.current.air ? 'NO AR! segure A ou D pra girar' : 'SURFANDO ' + Math.round(ride.current.speed * 3.6) + ' km/h · A/D vira (carving) · W acelera · S freia · Shift = boost · desça a face = ganha velocidade · suba rápido no lip = aéreo') + (ride.current.airs ? ' · aéreos: ' + ride.current.airs : '')
         : rolling ? 'tomou a vaca! girando com a espuma…' : '';
-      onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : shipTxt || undefined });
+      onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : shipTxt || undefined,
+        carTouch: !nearCar && (shipAct === 'construir' || shipAct === 'construir_carro') ? shipTxt.replace(' · E = ', ' · ') : undefined });
     }
   });
 
@@ -1143,7 +1145,8 @@ function ZsHudView({ touch }: { touch: boolean }) {
       <div className="zs-hud">
         <strong>{hud.state}</strong>
         {hud.near && !hud.overview && <small>perto de {hud.near}</small>}
-        {hud.car && <em>{hud.car}</em>}
+        {/* celular (Pedro 02/11: "um card muito grande, horrível"): sem "Espaço sobe · C desce · E sai…" — são os botões do arco */}
+        {(touch ? hud.carTouch : hud.car) && <em>{touch ? hud.carTouch : hud.car}</em>}
         <small className="zs-hud__keys">{hud.overview
           ? 'VISTA DE CIMA · WASD move · Shift rápido · roda sobe/desce · K volta'
           : touch ? 'joystick anda · arraste a tela gira a câmera' : 'WASD anda · clique ataca · botão direito mira · Espaço pula · E carro/pegar · C mergulha · K vista de cima · P FPS'}</small>

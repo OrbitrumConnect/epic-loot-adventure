@@ -1184,6 +1184,8 @@ function Index() {
                         aria-label="Zerar e começar novo" title="Zerar e começar novo"
                         onClick={resetCharacter}>Zerar</Button>
                     </div>
+                    {/* créditos do mapa (ODbL): no jogo o crédito some em 5 s; o detalhe fica aqui (diretriz da OSMF) */}
+                    <div className="home-building"><Compass /><div><strong>Créditos do mapa</strong><small>Mapa da Zona Sul: dados © colaboradores do OpenStreetMap, licença ODbL — <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">openstreetmap.org/copyright</a> · Relevo: AWS Terrain Tiles (SRTM)</small></div></div>
                     <div className="panel-stats"><span>TRIBOS v0.2 · Protótipo local · Sem multiplayer conectado</span></div>
                   </>
                 )}
@@ -1239,7 +1241,11 @@ function Index() {
                   disabled={!DEV_INFINITE_POTIONS && potionCount <= 0} onClick={drinkPotion}>
                   Beber agora
                 </Button>
-                {!panel && <div className="world-actions world-actions--footer">{actionButtons}</div>}
+                {/* celular (Pedro 02/11: "a engrenagem come uma margem desnecessária"): ela entra na fileira dos botões e a
+                    linha de baixo (engrenagem + nome do item) sai — o mundo ganha essa altura */}
+                {!panel && <div className="world-actions world-actions--footer">{actionButtons}
+                  <Button variant="ghost" className="world-action footer-settings-inline" aria-label="Preferências" title="Preferências · Sair · Zerar" onClick={() => open('settings')}><Settings /></Button>
+                </div>}
               </div>
             </div>
             <div className="hotbar-note-row">

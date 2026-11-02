@@ -48,6 +48,17 @@ export function arcTopPx(innerR: number, outerR: number, hasOuter: boolean): num
   return 18 + ATTACK_BTN / 2 + (hasOuter ? outerR : innerR) + ARC_BTN / 2;
 }
 
+/** Folga (px) entre o topo do arco e o topo da tela do jogo; menor escala do arco (40 px → 30 px por botão). */
+export const ARC_FIT_TOP = 6;
+export const ARC_MIN_SCALE = 0.75;
+/** CABER NA TELA (Pedro 02/11, celular deitado com a barra do navegador: "os triggers dá pra ocupar menos espaço"): numa
+ *  tela de jogo de ~184 px de altura o arco (até ~223 px) saía por cima do cabeçalho. O arco inteiro (botões E distâncias)
+ *  encolhe junto, a partir do canto do ATACAR, só o necessário pra caber — tela alta (PC, celular em pé) fica igual (1). */
+export function arcFitScale(arcTop: number, worldH: number): number {
+  if (!(worldH > 0) || arcTop <= 18) return 1;
+  return Math.min(1, Math.max(ARC_MIN_SCALE, (worldH - ARC_FIT_TOP - 18) / (arcTop - 18)));
+}
+
 /** Posições (dx, dy em px a partir do centro do ATACAR; dy negativo = pra cima) de `n` botões num arco. */
 export function arcLayout(n: number, radius: number, from = ARC_FROM, to = ARC_TO): { dx: number; dy: number }[] {
   if (n <= 0) return [];
@@ -157,10 +168,24 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
   const innerPos = arcLayout(inner.length, innerR);
   const outerPos = arcLayout(outer.length, outerR, ARC_FROM + 4, ARC_TO - 4);
   const arcTop = arcTopPx(innerR, outerR, outer.length > 0);
+  // altura da tela do jogo (muda ao virar o celular / a barra do navegador sumir) → escala que faz o arco caber
+  const arcRef = useRef<HTMLDivElement>(null);
+  const [worldH, setWorldH] = useState(0);
   useEffect(() => {
-    document.documentElement.style.setProperty('--mobile-arc-top', `${arcTop}px`);
+    const host = arcRef.current?.offsetParent as HTMLElement | null;
+    if (!host) return;
+    const read = () => setWorldH(host.clientHeight);
+    read();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(read) : null;
+    ro?.observe(host);
+    return () => ro?.disconnect();
+  }, []);
+  const fit = arcFitScale(arcTop, worldH);
+  const arcTopShown = Math.round(18 + (arcTop - 18) * fit); // o que fica acima do arco (LEVANTAR, mensagem) sobe/desce junto
+  useEffect(() => {
+    document.documentElement.style.setProperty('--mobile-arc-top', `${arcTopShown}px`);
     return () => { document.documentElement.style.removeProperty('--mobile-arc-top'); };
-  }, [arcTop]);
+  }, [arcTopShown]);
 
   const arcBtn = (b: ArcButton, pos: { dx: number; dy: number }) => (
     <button key={b.id} type="button" aria-label={b.label}
@@ -181,7 +206,7 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
           <span className="mobile-stick-knob" style={{ left: stick.kx, top: stick.ky }} />
         </>}
       </div>
-      <div className="mobile-arc">
+      <div ref={arcRef} className="mobile-arc" style={fit < 1 ? { transform: `scale(${fit.toFixed(3)})` } : undefined}>
         {inner.map((b, i) => arcBtn(b, innerPos[i]!))}
         {outer.map((b, i) => arcBtn(b, outerPos[i]!))}
         <button className="mobile-btn mobile-btn--attack" aria-label="Atacar"

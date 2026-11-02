@@ -544,6 +544,7 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .hotbar-row { display: flex; align-items: stretch; gap: 14px; }
 .hotbar-note-row { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .footer-settings { display: none; }
+.footer-settings-inline { display: none; }
 .potion-ctl { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 0 0 14px; border-left: 1px solid var(--border); }
 .potion-toggle { height: 29px; padding: 0 9px; gap: 6px; font-size: 9px; letter-spacing: 1px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted-foreground); background: var(--card); }
 .potion-toggle svg { width: 14px; height: 14px; }
@@ -683,6 +684,10 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .hotbar-note-row { justify-content: space-between; }
   .footer-settings { display: inline-flex; width: 26px; height: 22px; margin-top: 2px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted-foreground); }
   .footer-settings svg { width: 13px; height: 13px; }
+  /* TOQUE (Pedro 02/11): a engrenagem vai pra fileira dos botões e a linha de baixo some (o item na mão já fica
+     destacado no slot). Janela estreita de PC (sem toque) fica como estava. */
+  [data-touch] .footer-settings-inline { display: inline-flex; }
+  [data-touch] .hotbar-note-row { display: none; }
   .world-action { width: 26px; height: 26px; }
   /* Coluna da direita (AUTO + triggers) bem compacta p/ o rodapé preto encolher. */
   .potion-ctl { padding-left: 4px; gap: 2px; }
@@ -890,7 +895,7 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 /* ARCO do celular (Pedro 25/10): ATACAR grande no canto, os outros em meio círculo em volta (ao alcance do polegar).
    Posição de cada botão = translate do arcLayout (mobile-controls.tsx). */
 /* 26/10: ATACAR 72 e arco 40 (ATTACK_BTN/ARC_BTN em mobile-controls.tsx); botão do arco centrado: (72 − 40) / 2 = 16. */
-.mobile-arc { position: absolute; right: 16px; bottom: 18px; width: 72px; height: 72px; z-index: 60; }
+.mobile-arc { position: absolute; right: 16px; bottom: 18px; width: 72px; height: 72px; z-index: 60; transform-origin: 100% 100%; }
 .mobile-arc .mobile-btn--attack { position: absolute; inset: 0; width: 72px; height: 72px; }
 .mobile-arc .mobile-btn--attack svg { width: 32px; height: 32px; }
 .mobile-btn--arc { position: absolute; left: 16px; top: 16px; width: 40px; height: 40px; }
@@ -1077,7 +1082,12 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .zs-btn:active { background: color-mix(in oklch, var(--primary) 30%, var(--background)); }
 .zs-btn--pop { position: absolute; right: 18px; bottom: 96px; z-index: 4; height: 58px; font-size: 16px; box-shadow: 0 0 18px color-mix(in oklch, var(--primary) 45%, transparent); animation: cs-pulse 1s ease-in-out infinite; }
 .zs-btn--pop small { font-size: 10px; opacity: .75; }
-.zs-credit { position: absolute; right: 10px; bottom: 4px; z-index: 2; font-size: 9px; color: rgba(16, 32, 44, .85); background: rgba(255, 255, 255, .55); padding: 1px 6px; border-radius: 4px; pointer-events: none; }
+.zs-credit { position: absolute; right: 10px; bottom: 4px; z-index: 2; font-size: 9px; color: rgba(16, 32, 44, .85); background: rgba(255, 255, 255, .55); padding: 1px 6px; border-radius: 4px; pointer-events: none;
+  animation: zs-credit-out .8s ease 5s forwards; }
+/* Pedro 02/11 ("fica aparecendo relevo AWS, é bom tirar"): a diretriz de crédito da OSMF deixa o crédito sumir sozinho
+   depois de 5 s e, em jogo, ficar na tela de abertura + nos créditos do menu (Preferências → Créditos do mapa). */
+@keyframes zs-credit-out { to { opacity: 0; visibility: hidden; } }
+.zs-warm__credit { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 10px; letter-spacing: 0; opacity: .7; }
 /* CELULAR: Carro/Subir/Descer/Turbo/Mergulhar ficam DENTRO do arco de poderes (31/10, Pedro: "grandes, retangulares, em
    cima dos outros — horrível"; ZsTouchArc em zona-sul-world.tsx). Só o LEVANTAR da prancha (aparece quando a onda pega)
    fica logo acima do arco (--mobile-arc-top, publicado pelo arco). */
@@ -1086,6 +1096,23 @@ progress::-webkit-progress-bar { background: var(--secondary); }
    alto, pequeno (cobria os botões de baixo do arco) */
 .game-shell[data-touch] .world-bottom { bottom: calc(var(--mobile-arc-top, 232px) + 10px); right: 90px; }
 .game-shell[data-touch] .zs-credit { top: 2px; bottom: auto; right: 6px; font-size: 7px; max-width: 44%; }
+/* CELULAR (Pedro 02/11: "um card que fica na tela muito grande, horrível" — dirigindo dava 380×67 px por cima do arco):
+   o status vira uma etiqueta fina no canto ESQUERDO, logo abaixo do título do mapa (o arco fica à direita), cada linha
+   numa linha só (o que não cabe termina em "…") e sem as teclas de PC (os comandos são os botões do arco). */
+.game-shell[data-touch] .zs-hud { top: 58px; left: 12px; right: auto; max-width: min(240px, 46%); gap: 1px; padding: 3px 7px; border-radius: 6px; text-align: left; }
+.game-shell[data-touch] .zs-hud > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game-shell[data-touch] .zs-hud strong { font-size: 10px; }
+.game-shell[data-touch] .zs-hud small, .game-shell[data-touch] .zs-hud em { font-size: 9px; }
+.game-shell[data-touch] .zs-hud .zs-hud__keys { display: none; }
+/* celular DEITADO (tela baixa): acima do arco não sobra altura — a mensagem do mundo saía pelo topo, cortada ("…no seu
+   nível)." em cima do título). Aqui ela vai pra coluna da esquerda, embaixo do status: título → status → mensagem; o arco
+   fica à direita e o canto de baixo livre pro joystick. Em pé continua acima do arco. */
+@media (max-height: 500px) {
+  .game-shell[data-touch] .world-bottom { top: 116px; bottom: auto; right: 50%; align-items: flex-start; }
+  /* o aviso de um toque ("Novo poder…", a 150 px do fundo) saía por cima numa tela de ~209 px: só o OK aparecia */
+  .game-card { bottom: 6px; left: 42%; width: min(300px, 44%); max-height: calc(100% - 12px); overflow-y: auto; padding: 8px 10px; }
+  .game-card__btn { min-height: 34px; padding: 5px 10px; }
+}
 @media (max-width: 700px) {
   .zs-hud { top: 70px; right: 10px; padding: 6px 9px; }
   .zs-hud strong { font-size: 11px; }

@@ -153,6 +153,8 @@ export function ZsWarmOverlay() {
     <div className="world-loading zs-warm">
       <span>Preparando o mundo…</span>
       <progress max={w.total} value={w.done} aria-label="Preparando o mundo" />
+      {/* crédito na ABERTURA (diretriz da OSMF pra jogos: tela de abertura + créditos no menu); no jogo ele some em 5 s */}
+      <small className="zs-warm__credit">Relevo: AWS Terrain Tiles (SRTM) · Mapa: © OpenStreetMap contributors (ODbL)</small>
     </div>
   );
 }
