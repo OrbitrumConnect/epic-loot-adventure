@@ -53,7 +53,7 @@ import { RemotePlayers } from '@/components/world/remote-players';
 import { TargetRoute } from '@/components/world/target-route';
 import { houseFloorSurfaceY, houseWalkFloorY, pushOutBasePieces, pushOutHouseWalls } from '@/components/world/base-collision';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
-import { broadcastCannon, broadcastPose, type NetVehicle, useNet } from '@/net/multiplayer';
+import { broadcastCannon, broadcastPose, type NetVehicle, registerShipHitHandler, useNet } from '@/net/multiplayer';
 import { remoteDecks, remoteDeckTick, ZsRemoteVehicles } from './zs-remote-vehicles';
 import { CombatFeedback } from '@/components/world/combat-feedback';
 import { Projectiles } from '@/components/world/projectiles';
@@ -94,7 +94,7 @@ import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
 import { autoFollowDir, zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
 import { CAR, CAR_SEATS, carStep, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
-import { ballLanding, cannonElevation, cannonSalvo, cannonSide, cannonSwing, carryOnDeck, findWarshipDock, nearWarshipHull, newWarship, WARSHIP, type WarshipSide, warshipLocal, warshipStep, warshipWorld, type ZsWarship } from './zs-warship';
+import { ballLanding, cannonElevation, cannonSalvo, cannonSide, cannonSwing, carryOnDeck, damageWarship, findWarshipDock, nearWarshipHull, newWarship, WARSHIP, type WarshipSide, warshipGone, warshipLocal, warshipStep, warshipWorld, type ZsWarship } from './zs-warship';
 import { HELM_U, syncWarshipDeck, WARSHIP_DRAFT, warshipAim, warshipBoardSpot, warshipDims, warshipFx, warshipHalfBeam, ZsWarshipView, zsWarshipDeck } from './zs-warship-view';
 import { WAKE_BOARD, WAKE_SHIP, ZsWake, zsBoardWake } from './zs-wake';
 import { heroMuzzle } from '@/components/world/muzzle';
@@ -127,6 +127,8 @@ const LEAN_BODY = 0.8;
 const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving' | 'sailing', enterAt: 0 };
 /** veículos que vão de carona na pose (reaproveitado — nada criado por quadro) */
 const netVehicles: NetVehicle[] = [];
+/** ÂNCORA do navio de guerra (onde ele nasce e onde se CONSTRÓI outro depois de afundar — 01/11) */
+const warshipDock: { at: { x: number; z: number; yaw: number } | null } = { at: null };
 const ENTER_MS = 1100;
 
 /** Golpe/tiro: quanto dura a animação de ataque (s) — o herói PARA pra atacar (igual ao Vale). Giro do especial R. */
@@ -303,7 +305,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     // desenham (zs-remote-vehicles) e podem subir no convés do navio
     const r2 = (n: number) => Math.round(n * 100) / 100, r3 = (n: number) => Math.round(n * 1000) / 1000;
     netVehicles.length = 0;
-    if (ship) netVehicles.push({ k: 's', x: r2(ship.x), z: r2(ship.z), yaw: r3(ship.yaw), s: r2(ship.speed) });
+    if (ship && !warshipGone(ship)) netVehicles.push({ k: 's', x: r2(ship.x), z: r2(ship.z), yaw: r3(ship.yaw), s: r2(ship.speed), h: ship.hp });
     if (car) netVehicles.push({ k: 'c', x: r2(car.x), z: r2(car.z), yaw: r3(car.yaw), y: r2(car.y) });
     broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs), netVehicles);
     // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
@@ -344,11 +346,14 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     // NAVIO DE GUERRA a pé (01/11): o que o E faz agora — no convés perto do timão = pilotar; no convés longe = descer
     // (pula na água); fora, perto do CASCO = subir a bordo (qualquer nível: amigo/inimigo sobe — pirataria). Também no
     // navio de OUTRO jogador (online): sobe e desce (pilotar só o seu — o leme dele está na tela dele). `who` = id dele.
-    const shipSel: { act: 'pilotar' | 'descer' | 'subir'; who: string | null } | null = (() => {
+    const shipSel: { act: 'pilotar' | 'descer' | 'subir' | 'construir'; who: string | null } | null = (() => {
       if (drive.mode !== 'foot' || dead) return null;
+      // o MEU afundou: perto da âncora = construir outro (recurso da bolsa — 01/11)
+      const dk = warshipDock.at;
+      if (ship && warshipGone(ship) && dk && Math.hypot(dk.x - p.x, dk.z - p.z) < WARSHIP.BUILD_NEAR) return { act: 'construir', who: null };
       if (onDeck.current && ship) { const h = warshipWorld(ship, 0, HELM_U * WARSHIP.LENGTH); return { act: Math.hypot(h.x - p.x, h.z - p.z) < WARSHIP.HELM_REACH ? 'pilotar' : 'descer', who: null }; }
       if (onRemoteDeck.current) return remoteDecks.has(onRemoteDeck.current) ? { act: 'descer', who: onRemoteDeck.current } : null;
-      if (ship && nearWarshipHull(ship, p.x, p.z, warshipHalfBeam(), WARSHIP.BOARD_MARGIN)) return { act: 'subir', who: null };
+      if (ship && ship.sinkT === null && nearWarshipHull(ship, p.x, p.z, warshipHalfBeam(), WARSHIP.BOARD_MARGIN)) return { act: 'subir', who: null };
       for (const d of remoteDecks.values()) if (nearWarshipHull(d.pose, p.x, p.z, warshipHalfBeam(), WARSHIP.BOARD_MARGIN)) return { act: 'subir', who: d.id };
       return null;
     })();
@@ -390,6 +395,16 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
           drive.mode = 'sailing'; ride.current = null; dive.current = 0; swimVel.current.set(0, 0); vy.current = 0; onDeck.current = false;
           camTarget.current.set(ship.x, p.y + 6, ship.z);
           useGameStore.getState().setMessage('⚓ No timão! W/S vela · A/D leme · segure o botão direito pra mirar · clique = canhões · E solta o timão');
+        }
+      } else if (ship && shipAct === 'construir' && warshipDock.at) {
+        // o MEU navio afundou: constrói outro na âncora com recurso da BOLSA (tabela dos veículos, 01/11)
+        const r = useGameStore.getState().spendItems(WARSHIP.BUILD_COST);
+        const nome: Record<string, string> = { wood: 'madeira', iron_ore: 'ferro', stone: 'pedra' };
+        if (!r.ok) useGameStore.getState().setMessage('🔨 Pra construir o navio falta: ' + r.missing.map((m) => `${m.n} ${nome[m.id] ?? m.id}`).join(', '));
+        else {
+          const d = warshipDock.at;
+          shipRef.current = newWarship(d.x, d.z, d.yaw);
+          useGameStore.getState().setMessage('🔨⚓ Navio de guerra construído na âncora! (' + WARSHIP.BUILD_COST.map((c) => `−${c.n} ${nome[c.id] ?? c.id}`).join(', ') + ')');
         }
       } else if (selPose && shipAct === 'descer') {
         // no convés (o meu ou o do outro), longe do timão → DESCE: pula na água do lado mais perto (fora do casco)
@@ -497,6 +512,14 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         const m = carryOnDeck(d.prev, d.pose, movement.current.x, movement.current.z); movement.current.set(m.x, 0, m.z);
       }
     }
+    // AFUNDOU com você no timão (01/11): cai na água do lado, nadando
+    if (ship && ship.sinkT !== null && drive.mode === 'sailing') {
+      drive.mode = 'foot'; warshipAim.on = false; input.cannonAim = false; if (document.pointerLockElement) document.exitPointerLock();
+      const out = warshipWorld(ship, warshipHalfBeam() + 3, 0);
+      p.set(out.x, zsWaterYAt(out.x, out.z), out.z); movement.current.set(p.x, 0, p.z);
+      vy.current = 0; grounded.current = false; onDeck.current = false;
+      if (group.current) group.current.visible = true;
+    }
     if (ship && drive.mode === 'sailing') {
       const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
       const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
@@ -556,7 +579,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (hudAcc.current > 0.25) {
         hudAcc.current = 0;
         const rl = (s: WarshipSide) => (ship.reload[s] > 0 ? Math.ceil(ship.reload[s]) + ' s' : 'pronto');
-        onHud({ x: ship.x, z: ship.z, y: wy, state: 'navio de guerra · ' + Math.round(Math.abs(ship.speed) * 3.6) + ' km/h · bombordo ' + rl('port') + ' · boreste ' + rl('starboard'), near: '', overview: false, car: 'W/S vela · A/D leme · segure o botão direito = mira (o lado pra onde a câmera olha; mais alto = mais longe) · clique = canhões · E desembarca' });
+        onHud({ x: ship.x, z: ship.z, y: wy, state: 'navio de guerra · casco ' + ship.hp + '/' + WARSHIP.HP + ' · ' + Math.round(Math.abs(ship.speed) * 3.6) + ' km/h · bombordo ' + rl('port') + ' · boreste ' + rl('starboard'), near: '', overview: false, car: 'W/S vela · A/D leme · segure o botão direito = mira (o lado pra onde a câmera olha; mais alto = mais longe) · clique = canhões · E desembarca' });
       }
       return;
     }
@@ -906,7 +929,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
       if (zsCave.inCave) best = `${caveRoomName(p.x, p.z)} (caverna, ${Math.max(0, Math.round(zsHeightAt(t, p.x, p.z) - p.y))} m de rocha em cima)`;
       const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
-      const shipTxt = nearCar || !shipAct ? '' : shipAct === 'subir' ? 'E = subir no navio de guerra'
+      const shipTxt = nearCar || !shipAct ? '' : shipAct === 'construir' ? 'seu navio afundou · E = construir outro (' + WARSHIP.BUILD_COST.map((c) => c.n + ' ' + ({ wood: 'madeira', iron_ore: 'ferro', stone: 'pedra' } as Record<string, string>)[c.id]).join(' · ') + ')'
+        : shipAct === 'subir' ? 'E = subir no navio de guerra'
         : shipAct === 'pilotar' ? 'E = pilotar (timão' + (isUnlocked(WARSHIP.UNLOCK_ID, gs.player.level) ? '' : ', nível ' + unlockLevel(WARSHIP.UNLOCK_ID)) + ')'
         : shipSel?.who ? 'no navio de outro jogador · E = descer (pula na água)' : 'no convés · timão na popa · E = descer (pula na água)';
       const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
@@ -1145,7 +1169,7 @@ const carBtn = (label: string, icon: React.ReactNode): ArcButton => ({ id: 'zs-c
 function ZsTouchArc() {
   const driving = useZsTouch(s => s.driving), nearCar = useZsTouch(s => s.nearCar), inWater = useZsTouch(s => s.inWater);
   const sailing = useZsTouch(s => s.sailing), nearShip = useZsTouch(s => s.nearShip), shipAct = useZsTouch(s => s.shipAct);
-  const shipLabel = shipAct === 'pilotar' ? 'Pilotar (timão)' : shipAct === 'descer' ? 'Descer do navio' : 'Subir no navio';
+  const shipLabel = shipAct === 'pilotar' ? 'Pilotar (timão)' : shipAct === 'descer' ? 'Descer do navio' : shipAct === 'construir' ? 'Construir navio' : 'Subir no navio';
   useEffect(() => {
     if (sailing) {
       // NAVIO DE GUERRA (01/11): canhões de cada costado + desembarcar; o joystick é o leme/vela; a mira aparece sozinha
@@ -1208,6 +1232,17 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
   }, [paused]);
+  // NAVIO 5K DE VIDA (Pedro 01/11): canhão de jogador INIMIGO acertou o MEU navio (a rede já conferiu a inimizade)
+  useEffect(() => {
+    registerShipHitHandler((hit) => {
+      const s = shipRef.current;
+      if (!s || s.sinkT !== null) return;
+      const sank = damageWarship(s, hit.damage);
+      useGameStore.getState().setMessage(sank ? `🔥 Seu navio AFUNDOU — canhão de ${hit.fromName}! Construa outro na âncora (E).`
+        : `💥 Canhão de ${hit.fromName} no seu navio! −${Math.round(hit.damage)} (casco ${s.hp}/${WARSHIP.HP})`);
+    });
+    return () => registerShipHitHandler(null);
+  }, []);
   useEffect(() => {
     // entrou no mapa: a pé, câmera no herói; 1ª vez = ganha a prancha
     drive.mode = 'foot'; input.overview = false; input.keys.clear(); hudNow = null;
@@ -1221,7 +1256,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       heroRef.current.set(at.x, at.y ?? zsHeightAt(tt, at.x, at.z), at.z); focusRef.current.copy(heroRef.current);
       movement.current.set(at.x, 0, at.z);
       carRef.current = newCar(at.x + 3, at.z - 2, 0, tt);
-      { const dock = findWarshipDock((x, z) => zsSwimmable(tt, x, z, WARSHIP.MIN_DEPTH), WARSHIP.DOCK_NEAR); shipRef.current = dock ? newWarship(dock.x, dock.z, dock.yaw) : null; }
+      { const dock = findWarshipDock((x, z) => zsSwimmable(tt, x, z, WARSHIP.MIN_DEPTH), WARSHIP.DOCK_NEAR); warshipDock.at = dock; shipRef.current = dock ? newWarship(dock.x, dock.z, dock.yaw) : null; }
       // o JOGO passa a viver na Zona Sul: chão/terra/limites/zona segura/acampamentos dela + a fauna por região
       const prof = zsWorldProfile(tt);
       setWorldProfile(prof);

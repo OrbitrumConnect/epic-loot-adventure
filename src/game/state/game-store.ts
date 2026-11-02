@@ -189,6 +189,10 @@ type GameActions = {
   /** BALA DE CANHÃO do navio de guerra (Zona Sul, 01/11) caiu em `at`: dano em área `radius` (mesmo caminho do especial:
    *  armadura, crítico, número na tela, XP/loot ao matar). Devolve quantos acertou. */
   cannonHit: (at: Position, radius: number) => number;
+  /** Força de UMA bala de canhão deste jogador agora (a mesma do cannonHit) — também contra NAVIO inimigo (01/11). */
+  cannonPower: () => number;
+  /** Gasta da BOLSA uma lista de itens (construir veículo, 01/11). Faltou algum: não gasta nada e devolve o que falta. */
+  spendItems: (cost: readonly { id: string; n: number }[]) => { ok: boolean; missing: { id: string; n: number }[] };
   /** Chuva de Flechas: poder de longe, flechas caem do céu e dão dano em ÁREA (raio escala
    *  com o nível, 5 m → 18 m; cooldown 15 s → 5 s). Precisa de arma de longe equipada.
    *  `auto` (piloto idle): silencioso — não escreve mensagem quando ainda não pode disparar. */
@@ -1306,11 +1310,24 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     });
   },
 
+  cannonPower: () => {
+    const p = get().player;
+    return Math.round((playerBaseAttack(p.level) + equipmentStats(p).damage) * CANNON_POWER * damageMultiplier(p));
+  },
+  spendItems: (cost) => {
+    const inv0 = get().player.inventory;
+    const missing = cost.filter((c) => getItemCount(inv0, c.id) < c.n).map((c) => ({ id: c.id, n: c.n - getItemCount(inv0, c.id) }));
+    if (missing.length) return { ok: false, missing };
+    let inv = inv0;
+    for (const c of cost) inv = removeItem(inv, c.id, c.n);
+    set((s) => ({ player: { ...s.player, inventory: inv } }));
+    return { ok: true, missing: [] };
+  },
   cannonHit: (at, radius) => {
     const state = get();
     if (state.player.dead) return 0;
     // bala de canhão = 2,5× o golpe base do herói (nível + equipamento), com os multiplicadores dele
-    const power = Math.round((playerBaseAttack(state.player.level) + equipmentStats(state.player).damage) * CANNON_POWER * damageMultiplier(state.player));
+    const power = get().cannonPower();
     // ONLINE (Pedro 01/11: "jogador na praia, horda, qualquer coisa toma dano"): jogador no raio leva o golpe pelo
     // caminho do PvP (quem leva confere a inimizade e aplica a armadura)
     const net = useNet.getState();

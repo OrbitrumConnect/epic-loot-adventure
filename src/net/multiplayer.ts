@@ -53,8 +53,20 @@ export type RemotePose = {
   v?: NetVehicle[];
 };
 
-/** Veículo visto pela rede: `k` 's' = navio de guerra · 'c' = carro voador; `y` = altura (carro); `s` = velocidade. */
-export type NetVehicle = { k: 's' | 'c'; x: number; z: number; yaw: number; y?: number; s?: number };
+/** Veículo visto pela rede: `k` 's' = navio de guerra · 'c' = carro voador; `y` = altura (carro); `s` = velocidade;
+ *  `h` = vida do navio (01/11, Pedro: "navio 5k vida") — 0 = afundando. */
+export type NetVehicle = { k: 's' | 'c'; x: number; z: number; yaw: number; y?: number; s?: number; h?: number };
+
+/** Canhão de OUTRO jogador acertou o MEU navio (01/11). O dono do navio valida (inimizade) e aplica. */
+export type ShipHitIntent = { id: string; ownerId: string; damage: number; fromName: string; fromSide: PvpSide };
+let shipHitHandler: ((intent: ShipHitIntent) => void) | null = null;
+export function registerShipHitHandler(handler: ((intent: ShipHitIntent) => void) | null): void { shipHitHandler = handler; }
+export function broadcastShipHit(ownerId: string, damage: number): void {
+  if (!channel || !useNet.getState().connected || !Number.isFinite(damage) || damage <= 0) return;
+  const { selfId, selfName, selfSide } = useNet.getState();
+  if (ownerId === selfId) return;
+  void channel.send({ type: 'broadcast', event: 'ship-hit', payload: { id: selfId, ownerId, damage: Math.round(damage), fromName: selfName, fromSide: selfSide } satisfies ShipHitIntent });
+}
 
 /** SALVA DE CANHÃO vista pela rede (01/11, Pedro: "ver o navio dar dano, atacar outro player e ser atacado"): as balas
  *  de quem atirou — saída/velocidade (`b`: ox, oy, oz, vx, vy, vz), onde caem (`l`: x, y, z, t) e o intervalo da
@@ -265,6 +277,14 @@ export const useNet = create<NetState>((set, get) => ({
       const hit = payload as MobHitIntent;
       if (hit.targetId !== selfId || get().isHost || !Number.isFinite(hit.damage)) return;
       mobHitHandler?.(hit);
+    });
+
+    // NAVIO (01/11): canhão de outro jogador no MEU navio — só com inimizade (aliado não afunda aliado)
+    ch.on('broadcast', { event: 'ship-hit' }, ({ payload }) => {
+      const hit = payload as ShipHitIntent;
+      if (hit.ownerId !== selfId || hit.id === selfId || !Number.isFinite(hit.damage)) return;
+      if (hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return;
+      shipHitHandler?.(hit);
     });
 
     // PvP (fatia 2): golpe de outro jogador. Só me interessa o que mira em MIM, e só vale se

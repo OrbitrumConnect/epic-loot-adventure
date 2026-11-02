@@ -52,7 +52,7 @@ describe('navio de guerra — convés', () => {
   it('no jogo: E sobe a bordo (qualquer nível), no timão pilota (70), solta o timão no convés, longe dele desce', () => {
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
     // (01/11, online: o navio de OUTRO jogador também — sobe e desce; pilotar só o seu)
-    expect(zs).toMatch(/if \(ship && nearWarshipHull\(ship, p\.x, p\.z, warshipHalfBeam\(\), WARSHIP\.BOARD_MARGIN\)\) return \{ act: 'subir', who: null \};/);
+    expect(zs).toMatch(/if \(ship && ship\.sinkT === null && nearWarshipHull\(ship, p\.x, p\.z, warshipHalfBeam\(\), WARSHIP\.BOARD_MARGIN\)\) return \{ act: 'subir', who: null \};/);
     expect(zs).toMatch(/act: Math\.hypot\(h\.x - p\.x, h\.z - p\.z\) < WARSHIP\.HELM_REACH \? 'pilotar' : 'descer', who: null/);
     expect(zs).toMatch(/const at = rd \? warshipBoardSpot\(rd\.pose, p\.x, p\.z, rd\.c\) : warshipBoardSpot\(selPose, p\.x, p\.z\);/);
     expect(zs).toMatch(/const c = carryOnDeck\(before, ship, p\.x, p\.z\)/);

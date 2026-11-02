@@ -28,6 +28,13 @@ export const WARSHIP = {
   RELOAD_S: 4, SALVO: 3, SALVO_GAP_MS: 150, SALVO_SPREAD: 5,  // 3 balas espalhadas 5 m ao longo do costado
   SPLASH_R: 5,
   UNLOCK_ID: 'war_ship',
+  /** VIDA do navio (Pedro 01/11: "navio 5k vida"): só canhão de jogador INIMIGO tira (pela rede). Zerou: afunda
+   *  (SINK_S), quem está nele cai na água, e outro se CONSTRÓI na âncora com recurso da bolsa (BUILD_COST). */
+  HP: 5000,
+  SINK_S: 6,
+  BUILD_COST: [{ id: 'wood', n: 200 }, { id: 'iron_ore', n: 80 }, { id: 'stone', n: 40 }] as readonly { id: string; n: number }[],
+  /** E a até isto (m) da âncora com o navio afundado = construir outro */
+  BUILD_NEAR: 30,
   /** ancorado no mar fundo mais perto disto: perto do Arpoador, do lado de Ipanema, FORA da onda (a zona de surf vai até
    *  ~160 m pro oeste do pico, x ≈ −70) */
   DOCK_NEAR: { x: -140, z: 470 },
@@ -41,11 +48,27 @@ export type ZsWarship = {
   roll: number;
   /** segundos até poder atirar de novo, por lado */
   reload: Record<WarshipSide, number>;
+  /** vida (WARSHIP.HP) e há quanto tempo está afundando (null = inteiro) */
+  hp: number;
+  sinkT: number | null;
 };
 export type WarshipInput = { throttle: number; steer: number };
 
 export function newWarship(x: number, z: number, yaw: number): ZsWarship {
-  return { x, z, yaw, speed: 0, yawRate: 0, roll: 0, reload: { port: 0, starboard: 0 } };
+  return { x, z, yaw, speed: 0, yawRate: 0, roll: 0, reload: { port: 0, starboard: 0 }, hp: WARSHIP.HP, sinkT: null };
+}
+
+/** Canhão INIMIGO acertou o navio: tira vida; zerou = começa a afundar. Devolve se afundou AGORA. */
+export function damageWarship(s: ZsWarship, dmg: number): boolean {
+  if (s.sinkT !== null || !(dmg > 0)) return false;
+  s.hp = Math.max(0, s.hp - Math.round(dmg));
+  if (s.hp > 0) return false;
+  s.sinkT = 0; s.speed = 0; s.yawRate = 0;
+  return true;
+}
+/** Afundou de vez (acabou a animação) — some do mar (e da rede); outro se constrói na âncora. */
+export function warshipGone(s: ZsWarship | null): boolean {
+  return !!s && s.sinkT !== null && s.sinkT >= WARSHIP.SINK_S;
 }
 
 /** Coordenadas DO NAVIO: u = pro lado (boreste +), v = ao longo (proa +). Mesmo giro do three.js em Y. */
@@ -80,6 +103,7 @@ export function hullFits(swimmable: (x: number, z: number) => boolean, x: number
 
 /** Um passo do navio (mexe em `s`). `swimmable` = mar com fundura suficiente (o mapa diz). */
 export function warshipStep(swimmable: (x: number, z: number) => boolean, s: ZsWarship, inp: WarshipInput, dt: number): void {
+  if (s.sinkT !== null) { s.sinkT += dt; s.speed = 0; s.yawRate = 0; return; } // afundando: parado
   for (const side of ['port', 'starboard'] as const) s.reload[side] = Math.max(0, s.reload[side] - dt);
   let v = s.speed;
   if (inp.throttle > 0) v += WARSHIP.ACCEL * inp.throttle * Math.max(0, 1 - v / WARSHIP.MAX) * dt;

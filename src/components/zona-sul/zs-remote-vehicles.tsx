@@ -12,10 +12,10 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useNet } from '@/net/multiplayer';
-import { buildWarshipModel, WARSHIP_URL, warshipPose, zsWarshipDeck } from './zs-warship-view';
+import { buildWarshipModel, makeShipHpBar, SHIP_BAR_K, WARSHIP_URL, warshipDims, warshipPose, zsWarshipDeck } from './zs-warship-view';
 import { buildCarModel, CAR_URL } from './zs-car-view';
 import type { ShipCollider } from './zs-ship';
-import type { ZsWarship } from './zs-warship';
+import { WARSHIP, type ZsWarship } from './zs-warship';
 
 type Pose = { x: number; z: number; yaw: number };
 /** Navio de OUTRO jogador agora: pose suavizada (e a do quadro anterior, pra levar junto quem está no convés) + o
@@ -34,7 +34,7 @@ export function sameSpot(a: Pose | null, b: Pose): boolean {
   return !!a && Math.hypot(a.x - b.x, a.z - b.z) < SAME_SPOT_M && Math.abs(angDiff(a.yaw, b.yaw)) < SAME_SPOT_YAW;
 }
 
-type Slot = { kind: 's' | 'c'; obj: THREE.Group; pose: Pose; y: number };
+type Slot = { kind: 's' | 'c'; obj: THREE.Group; pose: Pose; y: number; bar: ReturnType<typeof makeShipHpBar> | null; sinkT: number | null };
 
 export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefObject<ZsWarship | null>; myCar: React.MutableRefObject<Pose | null> }) {
   const ship = useGLTF(WARSHIP_URL).scene;
@@ -59,8 +59,9 @@ export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefOb
         let s = slots.current.get(key);
         if (!s) {
           const obj = v.k === 's' ? buildWarshipModel(ship).holder : buildCarModel(car).holder;
-          g.add(obj);
-          s = { kind: v.k, obj, pose: { x: v.x, z: v.z, yaw: v.yaw }, y: v.y ?? 0 };
+          const bar = v.k === 's' ? makeShipHpBar() : null;
+          g.add(obj); if (bar) g.add(bar.group);
+          s = { kind: v.k, obj, pose: { x: v.x, z: v.z, yaw: v.yaw }, y: v.y ?? 0, bar, sinkT: null };
           slots.current.set(key, s);
         }
         const far = Math.hypot(v.x - s.pose.x, v.z - s.pose.z) > 25; // teleporte/renasceu: pula direto
@@ -72,12 +73,17 @@ export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefOb
         const same = sameSpot(mine, s.pose);
         s.obj.visible = !same;
         if (v.k === 's') {
-          const ps = warshipPose({ x: s.pose.x, z: s.pose.z, roll: 0 } as ZsWarship, t);
+          // vida 0 = afundando (01/11): o mesmo afundar do meu, contado aqui
+          const hp = v.h ?? WARSHIP.HP;
+          s.sinkT = hp <= 0 ? (s.sinkT ?? 0) + dt : null;
+          const ps = warshipPose({ x: s.pose.x, z: s.pose.z, roll: 0, sinkT: s.sinkT } as ZsWarship, t);
           s.obj.position.set(s.pose.x, ps.y0, s.pose.z);
           s.obj.rotation.set(ps.pitch, s.pose.yaw, ps.roll, 'YXZ');
-          // convés do navio dele = chão (a não ser que esteja em cima do meu: aí vale o meu)
-          const base = zsWarshipDeck.c;
-          if (!same && base) {
+          if (s.sinkT !== null && s.sinkT >= WARSHIP.SINK_S) s.obj.visible = false;
+          if (s.bar) { s.bar.group.position.set(s.pose.x, ps.y0 + warshipDims.height * SHIP_BAR_K, s.pose.z); s.bar.set(hp / WARSHIP.HP, !same && s.sinkT === null, state.camera); }
+          // convés do navio dele = chão (a não ser que esteja em cima do meu ou afundando)
+          const base = zsWarshipDeck.scan; // o escaneamento (vale mesmo com o MEU navio afundado)
+          if (!same && base && s.sinkT === null) {
             let d = remoteDecks.get(id);
             if (!d) { d = { id, c: { ...base }, pose: { ...s.pose }, prev: { ...s.pose }, tick: 0 }; remoteDecks.set(id, d); }
             d.prev = { ...d.pose }; d.pose = { ...s.pose }; d.tick = remoteDeckTick.n;
@@ -92,7 +98,7 @@ export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefOb
       }
     }
     // saiu da sala / parou de mandar: some
-    for (const [key, s] of slots.current) if (!live.has(key)) { g.remove(s.obj); slots.current.delete(key); }
+    for (const [key, s] of slots.current) if (!live.has(key)) { g.remove(s.obj); if (s.bar) g.remove(s.bar.group); slots.current.delete(key); }
     for (const id of [...remoteDecks.keys()]) if (!live.has(`${id}:s`)) remoteDecks.delete(id);
   });
 

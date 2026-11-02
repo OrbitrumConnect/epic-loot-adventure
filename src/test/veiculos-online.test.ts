@@ -10,7 +10,7 @@ describe('veículos e canhão pela rede', () => {
     expect(net).toMatch(/v\?: NetVehicle\[\];/);
     expect(net).toMatch(/\.\.\.\(vehicles && vehicles\.length \? \{ v: vehicles\.map\(\(v\) => \(\{ \.\.\.v \}\)\) \} : \{\}\)/);
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
-    expect(zs).toMatch(/if \(ship\) netVehicles\.push\(\{ k: 's'/);
+    expect(zs).toMatch(/if \(ship && !warshipGone\(ship\)\) netVehicles\.push\(\{ k: 's'/); // afundado de vez não vai
     expect(zs).toMatch(/if \(car\) netVehicles\.push\(\{ k: 'c'/);
     expect(zs).toMatch(/<ZsRemoteVehicles myShip=\{shipRef\} myCar=\{carRef\} \/>/);
   });
@@ -25,7 +25,7 @@ describe('veículos e canhão pela rede', () => {
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
     expect(zs).toMatch(/broadcastCannon\(salvo\.map/);
     const view = fs.readFileSync('src/components/zona-sul/zs-warship-view.tsx', 'utf8');
-    expect(view).toMatch(/if \(!fb\.remote\) useGameStore\.getState\(\)\.cannonHit/);
+    expect(view).toMatch(/if \(!fb\.remote\) \{\s+useGameStore\.getState\(\)\.cannonHit/);
     expect(view).toMatch(/hit: false, remote: true/);
     // a bala bate no CONVÉS do navio de outro jogador (não atravessa o casco)
     expect(zs).toMatch(/for \(const d of remoteDecks\.values\(\)\) \{ const g = shipGround\(d\.c, x, z, 1e6\); if \(g && 'y' in g\) y = Math\.max\(y, g\.y\); \}/);

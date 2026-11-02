@@ -12,9 +12,10 @@ import * as THREE from 'three';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { type ShipCollider, shipGround } from './zs-ship';
 import { useGameStore } from '@/game/state/game-store';
-import { netCannonInbox } from '@/net/multiplayer';
+import { broadcastShipHit, netCannonInbox } from '@/net/multiplayer';
+import { remoteDecks } from './zs-remote-vehicles';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
-import { ballAt, type CannonBall, WARSHIP, warshipLocal, warshipWorld, type ZsWarship } from './zs-warship';
+import { ballAt, type CannonBall, WARSHIP, warshipGone, warshipLocal, warshipWorld, type ZsWarship } from './zs-warship';
 import { zsWaterYAt } from './zs-terrain-data';
 
 const URL = '/zona-sul/warship.glb';
@@ -36,14 +37,46 @@ export const warshipDims = { gunY: 4.2, helmY: 4.9, height: 18 };
  * colisor (`syncWarshipDeck`) — o mesmo `shipGround` do galeão vale: convés = chão, casco = parede pra quem vem da água,
  * mastro/amurada = obstáculo (mais alto que um degrau).
  */
-export const zsWarshipDeck: { c: ShipCollider | null; main: number } = { c: null, main: 0 };
+export const zsWarshipDeck: { c: ShipCollider | null; main: number; scan: ShipCollider | null } = { c: null, main: 0, scan: null };
 /** raios saem desta fração da altura do modelo (acima do convés de popa ~0,27, abaixo das vergas/velas) */
 const DECK_TOP_K = 0.36;
 const DECK_CELL = 1;
 
-/** Balanço do navio no tempo `t` (s): o MESMO no desenho e no colisor (quem está no convés sobe e desce junto). */
-export function warshipPose(s: ZsWarship, t: number): { y0: number; roll: number; pitch: number } {
-  return { y0: zsWaterYAt(s.x, s.z) - WARSHIP_DRAFT + Math.sin(t * 0.7) * 0.15, roll: s.roll + Math.sin(t * 0.6 + 1) * 0.02, pitch: Math.sin(t * 0.5) * 0.012 };
+/** Balanço do navio no tempo `t` (s): o MESMO no desenho e no colisor (quem está no convés sobe e desce junto).
+ *  Afundando (`sinkT`, 01/11): tomba pro lado, embica e desce até sumir (WARSHIP.SINK_S). */
+export function warshipPose(s: Pick<ZsWarship, 'x' | 'z' | 'roll'> & { sinkT?: number | null }, t: number): { y0: number; roll: number; pitch: number } {
+  const k = s.sinkT != null ? Math.min(1, s.sinkT / WARSHIP.SINK_S) : 0;
+  return {
+    y0: zsWaterYAt(s.x, s.z) - WARSHIP_DRAFT + Math.sin(t * 0.7) * 0.15 * (1 - k) - k * k * (warshipDims.height + 4),
+    roll: s.roll + Math.sin(t * 0.6 + 1) * 0.02 + k * 0.55,
+    pitch: Math.sin(t * 0.5) * 0.012 + k * 0.25,
+  };
+}
+
+/** Altura da barra de vida do navio (fração da altura do modelo): logo abaixo da ponta dos mastros — acima deles saía
+ *  da tela com a câmera baixa e perto. */
+export const SHIP_BAR_K = 0.82;
+/** BARRA DE VIDA do navio (Pedro: "barra de vida igual à do herói"): 2 planos virados pra câmera, no alto dos mastros. */
+export function makeShipHpBar(): { group: THREE.Group; set: (frac: number, show: boolean, camera: THREE.Camera) => void } {
+  const group = new THREE.Group();
+  const bg = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#111418', transparent: true, opacity: 0.75, depthWrite: false }));
+  // (transparente também: os dois na MESMA fila de desenho — o fundo, semitransparente, não cobre o verde; renderOrder 9 > 8)
+  const fill = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#3fbf5a', transparent: true, opacity: 1, depthWrite: false }));
+  bg.scale.set(10.4, 1.0, 1); fill.scale.set(10, 0.7, 1); fill.position.z = 0.01;
+  bg.renderOrder = 8; fill.renderOrder = 9;
+  group.add(bg, fill); group.visible = false;
+  const green = new THREE.Color('#3fbf5a'), red = new THREE.Color('#d8452f');
+  return {
+    group,
+    set: (frac, show, camera) => {
+      group.visible = show;
+      if (!show) return;
+      const f = Math.max(0, Math.min(1, frac));
+      fill.scale.x = Math.max(0.001, 10 * f); fill.position.x = -5 * (1 - f);
+      (fill.material as THREE.MeshBasicMaterial).color.copy(red).lerp(green, f);
+      group.quaternion.copy(camera.quaternion);
+    },
+  };
 }
 /** Põe a pose do quadro no colisor do convés (centro, giro, quilha, adernar/arfar). */
 export function syncWarshipDeck(s: ZsWarship, t: number): void {
@@ -55,7 +88,7 @@ export function syncWarshipDeck(s: ZsWarship, t: number): void {
 }
 
 /** Meia boca do convés escaneado (m) — pra "perto do casco". */
-export function warshipHalfBeam(): number { return zsWarshipDeck.c ? -zsWarshipDeck.c.u0 - 0.5 : WARSHIP.LENGTH * 0.12; }
+export function warshipHalfBeam(): number { return zsWarshipDeck.scan ? -zsWarshipDeck.scan.u0 - 0.5 : WARSHIP.LENGTH * 0.12; }
 
 /** Altura CRUA do convés (relativa à quilha) na célula sob (x, z); NaN = fora do navio. */
 function deckCell(c: ShipCollider, s: Pick<ZsWarship, 'x' | 'z' | 'yaw'>, x: number, z: number): number {
@@ -150,8 +183,8 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
   }, [scene]);
   // o colisor do convés vale enquanto o navio está na cena (montar/desmontar do React não perde o escaneamento)
   useEffect(() => {
-    zsWarshipDeck.c = model.scan.c; zsWarshipDeck.main = model.scan.main;
-    return () => { if (zsWarshipDeck.c === model.scan.c) zsWarshipDeck.c = null; };
+    zsWarshipDeck.c = model.scan.c; zsWarshipDeck.main = model.scan.main; zsWarshipDeck.scan = model.scan.c;
+    return () => { if (zsWarshipDeck.c === model.scan.c) zsWarshipDeck.c = null; if (zsWarshipDeck.scan === model.scan.c) zsWarshipDeck.scan = null; };
   }, [model]);
   const ship = useRef<THREE.Group>(null);
   const balls = useRef<THREE.InstancedMesh>(null);
@@ -161,6 +194,7 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
   /** o ARCO = fileira de bolinhas (linha de 1 px some de longe e de frente) */
   const arcDots = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const hpBar = useMemo(() => makeShipHpBar(), []);
 
   useFrame((state) => {
     const s = shipRef.current, g = ship.current;
@@ -170,6 +204,14 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
     const ps = warshipPose(s, t);
     g.position.set(s.x, ps.y0, s.z);
     g.rotation.set(ps.pitch, s.yaw, ps.roll, 'YXZ');
+    // afundando: o convés deixa de ser chão (quem está nele cai na água); afundou de vez: some
+    const sinking = s.sinkT !== null;
+    zsWarshipDeck.c = sinking ? null : model.scan.c;
+    g.visible = !warshipGone(s);
+    // barra de vida: ferido, ou com o herói perto
+    const hero = heroRef.current, nearHero = Math.hypot(hero.x - s.x, hero.z - s.z) < 90;
+    hpBar.group.position.set(s.x, ps.y0 + warshipDims.height * SHIP_BAR_K, s.z);
+    hpBar.set(s.hp / WARSHIP.HP, !sinking && (s.hp < WARSHIP.HP || nearHero), state.camera);
     // ── salvas de OUTROS jogadores (online): entram como balas "só de desenho" + o estrondo pela distância ──────
     while (netCannonInbox.length) {
       const nc = netCannonInbox.shift()!;
@@ -193,7 +235,13 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
         if (!fb.hit) {
           fb.hit = true;
           fx.splashes.push({ x: fb.land.x, y: fb.land.y, z: fb.land.z, t0: now });
-          if (!fb.remote) useGameStore.getState().cannonHit({ x: fb.land.x, z: fb.land.z }, WARSHIP.SPLASH_R); // dano: só de quem atirou
+          if (!fb.remote) {
+            useGameStore.getState().cannonHit({ x: fb.land.x, z: fb.land.z }, WARSHIP.SPLASH_R); // dano: só de quem atirou
+            // caiu NO navio de outro jogador (online, 01/11 — "navio 5k vida"): o dono aplica (com inimizade)
+            for (const d of remoteDecks.values()) {
+              if (shipGround(d.c, fb.land.x, fb.land.z, 1e6)) { broadcastShipHit(d.id, useGameStore.getState().cannonPower()); break; }
+            }
+          }
           const h = heroRef.current;
           audioManager.playWorld('gun', distanceGain(Math.hypot(fb.land.x - h.x, fb.land.z - h.z)) * 0.8, now);
         }
@@ -228,6 +276,7 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
   return (
     <>
       <group ref={ship}><primitive object={model.holder} /></group>
+      <primitive object={hpBar.group} />
       <instancedMesh ref={balls} args={[undefined, undefined, MAX_BALLS]} frustumCulled={false}>
         <sphereGeometry args={[0.45, 10, 8]} />
         <meshStandardMaterial color="#1c1c1e" roughness={0.6} metalness={0.4} />
