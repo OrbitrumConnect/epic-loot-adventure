@@ -87,7 +87,7 @@ describe('caverna — uma camada EMBAIXO do mapa (não fura nada)', () => {
     expect(n).toBeGreaterThan(1500);
     expect(furos).toBe(0);
     expect(flutua).toBe(0);
-  });
+  }, 30_000); // 02/11: varre a caverna inteira — com a suíte cheia em paralelo passava dos 5 s padrão (sozinho ~3 s)
   it('nenhuma árvore na boca (o buraco fica limpo)', () => {
     for (const m of ZS_CAVE_MOUTHS) {
       const veg = zsVegetationAround(t, m.ax, m.az, 60, 60);

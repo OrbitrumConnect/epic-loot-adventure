@@ -19,7 +19,7 @@ describe('enfeites do protótipo no chão seco', () => {
     expect(d).toBeLessThanOrEqual(7.01); // o mais perto (anel de 1 m)
     const sea = () => -3; // tudo água: não some, fica no lugar (chão real)
     expect(dryGroundNear(1, 1, sea, WATER)).toEqual([1, -3, 1]);
-  }, 20_000);
+  }, 60_000); // importa o mundo inteiro do Vale: com a suíte cheia em paralelo passava dos 20 s (02/11)
   it('ligado: fogueiras, baú, torre e cristal usam o chão seco; a pedra do cristal não soma o relevo antigo', () => {
     const gw = fs.readFileSync('src/components/game-world.tsx', 'utf8');
     expect(gw).toMatch(/const pos = useDryGround\(rawPos\[0\], rawPos\[2\]\);/);

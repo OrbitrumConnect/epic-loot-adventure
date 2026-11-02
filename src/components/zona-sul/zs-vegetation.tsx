@@ -19,7 +19,7 @@ import { useNet } from '@/net/multiplayer';
 import { BASE_GRID, type PlayerBaseState } from '@/game/types/playerbase';
 
 /** Quadrados das BASES (minha + as dos outros, online) com 3 m de folga: a mata não nasce dentro (31/10, base na Zona Sul). */
-function baseBoxes(pb: PlayerBaseState | null, others: Record<string, PlayerBaseState | null | undefined>): number[][] {
+export function baseBoxes(pb: PlayerBaseState | null, others: Record<string, PlayerBaseState | null | undefined>): number[][] {
   const out: number[][] = [];
   for (const b of [pb, ...Object.values(others)]) {
     if (!b) continue;

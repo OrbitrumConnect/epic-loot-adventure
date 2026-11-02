@@ -92,6 +92,7 @@ const SURF_ON = typeof window === 'undefined' || !/[?&]surf=0/.test(window.locat
 import { ZsTerrainMesh } from './zs-terrain-mesh';
 import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
+import { ZsGrass } from './zs-grass';
 import { autoFollowDir, zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
 import { CAR, CAR_SEATS, carGone, carStep, damageCar, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
 import { costText, VEHICLE_COST } from '@/game/data/vehicle-costs';
@@ -1359,6 +1360,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
               {SURF_ON && <SorrisoBreak t={spawnT ?? t} />}
             </ZsSea>
             <ZsVegetation t={t} heroRef={focusRef} />
+            {/* GRAMA LEVE (02/11): só em volta do herói, no verde; some no fundo da caverna junto com a superfície */}
+            <ZsGrass t={t} heroRef={focusRef} />
           </ZsSurface>
           {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}
           <ZsCave t={t} heroRef={heroRef} />
