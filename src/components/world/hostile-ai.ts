@@ -22,6 +22,7 @@ import { markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } fr
 import { WORLD } from '@/game/data/world-profile';
 import { blockedByWall, caveStep, glbSurfaceY, groundUnder } from './terrain-collision';
 import { isWalkable, walkStep } from './map-walk';
+import { vehicleShield } from '@/game/systems/vehicleShield';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
 import { addObjective, getTargetId, setTarget } from './objective-bridge';
 import { isBuildActive } from './build-mode';
@@ -668,13 +669,15 @@ export function useHostileAI(opts: HostileOptions) {
           // ESQUIVA (dodgeSystem): no meio do rolamento a mordida/tiro ERRA (sem dano, sem agarrar).
           const dodged = isInvulnerable();
           const dmg = dodged ? 0 : mitigateDamage(Math.max(1, creature.attackPower), useGameStore.getState().player);
-          if (!useGameStore.getState().player.dead && !dodged) {
+          // dirigindo (01/11): o CARRO toma no lugar do herói (vehicleShield) — sem número/empurrão/agarrão no herói
+          const shielded = !dodged && !useGameStore.getState().player.dead && !!vehicleShield.absorb?.(dmg, creature.name);
+          if (!useGameStore.getState().player.dead && !dodged && !shielded) {
             reportDamageToStore("player", dmg, { x: px, z: pz }, true);
             const shove = PLAYER_SHOVE[creature.speciesId];
             if (shove && distToPlayer > 1e-3) queueKnockback("player", ((px - wx) / distToPlayer) * shove, ((pz - wz) / distToPlayer) * shove);
           }
           useGameStore.setState(s => {
-            if (s.player.dead) return {};
+            if (s.player.dead || shielded) return {};
             if (dodged) return { ui: { ...s.ui, message: `💨 Esquivou de ${creature.name}!` } };
             const hp = Math.max(0, s.player.hp - dmg);
             if (hp <= 0) {
@@ -689,7 +692,7 @@ export function useHostileAI(opts: HostileOptions) {
             };
           });
           // GIRO DA MORTE (jacaré, grabSystem): 30% de agarrar na mordida — preso ~1,2 s, 3 pancadas; bater nele solta.
-          if (!useGameStore.getState().player.dead && !dodged && tryStartGrab(creatureId, creature.speciesId, Math.max(1, creature.attackPower))) {
+          if (!useGameStore.getState().player.dead && !dodged && !shielded && tryStartGrab(creatureId, creature.speciesId, Math.max(1, creature.attackPower))) {
             useGameStore.getState().setMessage(`🐊 ${creature.name} te AGARROU — giro da morte! Bata nele pra se soltar!`);
           }
         }

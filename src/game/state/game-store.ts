@@ -27,6 +27,8 @@ import { UNITS } from '../data/units';
 import { createResourceNode, harvestNode, rollCreatureLoot, createDeathBag } from '../systems/lootSystem';
 import { rollBonusLoot } from '../systems/lootEconomySystem';
 import { canCraft, craft } from '../systems/craftSystem';
+import { vehicleShield } from '../systems/vehicleShield';
+import { RECIPES } from '../data/recipes';
 import {
   createInitialBase, tickBase as resolveBase, placeBuilding as placeBaseBuilding, startUpgrade,
   enqueueUnit as enqueueBaseUnit, cancelQueueItem as cancelBaseQueueItem,
@@ -59,7 +61,7 @@ import {
   tickObjectives,
 } from '../systems/objectiveSystem';
 import { HUNT_AREA_RADIUS } from '../systems/objectiveSystem';
-import { grantMobilityKit, isMobilityItem, SURFBOARD_ID } from '../systems/zonaSulKit';
+import { grantKitItem, grantMobilityKit, isMobilityItem, SURFBOARD_ID } from '../systems/zonaSulKit';
 import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { lineWalkable } from '@/components/world/map-walk';
@@ -1785,6 +1787,23 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   craftItem: (recipeId: string) => {
     const state = get();
+    // KIT DE MOBILIDADE fabricado (Pedro 01/11: "custa recurso, sai da bolsa"; "tem nível pra liberar, lembra"): o nível
+    // trava (não gasta à toa), 1 por personagem, e entra na hotbar como sempre entrou (grantKitItem — não pesa)
+    const kitId = RECIPES[recipeId]?.result.itemId;
+    if (kitId && isMobilityItem(kitId)) {
+      const recipe = RECIPES[recipeId]!, name = ITEMS[kitId]?.name ?? kitId;
+      const msg = (m: string) => set(s => ({ ui: { ...s.ui, panelMessage: m, message: m } }));
+      if (!isUnlocked(kitId, state.player.level)) { msg(`🔒 ${name}: libera no nível ${unlockLevel(kitId)}.`); return; }
+      if (getItemCount(state.player.inventory, kitId) > 0) { msg(`Você já tem ${name}.`); return; }
+      const missing = recipe.materials.filter(m => getItemCount(state.player.inventory, m.itemId) < m.quantity);
+      if (missing.length) { msg(`Falta: ${missing.map(m => `${m.quantity - getItemCount(state.player.inventory, m.itemId)} ${ITEMS[m.itemId]?.name ?? m.itemId}`).join(', ')}.`); return; }
+      let inv = state.player.inventory;
+      for (const m of recipe.materials) inv = removeItem(inv, m.itemId, m.quantity);
+      const r = grantKitItem(inv, kitId);
+      set(s => ({ player: { ...s.player, inventory: r.inventory } }));
+      msg(`🔨 Pronto: ${name} — está na hotbar${r.grewBag ? ' (a mochila ganhou um espaço)' : ''}.`);
+      return;
+    }
     if (!canCraft(state.player.inventory, recipeId)) {
       set(s => ({ ui: { ...s.ui, panelMessage: 'Materiais insuficientes.' } }));
       return;
@@ -2555,6 +2574,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (amount <= 0) return;
     // ESQUIVA (dodgeSystem): no meio do rolamento o golpe ERRA — vale pra PvP e pra mordida vinda do host (online).
     if (isInvulnerable()) { set(s => ({ ui: { ...s.ui, message: `💨 Esquivou de ${sourceName}!` } })); return; }
+    // dirigindo (01/11): o CARRO toma no lugar do herói (vida própria; explodiu = você cai)
+    if (vehicleShield.absorb?.(Math.max(1, Math.round(amount)), sourceName)) return;
     const now = Date.now();
     set(s => {
       if (s.player.dead) return {};

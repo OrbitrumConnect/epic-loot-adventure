@@ -473,18 +473,15 @@ function Index() {
   if (!AUTH_ENABLED || authUser) worldUnlocked.current = true;
   const worldOn = ready && worldUnlocked.current;
   useCardWatchers(worldOn);
-  // PRANCHA = item FIXO de TODO personagem (Pedro 29/10: "ela já tem que entrar dentro do loot… estou nível 13, era pra
-  // ter"): entra ao entrar no jogo e VOLTA sempre que faltar — save da conta chegando depois, outro aparelho/aba com
-  // save antigo subindo pra conta, zerar o personagem… Não dá pra descartar (dropItem recusa). Conferência barata: só
-  // quando a mochila muda.
+  // KIT DE MOBILIDADE (prancha, asa-delta, skate): até 01/11 entrava de GRAÇA e voltava sempre que faltasse (29/10). Pedro
+  // 01/11: "custa recurso — sai da bolsa, precisa ter pra buildar; skate, asa e prancha ficam no loot" → agora é
+  // FABRICADO (Home · Base → Fabricar no campo; nível trava; 1 por personagem). Quem já tem continua com os seus (o save
+  // guarda; não dá pra descartar). Quem não tem ganha só o AVISO, uma vez por sessão.
   useEffect(() => {
     if (!worldOn) return;
-    useGameStore.getState().grantMobilityKit();
-    return useGameStore.subscribe((s, prev) => {
-      if (s.player.inventory === prev.player.inventory) return;
-      // falta algum do kit (prancha, asa-delta, skate voador)? devolve
-      if (!(['surfboard', 'hang_glider', 'hover_skate'] as const).every(id => s.player.inventory.slots.some(sl => sl.itemId === id))) s.grantMobilityKit();
-    });
+    const s = useGameStore.getState();
+    const falta = (['surfboard', 'hang_glider', 'hover_skate'] as const).filter(id => !s.player.inventory.slots.some(sl => sl.itemId === id));
+    if (falta.length === 3) s.setMessage('🔨 Prancha, asa-delta e skate voador agora são FABRICADOS: Home · Base → Fabricar no campo (cada um libera no seu nível).');
   }, [worldOn]);
 
   // Novo personagem (zerar): apaga o save LOCAL e, se logado, o da CONTA (senão recarrega

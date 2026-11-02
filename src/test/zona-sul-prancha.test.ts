@@ -162,10 +162,10 @@ describe('prancha = item OFICIAL do jogo (29/10: a Zona Sul entrou na casa do jo
     const back = parseLocalSave(JSON.stringify(createLocalSave({ ...st, player: { ...st.player, inventory: g.inventory } } as never)));
     expect(back?.player.inventory.slots.some((sl) => sl.itemId === SURFBOARD_ID)).toBe(true);
   });
-  it('a casa do jogo entrega a prancha ao ENTRAR NO JOGO (qualquer mapa) e de novo quando o save da conta chega', () => {
+  it('(01/11) o kit não é mais entregue de graça: é FABRICADO (receita com nível) — a casa do jogo só avisa quem não tem', () => {
     const idx = src('src/routes/index.tsx');
-    expect(idx).toContain('useGameStore.getState().grantMobilityKit();'); // 30/10: kit inteiro
-    expect(idx).toContain("(['surfboard', 'hang_glider', 'hover_skate'] as const).every(id => s.player.inventory.slots.some(sl => sl.itemId === id))");
+    expect(idx).not.toContain('useGameStore.getState().grantMobilityKit();');
+    expect(idx).toContain("(['surfboard', 'hang_glider', 'hover_skate'] as const).filter(id => !s.player.inventory.slots.some(sl => sl.itemId === id))");
   });
   it('a Zona Sul lê a prancha DA HOTBAR do jogo (nada de inventário paralelo); o loot só-leitura saiu', () => {
     const w = src('src/components/zona-sul/zona-sul-world.tsx');

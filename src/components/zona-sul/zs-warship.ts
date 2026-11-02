@@ -8,6 +8,7 @@
  *  - Navio contra navio de OUTRO jogador e vida do navio: próxima etapa (precisa do veículo do outro na rede).
  * Frente do navio = (sin yaw, cos yaw), igual ao herói e ao carro.
  */
+import { VEHICLE_COST } from '@/game/data/vehicle-costs';
 
 export const WARSHIP = {
   LENGTH: 36.8,                     // m (o encalhado tem 38) — Pedro 01/11: "aumentar o navio uns 15%" (era 32)
@@ -32,7 +33,7 @@ export const WARSHIP = {
    *  (SINK_S), quem está nele cai na água, e outro se CONSTRÓI na âncora com recurso da bolsa (BUILD_COST). */
   HP: 5000,
   SINK_S: 6,
-  BUILD_COST: [{ id: 'wood', n: 200 }, { id: 'iron_ore', n: 80 }, { id: 'stone', n: 40 }] as readonly { id: string; n: number }[],
+  BUILD_COST: VEHICLE_COST.war_ship as readonly { id: string; n: number }[], // 600 madeira + 240 ferro + 120 pedra (3×)
   /** E a até isto (m) da âncora com o navio afundado = construir outro */
   BUILD_NEAR: 30,
   /** ancorado no mar fundo mais perto disto: perto do Arpoador, do lado de Ipanema, FORA da onda (a zona de surf vai até

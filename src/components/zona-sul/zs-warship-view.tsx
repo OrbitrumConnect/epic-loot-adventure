@@ -57,12 +57,12 @@ export function warshipPose(s: Pick<ZsWarship, 'x' | 'z' | 'roll'> & { sinkT?: n
  *  da tela com a câmera baixa e perto. */
 export const SHIP_BAR_K = 0.82;
 /** BARRA DE VIDA do navio (Pedro: "barra de vida igual à do herói"): 2 planos virados pra câmera, no alto dos mastros. */
-export function makeShipHpBar(): { group: THREE.Group; set: (frac: number, show: boolean, camera: THREE.Camera) => void } {
+export function makeShipHpBar(W = 10, H = 0.7): { group: THREE.Group; set: (frac: number, show: boolean, camera: THREE.Camera) => void } {
   const group = new THREE.Group();
   const bg = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#111418', transparent: true, opacity: 0.75, depthWrite: false }));
   // (transparente também: os dois na MESMA fila de desenho — o fundo, semitransparente, não cobre o verde; renderOrder 9 > 8)
   const fill = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#3fbf5a', transparent: true, opacity: 1, depthWrite: false }));
-  bg.scale.set(10.4, 1.0, 1); fill.scale.set(10, 0.7, 1); fill.position.z = 0.01;
+  bg.scale.set(W * 1.04, H / 0.7, 1); fill.scale.set(W, H, 1); fill.position.z = 0.01;
   bg.renderOrder = 8; fill.renderOrder = 9;
   group.add(bg, fill); group.visible = false;
   const green = new THREE.Color('#3fbf5a'), red = new THREE.Color('#d8452f');
@@ -72,7 +72,7 @@ export function makeShipHpBar(): { group: THREE.Group; set: (frac: number, show:
       group.visible = show;
       if (!show) return;
       const f = Math.max(0, Math.min(1, frac));
-      fill.scale.x = Math.max(0.001, 10 * f); fill.position.x = -5 * (1 - f);
+      fill.scale.x = Math.max(0.001, W * f); fill.position.x = -(W / 2) * (1 - f);
       (fill.material as THREE.MeshBasicMaterial).color.copy(red).lerp(green, f);
       group.quaternion.copy(camera.quaternion);
     },

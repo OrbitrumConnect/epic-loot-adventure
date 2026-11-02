@@ -8,8 +8,10 @@ import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { CAR, type ZsCar } from './zs-car';
+import { CAR, carGone, type ZsCar } from './zs-car';
 import { zsWaterYAt } from './zs-terrain-data';
+import { makeShipHpBar } from './zs-warship-view';
+import { zsCtx } from './zs-context';
 
 export const CAR_URL = '/zona-sul/car.glb';
 /** Se a frente do modelo ficar pra trás, girar 180° aqui (conferido na tela). */
@@ -60,11 +62,33 @@ export function ZsCarView({ carRef, dimsRef }: { carRef: React.MutableRefObject<
     });
   }, []);
   const emitAcc = useRef(0), next = useRef(0), clock = useRef(0);
+  // VIDA (01/11): barra igual à do herói (a mesma do navio, menor) + EXPLOSÃO (bola de fogo + fumaça) ao zerar
+  const hpBar = useMemo(() => makeShipHpBar(3.2, 0.3), []);
+  const boom = useMemo(() => {
+    const fire = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: '#ffb347', transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
+    const smoke = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10), new THREE.MeshBasicMaterial({ color: '#2b2622', transparent: true, opacity: 0, depthWrite: false }));
+    fire.visible = false; smoke.visible = false; fire.renderOrder = 4; smoke.renderOrder = 3;
+    return { fire, smoke };
+  }, []);
 
-  useFrame((_, dt) => {
+  useFrame((state, dt) => {
     const c = carRef.current, g = group.current;
     if (!c || !g) return;
     clock.current += dt;
+    g.visible = !carGone(c);
+    const wreck = c.wreckT;
+    hpBar.group.position.set(c.x, c.y + (dimsRef.current?.height ?? 1.6) + 0.9, c.z);
+    hpBar.set(c.hp / CAR.HP, wreck === null && (c.hp < CAR.HP || zsCtx.driving), state.camera);
+    boom.fire.visible = boom.smoke.visible = wreck !== null && wreck < CAR.WRECK_S + 1.5;
+    if (wreck !== null) {
+      const kf = Math.min(1, wreck / 0.8), ks = Math.min(1, wreck / (CAR.WRECK_S + 1.5));
+      boom.fire.position.set(c.x, c.y + 1, c.z); boom.fire.scale.setScalar(1 + kf * 5);
+      (boom.fire.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - kf);
+      boom.smoke.position.set(c.x, c.y + 1.5 + ks * 6, c.z); boom.smoke.scale.setScalar(1.5 + ks * 7);
+      (boom.smoke.material as THREE.MeshBasicMaterial).opacity = 0.55 * (1 - ks);
+      g.position.set(c.x, c.y, c.z); g.rotation.set(0.25, c.yaw, 0.35); // carcaça tombada
+      return;
+    }
     const bob = Math.sin(clock.current * 2.1) * (c.flying ? 0.12 : 0.035);
     g.position.set(c.x, c.y + bob, c.z);
     g.rotation.set(0, c.yaw, 0);
@@ -94,6 +118,9 @@ export function ZsCarView({ carRef, dimsRef }: { carRef: React.MutableRefObject<
     <>
       <group ref={group}><primitive object={model} /></group>
       {rings.map((r, i) => <primitive key={i} object={r.mesh} />)}
+      <primitive object={hpBar.group} />
+      <primitive object={boom.fire} />
+      <primitive object={boom.smoke} />
     </>
   );
 }

@@ -11,7 +11,7 @@ describe('veículos e canhão pela rede', () => {
     expect(net).toMatch(/\.\.\.\(vehicles && vehicles\.length \? \{ v: vehicles\.map\(\(v\) => \(\{ \.\.\.v \}\)\) \} : \{\}\)/);
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
     expect(zs).toMatch(/if \(ship && !warshipGone\(ship\)\) netVehicles\.push\(\{ k: 's'/); // afundado de vez não vai
-    expect(zs).toMatch(/if \(car\) netVehicles\.push\(\{ k: 'c'/);
+    expect(zs).toMatch(/if \(car && !carGone\(car\)\) netVehicles\.push\(\{ k: 'c'/); // explodido de vez não vai
     expect(zs).toMatch(/<ZsRemoteVehicles myShip=\{shipRef\} myCar=\{carRef\} \/>/);
   });
   it('os dois ancorados no MESMO ponto (cada um tem o seu): desenha um só — longe, os dois', () => {

@@ -20,7 +20,8 @@ describe('pirata de acampamento atira', () => {
   }, 20_000); // importa o raider inteiro: na suíte cheia (paralela) passava dos 5 s padrão
   it('ligado: só no acampamento; clip de tiro + pistola na mão; IA solta rastro + som nos 2 golpes', () => {
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
-    expect(r).toMatch(/const gunner = isCampSpawn\(creatureId\) && CAMP_GUNNERS\.has\(speciesId\);/);
+    // 01/11: + os BANDIDOS armados soltos nos morros da Zona Sul (wild_bandit_) — a horda segue na faca
+    expect(r).toMatch(/const gunner = \(isCampSpawn\(creatureId\) \|\| isZsBandit\(creatureId\)\) && CAMP_GUNNERS\.has\(speciesId\);/);
     expect(r).toMatch(/forceGun=\{gunner\}/);
     expect(r).toMatch(/weapon=\{gunner \? <HeldItem c=\{c\} itemId="rifle" \/> : undefined\}/); // 26/10: fuzil = o do herói
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');

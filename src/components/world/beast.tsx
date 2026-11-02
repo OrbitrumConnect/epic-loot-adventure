@@ -136,8 +136,7 @@ export const BEASTS: Record<string, BeastSpec> = {
     ears: 'cone', earColor: '#3d2a1b', tail: 'stub', tailColor: '#3d2a1b', eyes: '#d84a28',
     extras: ['tusks', 'mane'], extraColor: '#e8e0c8', labelHeight: 1.9, ringRadius: 3.3,
     // 26/10: ×1,5 → alcance da mordida acompanha (do centro do corpo; senão o herói ficava "dentro" do jacaré).
-    // 01/11: o JACARÉ nada (persegue na Lagoa, só as costas pra fora)
-    tuning: { ...hostileBase, speed: 4.1, aggroRange: 7, attackRange: 3.6, leashRange: 16, hitVerb: 'investiu', landSwim: 0.55 },
+    tuning: { ...hostileBase, speed: 4.1, aggroRange: 7, attackRange: 3.6, leashRange: 16, hitVerb: 'investiu', landSwim: 0.55 }, // 01/11: o JACARÉ nada (persegue na Lagoa, só as costas pra fora)
   },
   bear: {
     scale: 1, body: [0.85, 0.75, 1.35], bodyColor: '#4b3424', legLen: 0.45, legThick: 0.2, legColor: '#3a281a',

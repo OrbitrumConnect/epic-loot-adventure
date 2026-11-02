@@ -1,3 +1,5 @@
+import { VEHICLE_COST } from './vehicle-costs';
+
 export type Recipe = {
   id: string;
   result: { itemId: string; quantity: number };
@@ -160,4 +162,13 @@ export const RECIPES: Record<string, Recipe> = {
     station: 'none',
     craftTime: 2,
   },
+  // KIT DE MOBILIDADE fabricado (Pedro 01/11: "custa recurso — sai da bolsa, precisa ter"): custo em vehicle-costs.ts;
+  // o nível (prancha 5, asa 8, skate 15) trava a receita (craftItem); quem já tem não fabrica outro.
+  surfboard: vehicleRecipe('surfboard'),
+  hang_glider: vehicleRecipe('hang_glider'),
+  hover_skate: vehicleRecipe('hover_skate'),
 };
+
+function vehicleRecipe(id: 'surfboard' | 'hang_glider' | 'hover_skate'): Recipe {
+  return { id, result: { itemId: id, quantity: 1 }, materials: VEHICLE_COST[id].map((c) => ({ itemId: c.id, quantity: c.n })), station: 'none', craftTime: 3 };
+}

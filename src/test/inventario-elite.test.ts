@@ -98,14 +98,16 @@ describe('pôr item numa tecla da hotbar (bug 29/10: soltar na hotbar só SELECI
 
 describe('prancha = item FIXO (Pedro 29/10: "estou nível 13, era pra ter a prancha")', () => {
   beforeEach(clean);
-  it('não dá pra descartar; a casa do jogo devolve sempre que faltar (sem janela de tempo); ficha esconde "Descartar"', () => {
+  it('não dá pra descartar; (01/11) o kit é FABRICADO — a casa do jogo não entrega mais de graça, só avisa; ficha esconde "Descartar"', () => {
     give('surfboard');
     const idx = useGameStore.getState().player.inventory.slots.findIndex(s => s.itemId === 'surfboard');
     useGameStore.getState().dropItem(idx);
     expect(useGameStore.getState().player.inventory.slots[idx]?.itemId).toBe('surfboard');
     expect(useGameStore.getState().ui.message).toMatch(/não dá pra descartar/);
     const idxSrc = fs.readFileSync('src/routes/index.tsx', 'utf8');
-    expect(idxSrc).toContain("s.grantMobilityKit();"); // 30/10: o kit inteiro (prancha, asa-delta, skate) volta sempre que faltar
+    // Pedro 01/11: "custa recurso — sai da bolsa, precisa ter pra buildar" → não volta sozinho; quem já tem continua
+    expect(idxSrc).not.toContain("s.grantMobilityKit();");
+    expect(idxSrc).toContain('agora são FABRICADOS: Home · Base → Fabricar no campo');
     expect(idxSrc).not.toMatch(/until = Date\.now\(\) \+ 45_000/);
     expect(fs.readFileSync('src/components/hud/character-sheet.tsx', 'utf8')).toContain('!isMobilityItem(picked.id)');
   });

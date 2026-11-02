@@ -93,7 +93,9 @@ import { ZsTerrainMesh } from './zs-terrain-mesh';
 import { ZsWater } from './zs-water';
 import { ZsVegetation } from './zs-vegetation';
 import { autoFollowDir, zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SWIM_GLIDE, ZS_SWIM_SINK, ZS_SWIM_SINK_MOVE, ZS_WALK, zsWaterState } from './zs-move';
-import { CAR, CAR_SEATS, carStep, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
+import { CAR, CAR_SEATS, carGone, carStep, damageCar, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
+import { costText, VEHICLE_COST } from '@/game/data/vehicle-costs';
+import { vehicleShield } from '@/game/systems/vehicleShield';
 import { ballLanding, cannonElevation, cannonSalvo, cannonSide, cannonSwing, carryOnDeck, damageWarship, findWarshipDock, nearWarshipHull, newWarship, WARSHIP, type WarshipSide, warshipGone, warshipLocal, warshipStep, warshipWorld, type ZsWarship } from './zs-warship';
 import { HELM_U, syncWarshipDeck, WARSHIP_DRAFT, warshipAim, warshipBoardSpot, warshipDims, warshipFx, warshipHalfBeam, ZsWarshipView, zsWarshipDeck } from './zs-warship-view';
 import { WAKE_BOARD, WAKE_SHIP, ZsWake, zsBoardWake } from './zs-wake';
@@ -129,6 +131,8 @@ const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving' | 'sailing', ent
 const netVehicles: NetVehicle[] = [];
 /** ÂNCORA do navio de guerra (onde ele nasce e onde se CONSTRÓI outro depois de afundar — 01/11) */
 const warshipDock: { at: { x: number; z: number; yaw: number } | null } = { at: null };
+/** GARAGEM do carro voador (onde ele nasce e onde se CONSTRÓI outro depois de explodir — 01/11) */
+const carGarage: { at: { x: number; z: number; yaw: number } | null } = { at: null };
 const ENTER_MS = 1100;
 
 /** Golpe/tiro: quanto dura a animação de ataque (s) — o herói PARA pra atacar (igual ao Vale). Giro do especial R. */
@@ -244,6 +248,16 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const onDeck = useRef(false);
   /** em pé no convés do navio de OUTRO jogador (id dele) + o tique do "levar junto" já aplicado (online, 01/11) */
   const onRemoteDeck = useRef<string | null>(null), remoteCarryTick = useRef(-1);
+  /** CARRO COM VIDA (01/11): dirigindo, o dano que viria no herói vai aqui (vehicleShield); zerou = explode */
+  const carShield = useMemo(() => (dmg: number, from: string) => {
+    const c = carRef.current;
+    if (!c || c.wreckT !== null) return false;
+    const boom = damageCar(c, dmg), st = useGameStore.getState();
+    if (boom) { audioManager.playWorld('cannon', 1); st.setMessage(`🔥 Seu carro EXPLODIU (${from})! Construa outro na garagem, na praia do Arpoador (E).`); }
+    else st.setMessage(`💥 ${from} acertou o carro! −${dmg} (carro ${c.hp}/${CAR.HP})`);
+    return true;
+  }, [carRef]);
+  useEffect(() => () => { vehicleShield.absorb = null; }, []);
   const facing = useRef(0);
   const hudAcc = useRef(0);
   const sun = useRef<THREE.DirectionalLight>(null);
@@ -306,7 +320,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const r2 = (n: number) => Math.round(n * 100) / 100, r3 = (n: number) => Math.round(n * 1000) / 1000;
     netVehicles.length = 0;
     if (ship && !warshipGone(ship)) netVehicles.push({ k: 's', x: r2(ship.x), z: r2(ship.z), yaw: r3(ship.yaw), s: r2(ship.speed), h: ship.hp });
-    if (car) netVehicles.push({ k: 'c', x: r2(car.x), z: r2(car.z), yaw: r3(car.yaw), y: r2(car.y) });
+    if (car && !carGone(car)) netVehicles.push({ k: 'c', x: r2(car.x), z: r2(car.z), yaw: r3(car.yaw), y: r2(car.y), h: car.hp });
     broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs), netVehicles);
     // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
     if (gs.player.dead && gs.player.respawnAt > 0 && Date.now() >= gs.player.respawnAt) {
@@ -343,11 +357,24 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     posAcc.current += dt;
     if (posAcc.current > 0.15) { posAcc.current = 0; const cur = gs.player.position; if (cur.x !== p.x || cur.z !== p.z) useGameStore.setState(s => ({ player: { ...s.player, position: { x: p.x, z: p.z } } })); }
     zsCtx.driving = drive.mode === 'driving';
+    // CARRO COM VIDA (01/11): no volante, o dano que viria no herói vai no carro (vehicleShield); explodiu = você cai
+    vehicleShield.absorb = (drive.mode === 'driving' || drive.mode === 'entering') && car && car.wreckT === null ? carShield : null;
+    if (car && car.wreckT !== null && (drive.mode === 'driving' || drive.mode === 'entering')) {
+      drive.mode = 'foot'; vehicleShield.absorb = null;
+      if (group.current) group.current.visible = true;
+      const pc = camera as THREE.PerspectiveCamera; if (pc.fov !== CHASE_FOV) { pc.fov = CHASE_FOV; pc.updateProjectionMatrix(); }
+      const side = (dimsRef.current?.width ?? 2.2) / 2 + 1.5;
+      p.x = car.x - Math.cos(car.yaw) * side; p.z = car.z + Math.sin(car.yaw) * side; p.y = Math.max(p.y, car.y);
+      movement.current.set(p.x, 0, p.z); vy.current = 2; grounded.current = false;
+    }
     // NAVIO DE GUERRA a pé (01/11): o que o E faz agora — no convés perto do timão = pilotar; no convés longe = descer
     // (pula na água); fora, perto do CASCO = subir a bordo (qualquer nível: amigo/inimigo sobe — pirataria). Também no
     // navio de OUTRO jogador (online): sobe e desce (pilotar só o seu — o leme dele está na tela dele). `who` = id dele.
-    const shipSel: { act: 'pilotar' | 'descer' | 'subir' | 'construir'; who: string | null } | null = (() => {
+    const shipSel: { act: 'pilotar' | 'descer' | 'subir' | 'construir' | 'construir_carro'; who: string | null } | null = (() => {
       if (drive.mode !== 'foot' || dead) return null;
+      // o MEU carro explodiu: perto da garagem = construir outro (01/11) — mesmo canal de ação (E / botão do arco)
+      const gg = carGarage.at;
+      if (car && carGone(car) && gg && Math.hypot(gg.x - p.x, gg.z - p.z) < CAR.BUILD_NEAR) return { act: 'construir_carro', who: null };
       // o MEU afundou: perto da âncora = construir outro (recurso da bolsa — 01/11)
       const dk = warshipDock.at;
       if (ship && warshipGone(ship) && dk && Math.hypot(dk.x - p.x, dk.z - p.z) < WARSHIP.BUILD_NEAR) return { act: 'construir', who: null };
@@ -362,7 +389,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const selPose = shipSel?.who ? remoteDecks.get(shipSel.who)?.pose ?? null : ship;
     {
       const tc = useZsTouch.getState(), drv = drive.mode === 'driving', wet = zsCtx.inWater && drive.mode === 'foot';
-      const near = !!car && drive.mode === 'foot' && !dead && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
+      const near = !!car && car.wreckT === null && drive.mode === 'foot' && !dead && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
       const sail = drive.mode === 'sailing', act = near ? null : shipAct, nearSh = !!act;
       if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet || tc.sailing !== sail || tc.nearShip !== nearSh || tc.shipAct !== act) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet, sailing: sail, nearShip: nearSh, shipAct: act });
     }
@@ -373,9 +400,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (input.eTap) {
       input.eTap = false;
       const lvl = useGameStore.getState().player.level;
-      if (drive.mode === 'foot' && car && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST && !isUnlocked('flying_car', lvl)) {
+      if (drive.mode === 'foot' && car && car.wreckT === null && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST && !isUnlocked('flying_car', lvl)) {
         useGameStore.getState().setMessage(lockedMessage('O carro voador', 'flying_car'));
-      } else if (drive.mode === 'foot' && car && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST) {
+      } else if (drive.mode === 'foot' && car && car.wreckT === null && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST) {
         drive.mode = 'entering'; drive.enterAt = now; facing.current = Math.atan2(car.x - p.x, car.z - p.z);
       } else if (drive.mode === 'driving' && car) {
         drive.mode = 'foot';
@@ -399,12 +426,23 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       } else if (ship && shipAct === 'construir' && warshipDock.at) {
         // o MEU navio afundou: constrói outro na âncora com recurso da BOLSA (tabela dos veículos, 01/11)
         const r = useGameStore.getState().spendItems(WARSHIP.BUILD_COST);
-        const nome: Record<string, string> = { wood: 'madeira', iron_ore: 'ferro', stone: 'pedra' };
-        if (!r.ok) useGameStore.getState().setMessage('🔨 Pra construir o navio falta: ' + r.missing.map((m) => `${m.n} ${nome[m.id] ?? m.id}`).join(', '));
+        if (!r.ok) useGameStore.getState().setMessage('🔨 Pra construir o navio falta: ' + costText(r.missing));
         else {
           const d = warshipDock.at;
           shipRef.current = newWarship(d.x, d.z, d.yaw);
-          useGameStore.getState().setMessage('🔨⚓ Navio de guerra construído na âncora! (' + WARSHIP.BUILD_COST.map((c) => `−${c.n} ${nome[c.id] ?? c.id}`).join(', ') + ')');
+          useGameStore.getState().setMessage('🔨⚓ Navio de guerra construído na âncora! (−' + costText(WARSHIP.BUILD_COST).replace(/ \+ /g, ', −') + ')');
+        }
+      } else if (car && shipAct === 'construir_carro' && carGarage.at) {
+        // o MEU carro explodiu: constrói outro na garagem (nível do carro + recurso da bolsa — 01/11)
+        if (!isUnlocked('flying_car', lvl)) useGameStore.getState().setMessage(lockedMessage('O carro voador', 'flying_car'));
+        else {
+          const r = useGameStore.getState().spendItems(VEHICLE_COST.flying_car);
+          if (!r.ok) useGameStore.getState().setMessage('🔨 Pra construir o carro falta: ' + costText(r.missing));
+          else {
+            const gg = carGarage.at;
+            carRef.current = newCar(gg.x, gg.z, gg.yaw, t);
+            useGameStore.getState().setMessage('🔨🚗 Carro voador construído na garagem! (−' + costText(VEHICLE_COST.flying_car).replace(/ \+ /g, ', −') + ')');
+          }
         }
       } else if (selPose && shipAct === 'descer') {
         // no convés (o meu ou o do outro), longe do timão → DESCE: pula na água do lado mais perto (fora do casco)
@@ -928,8 +966,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       let best = '', bd = 700;
       for (const l of ZS_LANDMARKS) { const d = Math.hypot(l.x - p.x, l.z - p.z); if (d < bd) { bd = d; best = `${l.name} (${Math.round(d)} m)`; } }
       if (zsCave.inCave) best = `${caveRoomName(p.x, p.z)} (caverna, ${Math.max(0, Math.round(zsHeightAt(t, p.x, p.z) - p.y))} m de rocha em cima)`;
-      const nearCar = car && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
-      const shipTxt = nearCar || !shipAct ? '' : shipAct === 'construir' ? 'seu navio afundou · E = construir outro (' + WARSHIP.BUILD_COST.map((c) => c.n + ' ' + ({ wood: 'madeira', iron_ore: 'ferro', stone: 'pedra' } as Record<string, string>)[c.id]).join(' · ') + ')'
+      const nearCar = car && car.wreckT === null && drive.mode === 'foot' && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
+      const shipTxt = nearCar || !shipAct ? '' : shipAct === 'construir' ? 'seu navio afundou · E = construir outro (' + costText(WARSHIP.BUILD_COST) + ')'
+        : shipAct === 'construir_carro' ? 'seu carro explodiu · E = construir outro (' + costText(VEHICLE_COST.flying_car) + ')'
         : shipAct === 'subir' ? 'E = subir no navio de guerra'
         : shipAct === 'pilotar' ? 'E = pilotar (timão' + (isUnlocked(WARSHIP.UNLOCK_ID, gs.player.level) ? '' : ', nível ' + unlockLevel(WARSHIP.UNLOCK_ID)) + ')'
         : shipSel?.who ? 'no navio de outro jogador · E = descer (pula na água)' : 'no convés · timão na popa · E = descer (pula na água)';
@@ -1169,7 +1208,7 @@ const carBtn = (label: string, icon: React.ReactNode): ArcButton => ({ id: 'zs-c
 function ZsTouchArc() {
   const driving = useZsTouch(s => s.driving), nearCar = useZsTouch(s => s.nearCar), inWater = useZsTouch(s => s.inWater);
   const sailing = useZsTouch(s => s.sailing), nearShip = useZsTouch(s => s.nearShip), shipAct = useZsTouch(s => s.shipAct);
-  const shipLabel = shipAct === 'pilotar' ? 'Pilotar (timão)' : shipAct === 'descer' ? 'Descer do navio' : shipAct === 'construir' ? 'Construir navio' : 'Subir no navio';
+  const shipLabel = shipAct === 'pilotar' ? 'Pilotar (timão)' : shipAct === 'descer' ? 'Descer do navio' : shipAct === 'construir' ? 'Construir navio' : shipAct === 'construir_carro' ? 'Construir carro' : 'Subir no navio';
   useEffect(() => {
     if (sailing) {
       // NAVIO DE GUERRA (01/11): canhões de cada costado + desembarcar; o joystick é o leme/vela; a mira aparece sozinha
@@ -1256,6 +1295,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       heroRef.current.set(at.x, at.y ?? zsHeightAt(tt, at.x, at.z), at.z); focusRef.current.copy(heroRef.current);
       movement.current.set(at.x, 0, at.z);
       carRef.current = newCar(at.x + 3, at.z - 2, 0, tt);
+      carGarage.at = { x: at.x + 3, z: at.z - 2, yaw: 0 }; // GARAGEM: onde ele nasce e onde se constrói outro (01/11)
       { const dock = findWarshipDock((x, z) => zsSwimmable(tt, x, z, WARSHIP.MIN_DEPTH), WARSHIP.DOCK_NEAR); warshipDock.at = dock; shipRef.current = dock ? newWarship(dock.x, dock.z, dock.yaw) : null; }
       // o JOGO passa a viver na Zona Sul: chão/terra/limites/zona segura/acampamentos dela + a fauna por região
       const prof = zsWorldProfile(tt);

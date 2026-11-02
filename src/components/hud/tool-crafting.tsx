@@ -5,6 +5,9 @@ import { ITEMS } from '@/game/data/items';
 import { RECIPES } from '@/game/data/recipes';
 import { ItemSprite } from './item-sprite';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
+import { getItemCount } from '@/game/systems/inventorySystem';
+import { isUnlocked, unlockLevel } from '@/game/systems/unlockSystem';
+import { isMobilityItem } from '@/game/systems/zonaSulKit';
 
 /**
  * Receitas de campo: tudo que o jogador faz sem bancada, com o que achou no
@@ -13,11 +16,14 @@ import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 const FIELD_RECIPES = [
   'axe', 'pickaxe', 'iron_axe', 'iron_pickaxe',
   'cooked_meat', 'sinew_traps', 'hunter_bow',
+  // 01/11 (Pedro: "custa recurso — sai da bolsa"): o kit de mobilidade é fabricado (nível trava; 1 por personagem)
+  'surfboard', 'hang_glider', 'hover_skate',
 ];
 
 /** Seção de fabricação das ferramentas de coleta. Mostra materiais, o que o jogador tem e o motivo quando não dá. */
 export function ToolCrafting() {
   const inventory = useGameStore(s => s.player.inventory);
+  const level = useGameStore(s => s.player.level);
   const craftItem = useGameStore(s => s.craftItem);
   const ids = FIELD_RECIPES.filter(id => RECIPES[id]);
 
@@ -34,8 +40,13 @@ export function ToolCrafting() {
         const item = ITEMS[recipe.result.itemId];
         const mats = getMaterialStatus(inventory, id);
         const missing = mats.filter(m => !m.ok);
-        const ok = canCraft(inventory, id);
-        const reason = ok ? '' : missing.length > 0
+        // kit de mobilidade: trava no nível, 1 por personagem, não pesa (não depende de espaço na mochila)
+        const kit = isMobilityItem(recipe.result.itemId);
+        const locked = kit && !isUnlocked(recipe.result.itemId, level);
+        const owned = kit && getItemCount(inventory, recipe.result.itemId) > 0;
+        const ok = kit ? !locked && !owned && missing.length === 0 : canCraft(inventory, id);
+        const reason = ok ? '' : locked ? `Libera no nível ${unlockLevel(recipe.result.itemId)}` : owned ? 'Você já tem'
+          : missing.length > 0
           ? `Falta: ${missing.map(m => `${m.need - m.have} ${m.name}`).join(', ')}`
           : 'Mochila cheia';
         return (

@@ -26,6 +26,10 @@ export const CAR = {
   ENTER_DIST: 6, EXIT_MAX_SPEED: 3, EXIT_MAX_ALT: 2,
   LENGTH: 7.4,                                       // m — Pedro: "uns 20% maior" (4,6 → 5,5); 29/10 "+35%" (5,5 → 7,4); 5 lugares
   WAVE_GRAB: 5,                                      // quão rápido a onda agarra o carro rente à água (1/s)
+  // VIDA (Pedro 01/11: "carro com vida e barra igual à do herói; explodiu, builda outro com recurso"): dirigindo, o
+  // dano que viria no herói vai no carro; zerou = EXPLODE (o herói cai), queima WRECK_S e some; outro se constrói
+  // na GARAGEM (onde ele nasce) com VEHICLE_COST.flying_car, a até BUILD_NEAR m dela
+  HP: 600, WRECK_S: 3, BUILD_NEAR: 18,
 } as const;
 const PUSH = { x: 0, z: 0 };
 
@@ -39,11 +43,26 @@ export type ZsCar = {
   /** energia de voo (s), recarga e se está no ar */
   energy: number; cooldownUntil: number; flying: boolean;
   overWater: boolean; steerVis: number;
+  /** vida (CAR.HP) e há quanto tempo explodiu (null = inteiro) */
+  hp: number; wreckT: number | null;
 };
 export type ZsCarInput = { throttle: number; steer: number; up?: boolean; down?: boolean; turbo?: boolean };
 
 export function newCar(x: number, z: number, yaw: number, t: ZsTerrain): ZsCar {
-  return { x, z, yaw, y: carSurface(t, x, z).y, vx: 0, vz: 0, vy: 0, yawRate: 0, speed: 0, alt: 0, altitude: 0, energy: CAR.FLY_S, cooldownUntil: 0, flying: false, overWater: false, steerVis: 0 };
+  return { x, z, yaw, y: carSurface(t, x, z).y, vx: 0, vz: 0, vy: 0, yawRate: 0, speed: 0, alt: 0, altitude: 0, energy: CAR.FLY_S, cooldownUntil: 0, flying: false, overWater: false, steerVis: 0, hp: CAR.HP, wreckT: null };
+}
+
+/** Dano no carro (dirigindo, no lugar do herói). Devolve se EXPLODIU agora. */
+export function damageCar(c: ZsCar, dmg: number): boolean {
+  if (c.wreckT !== null || !(dmg > 0)) return false;
+  c.hp = Math.max(0, c.hp - Math.round(dmg));
+  if (c.hp > 0) return false;
+  c.wreckT = 0;
+  return true;
+}
+/** Explodiu e já queimou (some do mundo e da rede); outro se constrói na garagem. */
+export function carGone(c: ZsCar | null): boolean {
+  return !!c && c.wreckT !== null && c.wreckT >= CAR.WRECK_S;
 }
 
 /**
@@ -57,6 +76,14 @@ export function carSurface(t: ZsTerrain, x: number, z: number, yRef = Infinity):
 
 /** Um passo do carro (mexe em `c`). `now` em ms. */
 export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now: number): void {
+  // EXPLODIU: carcaça cai até o chão/água e para (some depois de CAR.WRECK_S)
+  if (c.wreckT !== null) {
+    c.wreckT += dt; c.vx = 0; c.vz = 0; c.speed = 0; c.yawRate = 0; c.alt = 0;
+    const floor = carSurface(t, c.x, c.z).y - CAR.HOVER;
+    c.vy -= 15 * dt; c.y = Math.max(floor, c.y + c.vy * dt); if (c.y <= floor) c.vy = 0;
+    c.altitude = 0; c.flying = false;
+    return;
+  }
   // ── altura pedida: Espaço sobe, C desce, soltou fica ─────────────────────────────────────────────────────────
   const canFly = now >= c.cooldownUntil && c.energy > 0;
   if (inp.up && canFly) c.alt = Math.min(CAR.MAX_ALT, c.alt + CAR.CLIMB * dt);

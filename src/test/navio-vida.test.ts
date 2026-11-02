@@ -20,8 +20,8 @@ describe('navio de guerra — vida, afundar e construir outro', () => {
     for (let i = 0; i < WARSHIP.SINK_S * 10; i++) warshipStep(sea, s, { throttle: 0, steer: 0 }, 0.1);
     expect(warshipGone(s)).toBe(true);
   });
-  it('construir outro custa da bolsa (200 madeira, 80 ferro, 40 pedra) e nasce inteiro na âncora', () => {
-    expect(WARSHIP.BUILD_COST).toEqual([{ id: 'wood', n: 200 }, { id: 'iron_ore', n: 80 }, { id: 'stone', n: 40 }]);
+  it('construir outro custa da bolsa (600 madeira, 240 ferro, 120 pedra — "os de nível alto 3×") e nasce inteiro na âncora', () => {
+    expect(WARSHIP.BUILD_COST).toEqual([{ id: 'wood', n: 600 }, { id: 'iron_ore', n: 240 }, { id: 'stone', n: 120 }]);
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
     expect(zs).toMatch(/const r = useGameStore\.getState\(\)\.spendItems\(WARSHIP\.BUILD_COST\);/);
     expect(zs).toMatch(/shipRef\.current = newWarship\(d\.x, d\.z, d\.yaw\);/);

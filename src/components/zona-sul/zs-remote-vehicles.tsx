@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { useNet } from '@/net/multiplayer';
 import { buildWarshipModel, makeShipHpBar, SHIP_BAR_K, WARSHIP_URL, warshipDims, warshipPose, zsWarshipDeck } from './zs-warship-view';
 import { buildCarModel, CAR_URL } from './zs-car-view';
+import { CAR } from './zs-car';
 import type { ShipCollider } from './zs-ship';
 import { WARSHIP, type ZsWarship } from './zs-warship';
 
@@ -59,7 +60,7 @@ export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefOb
         let s = slots.current.get(key);
         if (!s) {
           const obj = v.k === 's' ? buildWarshipModel(ship).holder : buildCarModel(car).holder;
-          const bar = v.k === 's' ? makeShipHpBar() : null;
+          const bar = v.k === 's' ? makeShipHpBar() : makeShipHpBar(3.2, 0.3);
           g.add(obj); if (bar) g.add(bar.group);
           s = { kind: v.k, obj, pose: { x: v.x, z: v.z, yaw: v.yaw }, y: v.y ?? 0, bar, sinkT: null };
           slots.current.set(key, s);
@@ -94,6 +95,9 @@ export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefOb
           const bob = Math.sin(t * 2.1) * 0.035;
           s.obj.position.set(s.pose.x, s.y + bob, s.pose.z);
           s.obj.rotation.set(0, s.pose.yaw, 0);
+          // vida do carro dele (01/11): barra igual à do herói quando ferido
+          const ch = v.h ?? CAR.HP;
+          if (s.bar) { s.bar.group.position.set(s.pose.x, s.y + 2.5, s.pose.z); s.bar.set(ch / CAR.HP, !same && ch > 0 && ch < CAR.HP, state.camera); }
         }
       }
     }
