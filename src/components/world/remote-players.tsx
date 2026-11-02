@@ -21,7 +21,8 @@ function sameLayerAsMe(p: { x: number; z: number; y?: number | undefined }): boo
   return (Number.isFinite(p.y) ? u.layer(p.x, p.y as number, p.z) : 0) === layers.player;
 }
 
-const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump']);
+// 02/11 (PvP): agachado parado/andando/atirando e atirando no ar — os outros veem igual
+const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump', 'crouch', 'crouch_walk', 'crouch_attack', 'jump_shoot']);
 const LABEL_RANGE = 12;
 const REMOTE_SOUND_RANGE = 35; // m: além disso o ataque do outro é mudo
 const noRaycast = () => {};
@@ -47,7 +48,8 @@ function RemotePlayer({ id }: { id: string }) {
     action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
     // SOM do ataque dele (online): quando a ação vira 'attack', toca o som da arma que ele tem na
     // mão, mais baixo quanto mais longe (some a partir de ~35 m).
-    if (p.action === 'attack' && lastAction.current !== 'attack') {
+    const atk = (a: string) => a === 'attack' || a === 'crouch_attack' || a === 'jump_shoot';
+    if (atk(p.action) && !atk(lastAction.current)) {
       const me = useGameStore.getState().player.position;
       const gain = 1 - Math.hypot(me.x - p.x, me.z - p.z) / REMOTE_SOUND_RANGE;
       const kind = heldKindFor(p.w ?? null);

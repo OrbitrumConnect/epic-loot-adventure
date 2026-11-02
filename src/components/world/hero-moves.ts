@@ -20,8 +20,62 @@ export const HERO_EXTRA_CLIPS = {
   slash1: '/models/red/slash_1.glb',              // "slash", "slash (3)", "slash (5)"
   slash2: '/models/red/slash_2.glb',
   slash3: '/models/red/slash_3.glb',
+  // PvP (02/11, Pedro: "pular atirando, agachar… aproveitar o máximo do pack, sem quebrar; o idle não muda"):
+  crouchIdle: '/models/red/crouch_idle.glb',      // Sword&Shield "crouch idle"
+  crouchWalk: '/models/red/crouch_walk.glb',      // Sword&Shield "crouching" (anda agachado ~0,55 m/s)
+  aimGunIdle: '/models/red/aim_gun_idle.glb',     // Shooter "rifle aiming idle" (só a metade de cima → agachado de fuzil)
+  jumpGunFwd: '/models/red/jump_gun_fwd.glb',     // Shooter "jump forward"
+  jumpGunBack: '/models/red/jump_gun_back.glb',   // Shooter "jump backward"
 } as const;
 export type HeroExtraClip = keyof typeof HERO_EXTRA_CLIPS;
+/** Clips de AGACHAR: o quadril DESCE (não trava na altura de pé, como os outros clips do herói "fooled"). */
+export const CROUCH_CLIPS: readonly HeroExtraClip[] = ['crouchIdle', 'crouchWalk'];
+/** Velocidade (m/s) que o clip de andar agachado anda no Mixamo — a cadência acompanha a velocidade real. */
+export const CROUCH_WALK_CLIP_SPEED = 0.55;
+
+/** Agachado (parado / andando / atirando)? */
+export function isCrouchAction(a: string | null | undefined): boolean {
+  return a === 'crouch' || a === 'crouch_walk' || a === 'crouch_attack';
+}
+/** Clip do agachado: de FUZIL/pistola = pernas agachadas + tronco segurando a arma apontada (`…Gun`, montado na carga);
+ *  espada/arco/mão = o agachar de espada e escudo inteiro. */
+export function crouchClipFor(gun: boolean, moving: boolean): string {
+  return (moving ? 'crouchWalk' : 'crouchIdle') + (gun ? 'Gun' : '');
+}
+/** Pulo: com fuzil/pistola o pulo de fuzil (pra frente ou, andando de costas, pra trás); o resto, o de sempre. */
+export function jumpClipFor(gun: boolean, dir: MoveDir): string {
+  return gun ? (dir === 'back' ? 'jumpGunBack' : 'jumpGunFwd') : 'jump';
+}
+/** A metade de cima do ATAQUE por cima das pernas (agachado atirando / atirando no ar). */
+export function attackUpperFor(kind: 'bow' | 'gun' | 'melee'): string {
+  return kind === 'gun' ? 'attackGunUp' : kind === 'bow' ? 'attackBowUp' : 'slashUp';
+}
+/** Peso da camada de cima do ataque (por cima das pernas agachadas / do pulo): o tronco é o do tiro. */
+export const ATTACK_UPPER_WEIGHT = 3;
+
+/** Junta as PERNAS (e o quadril) de um clip com a METADE DE CIMA de outro — ex.: agachado de espada + tronco do fuzil. */
+export function lowerPlusUpper(lower: THREE.AnimationClip, upper: THREE.AnimationClip, name: string): THREE.AnimationClip {
+  const out = lower.clone();
+  out.name = name;
+  out.tracks = [...lower.tracks.filter((t) => !isUpperBodyTrack(t.name)).map((t) => t.clone()),
+    ...upper.tracks.filter((t) => isUpperBodyTrack(t.name)).map((t) => t.clone())];
+  out.duration = lower.duration;
+  return out;
+}
+/**
+ * Quadril do clip AGACHADO na escala do modelo: a altura de pé do clip (`clipStandY`, do idle do mesmo esqueleto Mixamo)
+ * vira a altura de pé do modelo (`standY`); o agachado desce na mesma proporção. Sem standY (modelo comum) fica igual.
+ * Trabalha numa CÓPIA.
+ */
+export function scaleHipsTo(clip: THREE.AnimationClip, standY: number | null, clipStandY: number | null): THREE.AnimationClip {
+  if (standY === null || clipStandY === null || !Number.isFinite(clipStandY) || Math.abs(clipStandY) < 1e-6) return clip;
+  const out = clip.clone();
+  const tr = out.tracks.find((t) => /Hips\.position$/i.test(t.name));
+  if (!tr) return out;
+  const s = standY / clipStandY, v = tr.values;
+  for (let i = 1; i < v.length; i += 3) v[i] = v[i]! * s;
+  return out;
+}
 
 export const SLASH_COMBO: HeroExtraClip[] = ['slash1', 'slash2', 'slash3'];
 export const HIT_CLIPS: HeroExtraClip[] = ['hit1', 'hit2'];

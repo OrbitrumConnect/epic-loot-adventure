@@ -70,9 +70,9 @@ import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsHarvestNodes, createZsNewAreaTrees } from '@/game/systems/zsHarvestSystem';
 import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
-import { useZsTouch, zsAttack, zsCave, zsCtx } from './zs-context';
+import { useZsTouch, zsAttack, zsCave, zsCrouch, zsCtx, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
-import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, Gauge, LogOut, Ship } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
 import { CAVE_MOUTH_ZONE, caveCamFit, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
 import { ZsCave } from './zs-cave-view';
 import { layers, resetLayers, sameLayerAsPlayer } from '@/game/systems/layerSystem';
@@ -182,6 +182,8 @@ const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch:
   carCam: 'chase' as 'chase' | 'cockpit', cockYaw: 0, cockPitch: 0,
   /** botão LEVANTAR na tela (celular) */
   popTap: false,
+  /** AGACHAR (02/11): Ctrl (toque, alterna) ou o botão do arco no celular */
+  crouchTap: false,
   /** tecla P: mostrador de FPS / desenhos / triângulos */
   perf: false,
   /** NAVIO DE GUERRA: segurando a mira (botão direito) · pedido de tiro ('aim' = lado pra onde a câmera olha) */
@@ -235,6 +237,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const ride = useRef<RideState | null>(null);
   const tumble = useRef(0), spin = useRef(0);
   const boardYaw = useRef(0), popOk = useRef(false), lean = useRef(0), tubeCam = useRef(0), shiftWas = useRef(false);
+  /** agachado, o Espaço levantou: não pula enquanto ele não for solto (02/11) */
+  const crouchStand = useRef(false);
   /** caverna: na poça (anda mais devagar) · quanto da distância da câmera cabe sem entrar na rocha (0..1) */
   const caveWade = useRef(false), camFit = useRef(1);
   const action = useRef<HeroAction>('idle');
@@ -392,8 +396,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     {
       const tc = useZsTouch.getState(), drv = drive.mode === 'driving', wet = zsCtx.inWater && drive.mode === 'foot';
       const near = !!car && car.wreckT === null && drive.mode === 'foot' && !dead && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
-      const sail = drive.mode === 'sailing', act = near ? null : shipAct, nearSh = !!act;
-      if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet || tc.sailing !== sail || tc.nearShip !== nearSh || tc.shipAct !== act) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet, sailing: sail, nearShip: nearSh, shipAct: act });
+      const sail = drive.mode === 'sailing', act = near ? null : shipAct, nearSh = !!act, cr = zsCrouch.on;
+      if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet || tc.sailing !== sail || tc.nearShip !== nearSh || tc.shipAct !== act || tc.crouched !== cr) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet, sailing: sail, nearShip: nearSh, shipAct: act, crouched: cr });
     }
     ambAcc.current += dt;
     if (ambAcc.current > 0.1) { ambAcc.current = 0; zsAmbience.update(ambienceAt(t, p, car, ride.current?.mode === 'ride' ? ride.current.speed : 0, ship && (drive.mode === 'sailing' || onDeck.current) ? ship.speed : 0)); }
@@ -642,6 +646,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       else skate.current = null;
       const gl = glide.current, sk = skate.current;
       gearRef.glider.visible = !!gl; gearRef.skate.visible = !!sk;
+      if (gl || sk) zsCrouch.on = false; // na asa/no skate não tem agachado
       if (gl || sk) {
         const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
         const fwd = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
@@ -726,7 +731,11 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const shift = k.has('ShiftLeft') || k.has('ShiftRight') || Math.hypot(input.stick.x, input.stick.z) > 0.92 || Math.hypot(virtualMove.x, virtualMove.z) > 0.92;
     const moveBonus = 1 + effectiveAttributes(gs.player).moveSpeed / 100; // atributo Velocidade (igual ao Vale)
     let autoRun = false, dodging = false;
-    const run = shift && !water0.swimming;
+    // AGACHAR (02/11, PvP): Ctrl/botão alterna — só a pé, em terra (na água, no carro, no navio, morto: em pé)
+    const landFoot = drive.mode === 'foot' && !dead && !water0.swimming && !water0.wading;
+    if (input.crouchTap) { input.crouchTap = false; if (landFoot) zsCrouch.on = !zsCrouch.on; }
+    if (!landFoot) zsCrouch.on = false;
+    const run = shift && !water0.swimming && !zsCrouch.on; // agachado não corre
     const wantMove = Math.hypot(wx, wz) > 0.05 && drive.mode === 'foot';
     // Piloto automático também na ÁGUA: sem input manual, o nado/vadeio segue o alvo do piloto (movement.current),
     // igual ao branch de TERRA mais abaixo. Sem isto o herói fica boiando preso quando o AUTO manda caçar e ele está
@@ -737,7 +746,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const af = autoFollowDir(movement.current.x, movement.current.z, p.x, p.z);
       if (af.has) { awx = af.x; awz = af.z; aWantMove = true; }
     }
-    let v = (run ? ZS_RUN : ZS_WALK) * (water0.wading ? 0.75 : 1) * moveBonus;
+    let v = (zsCrouch.on ? ZS_CROUCH_SPEED : run ? ZS_RUN : ZS_WALK) * (water0.wading ? 0.75 : 1) * moveBonus;
     let moving = wantMove;
     let st;
     const onBoard = selectedItemId(useGameStore.getState()) === SURFBOARD_ID && water0.swimming && drive.mode === 'foot';
@@ -815,15 +824,17 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (wantMove) movement.current.set(p.x, 0, p.z);
       else if (!dead && drive.mode === 'foot') {
         const ax = movement.current.x - p.x, az = movement.current.z - p.z, al = Math.hypot(ax, az);
-        if (al > 0.15) { mx = ax / al; mz = az / al; mv = ZS_RUN * moveBonus; autoRun = true; } // o piloto corre
+        if (al > 0.15) { mx = ax / al; mz = az / al; mv = ZS_RUN * moveBonus; autoRun = true; zsCrouch.on = false; } // o piloto corre (em pé)
       }
-      if (atkT.current > 0 || isGrabbed() || dead || drive.mode !== 'foot') { mx = 0; mz = 0; }
+      // atacar PARA o herói no chão; no AR (pulando atirando, 02/11) o pulo segue o embalo
+      if ((atkT.current > 0 && grounded.current) || isGrabbed() || dead || drive.mode !== 'foot') { mx = 0; mz = 0; }
       const dreq = takeDodgeRequest();
       if (dreq && !isGrabbed() && !dead && drive.mode === 'foot') {
         const d = dreq.dir ?? (mx || mz ? { x: mx, z: mz } : { x: Math.sin(facing.current), z: Math.cos(facing.current) });
         if (startDodge(d.x, d.z)) atkT.current = 0;
       }
       const dg = activeDodge(); dodging = !!dg;
+      if (dg) zsCrouch.on = false; // rolou: levanta
       const wadeK = caveNow && caveWade.current ? 0.7 : 1; // poça da caverna: água no joelho
       let dx = mx * mv * dt * wadeK, dz = mz * mv * dt * wadeK;
       if (dg) { const sp = dodgeSpeed(dg.t); dx = dg.dirX * sp * dt; dz = dg.dirZ * sp * dt; }
@@ -866,7 +877,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (!grounded.current && vy.current > 0 && caveField(p.x, p.y + 1.85, p.z) > -0.05) vy.current = 0;
     }
     // vertical: pulo (só fora d'água funda) + chão / nado
-    if (k.has('Space') && grounded.current && !st.swimming && drive.mode === 'foot' && !dead) { vy.current = 6.2; grounded.current = false; }
+    // agachado: o Espaço LEVANTA (não pula — igual aos jogos de tiro); só pula de novo depois de soltar
+    if (k.has('Space') && zsCrouch.on) { zsCrouch.on = false; crouchStand.current = true; }
+    if (!k.has('Space')) crouchStand.current = false;
+    if (k.has('Space') && !crouchStand.current && grounded.current && !st.swimming && drive.mode === 'foot' && !dead) { vy.current = 6.2; grounded.current = false; }
     dive.current = st.swimming && drive.mode === 'foot' ? zsDiveStep(dive.current, k.has('KeyC'), ZS_WATER_Y - st.ground, dt) : 0;
     // altura de quem nada vai junto: dentro do tubo o nível é o chão da cavidade (dá pra entrar), por fora é o topo
     const rm = ride.current?.mode, rolling = rm === 'wipe' || tumble.current > 0;
@@ -881,8 +895,11 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     else if (rm === 'ride' && ride.current?.air) p.y = ride.current.y + BOARD_DECK; // AÉREO: a altura é a do voo
     else p.y += (floor - p.y) * Math.min(1, dt * (rm === 'ride' || rm === 'popup' ? 12 : st.swimming ? 3 : 30)); // em pé gruda na face; nadando sobe/desce macio
     if (drive.mode === 'foot') action.current = dead ? 'death' : rm === 'paddle' ? 'paddle' : rm === 'popup' ? 'popup' : rm === 'ride' ? 'surf' : rolling ? 'swim'
-      : st.swimming ? (moving || dive.current > 0.3 ? 'swim' : 'tread') : dodging ? 'dodge' : atkT.current > 0 ? 'attack'
-      : !grounded.current ? 'jump' : moving ? (run || autoRun ? 'run' : 'walk') : 'idle';
+      : st.swimming ? (moving || dive.current > 0.3 ? 'swim' : 'tread') : dodging ? 'dodge'
+      // PvP (02/11): atirando NO AR = pulo + tiro por cima; agachado parado/andando/atirando
+      : atkT.current > 0 ? (!grounded.current ? 'jump_shoot' : zsCrouch.on ? 'crouch_attack' : 'attack')
+      : !grounded.current ? 'jump' : zsCrouch.on ? (moving ? 'crouch_walk' : 'crouch') : moving ? (run || autoRun ? 'run' : 'walk') : 'idle';
+    if (import.meta.env.DEV) (window as unknown as { __zsHero?: unknown }).__zsHero = { action: action.current, crouch: zsCrouch }; // testes de tela
     audioManager.setFootsteps(drive.mode === 'foot' && !dead && !st.swimming && grounded.current && moving && !dodging, run || autoRun);
     // a prancha: deitado (embaixo do peito), em pé (embaixo dos pés), vaca (rodando solta perto)
     // inclinação do CARVING (suave): proporcional à taxa de curva da prancha
@@ -938,7 +955,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (Math.abs(persp.fov - wantFov) > 0.05) { persp.fov = wantFov; persp.updateProjectionMatrix(); }
     // câmera em órbita, sem entrar no chão; mirando, o apoio vai pro ombro (celular: o OUTRO ombro, longe dos botões)
     const sh = AIM_SHOULDER * ak * (touchAim ? -1 : 1);
-    const tx = p.x + Math.cos(yawC) * sh, ty = p.y + 1.6 - 0.05 * ak + (rm === 'ride' ? SURF_LIFT * 0.6 : 0), tz = p.z - Math.sin(yawC) * sh;
+    zsCrouch.k += ((zsCrouch.on ? 1 : 0) - zsCrouch.k) * Math.min(1, dt * 8); // agachado: a câmera desce junto (02/11)
+    const tx = p.x + Math.cos(yawC) * sh, ty = p.y + 1.6 - 0.05 * ak - ZS_CROUCH_CAM_DROP * zsCrouch.k + (rm === 'ride' ? SURF_LIFT * 0.6 : 0), tz = p.z - Math.sin(yawC) * sh;
     const cp = Math.cos(camPitch);
     const cx = tx + Math.sin(yawC) * cp * camDist, cz = tz + Math.cos(yawC) * cp * camDist;
     let cyy = ty + Math.sin(camPitch) * camDist;
@@ -977,7 +995,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const surfTxt = rm === 'paddle' ? (popOk.current ? 'a onda te pegou — ESPAÇO levanta!' : 'remando na prancha · Shift rema forte · espere a onda')
         : rm === 'popup' ? 'levantando…' : rm === 'ride' && ride.current ? (ride.current.trickT > 0 ? ride.current.trick.toUpperCase() + ' · ' : '') + (ride.current.air ? 'NO AR! segure A ou D pra girar' : 'SURFANDO ' + Math.round(ride.current.speed * 3.6) + ' km/h · A/D vira (carving) · W acelera · S freia · Shift = boost · desça a face = ganha velocidade · suba rápido no lip = aéreo') + (ride.current.airs ? ' · aéreos: ' + ride.current.airs : '')
         : rolling ? 'tomou a vaca! girando com a espuma…' : '';
-      onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : shipTxt || undefined,
+      onHud({ canPop: rm === 'paddle' && popOk.current, x: p.x, z: p.z, y: p.y, state: surfTxt ? surfTxt : drive.mode === 'entering' ? 'entrando no carro' : st.swimming && dive.current > 0.3 ? 'mergulhando · ' + dive.current.toFixed(1) + ' m (solte o C pra subir)' : st.swimming && bodysurf.current ? 'pegando jacaré!' : st.swimming ? (moving ? 'nadando · C mergulha' : 'boiando · C mergulha') : st.wading ? 'na água rasa' : !grounded.current ? 'pulando' : zsCrouch.on ? (moving ? 'andando agachado' : 'agachado') : run && moving ? 'correndo' : moving ? 'andando' : 'parado', near: best, overview: false, car: nearCar ? 'E = entrar no carro voador' : shipTxt || undefined,
         carTouch: !nearCar && (shipAct === 'construir' || shipAct === 'construir_carro') ? shipTxt.replace(' · E = ', ' · ') : undefined });
     }
   });
@@ -1012,6 +1030,13 @@ function ZsPerf({ elRef }: { elRef: React.RefObject<HTMLDivElement | null> }) {
   return null;
 }
 
+/** "Sair do site?" só enquanto o Ctrl (agachar) está apertado — Ctrl+W fecha a aba e o navegador não deixa o jogo
+ *  impedir; com isto ele pergunta antes. Solto o Ctrl, sai (recarregar a página segue normal). */
+const leaveGuard = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+let leaveGuardOff = 0;
+function armLeaveGuard() { window.clearTimeout(leaveGuardOff); window.addEventListener('beforeunload', leaveGuard); }
+function releaseLeaveGuard() { window.clearTimeout(leaveGuardOff); leaveGuardOff = window.setTimeout(() => window.removeEventListener('beforeunload', leaveGuard), 400); }
+
 function Controls() {
   const { gl } = useThree();
   useEffect(() => {
@@ -1023,6 +1048,10 @@ function Controls() {
       if (e.code === 'KeyK' && !e.repeat) input.overview = !input.overview;
       if (e.code === 'KeyP' && !e.repeat) input.perf = !input.perf;
       if (e.code === 'KeyE' && !e.repeat) input.eTap = true;
+      // AGACHAR (02/11): Ctrl alterna. No navegador Ctrl+W FECHA A ABA (o jogo não pode impedir) → enquanto o Ctrl está
+      // apertado o jogo liga o "Sair do site?" (esbarrou no W: pergunta antes de fechar). Ctrl+A/S/D/Espaço: o jogo segura.
+      if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && !e.repeat) { input.crouchTap = true; armLeaveGuard(); }
+      if (e.ctrlKey && (e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD' || e.code === 'Space')) e.preventDefault();
       // V a pé = alterna 3ª pessoa ↔ de cima (igual ao V do Vale, que cicla seguir/de-cima); V dirigindo = câmera do carro.
       if (e.code === 'KeyV' && !e.repeat) {
         if (drive.mode === 'driving') { input.carCam = input.carCam === 'chase' ? 'cockpit' : 'chase'; input.cockYaw = 0; input.cockPitch = 0; }
@@ -1030,8 +1059,8 @@ function Controls() {
       }
       input.keys.add(e.code); if (e.code === 'Space') e.preventDefault();
     };
-    const ku = (e: KeyboardEvent) => input.keys.delete(e.code);
-    const blur = () => input.keys.clear();
+    const ku = (e: KeyboardEvent) => { input.keys.delete(e.code); if (e.code === 'ControlLeft' || e.code === 'ControlRight') releaseLeaveGuard(); };
+    const blur = () => { input.keys.clear(); releaseLeaveGuard(); };
     const look = new Map<number, { x: number; y: number }>(), stick = new Map<number, { x: number; y: number }>();
     /** clique ESQUERDO curto (sem arrastar) = atacar; arrastar = girar a câmera */
     let press: { x: number; y: number; at: number } | null = null;
@@ -1150,7 +1179,7 @@ function ZsHudView({ touch }: { touch: boolean }) {
         {(touch ? hud.carTouch : hud.car) && <em>{touch ? hud.carTouch : hud.car}</em>}
         <small className="zs-hud__keys">{hud.overview
           ? 'VISTA DE CIMA · WASD move · Shift rápido · roda sobe/desce · K volta'
-          : touch ? 'joystick anda · arraste a tela gira a câmera' : 'WASD anda · clique ataca · botão direito mira · Espaço pula · E carro/pegar · C mergulha · K vista de cima · P FPS'}</small>
+          : touch ? 'joystick anda · arraste a tela gira a câmera' : 'WASD anda · clique ataca · botão direito mira · Espaço pula · Ctrl agacha · E carro/pegar · C mergulha · K vista de cima · P FPS'}</small>
       </div>
       {hud.canPop && (
         <button type="button" className="zs-btn zs-btn--pop" onPointerDown={() => { input.popTap = true; }}>LEVANTAR <small>(Espaço)</small></button>
@@ -1212,6 +1241,7 @@ const carBtn = (label: string, icon: React.ReactNode): ArcButton => ({ id: 'zs-c
 function ZsTouchArc() {
   const driving = useZsTouch(s => s.driving), nearCar = useZsTouch(s => s.nearCar), inWater = useZsTouch(s => s.inWater);
   const sailing = useZsTouch(s => s.sailing), nearShip = useZsTouch(s => s.nearShip), shipAct = useZsTouch(s => s.shipAct);
+  const crouched = useZsTouch(s => s.crouched);
   const shipLabel = shipAct === 'pilotar' ? 'Pilotar (timão)' : shipAct === 'descer' ? 'Descer do navio' : shipAct === 'construir' ? 'Construir navio' : shipAct === 'construir_carro' ? 'Construir carro' : 'Subir no navio';
   useEffect(() => {
     if (sailing) {
@@ -1231,12 +1261,14 @@ function ZsTouchArc() {
     } else {
       useArcExtras.setState({
         inner: null,
-        outer: [...(nearCar ? [carBtn('Entrar no carro', <Car />)] : []), ...(nearShip ? [carBtn(shipLabel, <Ship />)] : []), ...(inWater ? [holdBtn('zs-dive', 'Mergulhar', <ArrowDownToLine />, 'KeyC')] : [])],
+        outer: [...(nearCar ? [carBtn('Entrar no carro', <Car />)] : []), ...(nearShip ? [carBtn(shipLabel, <Ship />)] : []), ...(inWater ? [holdBtn('zs-dive', 'Mergulhar', <ArrowDownToLine />, 'KeyC')] : []),
+          // AGACHAR (02/11, PvP): toque alterna (em terra) — o ícone vira "levantar"
+          ...(!inWater ? [{ id: 'zs-crouch', label: crouched ? 'Levantar' : 'Agachar', icon: crouched ? <ChevronsUp /> : <ChevronsDown />, onPress: () => { input.crouchTap = true; } }] : [])],
       });
     }
     // trocou o momento com o dedo num botão de segurar: a tecla não fica presa
     return () => { for (const k of ARC_HELD) input.keys.delete(k); ARC_HELD.clear(); useArcExtras.setState({ inner: null, outer: [] }); };
-  }, [driving, nearCar, inWater, sailing, nearShip, shipLabel]);
+  }, [driving, nearCar, inWater, sailing, nearShip, shipLabel, crouched]);
   return null;
 }
 

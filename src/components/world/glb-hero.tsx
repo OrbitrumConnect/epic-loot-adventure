@@ -18,7 +18,9 @@ export type HeroAction = 'idle' | 'walk' | 'run' | 'attack' | 'jump' | 'death' |
   // surf (Zona Sul): remar deitado na prancha, levantar (Zombie Stand Up de 30%), base de surf (pose final)
   | 'paddle' | 'popup' | 'surf'
   // asa-delta (Zona Sul, 30/10): "Flying" do Mixamo — pendurado deitado sob a asa
-  | 'glide';
+  | 'glide'
+  // PvP (02/11): agachado parado / andando / atirando, e atirando NO AR (pulo + tiro por cima)
+  | 'crouch' | 'crouch_walk' | 'crouch_attack' | 'jump_shoot';
 
 function pickClip(names: string[], kind: HeroAction): string | undefined {
   const find = (sub: string) => names.find((n) => n.toLowerCase().includes(sub));

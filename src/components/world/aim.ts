@@ -72,6 +72,11 @@ export type AimTarget = { kind: 'creature'; id: string } | { kind: 'player'; id:
 export const AIM_ASSIST_DEG = 0.5;
 /** Raio do corpo do JOGADOR (hitbox) pra mira. */
 const PLAYER_BODY_R = 0.4;
+/** Corpo do JOGADOR pra mira: em pé = bola de 0,4 m a 1 m do chão; AGACHADO (02/11, PvP) = mais baixa e menor (alvo
+ *  menor — a vantagem de agachar, como nos jogos de tiro). A ação vem na pose dele pela rede. */
+export function playerAimBody(action: string | undefined): { cy: number; r: number } {
+  return action === 'crouch' || action === 'crouch_walk' || action === 'crouch_attack' ? { cy: 0.62, r: 0.32 } : { cy: 1.0, r: PLAYER_BODY_R };
+}
 
 /** Ângulo (rad) entre o raio do centro da tela e um ponto; acerta se o pontinho está DENTRO do
  *  corpo (raio do alvo) + o ímã mínimo. */
@@ -121,8 +126,9 @@ export function pickAimTarget(camera: THREE.Camera): AimTarget | null {
     if (r.hp <= 0) continue;
     if (r.side !== 'enemy' && net.selfSide !== 'enemy') continue; // aliado: sem fogo amigo
     const y = Number.isFinite(r.y) ? (r.y as number) : 0;
-    const p = new THREE.Vector3(r.x, y + 1.0, r.z);
-    const s = aimScore(origin, dir, p, PLAYER_BODY_R);
+    const body = playerAimBody(r.action);
+    const p = new THREE.Vector3(r.x, y + body.cy, r.z);
+    const s = aimScore(origin, dir, p, body.r);
     if (s !== null) cands.push({ ang: s, t: { kind: 'player', id: r.id, name: r.name, x: r.x, z: r.z }, p });
   }
   // Peças da base INIMIGA (muro/torre/porta): o pontinho também acerta (raid em 3ª pessoa).

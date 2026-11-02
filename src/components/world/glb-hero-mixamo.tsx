@@ -25,6 +25,7 @@ const fitCache = new Map<string, FitCache>();
 import {
   HERO_EXTRA_CLIPS, HIT_CLIPS, HIT_REACT_GAP_S, SIDE_SUSTAIN_S, SLASH_COMBO, localMoveDir, moveClipFor,
   upperBodyOnly, type HeroExtraClip, type MoveDir,
+  ATTACK_UPPER_WEIGHT, CROUCH_CLIPS, CROUCH_WALK_CLIP_SPEED, attackUpperFor, crouchClipFor, isCrouchAction, jumpClipFor, lowerPlusUpper, scaleHipsTo,
 } from './hero-moves';
 
 const EXTRA_KEYS = Object.keys(HERO_EXTRA_CLIPS) as HeroExtraClip[];
@@ -360,12 +361,34 @@ export function GlbHeroMixamo({
     };
     const base = [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump'), (() => { const d = mk(deathG, 'death', true); return d && withoutHipsMotion(d); })(), (() => { const d = mk(dodgeG, 'dodge', true); return d && scaleHipsDrop(d, fixHipsY); })()];
     // Só JOGADORES (rangedAttack) ganham os extras; raiders ficam exatamente como antes.
+    // AGACHAR (02/11): o quadril DESCE — clip com o Y livre, na escala do modelo (altura de pé do idle do Mixamo → a do
+    // modelo); os outros extras seguem travados na altura de pé (como sempre).
+    const idleStandY = rangedAttack ? (() => {
+      const ik = mk(idleG, '_idleY', true);
+      const tr = ik?.tracks.find((t) => /Hips\.position$/i.test(t.name));
+      return tr ? tr.values[1]! : null;
+    })() : null;
     const extra = rangedAttack
       ? EXTRA_KEYS.map((k, i) => {
-          const c = mk(extraG[i]!, k);
+          const crouchClip = (CROUCH_CLIPS as string[]).includes(k);
+          let c = mk(extraG[i]!, k, crouchClip);
+          if (c && crouchClip) c = scaleHipsTo(c, fixHipsY, idleStandY);
           return c && (k === 'cast' || (HIT_CLIPS as string[]).includes(k)) ? upperBodyOnly(c) : c;
         })
       : [];
+    // PvP (02/11): agachado de FUZIL = pernas agachadas + tronco do "rifle aiming idle"; e a METADE DE CIMA de cada
+    // ataque (tiro/flecha/corte) pra tocar por cima das pernas agachadas ou do pulo.
+    const pvp: THREE.AnimationClip[] = [];
+    if (rangedAttack) {
+      const by = (n: string) => [...base, ...extra].find((c) => c?.name === n) ?? null;
+      const aim = by('aimGunIdle'), ci = by('crouchIdle'), cw = by('crouchWalk');
+      if (ci && aim) pvp.push(lowerPlusUpper(ci, aim, 'crouchIdleGun'));
+      if (cw && aim) pvp.push(lowerPlusUpper(cw, aim, 'crouchWalkGun'));
+      for (const [src, name] of [['attackGun', 'attackGunUp'], ['attackBow', 'attackBowUp'], ['slash1', 'slashUp']] as const) {
+        const s = by(src);
+        if (s) { const u = upperBodyOnly(s.clone()); u.name = name; pvp.push(u); }
+      }
+    }
     const custom = customKeys.map((k, i) => {
       const c = mk(customG[i + 1]!, k, !customClipCut?.[k]?.fixHips); // quadril livre (sentado / nadando), salvo fixHips
       const cut = customClipCut?.[k];
@@ -375,7 +398,7 @@ export function GlbHeroMixamo({
       const sub = THREE.AnimationUtils.subclip(c, k, from, to, fps);
       return sub;
     });
-    return [...base, ...extra, ...custom].filter((c): c is THREE.AnimationClip => c != null);
+    return [...base, ...extra, ...pvp, ...custom].filter((c): c is THREE.AnimationClip => c != null);
   }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, dodgeG, extraG, customKeys, customG, customClipCut, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
 
   // 26/10: animação por distância (anim-lod.ts) — herói/perto todo quadro (igual), inimigo longe com menos atualizações.
@@ -433,6 +456,10 @@ export function GlbHeroMixamo({
   // (velocidade medida pela própria posição — vale igual pro local e pro remoto) e camadas
   // "metade de cima" (golpe / gesto de poder).
   const playingLoco = useRef<string | null>(null);
+  /** PvP (02/11): o clip de pulo em curso (o de sempre ou o de fuzil), o de agachado, e a camada de cima do ataque. */
+  const playingJump = useRef<string>('jump');
+  const playingCrouch = useRef<string | null>(null);
+  const atkOv = useRef<string | null>(null);
   const combo = useRef(0);
   const lastPos = useRef<THREE.Vector3 | null>(null);
   const vel = useRef({ x: 0, z: 0 });
@@ -588,9 +615,14 @@ export function GlbHeroMixamo({
       else if (kind === 'pistol' || kind === 'rifle') atkName = actions['attackGun'] ? 'attackGun' : 'attackBow';
     }
 
-    // Clip que está REALMENTE tocando num estado (attack usa o playingAtk).
+    // Clip que está REALMENTE tocando num estado (attack usa o playingAtk; pulo/agachado, o clip escolhido — 02/11).
     const clipOf = (st: HeroAction | null): string | null =>
-      st === 'attack' ? playingAtk.current : (st === 'walk' || st === 'run') && playingLoco.current ? playingLoco.current : st;
+      st === 'attack' ? playingAtk.current : (st === 'walk' || st === 'run') && playingLoco.current ? playingLoco.current
+        : st === 'jump' || st === 'jump_shoot' ? playingJump.current
+        : isCrouchAction(st) && playingCrouch.current ? playingCrouch.current : st;
+    // PvP (02/11): arma na mão (pulo/agachado de fuzil e a metade de cima do ataque)
+    const heldKind = extras ? heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState())) : null;
+    const gunHeld = heldKind === 'pistol' || heldKind === 'rifle';
     const curClipName = clipOf(current.current);
     const playing = curClipName ? actions[curClipName] : null;
     const playDur = playing?.getClip().duration ?? 0;
@@ -611,6 +643,26 @@ export function GlbHeroMixamo({
         playingLoco.current = null;
       }
       return;
+    }
+
+    // ATAQUE POR CIMA (02/11 — agachado atirando / atirando no ar): só a metade de cima do ataque, de novo a cada tiro
+    // enquanto a ação pedir; as pernas seguem agachadas / no pulo. Saiu da ação: o tiro em curso termina e some.
+    if (extras) {
+      const wantUp = want === 'crouch_attack' || want === 'jump_shoot';
+      const upName = attackUpperFor(gunHeld ? 'gun' : heldKind === 'bow' ? 'bow' : 'melee');
+      const cur = atkOv.current ? actions[atkOv.current] : null;
+      const done = !cur || !cur.isRunning() || cur.time >= cur.getClip().duration - 0.02;
+      if (wantUp && actions[upName] && (done || atkOv.current !== upName)) {
+        const a = actions[upName]!;
+        if (cur && cur !== a) cur.fadeOut(0.08);
+        a.reset();
+        a.setLoop(THREE.LoopOnce, 1);
+        a.clampWhenFinished = false;
+        a.timeScale = ATTACK_SPEED;
+        a.setEffectiveWeight(ATTACK_UPPER_WEIGHT);
+        a.fadeIn(0.06).play();
+        atkOv.current = upName;
+      } else if (!wantUp && cur && (done || want === 'attack')) { cur.fadeOut(0.12); atkOv.current = null; }
     }
 
     // ATAQUE NÃO É CORTADO: enquanto o clip toca, não troca (termina 100% mesmo
@@ -635,19 +687,48 @@ export function GlbHeroMixamo({
       return;
     }
 
-    // PULO (oneshot): toca ao sair do chão; segura o último frame até pousar.
-    const jmp = actions['jump'];
-    if (want === 'jump' && jmp) {
-      if (current.current !== 'jump') {
+    // PULO (oneshot): toca ao sair do chão; segura o último frame até pousar. 02/11: com fuzil/pistola o PULO DE FUZIL
+    // (pra trás se vinha de costas); atirando no ar ('jump_shoot') o pulo segue e o tiro vai por cima (acima).
+    const jumpName = extras && actions[jumpClipFor(gunHeld, moveDir)] ? jumpClipFor(gunHeld, moveDir) : 'jump';
+    const jmp = actions[jumpName];
+    if ((want === 'jump' || want === 'jump_shoot') && jmp) {
+      if (current.current !== 'jump' && current.current !== 'jump_shoot') {
         if (curClipName && actions[curClipName]) actions[curClipName]!.fadeOut(0.1);
         jmp.reset();
         jmp.setLoop(THREE.LoopOnce, 1);
         jmp.clampWhenFinished = true;
         jmp.fadeIn(0.08).play();
-        current.current = 'jump';
+        playingJump.current = jumpName;
         playingLoco.current = null;
       }
+      current.current = want;
       return;
+    }
+
+    // AGACHADO (02/11): parado / andando (cadência pela velocidade real) / atirando (pernas paradas agachadas; o tiro vai
+    // por cima, acima). De fuzil/pistola o tronco segura a arma apontada.
+    if (extras && isCrouchAction(want)) {
+      const moving = want === 'crouch_walk';
+      const nm = actions[crouchClipFor(gunHeld, moving)] ? crouchClipFor(gunHeld, moving) : crouchClipFor(false, moving);
+      const a = actions[nm];
+      if (a) {
+        if (!isCrouchAction(current.current) || playingCrouch.current !== nm || !a.isRunning()) {
+          if (curClipName && curClipName !== nm && actions[curClipName]) actions[curClipName]!.fadeOut(0.18);
+          a.reset();
+          a.timeScale = 1;
+          a.setLoop(THREE.LoopRepeat, Infinity);
+          a.clampWhenFinished = false;
+          a.fadeIn(0.18).play();
+          playingCrouch.current = nm;
+        }
+        current.current = want;
+        playingLoco.current = null;
+        if (moving) {
+          const spd = speedRef ? speedRef.current : Math.hypot(vel.current.x, vel.current.z);
+          a.timeScale = THREE.MathUtils.clamp(spd / CROUCH_WALK_CLIP_SPEED, 0.6, 1.8);
+        }
+        return;
+      }
     }
 
     // Idle / Walk / Run (loop). Re-dispara ao mudar de estado ou se o loop parou.
@@ -721,7 +802,9 @@ export function GlbHeroMixamo({
     const w = weaponRef.current;
     const root = inner.current;
     if (!w || !root || !handBone) return;
-    const aiming = current.current === 'attack' && playingAtk.current === 'attackGun';
+    // (02/11: também atirando agachado/no ar e agachado de fuzil — o tronco está apontando a arma)
+    const aiming = (current.current === 'attack' && playingAtk.current === 'attackGun') || atkOv.current === 'attackGunUp'
+      || (isCrouchAction(current.current) && !!playingCrouch.current?.endsWith('Gun'));
     aimW.current += ((aiming ? 1 : 0) - aimW.current) * Math.min(1, dt * 14);
     if (aimW.current < 0.001) { w.quaternion.copy(gripQuat); return; }
     handBone.updateWorldMatrix(true, false);
