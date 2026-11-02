@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { barrelAt, barrelBand, branchOf, crestQ, FULL, SURF, surfHeightAt, surfPoint, surfPushAt, TUBE, tubeAx, type WaveState, type WaveVar, waveStateAt } from '@/components/zona-sul/surf/surf-wave';
 import { SERIES, SERIES_GROW, SERIES_GROW_MAX, SurfScheduler, WAVE_LIFE } from '@/components/zona-sul/surf/surf-scheduler';
 import { findSurfFrame, toSurfLocal } from '@/components/zona-sul/surf/surf-frame';
-import { decodeTerrain } from '@/components/zona-sul/zs-terrain-data';
-import { ZS_SPAWN, ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
+import { decodeTerrain, ZS_SPAWN_TERRAIN_URL } from '@/components/zona-sul/zs-terrain-data';
+import { ZS_SPAWN } from '@/components/zona-sul/zona-sul-meta';
 
 /* 28/10 — MOTOR DE SURF fase B (documento do Pedro): onda A-frame com 2 tubos OCOS, abertura pros dois lados, espuma,
    séries a cada ~180 s com 3–5 ondas, 5 vagas fixas, zona no Arpoador em água aberta. Só na Zona Sul. */
@@ -174,7 +174,8 @@ describe('surf — séries', () => {
 describe('surf — zona no Arpoador (terreno de verdade)', () => {
   it('acha o pico perto da partida com a zona INTEIRA em água aberta e o eixo q apontando pra praia', async () => {
     const sharp = (await import('sharp')).default;
-    const { data, info } = await sharp(fs.readFileSync('public' + ZS_TERRAIN.url)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    // 02/11 (Gávea + Cagarras): o pico é achado no terreno dos sorteios (o de 28/10) — ver gavea-cagarras.test.ts
+    const { data, info } = await sharp(fs.readFileSync('public' + ZS_SPAWN_TERRAIN_URL)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     const t = decodeTerrain(data, info.width, info.height);
     const f = findSurfFrame(t, ZS_SPAWN.x, ZS_SPAWN.z)!;
     expect(f).not.toBeNull();

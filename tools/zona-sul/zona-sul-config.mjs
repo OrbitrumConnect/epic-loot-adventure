@@ -9,6 +9,17 @@
 // (Botafogo → começo do Flamengo, pedido). A terra que chega na borda CONTINUA pra fora numa faixa nova (APRON) descendo
 // até a água — nada do que existe é cortado nem rebaixado.
 export const BBOX = { s: -22.993, w: -43.252, n: -22.932, e: -43.147 };
+/** O recorte de 28/10 (o mapa que o jogo tinha até 02/11). A EXPANSÃO (abaixo) cresce pra oeste e pro sul ALINHADA à
+ *  grade dele: o pixel antigo continua no mesmo lugar, com o mesmo (0, 0) no jogo — nada do que existe anda. */
+export const BBOX_V1 = BBOX;
+/** EXPANSÃO (02/11, Pedro: "abrir até a Pedra da Gávea e fazer aparecer as Ilhas Cagarras, sem bugar nada"): oeste
+ *  até depois da Pedra da Gávea (−43,2847) e sul até as Cagarras. Arredonda pra fora no pixel da grade antiga. */
+export const EXPAND_TO = { w: -43.298, s: -23.045 };
+/** O que da faixa oeste vira terreno de verdade: só ao SUL desta latitude (Pedra da Gávea, Pedra Bonita, Rocinha alta,
+ *  São Conrado). Ao norte é o maciço da Tijuca (Pico da Tijuca 1021 m…) — fora, como o Pedro pediu em 28/10 ("o maciço
+ *  atrás da Gávea, muito acidentado"); ali vale a mesma FAIXA que desce pro mar das bordas do mapa. A faixa sul (mar até
+ *  as Cagarras) entra inteira. */
+export const EXPAND_KEEP = { westNorth: -22.972 };
 /** Faixa NOVA em volta do mapa (px de 4 m): a terra da borda desce por ela até uma praia e o mar. */
 export const APRON_PX = 18;
 /** Largura (m no jogo) da praia no pé da descida. */

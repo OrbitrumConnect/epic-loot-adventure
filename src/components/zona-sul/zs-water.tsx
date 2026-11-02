@@ -12,7 +12,10 @@ import { ZS_RIPPLE_GLSL, ZS_WATER_LOOK, zsWaterTime } from './zs-water-look';
 
 /** Raio onde o mar começa a sumir e onde some de vez (m), a partir do centro do mapa. */
 export function zsSeaRadius(t: ZsTerrain): { r0: number; r1: number } {
-  const half = Math.hypot(t.w * t.cell, t.h * t.cell) / 2; // cobre até os cantos do mapa
+  // cobre até o canto MAIS LONGE do (0, 0) — 02/11: o mapa cresceu pra oeste/sul e não é mais centrado (antes = a meia
+  // diagonal; com o mapa centrado dá o mesmo número)
+  const x1 = t.x0 + (t.w - 1) * t.cell, z1 = t.z0 + (t.h - 1) * t.cell, c = t.cell / 2;
+  const half = Math.max(...[[t.x0 - c, t.z0 - c], [x1 + c, t.z0 - c], [t.x0 - c, z1 + c], [x1 + c, z1 + c]].map(([x, z]) => Math.hypot(x!, z!)));
   return { r0: half + 20, r1: half + 260 };
 }
 

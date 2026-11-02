@@ -22,9 +22,12 @@ describe('mapeamento mundo → fundo (Zona Sul)', () => {
   it('canto noroeste = 0%, canto sudeste = 100%, centro = 50%', () => {
     expect(zsWorldToPct(ZS_MAP_BOUNDS.minX, ZS_MAP_BOUNDS.minZ)).toEqual({ left: 0, top: 0 });
     expect(zsWorldToPct(ZS_MAP_BOUNDS.maxX, ZS_MAP_BOUNDS.maxZ)).toEqual({ left: 100, top: 100 });
-    const mid = zsWorldToPct(0, 0);
+    // 02/11 (Gávea + Cagarras): o mapa cresceu pra oeste/sul — o (0, 0) do jogo não é mais o meio da imagem
+    const mid = zsWorldToPct((ZS_MAP_BOUNDS.minX + ZS_MAP_BOUNDS.maxX) / 2, (ZS_MAP_BOUNDS.minZ + ZS_MAP_BOUNDS.maxZ) / 2);
     expect(mid.left).toBeCloseTo(50, 1);
     expect(mid.top).toBeCloseTo(50, 1);
+    const o = zsWorldToPct(0, 0);
+    expect(o.left).toBeGreaterThan(50); expect(o.top).toBeLessThan(50); // a área de antes fica a leste/norte da nova
   });
 
   it('prende fora dos limites em 0..100', () => {

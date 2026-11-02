@@ -5,7 +5,9 @@ import sharp from 'sharp';
 const RAW = 'tools/zona-sul/raw/dem';
 const TILE = 256;
 
-export async function loadDem() {
+/** `keep` (lat/lon): dentro dele o relevo fica EXATAMENTE como veio (o mapa de 28/10 não muda) — o conserto de furo
+ *  (abaixo) só vale fora. */
+export async function loadDem({ keep } = {}) {
   const t = JSON.parse(fs.readFileSync(`${RAW}/tiles.json`, 'utf8'));
   const nx = t.x1 - t.x0 + 1, ny = t.y1 - t.y0 + 1, W = nx * TILE, H = ny * TILE;
   const elev = new Float32Array(W * H);
@@ -17,6 +19,28 @@ export async function loadDem() {
       elev[(oy + j) * W + ox + i] = data[p] * 256 + data[p + 1] + data[p + 2] / 256 - 32768;
     }
   }
+  // FURO NO DADO (02/11, expansão da Gávea): os tiles da AWS têm fileiras com lixo (−3273 m, −3474 m no meio de São
+  // Conrado — virava uma vala reta de ponta a ponta). Aqui não existe nada abaixo de −1000 m (o mar em volta tem dezenas
+  // de metros); esse valor vira a média dos vizinhos BONS (janela crescendo até achar). Valor bom não é tocado.
+  // (dentro de `keep` fica como está: lá há um furo antigo perto da Urca que o mapa de 28/10 já tem — anotado no diário)
+  const BAD = -1000, nT = 2 ** t.z;
+  const lonOfPx = (i) => ((i + 0.5) / TILE + t.x0) / nT * 360 - 180;
+  const latOfPx = (j) => { const m = Math.PI * (1 - 2 * ((j + 0.5) / TILE + t.y0) / nT); return Math.atan(Math.sinh(m)) * 180 / Math.PI; };
+  let fixed = 0;
+  for (let p = 0; p < W * H; p++) {
+    if (!(elev[p] < BAD)) continue;
+    const i = p % W, j = (p - i) / W;
+    if (keep) { const la = latOfPx(j), lo = lonOfPx(i); if (la >= keep.s && la <= keep.n && lo >= keep.w && lo <= keep.e) continue; }
+    for (let r = 1; r <= 4; r++) {
+      let s = 0, k = 0;
+      for (let b = -r; b <= r; b++) for (let a = -r; a <= r; a++) {
+        const x = i + a, y = j + b; if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        const v = elev[y * W + x]; if (v >= BAD) { s += v; k++; }
+      }
+      if (k) { elev[p] = s / k; fixed++; break; }
+    }
+  }
+  if (fixed) console.log(JSON.stringify({ relevo_furos_consertados: fixed }));
   const n = 2 ** t.z;
   // pixel global (web mercator) ↔ lat/lon
   const px = (lon) => ((lon + 180) / 360 * n - t.x0) * TILE;

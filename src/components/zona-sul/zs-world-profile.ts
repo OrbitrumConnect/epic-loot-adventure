@@ -88,14 +88,16 @@ export function zsNavigable(t: ZsTerrain, x: number, z: number, minDepth: number
   return zsHeightAt(t, x, z) <= ZS_WATER_Y - minDepth;
 }
 
-export function zsWorldProfile(t: ZsTerrain, q: ZsQuery = zsQuery(t)): WorldProfile {
+/** `spawnQ` (02/11): onde os acampamentos são SORTEADOS — o terreno dos sorteios (o mapa de 28/10), pra ficarem onde
+ *  sempre estiveram; limites/chão/água são os do mapa de agora (`q`). */
+export function zsWorldProfile(t: ZsTerrain, q: ZsQuery = zsQuery(t), spawnQ: ZsQuery = q): WorldProfile {
   return {
     id: 'zona-sul',
     bounds: q.bounds,
     spawn: { x: ZS_SAFE.x, z: ZS_SAFE.z },
     safeZone: { x: ZS_SAFE.x, z: ZS_SAFE.z, radius: ZS_SAFE.radius },
     // 8 sorteados + os TOPOS armados (Sumaré, Horto, Gávea, Rocinha — Pedro 31/10)
-    camps: [...pickZsCampSites(q), ...ZS_HILLTOP_CAMPS.map((c) => ({ ...c, position: { ...c.position } }))],
+    camps: [...pickZsCampSites(spawnQ), ...ZS_HILLTOP_CAMPS.map((c) => ({ ...c, position: { ...c.position } }))],
     lakes: [],
     height: (x, z) => zsHeightAt(t, x, z),
     walkable: (x, z) => zsWalkable(t, x, z),

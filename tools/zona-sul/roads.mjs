@@ -40,8 +40,11 @@ function simplify(pts, tol) {
  */
 export function buildRoads(o) {
   const { osm, toPx, W, H, CELL, hg, surf, SURF } = o;
+  // x, z do jogo → pixel (centro do pixel = .0). 02/11: a grade cresceu e não é mais centrada no (0, 0) — o bake passa a
+  // conversão (`fx`/`fz`); sem ela, a de sempre (centrada)
+  const toFx = o.fx ?? ((x) => x / CELL + W / 2 - 0.5), toFz = o.fz ?? ((z) => z / CELL + H / 2 - 0.5);
   const heightAt = (x, z) => { // bilinear no grid ORIGINAL (x, z do jogo → pixel)
-    const fx = Math.max(0, Math.min(W - 1.001, x / CELL + W / 2 - 0.5)), fz = Math.max(0, Math.min(H - 1.001, z / CELL + H / 2 - 0.5));
+    const fx = Math.max(0, Math.min(W - 1.001, toFx(x))), fz = Math.max(0, Math.min(H - 1.001, toFz(z)));
     const i = Math.floor(fx), j = Math.floor(fz), ax = fx - i, az = fz - j, p = j * W + i;
     return (hg[p] * (1 - ax) + hg[p + 1] * ax) * (1 - az) + (hg[p + W] * (1 - ax) + hg[p + W + 1] * ax) * az;
   };
@@ -86,13 +89,13 @@ export function buildRoads(o) {
     const hw = r.w / 2;
     for (let k = 0; k + 1 < r.pts.length; k++) {
       const [ax, az, ay] = r.pts[k], [bx, bz, by] = r.pts[k + 1];
-      const x0 = Math.floor((Math.min(ax, bx) - hw - SHOULDER) / CELL + W / 2 - 0.5), x1 = Math.ceil((Math.max(ax, bx) + hw + SHOULDER) / CELL + W / 2 - 0.5);
-      const z0 = Math.floor((Math.min(az, bz) - hw - SHOULDER) / CELL + H / 2 - 0.5), z1 = Math.ceil((Math.max(az, bz) + hw + SHOULDER) / CELL + H / 2 - 0.5);
+      const x0 = Math.floor(toFx(Math.min(ax, bx) - hw - SHOULDER)), x1 = Math.ceil(toFx(Math.max(ax, bx) + hw + SHOULDER));
+      const z0 = Math.floor(toFz(Math.min(az, bz) - hw - SHOULDER)), z1 = Math.ceil(toFz(Math.max(az, bz) + hw + SHOULDER));
       const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9;
       for (let j = Math.max(0, z0); j <= Math.min(H - 1, z1); j++) for (let i = Math.max(0, x0); i <= Math.min(W - 1, x1); i++) {
         const p = j * W + i;
         if (surf[p] === SURF.sea || surf[p] === SURF.lagoon || surf[p] === SURF.beach) continue; // praia/água: intocadas
-        const px = (i + 0.5 - W / 2) * CELL, pz = (j + 0.5 - H / 2) * CELL;
+        const px = o.gameX(i + 0.5), pz = o.gameZ(j + 0.5);
         const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / L2));
         const d = Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
         if (d > hw + SHOULDER) continue;

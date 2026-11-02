@@ -149,8 +149,10 @@ const LAMP_URL = '/zona-sul/lamp.glb';
 const LAMP_LIGHTS = 6, LAMP_COLOR = new THREE.Color('#ffd59a');
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), ONE = new THREE.Vector3(1, 1, 1), tmpP = new THREE.Vector3();
 
-export function ZsLamps({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3> }) {
-  const spots = useMemo(() => zsLampSpots(t).map((s) => ({ ...s, y: zsHeightAt(t, s.x, s.z) })), [t]);
+/** `spotsFrom` (02/11): onde os postes são escolhidos — o terreno dos sorteios (28/10), pra ficarem onde sempre estiveram
+ *  (a varredura é em ordem e tem teto: o mapa maior mudaria a escolha); a altura é a do mapa de agora. */
+export function ZsLamps({ t, spotsFrom = t, heroRef }: { t: ZsTerrain; spotsFrom?: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3> }) {
+  const spots = useMemo(() => zsLampSpots(spotsFrom).map((s) => ({ ...s, y: zsHeightAt(t, s.x, s.z) })), [t, spotsFrom]);
   const { scene: glb } = useGLTF(LAMP_URL);
   // geometria do poste JÁ no tamanho certo (5,2 m, pé no chão, centrado) — uma vez
   const { geo, mat } = useMemo(() => {

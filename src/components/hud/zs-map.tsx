@@ -26,14 +26,15 @@ import { cellCenter } from '@/game/systems/playerBaseSystem';
  * zonas a cada 2 s; o herói anda por atualização imperativa de estilo (400 ms), sem re-render.
  */
 
-// Limites do mundo cobertos pelo terrain.png, derivados de ZS_TERRAIN (x = leste, z = SUL).
-const SPAN_X = (ZS_TERRAIN.w - 1) * ZS_TERRAIN.cell; // 1596
-const SPAN_Z = (ZS_TERRAIN.h - 1) * ZS_TERRAIN.cell; // 1052
+// Limites do mundo cobertos pelo terrain.png, derivados de ZS_TERRAIN (x = leste, z = SUL). 02/11 (Gávea + Cagarras):
+// o mapa cresceu pra oeste/sul e não é mais centrado no (0, 0) — o canto vem do meta (x0/z0 = centro da 1ª célula).
+const SPAN_X = (ZS_TERRAIN.w - 1) * ZS_TERRAIN.cell;
+const SPAN_Z = (ZS_TERRAIN.h - 1) * ZS_TERRAIN.cell;
 export const ZS_MAP_BOUNDS = {
-  minX: (0.5 - ZS_TERRAIN.w / 2) * ZS_TERRAIN.cell,
-  maxX: (0.5 - ZS_TERRAIN.w / 2) * ZS_TERRAIN.cell + SPAN_X,
-  minZ: (0.5 - ZS_TERRAIN.h / 2) * ZS_TERRAIN.cell,
-  maxZ: (0.5 - ZS_TERRAIN.h / 2) * ZS_TERRAIN.cell + SPAN_Z,
+  minX: ZS_TERRAIN.x0,
+  maxX: ZS_TERRAIN.x0 + SPAN_X,
+  minZ: ZS_TERRAIN.z0,
+  maxZ: ZS_TERRAIN.z0 + SPAN_Z,
 } as const;
 
 /** Mundo (x, z) → fração [0,1] sobre o fundo (0 = oeste/norte, 1 = leste/sul). Pura (testável). */

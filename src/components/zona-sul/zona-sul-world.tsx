@@ -14,7 +14,7 @@ import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
 import { ZS_LANDMARKS, ZS_SPAWN, ZS_SURF } from './zona-sul-meta';
-import { loadZsTerrain, type ZsTerrain, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
+import { loadZsTerrain, ZS_SPAWN_TERRAIN_URL, type ZsTerrain, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
 import { SurfBreak } from './surf/surf-break';
 import { SorrisoBreak } from './surf/sorriso-break';
 import { nearestSurfZone, surfZoneAt } from './surf/surf-zones';
@@ -1241,6 +1241,8 @@ function ZsTouchArc() {
 
 function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack?: () => void }) {
   const [t, setT] = useState<ZsTerrain | null>(null);
+  /** terreno dos SORTEIOS (o de 28/10 — os postes também saem dele, no mesmo lugar de sempre) */
+  const [spawnT, setSpawnT] = useState<ZsTerrain | null>(null);
   /** fauna/acampamentos/perfil prontos (precisam do terreno) — só aí o combate entra na cena */
   const [ready, setReady] = useState(false);
   /** o herói pro combate (inimigos, poderes, piloto) e o destino do piloto automático */
@@ -1291,7 +1293,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
     zsAmbience.arm(); // som do mar/carro/vento (liga no 1º clique/tecla)
     // PRANCHA: quem garante é a casa do jogo (routes/index.tsx) — item fixo, volta sempre que faltar
     let alive = true;
-    loadZsTerrain().then((tt) => {
+    // o mapa de agora + o TERRENO DOS SORTEIOS (o de 28/10: tudo que é sorteado nasce onde sempre nasceu — 02/11)
+    Promise.all([loadZsTerrain(), loadZsTerrain(ZS_SPAWN_TERRAIN_URL)]).then(([tt, st]) => {
       if (!alive) return;
       setCaveTerrain(tt); // a caverna precisa do chão do mapa (bocas) antes de qualquer conta
       const at = readZsPos(tt);
@@ -1301,15 +1304,15 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       carGarage.at = { x: at.x + 3, z: at.z - 2, yaw: 0 }; // GARAGEM: onde ele nasce e onde se constrói outro (01/11)
       { const dock = findWarshipDock((x, z) => zsSwimmable(tt, x, z, WARSHIP.MIN_DEPTH), WARSHIP.DOCK_NEAR); warshipDock.at = dock; shipRef.current = dock ? newWarship(dock.x, dock.z, dock.yaw) : null; }
       // o JOGO passa a viver na Zona Sul: chão/terra/limites/zona segura/acampamentos dela + a fauna por região
-      const prof = zsWorldProfile(tt);
+      const query = zsQuery(st); // SORTEIOS no terreno de 28/10 (bichos, farm, acampamentos, bandidos, tubarões)
+      const prof = zsWorldProfile(tt, zsQuery(tt), query);
       setWorldProfile(prof);
-      const query = zsQuery(tt);
       useGameStore.getState().enterWorld('zona-sul', {
-        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(tt)), ...createZsBandits(query, prof.camps)],
+        creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(st)), ...createZsBandits(query, prof.camps)],
         harvestNodes: [...createZsHarvestNodes(query), ...createCaveOreNodes()], // + veios de ferro da caverna (02/11)
         position: { x: at.x, z: at.z },
       });
-      setT(tt); setReady(true);
+      setSpawnT(st); setT(tt); setReady(true);
     }).catch((e) => alive && setErr(String(e)));
     const keep = window.setInterval(() => { if (carRef.current) saveZsPos(heroRef.current); }, 2000);
     return () => {
@@ -1335,7 +1338,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           <LightPool size={touchLayout.on ? 2 : 4} focus={heroRef} />
           {/* a SUPERFÍCIE some quando o herói está no fundo da caverna (nada dela aparece lá dentro — e não pesa) */}
           <ZsSurface>
-            <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} heroRef={heroRef} /></Suspense></AssetBoundary>
+            <AssetBoundary label="ZsPostes" fallback={null}><Suspense fallback={null}><ZsLamps t={t} spotsFrom={spawnT ?? t} heroRef={heroRef} /></Suspense></AssetBoundary>
             {/* NAVIO encalhado entre Ipanema e Leblon (dá pra subir pela prancha) */}
             <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
             {/* NAVIO DE GUERRA (nível 70, 01/11): ancorado perto do Arpoador; E embarca, canhões no botão direito/clique */}
@@ -1348,9 +1351,11 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
               {/* RASTRO na água (01/11): navio de guerra (da popa) e prancha em pé (da rabeta) */}
               <ZsWake look={WAKE_SHIP} source={() => { const s = shipRef.current; if (!s) return null; const k = WARSHIP.LENGTH * 0.47; return { active: true, x: s.x - Math.sin(s.yaw) * k, z: s.z - Math.cos(s.yaw) * k, yaw: s.yaw, speed: s.speed }; }} />
               <ZsWake look={WAKE_BOARD} source={() => zsBoardWake} />
-              {SURF_ON && <SurfBreak t={t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
+              {/* o PICO da onda é achado no terreno dos sorteios (02/11): o do Arpoador escolhia entre pontos da faixa de
+                  borda antiga (mar raso ao sul), que agora tem a profundidade de verdade — sem isso a onda mudava de lugar */}
+              {SURF_ON && <SurfBreak t={spawnT ?? t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />}
               {/* SORRISO: no meio de Copacabana (Pedro 30/10) */}
-              {SURF_ON && <SorrisoBreak t={t} />}
+              {SURF_ON && <SorrisoBreak t={spawnT ?? t} />}
             </ZsSea>
             <ZsVegetation t={t} heroRef={focusRef} />
           </ZsSurface>

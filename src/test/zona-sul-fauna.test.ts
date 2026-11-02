@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { decodeTerrain, type ZsTerrain, zsHeightAt } from '@/components/zona-sul/zs-terrain-data';
+import { decodeTerrain, ZS_SPAWN_TERRAIN_URL, type ZsTerrain, zsHeightAt } from '@/components/zona-sul/zs-terrain-data';
 import { ZS_SURF, ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
 import { zsQuery, zsWorldProfile } from '@/components/zona-sul/zs-world-profile';
 import { createZsWildlife, near, SURF, ZS_CLEAR_R, ZS_FAUNA, ZS_SAFE, type ZsQuery } from '@/game/systems/zsSpawnSystem';
@@ -17,7 +17,7 @@ let t: ZsTerrain;
 let q: ZsQuery;
 beforeAll(async () => {
   const sharp = (await import('sharp')).default;
-  const { data, info } = await sharp(fs.readFileSync('public' + ZS_TERRAIN.url)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(fs.readFileSync('public' + ZS_SPAWN_TERRAIN_URL) /* o jogo SORTEIA no terreno de 28/10 (02/11) */).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   t = decodeTerrain(data, info.width, info.height);
   q = zsQuery(t);
 });

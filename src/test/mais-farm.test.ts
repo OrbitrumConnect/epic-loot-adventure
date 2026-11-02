@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { decodeTerrain, type ZsTerrain } from '@/components/zona-sul/zs-terrain-data';
+import { decodeTerrain, ZS_SPAWN_TERRAIN_URL, type ZsTerrain } from '@/components/zona-sul/zs-terrain-data';
 import { ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
 import { zsQuery } from '@/components/zona-sul/zs-world-profile';
 import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
@@ -13,7 +13,7 @@ import { harvestTreeGeometry } from '@/components/world/harvest-tree-geometry';
 let t: ZsTerrain;
 beforeAll(async () => {
   const sharp = (await import('sharp')).default;
-  const { data, info } = await sharp(fs.readFileSync('public' + ZS_TERRAIN.url)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(fs.readFileSync('public' + ZS_SPAWN_TERRAIN_URL) /* o jogo SORTEIA no terreno de 28/10 (02/11) */).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   t = decodeTerrain(data, info.width, info.height);
 });
 

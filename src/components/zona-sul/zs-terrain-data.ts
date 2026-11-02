@@ -46,6 +46,13 @@ export type ZsTerrain = {
   surf: Uint8Array;
 };
 
+/** Onde fica o centro da 1ª célula: o mapa de agora traz no meta (02/11: cresceu pra oeste/sul com a origem no centro
+ *  do recorte de 28/10 — não é mais centrado); outro tamanho (o terreno dos sorteios, de 28/10) = centrado, como era. */
+function originOf(w: number, h: number, cell: number): { x0: number; z0: number } {
+  if (w === ZS_TERRAIN.w && h === ZS_TERRAIN.h && cell === ZS_TERRAIN.cell) return { x0: ZS_TERRAIN.x0, z0: ZS_TERRAIN.z0 };
+  return { x0: (0.5 - w / 2) * cell, z0: (0.5 - h / 2) * cell };
+}
+
 /** Decodifica o RGBA do PNG: R/G = altura em cm (+ deslocamento), B = superfície. Puro (testável). */
 export function decodeTerrain(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, cell = ZS_TERRAIN.cell, offset = ZS_TERRAIN.offset): ZsTerrain {
   const heights = new Float32Array(w * h), surf = new Uint8Array(w * h);
@@ -53,12 +60,17 @@ export function decodeTerrain(rgba: Uint8ClampedArray | Uint8Array, w: number, h
     heights[p] = ((rgba[p * 4]! << 8) + rgba[p * 4 + 1]!) / 100 - offset;
     surf[p] = rgba[p * 4 + 2]!;
   }
-  return { w, h, cell, x0: (0.5 - w / 2) * cell, z0: (0.5 - h / 2) * cell, heights, surf };
+  return { w, h, cell, ...originOf(w, h, cell), heights, surf };
 }
 
+/** TERRENO DOS SORTEIOS (02/11 — Gávea + Cagarras): o mapa de 28/10, intacto. Bichos, farm, acampamentos, bandidos,
+ *  tubarões e postes são SORTEADOS nele (mesma semente + mesmo terreno = tudo exatamente onde sempre esteve: a faixa da
+ *  borda antiga virou terreno de verdade e mudaria a sequência do sorteio). O jogo anda/desenha no mapa novo. */
+export const ZS_SPAWN_TERRAIN_URL = '/zona-sul/terrain-legacy.png';
+
 /** Baixa e decodifica (sem conversão de cor nem pré-multiplicação: os bytes são DADOS, não imagem). */
-export async function loadZsTerrain(): Promise<ZsTerrain> {
-  const blob = await (await fetch(ZS_TERRAIN.url)).blob();
+export async function loadZsTerrain(url: string = ZS_TERRAIN.url): Promise<ZsTerrain> {
+  const blob = await (await fetch(url)).blob();
   const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
   const cv = document.createElement('canvas');
   cv.width = bmp.width; cv.height = bmp.height;

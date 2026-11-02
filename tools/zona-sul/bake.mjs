@@ -11,7 +11,7 @@
 //     LAGOA (água do OSM) com fundo próprio; PRAIA = declive suave até a água.
 import fs from 'node:fs';
 import sharp from 'sharp';
-import { APRON_PX, BBOX, CANAL_ALAH, ISLAND_BEACH, LAGOA_MAX_DEPTH, LAGOA_SLOPE, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
+import { APRON_PX, BBOX_V1, CANAL_ALAH, EXPAND_KEEP, EXPAND_TO, ISLAND_BEACH, LAGOA_MAX_DEPTH, LAGOA_SLOPE, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
 import { loadDem } from './dem.mjs';
 import { buildMasks, joinRings } from './masks.mjs';
 import { buildRoads, MAX_GRADE, rasterRoadMask } from './roads.mjs';
@@ -21,16 +21,28 @@ export const H_OFFSET = 30;       // altura gravada = (h + H_OFFSET) em cm (h �
 export const SURF = { land: 0, sea: 1, lagoon: 2, beach: 3, forest: 4, out: 5, road: 6 }; // out = (reservado); road = debaixo da rua
 
 const [checkPng] = process.argv.slice(2);
-const M_LAT = 110574, M_LON = 111320 * Math.cos((BBOX.s + BBOX.n) / 2 * Math.PI / 180);
+// EXPANSÃO (02/11 — Gávea + Cagarras) ALINHADA à grade de 28/10: a escala de longitude fica presa à latitude média do
+// recorte antigo e a grade cresce KX px pra oeste e KY px pro sul → o pixel antigo (i, j) é o (i + KX, j) de agora, com a
+// MESMA lat/lon, e a coordenada do jogo dele não muda (origem = centro do recorte antigo).
+const M_LAT = 110574, M_LON = 111320 * Math.cos((BBOX_V1.s + BBOX_V1.n) / 2 * Math.PI / 180);
 const PXM = CELL * SCALE; // m reais por pixel
-const W = Math.round((BBOX.e - BBOX.w) * M_LON / PXM), H = Math.round((BBOX.n - BBOX.s) * M_LAT / PXM);
+const W_OLD = Math.round((BBOX_V1.e - BBOX_V1.w) * M_LON / PXM), H_OLD = Math.round((BBOX_V1.n - BBOX_V1.s) * M_LAT / PXM);
+const KX = Math.max(0, Math.ceil((BBOX_V1.w - EXPAND_TO.w) * M_LON / PXM)), KY = Math.max(0, Math.ceil((BBOX_V1.s - EXPAND_TO.s) * M_LAT / PXM));
+const BBOX = { n: BBOX_V1.n, e: BBOX_V1.e, w: BBOX_V1.w - KX * PXM / M_LON, s: BBOX_V1.s - KY * PXM / M_LAT };
+const W = W_OLD + KX, H = H_OLD + KY;
 const latOf = (j) => BBOX.n - (j + 0.5) * PXM / M_LAT, lonOf = (i) => BBOX.w + (i + 0.5) * PXM / M_LON;
 const toPx = (lat, lon) => [(lon - BBOX.w) * M_LON / PXM, (BBOX.n - lat) * M_LAT / PXM];
 const idx = (i, j) => Math.max(0, Math.min(H - 1, j)) * W + Math.max(0, Math.min(W - 1, i));
-/** pixel → coordenada do jogo (x leste, z SUL; origem no centro da área) */
-const gameX = (px) => (px - W / 2) * CELL, gameZ = (py) => (py - H / 2) * CELL;
+/** pixel (grade nova) → coordenada do jogo (x leste, z SUL; origem no centro do recorte ANTIGO) */
+const OX = KX + W_OLD / 2, OZ = H_OLD / 2;
+const gameX = (px) => (px - OX) * CELL, gameZ = (py) => (py - OZ) * CELL;
+/** O que é terreno de verdade (o resto da grade nova = faixa que desce pro mar): o recorte antigo, a faixa sul inteira e
+ *  a faixa oeste só ao sul de EXPAND_KEEP.westNorth (o maciço da Tijuca fica fora). */
+const inside = new Uint8Array(W * H);
+for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) inside[j * W + i] = i >= KX || j >= H_OLD || latOf(j) <= EXPAND_KEEP.westNorth ? 1 : 0;
+const insideAt = (px, py) => { const i = Math.floor(px), j = Math.floor(py); return i >= 0 && j >= 0 && i < W && j < H && inside[j * W + i] === 1; };
 
-const { at } = await loadDem();
+const { at } = await loadDem({ keep: BBOX_V1 }); // o relevo do recorte de 28/10 fica exatamente como era
 const e = new Float32Array(W * H); // altitude REAL (m)
 for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) e[j * W + i] = at(latOf(j), lonOf(i));
 const { sea, water, forest } = buildMasks(W, H, toPx);
@@ -56,7 +68,8 @@ const topOf = (el) => {
   for (let b = -r; b <= r; b++) for (let a = -r; a <= r; a++) { const i = Math.round(px) + a, j = Math.round(py) + b; if (i < 0 || j < 0 || i >= W || j >= H) continue; if (e[j * W + i] > best) { best = e[j * W + i]; bi = i; bj = j; } }
   return { best, bi, bj };
 };
-const peaks = osm.filter((el) => el.type === 'node' && el.tags?.natural === 'peak' && el.tags.ele && parseFloat(el.tags.ele) > 100);
+// (só os picos de DENTRO: o maciço da Tijuca, fora da expansão, não é esculpido — a cúpula vazaria pra dentro da borda)
+const peaks = osm.filter((el) => el.type === 'node' && el.tags?.natural === 'peak' && el.tags.ele && parseFloat(el.tags.ele) > 100 && insideAt(...toPx(el.lat, el.lon)));
 for (const el of peaks) {
   if (!el.tags.name || !(parseFloat(el.tags.ele) >= 250)) continue;
   const { best: top0, bi, bj } = topOf(el);
@@ -173,8 +186,37 @@ for (const r of ROCK_LANDMARKS) {
   for (let p = 0; p < W * H; p++) if (mask[p]) { hg[p] = Math.max(hg[p], 0.15) + r.height * (0.35 + 0.65 * sstep(0, Math.max(1, maxIn), din[p])); surf[p] = SURF.land; }
 }
 
+// FAIXA QUE DESCE PRO MAR (a das bordas do mapa, abaixo; e, desde 02/11, o bloco de FORA da expansão — o maciço da
+// Tijuca): a partir do pixel de dentro mais perto (altura h0, superfície s0) a `dm` m dele. Terra desce até uma praia no
+// pé e o mar; água continua água. Uma conta só pros dois.
+const A = APRON_PX;
+function apronAt(h0, s0, dm) {
+  if (h0 <= 0.05 || s0 === SURF.sea || s0 === SURF.lagoon) return [Math.max(-12, Math.min(h0, -(0.4 + dm * 0.08))), SURF.sea];
+  const Dd = Math.max(24, Math.min(A * CELL - 14, h0 * 0.8)); // morro alto desce mais longe (no máx. o que cabe na faixa)
+  if (dm < Dd) return [0.15 + (h0 - 0.15) * (1 - sstep(0, Dd, dm)), dm > Dd - ISLAND_BEACH ? SURF.beach : s0 === SURF.forest ? SURF.forest : s0 === SURF.beach ? SURF.beach : SURF.land];
+  return [-Math.min(12, 0.4 + (dm - Dd) * 0.08), SURF.sea];
+}
+{ // bloco de fora: pixel de dentro mais perto (propagação em 2 passadas com a distância de verdade)
+  const src = new Int32Array(W * H).fill(-1);
+  for (let p = 0; p < W * H; p++) if (inside[p]) src[p] = p;
+  const d2 = (p, s) => { const i = p % W, j = (p - i) / W, si = s % W, sj = (s - si) / W; return (i - si) ** 2 + (j - sj) ** 2; };
+  const relax = (p, q) => { const s = src[q]; if (s >= 0 && (src[p] < 0 || d2(p, s) < d2(p, src[p]))) src[p] = s; };
+  for (let rep = 0; rep < 2; rep++) {
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const p = j * W + i; if (inside[p]) continue; if (i > 0) relax(p, p - 1); if (j > 0) { relax(p, p - W); if (i > 0) relax(p, p - W - 1); if (i < W - 1) relax(p, p - W + 1); } }
+    for (let j = H - 1; j >= 0; j--) for (let i = W - 1; i >= 0; i--) { const p = j * W + i; if (inside[p]) continue; if (i < W - 1) relax(p, p + 1); if (j < H - 1) { relax(p, p + W); if (i < W - 1) relax(p, p + W + 1); if (i > 0) relax(p, p + W - 1); } }
+  }
+  let outPx = 0;
+  for (let p = 0; p < W * H; p++) {
+    if (inside[p] || src[p] < 0) continue;
+    const [h, s] = apronAt(hg[src[p]], surf[src[p]], Math.sqrt(d2(p, src[p])) * CELL);
+    hg[p] = h; surf[p] = s; outPx++;
+  }
+  console.log(JSON.stringify({ expansao: { KX, KY, grade: `${W}x${H}`, foraDaExpansao_px: outPx } }));
+}
+
 // RUAS (avenidas reais do OSM): nivelamento leve com travas (≤ MAX_GRADE m; praia/água intocadas; costão íngreme não)
-const RD = buildRoads({ osm, toPx, W, H, CELL, hg, surf, SURF, gameX, gameZ, minX: gameX(0), maxX: gameX(W), minZ: gameZ(0), maxZ: gameZ(H) });
+const RD = buildRoads({ osm, toPx, W, H, CELL, hg, surf, SURF, gameX, gameZ, minX: gameX(0), maxX: gameX(W), minZ: gameZ(0), maxZ: gameZ(H),
+  fx: (x) => x / CELL + OX - 0.5, fz: (z) => z / CELL + OZ - 0.5 });
 fs.mkdirSync('public/zona-sul', { recursive: true });
 console.log(JSON.stringify({ ruas: RD.roads.length, km_jogo: +RD.km.toFixed(2), nivelados_px: RD.graded, maiorMudanca_m: +RD.maxDelta.toFixed(2), trava_m: MAX_GRADE }));
 
@@ -204,24 +246,19 @@ console.log(JSON.stringify({ canalJardimDeAlah_px: canalPx }));
 // ESTENDER ATÉ A ÁGUA (Pedro: "você deve apenas estender até a água; o resto não remover"): o mapa ganha uma faixa NOVA
 // de APRON_PX em volta. Terra que chegava na borda continua pra fora DESCENDO (pedra/encosta) até uma praia no pé e o
 // mar; mar na borda continua mar. Nada dentro do mapa muda. Coordenadas do jogo iguais (faixa simétrica).
-const A = APRON_PX, W2 = W + 2 * A, H2 = H + 2 * A;
+const W2 = W + 2 * A, H2 = H + 2 * A;
 const HG = new Float32Array(W2 * H2), SF = new Uint8Array(W2 * H2);
 let apronLand = 0;
 for (let j2 = 0; j2 < H2; j2++) for (let i2 = 0; i2 < W2; i2++) {
   const q = j2 * W2 + i2, i = i2 - A, j = j2 - A;
   if (i >= 0 && j >= 0 && i < W && j < H) { HG[q] = hg[j * W + i]; SF[q] = surf[j * W + i]; continue; }
   const ci = Math.max(0, Math.min(W - 1, i)), cj = Math.max(0, Math.min(H - 1, j));
-  const dm = Math.hypot(i - ci, j - cj) * CELL, h0 = hg[cj * W + ci], s0 = surf[cj * W + ci];
-  if (h0 <= 0.05 || s0 === SURF.sea || s0 === SURF.lagoon) { HG[q] = Math.max(-12, Math.min(h0, -(0.4 + dm * 0.08))); SF[q] = SURF.sea; continue; }
-  const Dd = Math.max(24, Math.min(A * CELL - 14, h0 * 0.8)); // morro alto desce mais longe (no máx. o que cabe na faixa)
-  if (dm < Dd) {
-    HG[q] = 0.15 + (h0 - 0.15) * (1 - sstep(0, Dd, dm));
-    SF[q] = dm > Dd - ISLAND_BEACH ? SURF.beach : s0 === SURF.forest ? SURF.forest : s0 === SURF.beach ? SURF.beach : SURF.land;
-    apronLand++;
-  } else { HG[q] = -Math.min(12, 0.4 + (dm - Dd) * 0.08); SF[q] = SURF.sea; }
+  const [h, s] = apronAt(hg[cj * W + ci], surf[cj * W + ci], Math.hypot(i - ci, j - cj) * CELL);
+  HG[q] = h; SF[q] = s; if (s !== SURF.sea) apronLand++;
 }
 const idx2 = (i, j) => Math.max(0, Math.min(H2 - 1, j)) * W2 + Math.max(0, Math.min(W2 - 1, i));
-const gx2 = (px2) => (px2 - W2 / 2) * CELL, gz2 = (py2) => (py2 - H2 / 2) * CELL;
+/** pixel (grade com a faixa) → jogo; e o centro do 1º pixel / a borda (meta e máscara das ruas) */
+const gx2 = (px2) => (px2 - A - OX) * CELL, gz2 = (py2) => (py2 - A - OZ) * CELL;
 
 // grava: R/G = altura em cm (+ deslocamento), B = superfície
 const img = Buffer.alloc(W2 * H2 * 3);
@@ -235,18 +272,18 @@ fs.mkdirSync('public/zona-sul', { recursive: true });
 await sharp(img, { raw: { width: W2, height: H2, channels: 3 } }).png({ compressionLevel: 9 }).toFile('public/zona-sul/terrain.png');
 
 // RUAS como TEXTURA do chão: grade de 1 m cobrindo o mapa inteiro (com a faixa)
-const ROAD_RES = 1, RM = rasterRoadMask(RD.roads, { minX: -W2 * CELL / 2, minZ: -H2 * CELL / 2, sizeX: W2 * CELL, sizeZ: H2 * CELL, res: ROAD_RES });
+const ROAD_RES = 1, RM = rasterRoadMask(RD.roads, { minX: gx2(0), minZ: gz2(0), sizeX: W2 * CELL, sizeZ: H2 * CELL, res: ROAD_RES });
 // CANAL (01/11): a rua some onde o chão virou água (senão a terra da pista aparece no fundo do canal). Só na faixa do canal.
 {
   const hgAt = (x, z) => { // bilinear entre os centros das células (igual zsHeightAt no jogo)
-    const fx = Math.max(0, Math.min(W2 - 1.001, x / CELL + W2 / 2 - 0.5)), fz = Math.max(0, Math.min(H2 - 1.001, z / CELL + H2 / 2 - 0.5));
+    const fx = Math.max(0, Math.min(W2 - 1.001, x / CELL + A + OX - 0.5)), fz = Math.max(0, Math.min(H2 - 1.001, z / CELL + A + OZ - 0.5));
     const i = Math.floor(fx), j = Math.floor(fz), ax = fx - i, az = fz - j, p = j * W2 + i;
     return (HG[p] * (1 - ax) + HG[p + 1] * ax) * (1 - az) + (HG[p + W2] * (1 - ax) + HG[p + W2 + 1] * ax) * az;
   };
   let cleared = 0;
   for (let v = 0; v < RM.MH; v++) for (let u = 0; u < RM.MW; u++) {
     const q = v * RM.MW + u; if (RM.buf[q * 3] === 0) continue;
-    const x = -W2 * CELL / 2 + (u + 0.5) * ROAD_RES, z = -H2 * CELL / 2 + (v + 0.5) * ROAD_RES;
+    const x = gx2(0) + (u + 0.5) * ROAD_RES, z = gz2(0) + (v + 0.5) * ROAD_RES;
     if (canalDist(x, z) > CANAL_REACH || hgAt(x, z) >= 0.5) continue; // 0,5: a pista para um palmo antes da beira d'água
     RM.buf[q * 3] = 0; RM.buf[q * 3 + 1] = 128; cleared++;
   }
@@ -257,7 +294,7 @@ console.log(JSON.stringify({ mapaDasRuas: `${RM.MW}x${RM.MH} (${ROAD_RES} m)`, k
 
 // marcos (picos com nome ≥ 300 m) e ponto de partida — coordenadas do jogo (iguais com ou sem a faixa)
 const peak = (name) => osm.find((e) => e.type === 'node' && e.tags?.name === name);
-const landmarks = osm.filter((e) => e.type === 'node' && e.tags?.natural === 'peak' && e.tags.name && parseFloat(e.tags.ele) >= 300)
+const landmarks = osm.filter((e) => e.type === 'node' && e.tags?.natural === 'peak' && e.tags.name && parseFloat(e.tags.ele) >= 300 && insideAt(...toPx(e.lat, e.lon)))
   .map((e) => { const [px, py] = toPx(e.lat, e.lon); return { name: e.tags.name, x: +gameX(px).toFixed(1), z: +gameZ(py).toFixed(1), ele: parseFloat(e.tags.ele) }; });
 // partida: o ponto de PRAIA mais perto da praia do Arpoador (a coordenada sozinha caía no meio do bairro)
 const SPAWN = { lat: -22.98860, lon: -43.19300, name: 'Praia do Arpoador' };
@@ -268,11 +305,13 @@ const spawn = { x: +gx2(sx).toFixed(1), z: +gz2(sy).toFixed(1) };
 fs.mkdirSync('src/components/zona-sul', { recursive: true });
 fs.writeFileSync('src/components/zona-sul/zona-sul-meta.ts', `// GERADO por tools/zona-sul/bake.mjs — não editar à mão (rode a ferramenta de novo).
 // Zona Sul do RJ em escala 1:${SCALE} (altura ×${RELIEF} da proporção). Dados: relevo AWS Terrain Tiles (SRTM etc.) e
-// © OpenStreetMap contributors (ODbL). Coordenadas do jogo: x = leste, z = SUL, origem no centro da área.
-export const ZS_TERRAIN = { url: '/zona-sul/terrain.png', w: ${W2}, h: ${H2}, cell: ${CELL}, offset: ${H_OFFSET}, scale: ${SCALE} } as const;
+// © OpenStreetMap contributors (ODbL). Coordenadas do jogo: x = leste, z = SUL, origem no centro do recorte de 28/10.
+/** x0/z0 = centro do 1º pixel em coordenadas do jogo (02/11: a grade cresceu pra oeste/sul — a origem segue no centro
+ *  do recorte de 28/10, então o mapa não é mais centrado no (0, 0)). */
+export const ZS_TERRAIN = { url: '/zona-sul/terrain.png', w: ${W2}, h: ${H2}, cell: ${CELL}, offset: ${H_OFFSET}, scale: ${SCALE}, x0: ${gx2(0.5)}, z0: ${gz2(0.5)} } as const;
 export const ZS_SURF = ${JSON.stringify(SURF)} as const;
 /** Ruas como textura do chão: R = cobertura, G = posição atravessada na pista. Retângulo em coordenadas do jogo. */
-export const ZS_ROAD_MASK = { url: '/zona-sul/roads-mask.png', x0: ${-W2 * CELL / 2}, z0: ${-H2 * CELL / 2}, w: ${W2 * CELL}, h: ${H2 * CELL} } as const;
+export const ZS_ROAD_MASK = { url: '/zona-sul/roads-mask.png', x0: ${gx2(0)}, z0: ${gz2(0)}, w: ${W2 * CELL}, h: ${H2 * CELL} } as const;
 export const ZS_SPAWN = ${JSON.stringify({ ...spawn, name: SPAWN.name })};
 export const ZS_LANDMARKS: { name: string; x: number; z: number; ele: number }[] = ${JSON.stringify(landmarks)};
 `);
@@ -290,7 +329,7 @@ while (st.length) {
   }
 }
 const access = landmarks.filter((l) => l.ele >= 300).map((l) => {
-  const ci = Math.round(l.x / CELL + W2 / 2 - 0.5), cj = Math.round(l.z / CELL + H2 / 2 - 0.5);
+  const ci = Math.round(l.x / CELL + A + OX - 0.5), cj = Math.round(l.z / CELL + A + OZ - 0.5);
   let top = -Infinity, ti = ci, tj = cj; for (let b = -6; b <= 6; b++) for (let a = -6; a <= 6; a++) { const v = HG[idx2(ci + a, cj + b)]; if (v > top) { top = v; ti = ci + a; tj = cj + b; } }
   let bestR = -Infinity; for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) if (reach[idx2(ti + a, tj + b)]) bestR = Math.max(bestR, HG[idx2(ti + a, tj + b)]);
   return `${l.name} ${top.toFixed(0)} m: ${bestR > -Infinity ? 'alcança' : 'NÃO alcança'}`;
