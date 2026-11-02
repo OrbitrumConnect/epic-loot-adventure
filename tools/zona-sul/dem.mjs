@@ -23,6 +23,7 @@ export async function loadDem({ keep } = {}) {
   // Conrado — virava uma vala reta de ponta a ponta). Aqui não existe nada abaixo de −1000 m (o mar em volta tem dezenas
   // de metros); esse valor vira a média dos vizinhos BONS (janela crescendo até achar). Valor bom não é tocado.
   // (dentro de `keep` fica como está: lá há um furo antigo perto da Urca que o mapa de 28/10 já tem — anotado no diário)
+  // 02/11 (item 3 do Pedro): o bake NÃO passa mais `keep` → o conserto vale no mapa todo (Urca, Leme, Babilônia, Leblon).
   const BAD = -1000, nT = 2 ** t.z;
   const lonOfPx = (i) => ((i + 0.5) / TILE + t.x0) / nT * 360 - 180;
   const latOfPx = (j) => { const m = Math.PI * (1 - 2 * ((j + 0.5) / TILE + t.y0) / nT); return Math.atan(Math.sinh(m)) * 180 / Math.PI; };

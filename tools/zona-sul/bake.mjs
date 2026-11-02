@@ -42,7 +42,9 @@ const inside = new Uint8Array(W * H);
 for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) inside[j * W + i] = i >= KX || j >= H_OLD || latOf(j) <= EXPAND_KEEP.westNorth ? 1 : 0;
 const insideAt = (px, py) => { const i = Math.floor(px), j = Math.floor(py); return i >= 0 && j >= 0 && i < W && j < H && inside[j * W + i] === 1; };
 
-const { at } = await loadDem({ keep: BBOX_V1 }); // o relevo do recorte de 28/10 fica exatamente como era
+// 02/11 (Pedro, item 3: "consertar o furo antigo da Urca/Pão de Açúcar"): o conserto do lixo do satélite vale no mapa
+// TODO (antes: `keep: BBOX_V1` deixava o recorte de 28/10 com os furos). Só o valor impossível (< −1000 m) muda.
+const { at } = await loadDem();
 const e = new Float32Array(W * H); // altitude REAL (m)
 for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) e[j * W + i] = at(latOf(j), lonOf(i));
 const { sea, water, forest } = buildMasks(W, H, toPx);

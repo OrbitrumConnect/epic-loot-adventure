@@ -45,18 +45,31 @@ describe('Gávea + Cagarras — o que entrou', () => {
 });
 
 describe('Gávea + Cagarras — sem mexer no que existe', () => {
-  it('a área de 28/10 sai IGUAL (altura e superfície), menos a faixa de 8 px da borda oeste/sul antiga', () => {
+  it('a área de 28/10 sai IGUAL (altura e superfície), menos a faixa de 8 px da borda oeste/sul antiga e os FUROS do satélite consertados', () => {
+    // 02/11 (Pedro, item 3: "consertar o furo antigo da Urca/Pão de Açúcar"): o lixo do dado da AWS (< −1000 m) virava
+    // buraco com AREIA no meio da terra (Urca/Praia Vermelha, Leme, Babilônia, Leblon…). Consertado: 559 px em 17 manchas
+    // pequenas; o chão SÓ SOBE (no máx. ~1 m desce, na borda de uma mancha) e a superfície só sai de areia pra terra/mata/rua.
     const A = 18; let n = 0, diff = 0;
     for (let j = A; j < old.h - A - 8; j++) for (let i = A + 8; i < old.w - A; i++) {
       const x = old.x0 + i * old.cell, z = old.z0 + j * old.cell;
       const ib = Math.round((x - now.x0) / now.cell), jb = Math.round((z - now.z0) / now.cell);
       expect(now.x0 + ib * now.cell).toBeCloseTo(x, 6); // grade alinhada
       n++;
-      if (Math.abs(now.heights[jb * now.w + ib]! - old.heights[j * old.w + i]!) > 1e-6 || now.surf[jb * now.w + ib] !== old.surf[j * old.w + i]) diff++;
+      const dh = now.heights[jb * now.w + ib]! - old.heights[j * old.w + i]!, s0 = old.surf[j * old.w + i]!, s1 = now.surf[jb * now.w + ib]!;
+      if (Math.abs(dh) > 1e-6 || s1 !== s0) {
+        diff++;
+        expect(dh).toBeGreaterThan(-1.05);
+        if (s1 !== s0) { expect(s0).toBe(ZS_SURF.beach); expect([ZS_SURF.land, ZS_SURF.forest, ZS_SURF.road]).toContain(s1); }
+      }
     }
     expect(n).toBeGreaterThan(75000);
-    expect(diff).toBe(0);
+    expect(diff).toBeLessThanOrEqual(650); // medido: 632 (559 com mais de 1 cm + vizinhos de 1 cm)
   }, 30_000);
+  it('furo consertado no mapa todo (antes só na área nova): o bake não guarda mais o recorte de 28/10 com o lixo', () => {
+    const bake = fs.readFileSync('tools/zona-sul/bake.mjs', 'utf8');
+    expect(bake).toContain('const { at } = await loadDem();');
+    expect(bake).not.toContain('loadDem({ keep: BBOX_V1 })');
+  });
   it('o (0, 0) e a partida no mesmo lugar; o meta traz o canto (mapa não é mais centrado); o mapa (M) e o mar cobrem tudo', () => {
     expect(ZS_SPAWN).toEqual({ x: 90, z: 390, name: 'Praia do Arpoador' });
     expect(zsSurfAt(now, ZS_SPAWN.x, ZS_SPAWN.z)).toBe(ZS_SURF.beach);
