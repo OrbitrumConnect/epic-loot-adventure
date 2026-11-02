@@ -9,16 +9,21 @@ import { rand, type Palette } from './world-kit';
  * cada copa, nos MESMOS lugares, 1,7× maiores (cobrem a mesma área) → ~2 mil triângulos em vez de ~8,9 mil.
  * Sem `far` a árvore sai idêntica à de sempre.
  */
-export function harvestTreeGeometry(c: Palette, far = false): THREE.BufferGeometry {
+/** `xfar` (02/11 — mais árvores de farm e o custo de longe: além de 260 m): a MESMA árvore ainda mais leve — tronco de
+ *  3 lados, só a metade dos galhos (cada uma das copas que sobra no MESMO lugar) e 1 de cada 9 folhas, 3× maiores
+ *  (cobrem a mesma área) → ~400 triângulos. A essa distância a árvore tem poucos pixels. */
+export function harvestTreeGeometry(c: Palette, far: boolean | 'xfar' = false): THREE.BufferGeometry {
+  const xfar = far === 'xfar';
+  if (xfar) far = true;
   const pieces: THREE.BufferGeometry[] = [];
   const bark = new THREE.Color(c.trunk);
   const barkLight = bark.clone().lerp(new THREE.Color(c['ground-light']), 0.24);
   const foliage = new THREE.Color(c.leaf);
   const foliageLight = new THREE.Color(c['leaf-light']);
   const color = new THREE.Color();
-  const radial = far ? 4 : 7;
+  const radial = xfar ? 3 : far ? 4 : 7;
   const branch = (points: THREE.Vector3[], radius: number, segments0 = 7) => {
-    const segments = far ? Math.min(segments0, 3) : segments0;
+    const segments = xfar ? Math.min(segments0, 2) : far ? Math.min(segments0, 3) : segments0;
     const curve = new THREE.CatmullRomCurve3(points);
     const tube = new THREE.TubeGeometry(curve, segments, radius, radial, false);
     const p = tube.getAttribute('position');
@@ -46,7 +51,8 @@ export function harvestTreeGeometry(c: Palette, far = false): THREE.BufferGeomet
     branch([v(Math.cos(a) * 0.42, 0.025, Math.sin(a) * 0.42),
       v(Math.cos(a) * 0.18, 0.13, Math.sin(a) * 0.18), v(0, 0.68, 0)], 0.095, 4);
   }
-  const LEAF_STEP = far ? 3 : 1, LEAF_K = far ? Math.sqrt(3) : 1;
+  // (xfar: 1/9 das folhas em metade das copas → folha 4,2× maior cobre a mesma área de folhagem)
+  const LEAF_STEP = xfar ? 9 : far ? 3 : 1, LEAF_K = xfar ? 4.2 : far ? Math.sqrt(3) : 1;
   const positions: number[] = [];
   const colors: number[] = [];
   for (let i = 0; i < 16; i++) {
@@ -55,6 +61,7 @@ export function harvestTreeGeometry(c: Palette, far = false): THREE.BufferGeomet
     const h = 2.75 + rand(seed) * 1.5;
     const reach = (4.9 - h) * (0.43 + rand(seed + 2) * 0.15);
     const end = v(Math.cos(a) * reach, h, Math.sin(a) * reach);
+    if (xfar && i % 2 === 1) continue; // de muito longe: metade dos galhos (as copas que ficam, nos mesmos lugares)
     branch([v(0, h - 0.8, 0), v(end.x * 0.48, h - 0.25, end.z * 0.48), end], 0.07);
     for (let fork = 0; fork < 2 && !far; fork++) {
       const angle = a + (fork === 0 ? -0.6 : 0.6);

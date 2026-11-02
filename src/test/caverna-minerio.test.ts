@@ -47,7 +47,7 @@ describe('minério de ferro na caverna', () => {
     expect(nodes.reduce((a, n) => a + n.maxQuantity, 0)).toBe(216);
     expect(new Set(nodes.map((n) => n.id)).size).toBe(18);
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
-    expect(zs).toContain('harvestNodes: [...createZsHarvestNodes(query), ...createCaveOreNodes()]');
+    expect(zs).toContain('...createCaveOreNodes()];');
     expect(zs).toContain('<Suspense fallback={null}><HarvestNodes c={cFarm} layer={1} /></Suspense>');
   });
 

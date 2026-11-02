@@ -45,6 +45,12 @@ const USE_GLB_CRYSTAL = true;
 let cachedArray: HarvestNodeState[] | null = null;
 let cachedMap = new Map<string, HarvestNodeState>();
 
+/** PORTE da árvore de farm pela semente dela (02/11): [altura, largura] — 25% muda, 55% normal (como sempre), 20% grande. */
+export function farmTreeSize(seed: number): [number, number] {
+  const k = rand(seed + 41);
+  return k < 0.25 ? [0.72, 0.78] : k < 0.8 ? [1, 1] : [1.3, 1.25];
+}
+
 /** Altura do pé do nó: a guardada (caverna, 02/11) ou o chão do mapa, como sempre. */
 export function harvestNodeY(n: HarvestNodeState): number {
   return n.y ?? glbSurfaceY(n.position.x, n.position.z, terrainHeight(n.position.x, n.position.z));
@@ -113,6 +119,8 @@ type KindAssets = {
   live: THREE.BufferGeometry;
   /** versão de LONGE (só a árvore): desenhada além de `harvestLod.d` m da câmera quando o lote é recortado (Zona Sul) */
   far?: THREE.BufferGeometry;
+  /** versão de MUITO longe (só a árvore, 02/11): além de `harvestLod.d2` m (~400 triângulos) */
+  xfar?: THREE.BufferGeometry;
   dead: THREE.BufferGeometry;
   liveMat: THREE.Material;
   /** Altura do rótulo flutuante. */
@@ -150,6 +158,7 @@ function buildAssets(c: Palette, cave = false): { assets: Record<HarvestNodeKind
   const tree: KindAssets = {
     live: harvestTreeGeometry(c),
     far: harvestTreeGeometry(c, true),
+    xfar: harvestTreeGeometry(c, 'xfar'),
     dead: bake([
       { g: cyl(0.3, 0.4, 0.5, 7), color: c.trunk, pos: [0, 0.25, 0] },
       { g: cyl(0.26, 0.26, 0.05, 7), color: c['ground-light'], pos: [0, 0.52, 0] },
@@ -320,7 +329,9 @@ const VIEW_PAD = 3, VIEW_PAD_K = 0.15;
  * coleta vai pro lote LEVE (mesma copa, ~2 mil triângulos em vez de ~8,9 mil — `harvestTreeGeometry(c, true)`). Medido:
  * do nascedouro a câmera via 124 árvores (1,86 mi de triângulos). Só com o recorte ligado (Zona Sul, sem fade).
  */
-export const harvestLod = { d: 120 };
+// 02/11 (mais árvores de farm: 136 → 206): além de `d2` m a árvore vai pro lote de MUITO longe (~400 triângulos, mesmo
+// tronco e copas nos mesmos lugares) — sem ele, cada árvore a mais custava ~2 mil triângulos até o fim da névoa.
+export const harvestLod = { d: 120, d2: 260 };
 if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __harvestLod?: unknown }).__harvestLod = harvestLod; // testes de tela (A/B)
 const vFrustum = new THREE.Frustum();
 const vProj = new THREE.Matrix4();
@@ -354,6 +365,10 @@ function KindInstances({
   const farRef = useRef<THREE.InstancedMesh>(null);
   const farView = useRef({ k: 0, order: new Int32Array(Math.max(1, nodes.length)) });
   const farIds = useRef<string[]>([]);
+  /** Lote de MUITO longe (02/11 — `harvestLod.d2`), igual ao de longe. */
+  const xfarRef = useRef<THREE.InstancedMesh>(null);
+  const xfarView = useRef({ k: 0, order: new Int32Array(Math.max(1, nodes.length)) });
+  const xfarIds = useRef<string[]>([]);
   const tv = useTerrainVersion(); // reassenta na superfície do GLB quando ele carrega
 
   useLayoutEffect(() => {
@@ -382,9 +397,12 @@ function KindInstances({
           // Árvore de farm (Pedro 25/10): +~1 m e cada uma com altura PRÓPRIA (pareciam todas iguais).
           // Altura 4,9 m × 1,02–1,42 → ~5–7 m; largura varia pouco (0,95–1,15) → floresta natural, sem exagero.
           const fillK = 0.8 + 0.2 * Math.max(0, Math.min(1, fill));
-          const w = (0.95 + r * 0.2) * fillK;
+          // PORTE (02/11, Pedro: "add mais delas? tamanhos variados?"): muda / normal / grande pela semente (fixo por
+          // árvore) — ~4,7–6,6 m · 6,6–9,2 m · 8,6–12 m (a mata de cenário começa nos 13 m: continua dando pra ver qual se colhe)
+          const [ph, pw] = farmTreeSize(n.seed);
+          const w = (0.95 + r * 0.2) * fillK * pw;
           // +32% de altura (Pedro 25/10, TREE_HEIGHT_K): ~6,6–9,2 m.
-          dummy.scale.set(w, (1.02 + rand(n.seed + 29) * 0.4) * fillK * TREE_HEIGHT_K, w);
+          dummy.scale.set(w, (1.02 + rand(n.seed + 29) * 0.4) * fillK * TREE_HEIGHT_K * ph, w);
         } else dummy.scale.set(s, s, s);
         dummy.updateMatrix();
         live.setMatrixAt(li, dummy.matrix);
@@ -423,6 +441,9 @@ function KindInstances({
     if (farView.current.order.length < cap) farView.current.order = new Int32Array(cap);
     farView.current.k = 0; farIds.current = [];
     if (farRef.current) farRef.current.count = 0;
+    if (xfarView.current.order.length < cap) xfarView.current.order = new Int32Array(cap);
+    xfarView.current.k = 0; xfarIds.current = [];
+    if (xfarRef.current) xfarRef.current.count = 0;
   }, [mine, cap, kind, tv, assets]);
 
   // lote de longe usa o MESMO material da árvore (mesma luz/cor/1 passada); o alfa por instância fica sempre 100%
@@ -430,6 +451,10 @@ function KindInstances({
     if (!assets.far) return;
     assets.far.setAttribute('aFade', new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(1), 1));
     if (farRef.current) farRef.current.count = 0;
+    if (assets.xfar) {
+      assets.xfar.setAttribute('aFade', new THREE.InstancedBufferAttribute(new Float32Array(cap).fill(1), 1));
+      if (xfarRef.current) xfarRef.current.count = 0;
+    }
   }, [cap, assets]);
 
   // Cópia de sombra: na TELA desenha 0 instâncias; só no passe de sombra desenha as escolhidas.
@@ -448,7 +473,7 @@ function KindInstances({
     const B = base.current, sp = spheres.current, n = Math.min(B.n, sp.length / 4);
     // 1) RECORTE PELA CÂMERA (só sem fade rodando): quem a câmera vê vai pro começo do lote
     {
-      const V = view.current, F = farView.current, far = farRef.current;
+      const V = view.current, F = farView.current, far = farRef.current, X = xfarView.current, xfar = xfarRef.current;
       let k = 0, changed = false;
       if (fadeLoop.mounted === 0) {
         camera.updateMatrixWorld();
@@ -456,13 +481,15 @@ function KindInstances({
         vFrustum.setFromProjectionMatrix(vProj);
         const cp = camera.position;
         const lodD = far && assets.far ? harvestLod.d : Infinity;
-        let kf = 0, farChanged = false;
+        const lodD2 = xfar && assets.xfar ? harvestLod.d2 : Infinity;
+        let kf = 0, farChanged = false, kx = 0, xfarChanged = false;
         for (let i = 0; i < n; i++) {
           const x = sp[i * 4]!, y = sp[i * 4 + 1]!, z = sp[i * 4 + 2]!;
           const dist = Math.hypot(x - cp.x, y - cp.y, z - cp.z);
           shSphere.center.set(x, y, z);
           shSphere.radius = sp[i * 4 + 3]! + VIEW_PAD + dist * VIEW_PAD_K;
           if (!vFrustum.intersectsSphere(shSphere)) continue;
+          if (dist > lodD2) { if (X.order[kx] !== i) { X.order[kx] = i; xfarChanged = true; } kx++; continue; } // muito longe
           if (dist > lodD) { if (F.order[kf] !== i) { F.order[kf] = i; farChanged = true; } kf++; continue; } // longe: árvore leve
           if (V.order[k] !== i) { V.order[k] = i; changed = true; }
           k++;
@@ -475,10 +502,17 @@ function KindInstances({
           farIds.current = list; far.count = kf; F.k = kf;
           far.instanceMatrix.needsUpdate = true; far.boundingSphere = null;
         }
+        if (xfar && (xfarChanged || kx !== X.k)) {
+          const dst = xfar.instanceMatrix.array as Float32Array, list: string[] = [];
+          for (let j = 0; j < kx; j++) { const o = X.order[j]!; dst.set(B.m.subarray(o * 16, o * 16 + 16), j * 16); list[j] = B.ids[o]!; }
+          xfarIds.current = list; xfar.count = kx; X.k = kx;
+          xfar.instanceMatrix.needsUpdate = true; xfar.boundingSphere = null;
+        }
       } else if (V.culled) { // fade voltou a rodar: ordem original, lote inteiro
         for (let i = 0; i < n; i++) V.order[i] = i;
         k = n; changed = true; V.culled = false;
         if (far) { far.count = 0; F.k = 0; farIds.current = []; }
+        if (xfar) { xfar.count = 0; X.k = 0; xfarIds.current = []; }
       }
       if (changed) {
         const dst = live.instanceMatrix.array as Float32Array, list: string[] = [];
@@ -549,7 +583,7 @@ function KindInstances({
   const onPointerDown = onDown(ids), onPointerMove = onMove(ids);
 
   const onPointerOut = () => {
-    if (hover.current.id && (ids.current.includes(hover.current.id) || farIds.current.includes(hover.current.id))) {
+    if (hover.current.id && (ids.current.includes(hover.current.id) || farIds.current.includes(hover.current.id) || xfarIds.current.includes(hover.current.id))) {
       hover.current.id = null;
       document.body.style.cursor = '';
     }
@@ -577,6 +611,19 @@ function KindInstances({
           receiveShadow
           onPointerDown={onDown(farIds)}
           onPointerMove={onMove(farIds)}
+          onPointerOut={onPointerOut}
+        />
+      )}
+      {assets.xfar && (
+        <instancedMesh
+          key={`xfar-${cap}`}
+          ref={xfarRef}
+          args={[assets.xfar, assets.liveMat, cap]}
+          count={0}
+          castShadow={false}
+          receiveShadow
+          onPointerDown={onDown(xfarIds)}
+          onPointerMove={onMove(xfarIds)}
           onPointerOut={onPointerOut}
         />
       )}

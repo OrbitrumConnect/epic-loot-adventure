@@ -36,7 +36,28 @@ export const ZS_FARM_EXTRA: { kind: 'tree' | 'pebble' | 'rock'; count: number; s
   { kind: 'tree', count: 42 },                // mata e verde em geral
   { kind: 'pebble', count: 20 },
   { kind: 'rock', count: 30 },
+  // 02/11 (Pedro: "as árvores de farm já são mais bonitas — add mais delas"): +40 na mata/verde. NO FIM da lista: o
+  // sorteio de cima não muda (mesma sequência) — as árvores de antes ficam exatamente onde estão.
+  { kind: 'tree', count: 40 },
 ];
+
+/** ÁREA NOVA (02/11 — Gávea, Pedra Bonita, São Conrado): árvores de farm só FORA do recorte antigo, no terreno de agora
+ *  (o resto do farm é sorteado no de 28/10). Sorteio próprio → não mexe em nada do que existe. */
+export const ZS_FARM_NEW_AREA_TREES = 30;
+export function createZsNewAreaTrees(q: ZsQuery, oldBounds: ZsQuery['bounds'], existing: HarvestNodeState[], seed = 20261102): HarvestNodeState[] {
+  const rand = rng32(seed), def = HARVEST_NODES.tree, out: HarvestNodeState[] = [];
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const inOld = (x: number, z: number) => x >= oldBounds.minX && x <= oldBounds.maxX && z >= oldBounds.minZ && z <= oldBounds.maxZ;
+  for (let tries = 0; out.length < ZS_FARM_NEW_AREA_TREES && tries < 60000; tries++) {
+    const x = minX + 8 + rand() * Math.max(1, maxX - minX - 16), z = minZ + 8 + rand() * Math.max(1, maxZ - minZ - 16);
+    if (inOld(x, z) || !dryGround(q, x, z) || q.surf(x, z) === SURF.beach || !clearOfRoadAndWater(q, x, z)) continue;
+    if (q.slope(x, z) > 30) continue; // nada pendurado no paredão da Gávea
+    const position = { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
+    if ([...existing, ...out].some(n => distance2(n.position, position) < NODE_SPACING ** 2)) continue;
+    out.push({ id: `zs_hn_tree_gavea_${out.length}`, kind: 'tree', position, quantity: def.capacity, maxQuantity: def.capacity, depleted: false, respawnAt: null, seed: rand() });
+  }
+  return out;
+}
 /** a 2ª leva chega até aqui do nascedouro (a zona segura tem 45 m) */
 export const ZS_FARM_EXTRA_CLEAR = 70;
 /** "perto da praia/Lagoa": areia ou água da Lagoa a até isto (m) */

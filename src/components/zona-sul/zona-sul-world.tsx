@@ -68,7 +68,7 @@ import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-pro
 import { createZsBandits, createZsSharks, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
-import { createZsHarvestNodes } from '@/game/systems/zsHarvestSystem';
+import { createZsHarvestNodes, createZsNewAreaTrees } from '@/game/systems/zsHarvestSystem';
 import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
 import { useZsTouch, zsAttack, zsCave, zsCtx } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
@@ -1309,7 +1309,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       setWorldProfile(prof);
       useGameStore.getState().enterWorld('zona-sul', {
         creatures: [...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps), ...createCaveCreatures(), ...createZsSharks(query, zsSharkPeaks(st)), ...createZsBandits(query, prof.camps)],
-        harvestNodes: [...createZsHarvestNodes(query), ...createCaveOreNodes()], // + veios de ferro da caverna (02/11)
+        // + árvores de farm da área nova (Gávea/São Conrado, no terreno de agora) + veios de ferro da caverna (02/11)
+        harvestNodes: (() => { const base = createZsHarvestNodes(query); return [...base, ...createZsNewAreaTrees(zsQuery(tt), query.bounds, base), ...createCaveOreNodes()]; })(),
         position: { x: at.x, z: at.z },
       });
       setSpawnT(st); setT(tt); setReady(true);
