@@ -18,6 +18,9 @@ import { restoreLocalSave, SAVE_KEY } from '../systems/persistenceSystem';
 import { markRestored } from './restore-marker';
 
 const TABLE = 'player_saves';
+/** O save da conta já foi DECIDIDO neste login (carregou, semeou, ou falhou e ficou o local) — 03/11: a tela de escolha
+ *  do herói (homem/mulher) só aparece depois disso (senão piscava antes do save da conta chegar com a skin). */
+export const accountLoad = { decided: false };
 /** De QUAL conta é o personagem que está neste aparelho (memória + save local). */
 export const OWNER_KEY = 'tribos.local.owner';
 
@@ -97,6 +100,7 @@ export function startAccountPersistence(userId: string): () => void {
       // estado fresco). Mantém o que tem; o save local segue de fallback.
       console.warn('[save conta] load falhou, mantém local:', error.message);
       loaded = readOwner() === userId; // só volta a subir se o personagem local é desta conta
+      accountLoad.decided = true;
       return;
     }
     const parsed = data?.save ? parseLocalSave(JSON.stringify(data.save)) : null;
@@ -104,6 +108,7 @@ export function startAccountPersistence(userId: string): () => void {
       locked = true;
       console.warn('[save conta] save da conta não passou na validação — NÃO sobrescrevo.');
       store.getState().setMessage('⚠️ Seu save da conta não carregou. Nada foi apagado — avise o suporte antes de jogar.');
+      accountLoad.decided = true;
       return;
     }
     // O personagem do aparelho só sobe/vence se for DESTA conta (ver `accountLoginAction`).
@@ -132,6 +137,7 @@ export function startAccountPersistence(userId: string): () => void {
     }
     writeOwner(userId);
     loaded = true;
+    accountLoad.decided = true;
     if (action !== 'load') dirty = true;
     push();
   });

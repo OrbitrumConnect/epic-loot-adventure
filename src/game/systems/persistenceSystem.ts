@@ -117,6 +117,8 @@ const schema = z.object({
     maxHp: number.positive(), maxMana: number, maxStamina: number, gold: number,
     attributes: z.object({ damage: number, dexterity: number, carry: number, moveSpeed: number }),
     skillPoints: integer, huntValue: number, huntSeen: z.record(integer),
+    // 03/11: skin do herói (ausente = save antigo / ainda não escolheu)
+    skin: z.enum(['homem', 'mulher']).optional(),
   }),
   towerLastShotAt: z.record(number),
   harvest: z.array(z.object({ id, quantity: integer, depleted: z.boolean(), respawnAt: number.nullable() })).max(2000),
@@ -135,7 +137,7 @@ export type LocalSave = z.infer<typeof schema>;
 
 /** Lista explícita impede movimento, HP e cooldown do jogador de agendarem saves. */
 export const SAVED_PLAYER_KEYS = ['inventory', 'level', 'xp', 'xpToNext', 'totalXp', 'maxHp', 'maxMana',
-  'maxStamina', 'gold', 'attributes', 'skillPoints', 'huntValue', 'huntSeen'] as const;
+  'maxStamina', 'gold', 'attributes', 'skillPoints', 'huntValue', 'huntSeen', 'skin'] as const;
 
 export function persistedStateChanged(a: PersistState, b: PersistState): boolean {
   return a.base !== b.base || a.playerBase !== b.playerBase || a.harvestNodes !== b.harvestNodes || a.towerLastShotAt !== b.towerLastShotAt
@@ -168,6 +170,7 @@ export function createLocalSave(state: PersistState): LocalSave {
       maxHp: p.maxHp, maxMana: p.maxMana, maxStamina: p.maxStamina, gold: p.gold,
       attributes: p.attributes ?? { damage: 0, dexterity: 0, carry: 0, moveSpeed: 0 },
       skillPoints: p.skillPoints ?? 0, huntValue: p.huntValue ?? 0, huntSeen: p.huntSeen ?? {},
+      ...(p.skin ? { skin: p.skin } : {}),
     },
     towerLastShotAt: state.towerLastShotAt,
     // Só deltas: posição, capacidade e seed são reconstruídas pelos dados atuais.

@@ -34,7 +34,7 @@ import { takeKnockback } from '@/game/systems/knockbackSystem';
 import { PerfProbe } from './world/perf-probe';
 import { AdventurerDetails } from './world/adventurer-details';
 import { GlbHero, type HeroAction } from './world/glb-hero';
-import { GlbHeroMixamo } from './world/glb-hero-mixamo';
+import { LocalHeroBody } from './world/hero-skin-body';
 import { HeroNameplate } from './world/hero-nameplate';
 import { LandmarkTree } from './world/landmark-tree';
 import { RemotePlayers } from './world/remote-players';
@@ -893,7 +893,7 @@ function Character({
       <HeroNameplate />
 
       {USE_GLB_HERO && (USE_RED_HERO
-        ? <GlbHeroMixamo actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT * 1.04} rangedAttack weapon={<HeldItem c={c} />} />
+        ? <LocalHeroBody actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT * 1.04} rangedAttack weapon={<HeldItem c={c} />} />
         : <GlbHero actionRef={heroAction} speedRef={heroSpeed} autoHeight={HERO_HEIGHT} weapon={<HeldItem c={c} />} />)}
 
       <group visible={!USE_GLB_HERO}>

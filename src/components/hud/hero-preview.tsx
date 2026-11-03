@@ -7,7 +7,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
+import { LocalHeroBody } from '@/components/world/hero-skin-body';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HeldItem } from '@/components/world/held-weapon';
 import { HERO_HEIGHT, palette } from '@/components/world/world-kit';
@@ -80,7 +80,7 @@ export default function HeroPreview() {
         <Pedestal />
         <Suspense fallback={null}>
           <Turntable spin={spin}>
-            <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} rangedAttack preview weapon={<HeldItem c={c} />} />
+            <LocalHeroBody noNet actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} rangedAttack preview weapon={<HeldItem c={c} />} />
           </Turntable>
           <Ready onReady={onReady} />
         </Suspense>

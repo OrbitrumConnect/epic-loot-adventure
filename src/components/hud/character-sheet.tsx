@@ -22,6 +22,7 @@ import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { isUnlocked, unlockLevel } from '@/game/systems/unlockSystem';
 import { isMobilityItem } from '@/game/systems/zonaSulKit';
 
+import { HeroSkinToggle } from './hero-skin-picker';
 const HeroPreview = lazy(() => import('./hero-preview'));
 
 const SLOT_LABEL: Record<ArmorSlot, string> = {
@@ -141,6 +142,7 @@ export function CharacterSheet({ onHome }: { onHome: () => void }) {
           <div className="cs-stage">
             <Suspense fallback={<div className="hero-preview hero-preview--loading" />}>
               <HeroPreview />
+              <HeroSkinToggle />
             </Suspense>
           </div>
           <div className="cs-col">{RIGHT.map(armorSlot)}</div>

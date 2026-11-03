@@ -10,9 +10,9 @@ import { Sky } from '@react-three/drei';
 import type { Sky as SkyImpl } from 'three-stdlib';
 import { memo, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
-import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { HERO_HEIGHT } from '@/components/world/world-kit';
+import { LocalHeroBody } from '@/components/world/hero-skin-body';
 import { ZS_LANDMARKS, ZS_SPAWN, ZS_SURF } from './zona-sul-meta';
 import { loadZsTerrain, ZS_SPAWN_TERRAIN_URL, type ZsTerrain, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterChurnAt, zsWaterInTubeAt, zsWaterPushAt, zsWaterSpitAt, zsWaterYAt } from './zs-terrain-data';
 import { SurfBreak } from './surf/surf-break';
@@ -1124,7 +1124,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       <group ref={group}>
         <HeroNameplate />
         <Suspense fallback={null}>
-          <GlbHeroMixamo actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} customClipCut={HERO_CUT} preview rangedAttack weapon={<HeldItem c={c} />} />
+          <LocalHeroBody actionRef={action} speedRef={speed} autoHeight={HERO_HEIGHT * 1.04} customClips={HERO_CLIPS} customClipCut={HERO_CUT} preview rangedAttack weapon={<HeldItem c={c} />} />
         </Suspense>
       </group>
     </>

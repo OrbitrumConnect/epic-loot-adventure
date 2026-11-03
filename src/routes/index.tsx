@@ -65,6 +65,7 @@ import { setWorldMap, useWorldMap } from '@/components/world/world-map-choice';
 const ZS_SKIP_KEYS = new Set(['KeyE', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyK']);
 import { zsCtx } from '@/components/zona-sul/zs-context';
 import { toggleZsCam, useZsCam } from '@/components/zona-sul/zs-camera';
+import { HeroSkinPicker } from '@/components/hud/hero-skin-picker';
 /** Itens do menu que são do mapa velho (fila do piloto, mapa do vale) — somem na Zona Sul até ganharem a versão dela. */
 const ZS_HIDE_NAV = new Set(['objectives']);
 import { BossSpawner } from '@/components/world/boss-spawner';
@@ -785,6 +786,8 @@ function Index() {
           {worldOn && perfOn && !zs && <PerfHud />}
           {/* Cartas de um toque + lateral UPAR (Pedro 25/10: sem precisar ir à cidade). */}
           {worldOn && !inCity && !player.dead && <CardHost />}
+          {/* 03/11: escolha do sobrevivente (homem / mulher) — 1 vez, depois que o save da conta chegou */}
+          {worldOn && <HeroSkinPicker waitAccount={AUTH_ENABLED && !!authUser} />}
           {worldOn && !inCity && !player.dead && <UpgradeSide />}
           {/* 31/10: chefe a cada 15 min e a noite (pombos/mortos-vivos) também na Zona Sul — a mesma do Vale */}
           {worldOn && ui.mode === 'world' && <BossSpawner />}

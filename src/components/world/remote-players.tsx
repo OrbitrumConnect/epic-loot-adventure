@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import * as THREE from 'three';
 import { useNet, broadcastPlayerHit } from '@/net/multiplayer';
 import { GlbHeroMixamo } from './glb-hero-mixamo';
+import { heroSkinOf } from '@/game/data/hero-skins';
 import type { HeroAction } from './glb-hero';
 import { labelTexture, markPointerConsumed, palette, terrainHeight, HERO_HEIGHT } from './world-kit';
 import { HeldItem, heldKindFor } from './held-weapon';
@@ -44,6 +45,8 @@ const noRaycast = () => {};
 function RemotePlayer({ id, zs }: { id: string; zs?: RemoteZsKit | undefined }) {
   const group = useRef<THREE.Group>(null);
   const action = useRef<HeroAction>('idle');
+  // SKIN de quem joga (03/11): vem na pose; ausente = homem (cliente antigo também)
+  const skin = heroSkinOf(useNet((s) => s.players[id]?.sk));
   /** ações aceitas (com o kit do mundo) e a velocidade dele (ritmo da remada/nado, como no meu herói) */
   const allowed = useMemo(() => (zs ? new Set([...ACTIONS, ...zs.actions]) : ACTIONS), [zs]);
   const speed = useRef(0);
@@ -160,12 +163,12 @@ function RemotePlayer({ id, zs }: { id: string; zs?: RemoteZsKit | undefined }) 
       }
     }}>
       {zs ? (
-        <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack speedRef={speed} customClips={zs.clips} customClipCut={zs.cut}
+        <GlbHeroMixamo key={skin.id} charUrl={skin.url} bindFix={skin.bindFix} actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack speedRef={speed} customClips={zs.clips} customClipCut={zs.cut}
           heldItemOf={() => useNet.getState().players[id]?.w ?? null}
           hpOf={() => useNet.getState().players[id]?.hp ?? 0}
           weapon={<RemoteHeld id={id} />} />
       ) : (
-        <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack
+        <GlbHeroMixamo key={skin.id} charUrl={skin.url} bindFix={skin.bindFix} actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack
           heldItemOf={() => useNet.getState().players[id]?.w ?? null}
           hpOf={() => useNet.getState().players[id]?.hp ?? 0}
           weapon={<RemoteHeld id={id} />} />

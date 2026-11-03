@@ -12,6 +12,7 @@ import { DODGE_CLIP_FROM, DODGE_CLIP_TO, DODGE_MS } from '@/game/systems/dodgeSy
 import { createFootCache, footMinY, groundStep, nextGroundOffset } from './glb-creature';
 import { hitStopScale } from './hit-stop';
 import { extendKTX2, preloadKTX2GLTF, primeKTX2 } from './ktx2-gltf';
+import { HERO_SKINS } from '@/game/data/hero-skins';
 
 /** Clips já convertidos por (modelo, clip): a horda inteira usa o MESMO resultado (calcula 1×). */
 const bindClipCache = new Map<string, THREE.AnimationClip>();
@@ -833,7 +834,8 @@ export function GlbHeroMixamo({
   );
 }
 
-preloadKTX2GLTF(RED_URL);
+// 03/11: o herói agora é a SKIN escolhida (hero-skins.ts) — baixa a de homem já (padrão); a de mulher, quando alguém usar
+preloadKTX2GLTF(HERO_SKINS.homem.url);
 useGLTF.preload(CLIP_URL['idle']!);
 useGLTF.preload(CLIP_URL['walk']!);
 useGLTF.preload(CLIP_URL['run']!);
