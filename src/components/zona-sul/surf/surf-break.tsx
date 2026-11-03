@@ -17,13 +17,10 @@ import { ARPOADOR, BARREL_T, CURL_RAMP, FULL, type Lim, RIPPLE_A, RIPPLE_K, SHOU
 import { type SeriesRule, SERIES, SLOTS, SurfScheduler } from './surf-scheduler';
 import { findSurfFrame, type SurfFrame } from './surf-frame';
 import { nearestSurfZone, registerSurfZone, type SurfZoneInfo } from './surf-zones';
-import { SurfSpray } from './surf-spray';
 import { roomActive, roomEpoch, roomNow } from '@/net/room-clock';
 import { worldEpoch } from '@/game/systems/dayNightSystem';
 /** Até que distância (m) da câmera a malha da onda é desenhada. */
 const SURF_DRAW_DIST = 900;
-/** Espirro da onda (02/11): `?spray=0` na URL desliga (pra comparar desempenho). */
-const SPRAY_ON = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('spray') !== '0';
 
 /** Relógio das ondas (s): desde o começo do mundo — numa sala, o do ANFITRIÃO (começo do mundo dele + a hora dele,
  *  acertada pelo carimbo do pacote do mundo). Sozinho: desde que o jogo abriu (como antes). */
@@ -287,13 +284,6 @@ export function SurfBreak({ t, shoreX, shoreZ, pf = ARPOADOR, frameOf, enabled =
     if (meshRef.current) meshRef.current.visible = drawn || wasDrawn.current;
     wasDrawn.current = drawn;
   });
-  const statesOf = useMemo(() => () => ({ states: scheduler.states, vars: scheduler.vars }), [scheduler]);
   if (!frame) return null;
-  return (
-    <>
-      <mesh ref={meshRef} geometry={geometry} material={material} frustumCulled={false} renderOrder={2} receiveShadow />
-      {/* ESPIRRO na crista e na queda do lip (02/11): 1 desenho, só perto e com onda */}
-      {SPRAY_ON && <SurfSpray frame={frame} pf={pf} zoneRef={zoneRef} statesOf={statesOf} />}
-    </>
-  );
+  return <mesh ref={meshRef} geometry={geometry} material={material} frustumCulled={false} renderOrder={2} receiveShadow />;
 }
