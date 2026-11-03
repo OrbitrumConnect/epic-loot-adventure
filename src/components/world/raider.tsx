@@ -21,6 +21,7 @@ import { GlbCreature } from './glb-creature';
 import { isCampSpawn } from '@/game/systems/difficultySystem';
 import { isZsBandit } from '@/game/systems/zsSpawnSystem';
 import { campChaseScale, HORDE_RUN_FROM, hordeSpeedScale } from '@/game/systems/waveSystem';
+import { clearLeap, isRoaring, leapProgress } from '@/game/systems/leapSystem';
 
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
@@ -58,7 +59,8 @@ export const DEATH_LIE_S = 0.45; // Pedro 26/10: "ficar 0,3 s no máx" → "até
 export const CAMP_SCALE = 0.49;
 /** Exceção (Pedro 25/10: "a Couraça estava ok grande; só ela pode aumentar 1 a 1,5 m"): no acampamento ela fica
  *  0,87 (3,32 → ~2,9 m, +1,25 m sobre os 1,63 do −51%). Horda/mapa seguem no tamanho original (3,32 m). */
-export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 0.87 };
+// 03/11: a Couraça da HORDA ficou 25% menor (2,49 m); a do fortim mantém os ~2,9 m de antes (0,87 × 3,32 ÷ 2,49)
+export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 1.16 };
 /**
  * ATIRADORES de acampamento (Pedro 25/10: "quais inimigos podemos pôr arma pra atirar nos acampamentos"): o pirata
  * (guarda da frente) atira de FUZIL (o mesmo do herói, Pedro 26/10) de 12 m — mesmo dano/cadência dele, persegue correndo, para no alcance e atira.
@@ -89,14 +91,38 @@ const RAIDER_GLB: Record<string, string> = {
  *  girado ~105° e pioram um pouco → ficam como estão até refazer o rig no Mixamo. */
 // bindFix (24/10): Couraça e Fúngico vinham com o esqueleto fora da pose da pele (até 96°) → malha torcida.
 // 25/10: pirata, pântano e Brutamontes também (medido: pele +130–159° → +17–30°, direção 27–31° → 2–3°; pé igual).
-const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean; strideSync?: boolean; death?: DeathClip }> = {
-  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 3.32, bindFix: true, autoGround: true, strideSync: true, death: 'mutant' }, // 3,9→3,32 m (−15%, Pedro 25/10: muitos na base embolavam) // autoGround: andava meio enterrado (Pedro 25/10)     // spiked, 2x (Pedro)
+/** Animações dos CHEFES do pack Meshy (03/11, Mixamo "Creature Pack"): parado/andar/correr/golpe de MUTANTE + salto em
+ *  cima e rugido (leapSystem). O salto toca só o trecho agacha → voa → cai (7%–55% do clip; queda aos 1,67 s) no tempo
+ *  do salto do jogo; o rugido, os primeiros 60% (~2,3 s). */
+const MUTANT_BASE = { idle: '/models/mutant/idle.glb', walk: '/models/mutant/walk.glb', run: '/models/mutant/run.glb', attack: '/models/mutant/attack.glb' } as const;
+const MUTANT_CUSTOM = { leap: '/models/mutant/leap.glb', roar: '/models/mutant/roar.glb' } as const;
+type MixClips = { base?: Partial<Record<'idle' | 'walk' | 'run' | 'attack', string>>; custom?: Record<string, string>; cut?: Record<string, { from?: number; to?: number; speed?: number }>; attackSpeed?: number };
+/** Só o que a espécie define vira prop (sem `undefined` solto) — quem não tem `clips` (todos de antes): nada muda. */
+/** Correm SEMPRE que perseguem (03/11): os chefes do pack e a Feiticeira (que surge atrás e vem correndo). */
+const CHASE_RUNNERS = new Set(['raider_cannibal', 'raider_kraken', 'raider_sorceress']);
+function mixClipProps(c: MixClips | undefined) {
+  if (!c) return {};
+  return { ...(c.base ? { baseClips: c.base } : {}), ...(c.custom ? { customClips: c.custom } : {}), ...(c.cut ? { customClipCut: c.cut } : {}), ...(c.attackSpeed ? { attackSpeed: c.attackSpeed } : {}) };
+}
+const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean; strideSync?: boolean; death?: DeathClip; clips?: MixClips }> = {
+  // 03/11 (Pedro: "Couraça e Fúngico na onda podem diminuir uns 25%"): 3,32 → 2,49 m (a do FORTIM fica igual: CAMP_SCALE_BY)
+  raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 2.49, bindFix: true, autoGround: true, strideSync: true, death: 'mutant' }, // 3,9→3,32 m (−15%, Pedro 25/10: muitos na base embolavam) // autoGround: andava meio enterrado (Pedro 25/10)     // spiked, 2x (Pedro)
+  // CHEFES DE ONDA do pack Meshy (03/11): GLB do Meshy (já em pé → standFixX 0), esqueleto salvo noutra pose (bindFix).
+  // Canibal "um pouco menor que o Fúngico de hoje" (3,83 → 3,4 m); Kraken o maior (4,3 m), golpe pesado e LENTO.
+  raider_cannibal: { url: '/models/raiders/cannibal.glb', standFixX: 0, height: 3.4, bindFix: true, autoGround: true, strideSync: true, death: 'mutant',
+    clips: { base: MUTANT_BASE, custom: MUTANT_CUSTOM, cut: { leap: { from: 0.07, to: 0.55, speed: 1.46 }, roar: { to: 0.6, speed: 1.4 } } } },
+  raider_kraken: { url: '/models/raiders/kraken.glb', standFixX: 0, height: 4.3, bindFix: true, autoGround: true, strideSync: true, death: 'mutant',
+    clips: { base: { ...MUTANT_BASE, attack: '/models/mutant/slam.glb' }, custom: MUTANT_CUSTOM, cut: { leap: { from: 0.07, to: 0.55, speed: 1.25 }, roar: { to: 0.6, speed: 1.4 } }, attackSpeed: 0.9 } },
+  // Feiticeira (03/11): gente (as animações do herói), golpe = gesto de magia, bote = "Run Jump Attack" (trecho do pulo)
+  raider_sorceress: { url: '/models/raiders/sorceress.glb', standFixX: 0, height: 1.85, bindFix: true, autoGround: true,
+    clips: { base: { attack: '/models/red/cast.glb' }, custom: { leap: '/models/mutant/run_jump_attack.glb' }, cut: { leap: { from: 0.136, to: 0.52, speed: 1.4 } } } },
   // 25/10 (Pedro): autoGround (nasciam enterrados até o peito). Tamanho de ACAMPAMENTO = CAMP_SCALE (só quem nasce lá).
   raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8, bindFix: true, autoGround: true },       // pirata
   raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, bindFix: true, autoGround: true, death: 'mutant' },  // brutamontes (maior)
   raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true, twistFix: true, autoGround: true },// arqueiro: só ataque de longe
   raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9, bindFix: true, autoGround: true },      // swamp winged hybrid
-  raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 3.83, bindFix: true, autoGround: true, strideSync: true, death: 'mutant' }, // 4,5→3,83 m (−15%) // alien giant brute (boss) — grandão 4.5m
+  // 03/11 (Pedro): −25% — 3,83 → 2,87 m
+  raider_mushroom: { url: '/models/raiders/alien_brute.glb', standFixX: Math.PI / 2, height: 2.87, bindFix: true, autoGround: true, strideSync: true, death: 'mutant' }, // 4,5→3,83 m (−15%) // alien giant brute (boss) — grandão 4.5m
 };
 import { mixColor, terrainHeight, type Palette } from './world-kit';
 
@@ -114,6 +140,8 @@ type Species = {
   boss?: boolean;
   /** Escala do GLB quando boss (sobrepõe BOSS_GLB_SCALE). */
   bossScale?: number;
+  /** Chefe SEM o redemoinho (03/11: Canibal/Kraken saltam em cima — leapSystem — em vez de girar). */
+  noSpin?: boolean;
   tuning: HostileTuning;
 };
 
@@ -197,7 +225,7 @@ export const RAIDER_SPECIES: Record<string, Species> = {
   // Boss MAIOR (~1,5× o Colosso): mesmo rig/giro, mais lento, alcance maior.
   raider_mushroom: {
     scale: 3.3, bodyWidth: 0.95, bodyDepth: 0.55, weapon: 'club',
-    hood: false, shoulders: true, charm: false, boss: true, bossScale: 3.75,
+    hood: false, shoulders: true, charm: false, boss: true, bossScale: 2.81, // 03/11: −25% junto com o corpo (era 3,75)
     tuning: {
       ...base, speed: 3.9, aggroRange: 34, attackRange: 6, leashRange: 400, // +15% (Pedro 25/10)
       chaseTimeout: 600, provokeRange: 50, walkSpeedChase: 11, walkSpeedIdle: 4,
@@ -217,11 +245,41 @@ export const RAIDER_SPECIES: Record<string, Species> = {
   // Boss NOVO (somado, não substitui): Samurai Caído — ágil, golpe forte.
   raider_samurai: {
     scale: 3.3, bodyWidth: 0.9, bodyDepth: 0.5, weapon: 'club',
-    hood: false, shoulders: true, charm: false, boss: true, bossScale: 1.7,
+    hood: false, shoulders: true, charm: false, boss: true, bossScale: 1.28, // 03/11: −25% junto com o corpo (era 1,7)
     tuning: {
       ...base, speed: 6.1, aggroRange: 32, attackRange: 5, leashRange: 400, // +15% e +30% (Pedro 25/10)
       chaseTimeout: 600, provokeRange: 48, walkSpeedChase: 14, walkSpeedIdle: 6,
       hitVerb: 'retalhou',
+    },
+  },
+  // CHEFES DE ONDA do pack Meshy (03/11): caçam até o fim (leash/timeout de chefe), correm, SALTAM em cima e rugem ao
+  // chegar (leapSystem) — sem o redemoinho. bossScale = altura da plaquinha (~corpo + 0,4 m).
+  raider_cannibal: {
+    scale: 3.3, bodyWidth: 0.95, bodyDepth: 0.55, weapon: 'club',
+    hood: false, shoulders: true, charm: false, boss: true, bossScale: 1.77, noSpin: true,
+    tuning: {
+      ...base, speed: 4.8, aggroRange: 34, attackRange: 5, leashRange: 400,
+      chaseTimeout: 600, provokeRange: 50, walkSpeedChase: 13, walkSpeedIdle: 5,
+      hitVerb: 'dilacerou',
+    },
+  },
+  raider_kraken: {
+    scale: 3.3, bodyWidth: 1.05, bodyDepth: 0.6, weapon: 'club',
+    hood: false, shoulders: true, charm: false, boss: true, bossScale: 2.19, noSpin: true,
+    tuning: {
+      ...base, speed: 4.2, aggroRange: 36, attackRange: 6.5, leashRange: 400,
+      chaseTimeout: 600, provokeRange: 55, walkSpeedChase: 10, walkSpeedIdle: 4,
+      hitVerb: 'esmagou',
+    },
+  },
+  // Feiticeira da Mata (03/11): rápida, surge atrás e dá o bote; desiste se você sumir (chaseTimeout curto).
+  raider_sorceress: {
+    scale: 0.95, bodyWidth: 0.5, bodyDepth: 0.3, weapon: 'staff',
+    hood: true, shoulders: false, charm: true,
+    tuning: {
+      ...base, speed: 5.6, aggroRange: 60, attackRange: 3.2, leashRange: 400,
+      chaseTimeout: 45, provokeRange: 60, walkSpeedChase: 18, walkSpeedIdle: 8,
+      hitVerb: 'amaldiçoou', landSwim: SWIM,
     },
   },
 };
@@ -417,17 +475,20 @@ function RaiderImpl({
     // MORTE com animação (Pedro 26/10): cai rápido (clip Mixamo acelerado), encosta no chão e some DEATH_LIE_S depois.
     // Costas: 0,6 + 0,3 s · Mutant: 1,15 + 0,3 s (+ 0,4 s encolhendo, como antes). Só raiders Mixamo.
     deathHoldS: mxBody ? deathGroundTime(mxBody.death ?? 'back') + DEATH_LIE_S : 0,
-    onDeath: () => { bossAction.current = 'death'; },
+    onDeath: () => { bossAction.current = 'death'; clearLeap(creatureId); },
     onAnimate: (anim, dt) => {
       if (anim.elite !== eliteNow.current) { eliteNow.current = anim.elite; setElite(anim.elite); }
       // Horda Mixamo rápida (onda 8+): anda CORRENDO (Pedro 25/10).
-      bossAction.current = (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? (hordeRuns || (campRuns && anim.chasing) ? 'run' : 'walk') : 'idle';
+      // chefes do pack (03/11): RUGIDO de chegada e SALTO em cima mandam na animação (leapSystem)
+      const lp = mxBody?.clips ? leapProgress(creatureId) : -1;
+      bossAction.current = mxBody?.clips && isRoaring(creatureId) ? 'roar' : lp >= 0 ? 'leap'
+        : (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? (hordeRuns || ((campRuns || CHASE_RUNNERS.has(speciesId)) && anim.chasing) ? 'run' : 'walk') : 'idle';
       bossMoving.current = anim.moving;
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.6 : 0;
       if (leftLeg.current) leftLeg.current.rotation.x = swing;
       if (rightLeg.current) rightLeg.current.rotation.x = -swing;
 
-      if (spec.boss) {
+      if (spec.boss && !spec.noSpin) {
         // Golpe giratório COM cooldown: gira forte por ~0.6 s e só repete a cada
         // ~5 s. No meio, ataque normal (igual aos outros). Nunca gira eterno.
         spinCd.current -= dt;
@@ -517,6 +578,7 @@ function RaiderImpl({
               bindFix={mx.bindFix ?? false}
               autoGround={mx.autoGround ?? false}
               strideSync={mx.strideSync ?? false}
+              {...mixClipProps(mx.clips)}
               yaw={BOSS_GLB_YAW}
             />
           );

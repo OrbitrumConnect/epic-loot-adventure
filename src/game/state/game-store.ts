@@ -65,6 +65,7 @@ import { grantKitItem, grantMobilityKit, isMobilityItem, SURFBOARD_ID } from '..
 import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { lineWalkable } from '@/components/world/map-walk';
+import { behindSpot, isSorceress, nextSorceressAt, SORC, SORC_PREFIX, sorcClock, sorceressMaySpawn } from '../systems/sorceressSystem';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
@@ -211,6 +212,9 @@ type GameActions = {
   spawnBoss: () => void;
   /** Bando de pombos da NOITE (wildlifeSystem): chega ao escurecer, vai embora ao clarear. `night` = nightFactor (0–1). */
   tickNightFlock: (night: number) => void;
+  /** FEITICEIRA DA MATA (03/11, Zona Sul): surge atrás de quem anda longe da base, some se perder o herói, o corpo sai
+   *  depois de cair (sorceressSystem). `yaw` = pra onde o corpo do herói olha. */
+  tickSorceress: (now: number, yaw: number) => void;
   /** Gasta 1 ponto de skill subindo um atributo (0–100%). */
   allocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Devolve 1 ponto, baixando um atributo alocado. */
@@ -366,7 +370,7 @@ function towerSfx(tower: { x: number; z: number }, me: { x: number; z: number })
 }
 
 export function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
-  const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave')
+  const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave') || isSorceress(c.id) // 03/11: Feiticeira não renasce
     ? null
     : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
   return { ...c, hp: 0, behavior: 'dead', respawnAt };
@@ -481,7 +485,17 @@ function waveBossCount(wave: number): number {
  *  - onda 4-5: Fúngico aparece
  *  - onda 6+: Kaiju aparece (o gigante) — adiantado a pedido do Pedro
  */
-function waveBossSpecies(wave: number, index: number): string {
+/** 03/11 (Pedro: "na onda 8–9 aparece primeiro o canibal; na onda 18 vem o kraken — ambos sozinhos"): na ZONA SUL, a
+ *  partir destas ondas o 1º chefe é o CANIBAL e, da 18 em diante, o KRAKEN — UM de cada por onda. O total de chefes da
+ *  onda é o mesmo de antes (eles tomam a vaga dos primeiros da lista de sempre). No Vale nada muda. */
+export const CANNIBAL_FROM_WAVE = 8;
+export const KRAKEN_FROM_WAVE = 18;
+export function waveBossSpecies(wave: number, index: number, classic = isClassicWorld()): string {
+  const special = classic ? [] : [...(wave >= KRAKEN_FROM_WAVE ? ['raider_kraken'] : []), ...(wave >= CANNIBAL_FROM_WAVE ? ['raider_cannibal'] : [])];
+  if (index < special.length) return special[index]!;
+  return classicWaveBoss(wave, index - special.length);
+}
+function classicWaveBoss(wave: number, index: number): string {
   if (wave >= 6) {
     if (index === 0) return 'raider_mushroom'; // kaiju removido (Aberração já faz o papel)
     const pool = ['raider_mushroom', 'raider_samurai', 'raider_warlord'];
@@ -1843,6 +1857,44 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const actZ = nightFlockAction(night, hasZ);
     if (actZ === 'spawn') set((s) => ({ creatures: [...s.creatures, ...createNightZombies(Math.random, undefined, s.player.position)] }));
     else if (actZ === 'leave') set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(NIGHT_ZOMBIE_PREFIX)) }));
+  },
+
+  tickSorceress: (now, yaw) => {
+    if (isClassicWorld() || !canSimulateSharedWorld()) return; // só na Zona Sul; online, o host decide
+    const st = get(), p = st.player.position;
+    const mine = st.creatures.filter((c) => isSorceress(c.id));
+    // corpo caído sai depois de CORPSE_MS; viva longe demais (você fugiu / teleportou) vai embora
+    const gone = new Set<string>();
+    for (const c of mine) {
+      if (c.behavior === 'dead') {
+        const seen = sorcClock.deadSeen.get(c.id) ?? now;
+        sorcClock.deadSeen.set(c.id, seen);
+        if (now - seen >= SORC.CORPSE_MS) gone.add(c.id);
+      } else if (getDistance(p, c.position) > SORC.LEAVE_DIST) gone.add(c.id);
+    }
+    if (gone.size) {
+      for (const id of gone) sorcClock.deadSeen.delete(id);
+      set((s) => ({ creatures: s.creatures.filter((c) => !gone.has(c.id)) }));
+    }
+    const core = st.playerBase?.pieces.find((pc) => pc.kind === 'core');
+    const ok = sorceressMaySpawn({
+      now, level: st.player.level, dead: st.player.dead, inCave: layers.player !== 0,
+      alive: mine.some((c) => c.behavior !== 'dead' && !gone.has(c.id)),
+      baseDist: core ? getDistance(p, baseCellCenter(core.cell)) : Infinity,
+      safeDist: getDistance(p, SAFE_ZONE), safeR: SAFE_ZONE.radius,
+    });
+    if (!ok) return;
+    const def = CREATURES['raider_sorceress'];
+    const at = def ? behindSpot(p.x, p.z, yaw, (x, z) => (!WORLD.walkable || WORLD.walkable(x, z)) && lineWalkable(p.x, p.z, x, z)) : null;
+    if (!def || !at) return; // sem chão atrás agora: tenta no próximo
+    sorcClock.nextAt = nextSorceressAt(now);
+    const hp = scaleEnemyHp(def.maxHp);
+    const sorc: CreatureState = {
+      id: `${SORC_PREFIX}${now}`, speciesId: def.id, name: def.name, hp, maxHp: hp,
+      attackPower: def.attackPower, armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0,
+      position: { x: clampX(at.x, 4), z: clampZ(at.z, 4) }, behavior: 'patrol', lootTable: [], respawnAt: null,
+    };
+    set((s) => ({ creatures: [...s.creatures, sorc], ui: { ...s.ui, message: '🌿 Algo corre na mata atrás de você…' } }));
   },
 
   spawnBoss: () => {

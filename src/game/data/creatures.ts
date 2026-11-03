@@ -242,6 +242,71 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     peaceful: false,
   },
 
+  // 03/11 (Pedro: "personagens com a cara do mapa"): CHEFES DE ONDA da Zona Sul do pack Meshy — o CANIBAL chega na onda
+  // 8 e o KRAKEN na 18, UM de cada (sozinhos), correndo, saltando em cima (dano em área + "jogado pra longe") e com o
+  // rugido de chegada (leapSystem). Animação de MUTANTE (Mixamo Creature Pack).
+  raider_cannibal: {
+    id: 'raider_cannibal',
+    name: 'Canibal',
+    maxHp: 2400,
+    attackPower: 52,
+    armor: 20,
+    attackCooldown: 2.2,
+    attackRange: 5,
+    aggroRange: 34,
+    lootTable: [
+      { itemId: 'iron_ore', quantity: 20, chance: 1 },
+      { itemId: 'iron_sword', quantity: 1, chance: 0.7 },
+      { itemId: 'raider_token', quantity: 40, chance: 1 },
+      { itemId: 'ammo', quantity: 100, chance: 0.4 },
+      { itemId: 'arrow', quantity: 100, chance: 0.4 },
+      { itemId: 'cooked_meat', quantity: 16, chance: 1 },
+    ],
+    icon: 'Shield',
+    peaceful: false,
+  },
+  raider_kraken: {
+    id: 'raider_kraken',
+    name: 'Kraken Mutante',
+    maxHp: 3600,
+    attackPower: 70,
+    armor: 26,
+    attackCooldown: 2.8, // golpe LENTO e pesado (Pedro: "animação lenta de ataque, batendo")
+    attackRange: 6.5,
+    aggroRange: 36,
+    lootTable: [
+      { itemId: 'iron_ore', quantity: 30, chance: 1 },
+      { itemId: 'iron_sword', quantity: 1, chance: 0.9 },
+      { itemId: 'raider_token', quantity: 60, chance: 1 },
+      { itemId: 'ammo', quantity: 150, chance: 0.5 },
+      { itemId: 'arrow', quantity: 150, chance: 0.5 },
+      { itemId: 'cooked_meat', quantity: 22, chance: 1 },
+    ],
+    icon: 'Shield',
+    peaceful: false,
+  },
+  // 03/11 (Pedro: "a sorceress ataca, pode aparecer correndo do nada no mapa atrás da pessoa"): a FEITICEIRA da mata
+  // surge atrás de quem anda longe da base, corre e abre com um bote de salto (sorceressSystem).
+  raider_sorceress: {
+    id: 'raider_sorceress',
+    name: 'Feiticeira da Mata',
+    maxHp: 320,
+    attackPower: 34,
+    armor: 8,
+    attackCooldown: 1.5,
+    attackRange: 3.2,
+    aggroRange: 60,
+    lootTable: [
+      { itemId: 'arcane_essence', quantity: 6, chance: 0.8 },
+      { itemId: 'health_potion', quantity: 2, chance: 0.35 },
+      { itemId: 'raider_token', quantity: 8, chance: 1 },
+      { itemId: 'arrow', quantity: 50, chance: 0.35 },
+      { itemId: 'ancestral_strike', quantity: 1, chance: 0.08 },
+    ],
+    icon: 'Sparkles',
+    peaceful: false,
+  },
+
   // ---------------------------------------------------------------------------
   // Fauna selvagem do vale. `peaceful` foge do jogador; hostil ataca ao ver.
   // O XP de cada uma sai de `creatureXp` (progressionSystem).

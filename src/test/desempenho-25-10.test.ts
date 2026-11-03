@@ -45,8 +45,9 @@ describe('Couraça e Fúngico −15% + passo sem patinar', () => {
   it('alturas 3,32 / 3,83 m com strideSync', async () => {
     const fs = await import('node:fs');
     const src = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
-    expect(src).toMatch(/spiked\.glb', standFixX: Math\.PI \/ 2, height: 3\.32, bindFix: true, autoGround: true, strideSync: true/);
-    expect(src).toMatch(/alien_brute\.glb', standFixX: Math\.PI \/ 2, height: 3\.83, bindFix: true, autoGround: true, strideSync: true/);
+    // 03/11 (Pedro: "Couraça e Fúngico na onda podem diminuir uns 25%"): 3,32 → 2,49 e 3,83 → 2,87 (strideSync igual)
+    expect(src).toMatch(/spiked\.glb', standFixX: Math\.PI \/ 2, height: 2\.49, bindFix: true, autoGround: true, strideSync: true/);
+    expect(src).toMatch(/alien_brute\.glb', standFixX: Math\.PI \/ 2, height: 2\.87, bindFix: true, autoGround: true, strideSync: true/);
   });
   it('caminhada: ritmo = velocidade ÷ (1,182 corpos/s × corpo)', async () => {
     const { WALK_BODYLEN_PER_S } = await import('@/components/world/glb-hero-mixamo');

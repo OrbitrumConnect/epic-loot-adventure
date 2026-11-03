@@ -18,7 +18,8 @@ import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
-import { markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
+import { markImpact, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
+import { isLeaping, isRoaring, LEAP, leapPos, takeLeapLanding, tryStartLeap, tryStartRoar } from '@/game/systems/leapSystem';
 import { WORLD } from '@/game/data/world-profile';
 import { blockedByWall, caveStep, glbSurfaceY, groundUnder } from './terrain-collision';
 import { isWalkable, walkStep } from './map-walk';
@@ -40,7 +41,8 @@ const isNight = () => nightFactor() >= 0.5;
 import { queueKnockback } from '@/game/systems/knockbackSystem';
 
 /** Golpe que EMPURRA o herói (m) — Pedro 25/10: a Couraça (grandona, 3,9 m) acerta e joga 3–4 m pra trás. */
-export const PLAYER_SHOVE: Record<string, number> = { raider_samurai: 3.5 };
+// 03/11: os chefes do pack também empurram no golpe normal (o salto empurra mais — leapSystem)
+export const PLAYER_SHOVE: Record<string, number> = { raider_samurai: 3.5, raider_cannibal: 5, raider_kraken: 7 };
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { broadcastBaseHit, broadcastMobHit, canSimulateSharedWorld, remoteTargets, useNet, waveOwner } from '@/net/multiplayer';
 import { takeKnockback } from '@/game/systems/knockbackSystem';
@@ -345,6 +347,32 @@ function hurtPlayerFromGrab(name: string, raw: number, at: { x: number; z: numbe
   });
 }
 
+/**
+ * QUEDA DO SALTO no herói local (03/11, chefes do pack — leapSystem): dano em área (× o golpe), EMPURRÃO forte pra
+ * longe do ponto da queda e tremor. As mesmas regras da mordida: rolando (esquiva) escapa; dirigindo, o carro toma.
+ * Fora da área: só o tremor (o chão treme perto). Devolve o dano aplicado (0 = escapou / longe / carro).
+ */
+export function hurtPlayerFromLeap(name: string, speciesId: string, attackPower: number, from: { x: number; z: number }, at: { x: number; z: number }, dist: number): number {
+  const spec = LEAP[speciesId];
+  if (!spec) return 0;
+  if (dist <= spec.aoeR * 2) markImpact(dist <= spec.aoeR ? spec.impact : spec.impact * 0.4);
+  const st = useGameStore.getState();
+  if (dist > spec.aoeR || st.player.dead) return 0;
+  if (isInvulnerable()) { st.setMessage(`💨 Rolou e escapou do salto de ${name}!`); return 0; }
+  const dmg = mitigateDamage(Math.max(1, Math.round(attackPower * spec.dmgK)), st.player);
+  if (vehicleShield.absorb?.(dmg, name)) return 0;
+  reportDamageToStore('player', dmg, at, true);
+  const dx = at.x - from.x, dz = at.z - from.z, l = Math.hypot(dx, dz) || 1;
+  queueKnockback('player', (dx / l) * spec.shove, (dz / l) * spec.shove);
+  useGameStore.setState((s) => {
+    if (s.player.dead) return {};
+    const hp = Math.max(0, s.player.hp - dmg);
+    if (hp <= 0) return { player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 }, ui: { ...s.ui, message: `${name} caiu em cima de você!`, deathBy: { name, pvp: false } } };
+    return { player: { ...s.player, hp }, ui: { ...s.ui, message: `💥 ${name} saltou em cima! -${dmg} HP (${hp}/${s.player.maxHp})` } };
+  });
+  return dmg;
+}
+
 /** Intervalo dos tiros da rajada do inimigo (s). A rajada é só visual/som: o dano é o MESMO golpe de antes. */
 export const ENEMY_BURST_GAP_MS = 120;
 /** Tiro de inimigo: rastro de bala (mesmos projéteis do jogador) + som de arma pela distância até mim. */
@@ -645,16 +673,38 @@ export function useHostileAI(opts: HostileOptions) {
       chaseTimer.current += dt;
       if (distToPlayer <= tuning.attackRange) chaseTimer.current = 0;
       const angle = Math.atan2(px - wx, pz - wz);
+      // CHEFES DO PACK (03/11, leapSystem — só quem tem LEAP; os outros: nada muda): RUGE parado ao avistar (1×) e SALTA
+      // em cima a meia distância — voa até o alvo e, na QUEDA, dano em área + empurrão + tremor.
+      const lspec = LEAP[creature.speciesId];
+      let held = false, leaping = false;
+      if (lspec) {
+        const nowMs = Date.now();
+        tryStartRoar(creatureId, creature.speciesId, nowMs);
+        held = isRoaring(creatureId, nowMs);
+        if (!held) tryStartLeap(creatureId, creature.speciesId, { x: wx, z: wz }, { x: px, z: pz }, nowMs);
+        leaping = isLeaping(creatureId, nowMs);
+        if (takeLeapLanding(creatureId, creature.speciesId, nowMs)) {
+          if (targetRemoteId) { if (distToPlayer <= lspec.aoeR) broadcastMobHit(targetRemoteId, Math.max(1, Math.round(creature.attackPower * lspec.dmgK)), creature.name); }
+          else if (localValid) hurtPlayerFromLeap(creature.name, creature.speciesId, creature.attackPower, { x: wx, z: wz }, { x: px, z: pz }, distToPlayer);
+        }
+      }
       // Para na BORDA do alcance (era 0,6): cada um chega pelo seu lado e a separação os espalha num CERCO, em vez
       // de todos se amontoarem no mesmo ponto (Pedro 25/10).
-      if (distToPlayer > tuning.attackRange * CHASE_STOP) {
+      const lp = leaping ? leapPos(creatureId, creature.speciesId) : null;
+      if (lp) {
+        // NO SALTO: a posição sai do relógio do salto (cai no ponto marcado — independe do passo do quadro)
+        moving = Math.hypot(lp.x - wx, lp.z - wz) > 0.02;
+        targetX = lp.x; targetZ = lp.z;
+      } else if (!held && distToPlayer > tuning.attackRange * CHASE_STOP) {
         // Acampamento persegue CORRENDO (+25%, waveSystem.campChaseScale).
         const runSpeed = chaseSpeed * campChaseScale(isCampSpawn(creatureId), creature.speciesId);
         targetX = wx + Math.sin(angle) * runSpeed * dt;
         targetZ = wz + Math.cos(angle) * runSpeed * dt;
         moving = true;
       }
-      if (distToPlayer <= tuning.attackRange) {
+      if (held || leaping) {
+        // rugindo / no ar: não golpeia (o golpe do salto é a queda, acima)
+      } else if (distToPlayer <= tuning.attackRange) {
         attackCooldown.current -= dt;
         if (attackCooldown.current <= 0 && targetRemoteId) {
           // Alvo é um CONVIDADO: o host avisa e ele aplica com a própria armadura.

@@ -70,6 +70,7 @@ import { HeroSkinPicker } from '@/components/hud/hero-skin-picker';
 const ZS_HIDE_NAV = new Set(['objectives']);
 import { BossSpawner } from '@/components/world/boss-spawner';
 import { NightFlock } from '@/components/world/night-flock';
+import { SorceressStalker } from '@/components/world/sorceress-stalker';
 import { MultiplayerPanel } from '@/components/hud/multiplayer-panel';
 import { RoomsPanel } from '@/components/hud/rooms-panel';
 import { EditorPanel } from '@/components/editor/editor-panel';
@@ -792,6 +793,8 @@ function Index() {
           {/* 31/10: chefe a cada 15 min e a noite (pombos/mortos-vivos) também na Zona Sul — a mesma do Vale */}
           {worldOn && ui.mode === 'world' && <BossSpawner />}
           {worldOn && ui.mode === 'world' && <NightFlock />}
+          {/* 03/11: a Feiticeira da Mata surge atrás de quem anda longe da base (só na Zona Sul) */}
+          {worldOn && ui.mode === 'world' && zs && <SorceressStalker />}
           {player.dead && !inCity && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 50,

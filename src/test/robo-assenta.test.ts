@@ -84,7 +84,9 @@ describe('assenta ao NASCER, em qualquer distância', () => {
     expect(r).toMatch(/swamp\.glb', standFixX: Math\.PI \/ 2, height: 1\.9, bindFix: true, autoGround: true/);
     expect(r).toMatch(/export const CAMP_SCALE = 0\.49;/); // −30% e mais −30% (Pedro 25/10)
     expect(r).toMatch(/const sizeK = isCampSpawn\(creatureId\) \? \(CAMP_SCALE_BY\[speciesId\] \?\? CAMP_SCALE\) : 1;/);
-    expect(r).toMatch(/export const CAMP_SCALE_BY: Record<string, number> = \{ raider_samurai: 0\.87 \};/); // Couraça ~2,9 m no acampamento
+    // Couraça ~2,9 m no acampamento — 03/11: a da horda ficou 2,49 m (−25%), a do fortim segue ~2,9 (2,49 × 1,16)
+    expect(r).toMatch(/export const CAMP_SCALE_BY: Record<string, number> = \{ raider_samurai: 1\.16 \};/);
+    expect(r).toMatch(/raider_samurai: \{ url: '\/models\/raiders\/spiked\.glb', standFixX: Math\.PI \/ 2, height: 2\.49,/);
     expect(r).toMatch(/autoHeight=\{mx\.height \* sizeK\}/);
   });
 });

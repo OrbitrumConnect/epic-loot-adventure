@@ -40,7 +40,8 @@ describe('separação entre inimigos', () => {
   it('perseguidor para na BORDA do alcance (cerco) e cada tipo passa o raio do corpo', () => {
     expect(CHASE_STOP).toBeGreaterThanOrEqual(0.8);
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
-    expect(ai).toMatch(/if \(distToPlayer > tuning\.attackRange \* CHASE_STOP\)/);
+    // 03/11: chefe rugindo (`held`) fica parado; o resto da regra é a mesma
+    expect(ai).toMatch(/if \(!held && distToPlayer > tuning\.attackRange \* CHASE_STOP\)/);
     expect(fs.readFileSync('src/components/world/beast.tsx', 'utf8')).toMatch(/bodyRadius: spec\.ringRadius \* 0\.75/);
     expect(fs.readFileSync('src/components/world/raider.tsx', 'utf8')).toMatch(/bodyRadius,/);
   });

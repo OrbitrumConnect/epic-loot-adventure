@@ -21,7 +21,9 @@ export type HeroAction = 'idle' | 'walk' | 'run' | 'attack' | 'jump' | 'death' |
   // asa-delta (Zona Sul, 30/10): "Flying" do Mixamo — pendurado deitado sob a asa
   | 'glide'
   // PvP (02/11): agachado parado / andando / atirando, e atirando NO AR (pulo + tiro por cima)
-  | 'crouch' | 'crouch_walk' | 'crouch_attack' | 'jump_shoot';
+  | 'crouch' | 'crouch_walk' | 'crouch_attack' | 'jump_shoot'
+  // chefes de onda (03/11, leapSystem): salto em cima e rugido de chegada (clips de mutante, `customClips`)
+  | 'leap' | 'roar';
 
 function pickClip(names: string[], kind: HeroAction): string | undefined {
   const find = (sub: string) => names.find((n) => n.toLowerCase().includes(sub));

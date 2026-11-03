@@ -195,9 +195,16 @@ export function GlbHeroMixamo({
   customClips,
   customClipCut,
   preview = false,
+  baseClips,
+  attackSpeed = ATTACK_SPEED,
 }: {
   /** VITRINE (ficha do personagem, 29/10): sempre "perto" — animação cheia, sem LOD pela distância do jogador. */
   preview?: boolean;
+  /** Troca o ARQUIVO das animações básicas (03/11, chefes de onda: parado/andar/correr/golpe de MUTANTE). Sem isto: as de
+   *  sempre (herói e raiders iguais). */
+  baseClips?: Partial<Record<'idle' | 'walk' | 'run' | 'attack', string>>;
+  /** Velocidade do golpe (padrão 1,5 — o combo do Mixamo acelerado). Kraken: lento e pesado (03/11). */
+  attackSpeed?: number;
   /** Vida de OUTRO jogador (online) p/ a reação de golpe; sem ela, a vida do jogador local. */
   hpOf?: () => number;
   actionRef: React.MutableRefObject<HeroAction>;
@@ -256,10 +263,12 @@ export function GlbHeroMixamo({
   const gl = useThree((state) => state.gl);
   primeKTX2(gl);
   const { scene } = useGLTF(charUrl, true, true, extendKTX2);
-  const idleG = useGLTF(CLIP_URL['idle']!);
-  const walkG = useGLTF(CLIP_URL['walk']!);
-  const runG = useGLTF(CLIP_URL['run']!);
-  const attackG = useGLTF(CLIP_URL['attack']!);
+  const idleUrl = baseClips?.idle ?? CLIP_URL['idle']!, walkUrl = baseClips?.walk ?? CLIP_URL['walk']!;
+  const runUrl = baseClips?.run ?? CLIP_URL['run']!, attackUrl = baseClips?.attack ?? CLIP_URL['attack']!;
+  const idleG = useGLTF(idleUrl);
+  const walkG = useGLTF(walkUrl);
+  const runG = useGLTF(runUrl);
+  const attackG = useGLTF(attackUrl);
   const attackBowG = useGLTF(CLIP_URL['attackBow']!);
   const attackGunG = useGLTF(CLIP_URL['attackGun']!);
   const jumpG = useGLTF(CLIP_URL['jump']!);
@@ -340,20 +349,21 @@ export function GlbHeroMixamo({
     // (`mixamo-retarget.test.ts`) prova que nunca piora (`twistFix`).
     const fixTwist = twistFix ?? charUrl === RED_URL;
     // keepY: a MORTE precisa do quadril DESCENDO até o chão (fixHipsY travaria o corpo deitado no ar).
-    const mk = (g: { animations: THREE.AnimationClip[]; scene: THREE.Object3D }, name: string, keepY = false): THREE.AnimationClip | null => {
+    // `srcTag` (03/11): só quando a animação básica foi TROCADA (baseClips) — entra na chave do cache (o resto: chave de antes)
+    const mk = (g: { animations: THREE.AnimationClip[]; scene: THREE.Object3D }, name: string, keepY = false, srcTag = ''): THREE.AnimationClip | null => {
       const src = g.animations[0];
       if (!src) return null;
       let a = src.clone();
       a.name = name;
       a.tracks = a.tracks.filter((t) => boneNames.has(t.name.split('.')[0] ?? ''));
       if (bindFix) {
-        const key = `${charUrl}|${name}|${standFixX}${keepY ? `|${deathClip}` : ''}`; // mesmo modelo, morte diferente (tropa × Brutamontes)
+        const key = `${charUrl}|${name}|${standFixX}${keepY ? `|${deathClip}` : ''}${srcTag}`; // mesmo modelo, morte diferente (tropa × Brutamontes)
         let baked = bindClipCache.get(key);
         if (!baked) { baked = stripRootMotion(retargetBind(a, g.scene, cloned, standFixX, scene), keepY ? null : fixHipsY); bindClipCache.set(key, baked); }
         return baked;
       }
       if (fixTwist && !rangedAttack) {
-        const key = `${charUrl}|${name}|${standFixX}|${keepY ? `y|${deathClip}` : String(fixHipsY)}`;
+        const key = `${charUrl}|${name}|${standFixX}|${keepY ? `y|${deathClip}` : String(fixHipsY)}${srcTag}`;
         let baked = twistClipCache.get(key);
         if (!baked) { baked = stripRootMotion(retargetTwist(a, g.scene, cloned, standFixX), keepY ? null : fixHipsY); twistClipCache.set(key, baked); }
         return baked;
@@ -361,7 +371,8 @@ export function GlbHeroMixamo({
       if (fixTwist) a = retargetTwist(a, g.scene, cloned, standFixX);
       return stripRootMotion(a, keepY ? null : fixHipsY);
     };
-    const base = [mk(idleG, 'idle'), mk(walkG, 'walk'), mk(runG, 'run'), mk(attackG, 'attack'), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump'), (() => { const d = mk(deathG, 'death', true); return d && withoutHipsMotion(d); })(), (() => { const d = mk(dodgeG, 'dodge', true); return d && scaleHipsDrop(d, fixHipsY); })()];
+    const tag = (k: 'idle' | 'walk' | 'run' | 'attack', u: string) => (baseClips?.[k] ? `|${u}` : '');
+    const base = [mk(idleG, 'idle', false, tag('idle', idleUrl)), mk(walkG, 'walk', false, tag('walk', walkUrl)), mk(runG, 'run', false, tag('run', runUrl)), mk(attackG, 'attack', false, tag('attack', attackUrl)), mk(attackBowG, 'attackBow'), mk(attackGunG, 'attackGun'), mk(jumpG, 'jump'), (() => { const d = mk(deathG, 'death', true); return d && withoutHipsMotion(d); })(), (() => { const d = mk(dodgeG, 'dodge', true); return d && scaleHipsDrop(d, fixHipsY); })()];
     // Só JOGADORES (rangedAttack) ganham os extras; raiders ficam exatamente como antes.
     // AGACHAR (02/11): o quadril DESCE — clip com o Y livre, na escala do modelo (altura de pé do idle do Mixamo → a do
     // modelo); os outros extras seguem travados na altura de pé (como sempre).
@@ -673,7 +684,7 @@ export function GlbHeroMixamo({
       if (atk && (current.current !== 'attack' || atkFinished)) {
         if (curClipName && curClipName !== atkName && actions[curClipName]) actions[curClipName]!.fadeOut(0.1);
         atk.reset();
-        atk.timeScale = ATTACK_SPEED;
+        atk.timeScale = attackSpeed; // padrão ATTACK_SPEED (1,5); Kraken mais lento (03/11)
         atk.setLoop(THREE.LoopOnce, 1);
         atk.clampWhenFinished = true;
         atk.fadeIn(0.08).play();

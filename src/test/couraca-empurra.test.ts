@@ -7,7 +7,8 @@ import { queueKnockback, takeKnockback, pendingKnockback } from '@/game/systems/
 describe('Couraça empurra o herói', () => {
   it('golpe dela empurra 3,5 m (só ela) na direção oposta ao inimigo', () => {
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
-    expect(ai).toMatch(/PLAYER_SHOVE: Record<string, number> = \{ raider_samurai: 3\.5 \}/);
+    // 03/11: + os chefes do pack (Canibal 5, Kraken 7); a Couraça segue 3,5
+    expect(ai).toMatch(/PLAYER_SHOVE: Record<string, number> = \{ raider_samurai: 3\.5, raider_cannibal: 5, raider_kraken: 7 \}/);
     expect(ai).toMatch(/queueKnockback\("player", \(\(px - wx\) \/ distToPlayer\) \* shove/);
     const gw = fs.readFileSync('src/components/game-world.tsx', 'utf8');
     expect(gw).toMatch(/const shove = takeKnockback\("player", dt\);\s*if \(shove\) \{ nx \+= shove\.x; nz \+= shove\.z; \}/);

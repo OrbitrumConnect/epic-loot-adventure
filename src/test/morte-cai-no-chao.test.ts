@@ -134,8 +134,8 @@ describe('morte: regras do jogo', () => {
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
     expect(r).toMatch(/deathHoldS: mxBody \? deathGroundTime\(mxBody\.death \?\? 'back'\) \+ DEATH_LIE_S : 0,/);
     expect(r).toMatch(/export const DEATH_LIE_S = 0\.45;/); // Pedro 26/10: "até 0,4–0,5 s no chão"
-    expect(r).toMatch(/onDeath: \(\) => \{ bossAction\.current = 'death'; \},/);
-    expect(r.match(/death: 'mutant'/g)!.length).toBe(3);
+    expect(r).toMatch(/onDeath: \(\) => \{ bossAction\.current = 'death'; clearLeap\(creatureId\); \},/); // 03/11: + esquece o salto
+    expect(r.match(/death: 'mutant'/g)!.length).toBe(5); // 03/11: + Canibal e Kraken (chefes do pack)
     const hero = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
     expect(hero).toMatch(/if \(want === 'death'\) \{/);
     expect(hero).toMatch(/d\.setLoop\(THREE\.LoopOnce, 1\); d\.clampWhenFinished = true;/);
