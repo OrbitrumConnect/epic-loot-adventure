@@ -11,7 +11,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { ZS_SURF } from './zona-sul-meta';
+import { ZS_ROAD_MASK, ZS_SURF } from './zona-sul-meta';
 import { type ZsTerrain, zsHash, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
 import { caveMouthClear } from './zs-cave';
 import { useGameStore } from '@/game/state/game-store';
@@ -187,8 +187,114 @@ const WIDTH: Record<ZsVegKind, number> = { canopy: 0.85, canopyMid: 0.85, emerge
 
 export type ZsVegItem = { kind: ZsVegKind; x: number; y: number; z: number; h: number; yaw: number };
 
+/**
+ * FOLGA E ESPAÇO (03/11, Pedro: "na entrada do Rebouças parece várias pedras e árvores na pista e dentro da água —
+ * organizar direito, não deixar tudo juntinho demais, afastar levemente uma das outras"). Antes só o PONTO do tronco
+ * olhava a grade do mapa (4 m): a árvore nascia colada na pista que o chão pinta (máscara de 1 m) e na beira d'água, e
+ * duas podiam nascer quase uma em cima da outra. Medido no Rebouças (150 m em volta, 291 árvores): 5 troncos NA pista,
+ * 27 a menos de 3 m dela, 3 arbustos na pista; 59 árvores (20%) com outra a menos de 3 m.
+ *  - tronco a ≥ ZS_VEG_ROAD_CLEAR da PISTA de verdade e da água (coqueiro da praia: só da pista); arbusto/samambaia a
+ *    ≥ ZS_VEG_LOW_CLEAR;
+ *  - entre duas árvores ≥ ZS_VEG_TREE_GAP, entre dois arbustos ≥ ZS_VEG_BUSH_GAP: das que ficam perto demais, sai a de
+ *    sorteio MAIOR (cada uma olha as 9 células em volta — o resultado é o mesmo de onde quer que se olhe).
+ * Cada célula é calculada UMA vez e guardada (antes: tudo de novo a cada 16 m andados).
+ */
+export const ZS_VEG_ROAD_CLEAR = 3, ZS_VEG_LOW_CLEAR = 1.5, ZS_VEG_TREE_GAP = 3, ZS_VEG_BUSH_GAP = 2.5;
+/** Byte da máscara das ruas a partir do qual o chão já é pista (o chão começa a pintar em 0,16 e fecha em 0,6). */
+export const ZS_VEG_ROAD_BYTE = 40;
+/** Máscara das ruas (canal R, 1 byte por metro, linha 0 = norte) — a mesma que o chão pinta. */
+export type ZsVegRoadMask = { data: Uint8Array; w: number; h: number };
+let roadMask: ZsVegRoadMask | null = null;
+/** Versão da folga da pista: muda quando a máscara chega (o componente refaz a mata). */
+let vegVersion = 0;
+/** O navegador carrega a máscara (ZsVegetation); os testes passam a do arquivo. */
+export function setZsVegRoadMask(m: ZsVegRoadMask | null): void { roadMask = m; rawCache.clear(); thinCache.clear(); vegVersion++; }
+const RING = Array.from({ length: 8 }, (_, a) => [Math.sin((a / 8) * Math.PI * 2), Math.cos((a / 8) * Math.PI * 2)] as const);
+const roadPx = (m: ZsVegRoadMask, x: number, z: number) => {
+  const u = Math.floor(x - ZS_ROAD_MASK.x0), v = Math.floor(z - ZS_ROAD_MASK.z0);
+  return u >= 0 && v >= 0 && u < m.w && v < m.h && m.data[v * m.w + u]! > ZS_VEG_ROAD_BYTE;
+};
+/** Tem pista (a que o chão pinta) a até `r` m? (centro + 8 direções em 2 anéis) */
+export function zsVegRoadNear(x: number, z: number, r: number): boolean {
+  const m = roadMask;
+  if (!m) return false;
+  if (roadPx(m, x, z)) return true;
+  for (const f of [0.5, 1]) for (const [sx, sz] of RING) if (roadPx(m, x + sx * r * f, z + sz * r * f)) return true;
+  return false;
+}
+function waterNear(t: ZsTerrain, x: number, z: number, r: number): boolean {
+  for (const f of [0.5, 1]) for (const [sx, sz] of RING) {
+    const s = zsSurfAt(t, x + sx * r * f, z + sz * r * f);
+    if (s === ZS_SURF.sea || s === ZS_SURF.lagoon) return true;
+  }
+  return false;
+}
+type VegCand = { kind: ZsVegKind; x: number; y: number; z: number; r: number; r2: number; pr: number; group: 0 | 1 | 2 };
+const groupOf = (k: ZsVegKind): 0 | 1 | 2 => (k === 'bush' ? 2 : k === 'fern' ? 0 : 1); // 1 = árvore (dossel, emergente, baixa, coqueiro)
+const rawCache = new Map<number, VegCand[]>();
+const thinCache = new Map<number, VegCand[]>();
+let cacheT: ZsTerrain | null = null;
+const cellKey = (cx: number, cz: number) => (cx + 32768) * 65536 + (cz + 32768);
+
+/** Os candidatos de uma célula (sem olhar as vizinhas): o sorteio de sempre + a folga de pista e água. */
+function rawCell(t: ZsTerrain, cx: number, cz: number): VegCand[] {
+  const key = cellKey(cx, cz);
+  const hit = rawCache.get(key);
+  if (hit) return hit;
+  const out: VegCand[] = [];
+  for (let k = 0; k < 7; k++) {
+    const x = (cx + zsHash(cx, cz, k * 3 + 1)) * ZS_VEG_CELL, z = (cz + zsHash(cx, cz, k * 3 + 2)) * ZS_VEG_CELL;
+    const s = zsSurfAt(t, x, z), y = zsHeightAt(t, x, z);
+    if (y < ZS_WATER_Y + 0.1 || s === ZS_SURF.sea || s === ZS_SURF.lagoon || s === ZS_SURF.out || s === ZS_SURF.road) continue; // nada no meio da rua
+    if (!caveMouthClear(x, z)) continue; // boca da caverna limpa
+    const slope = zsSlopeDeg(t, x, z), r = zsHash(cx, cz, k * 3 + 3), r2 = zsHash(cx, cz, k * 3 + 40);
+    let kind: ZsVegKind | null = null;
+    if (s === ZS_SURF.beach) { if (k < 1 && r < 0.35) kind = 'palm'; }
+    else if (slope > 40) kind = null;                                     // paredão de granito: pelado
+    else {
+      const lowland = y < 4 && s !== ZS_SURF.forest;
+      const dense = lowland ? 3 : 5;                                      // baixada (ruína tomada) mais aberta; morro fechado
+      if (k >= dense) continue;
+      if (slope > 32) kind = r < 0.5 ? 'bush' : null;                    // encosta forte: só mato baixo
+      else if (r < 0.03 && !lowland) kind = 'emergent';
+      else if (r < (lowland ? 0.4 : 0.6)) kind = 'canopy';
+      else if (r < (lowland ? 0.58 : 0.78)) kind = 'fern';
+      else if (r < (lowland ? 0.68 : 0.82) && slope < 20) kind = 'farm';
+      else kind = 'bush';
+    }
+    if (!kind) continue;
+    const group = groupOf(kind), clear = group === 1 ? ZS_VEG_ROAD_CLEAR : ZS_VEG_LOW_CLEAR;
+    if (zsVegRoadNear(x, z, clear)) continue;                             // nada na pista que o chão pinta
+    if (kind !== 'palm' && waterNear(t, x, z, clear)) continue;           // nem na beira d'água (coqueiro é da praia)
+    out.push({ kind, x, y, z, r, r2, pr: zsHash(cx, cz, k * 3 + 61), group });
+  }
+  rawCache.set(key, out);
+  return out;
+}
+
+/** A célula depois do espaço mínimo: árvore perto de outra árvore (arbusto de outro arbusto) com sorteio menor sai. */
+function cellVeg(t: ZsTerrain, cx: number, cz: number): VegCand[] {
+  const key = cellKey(cx, cz);
+  const hit = thinCache.get(key);
+  if (hit) return hit;
+  const keep = rawCell(t, cx, cz).filter((c) => {
+    if (c.group === 0) return true;
+    const gap = c.group === 1 ? ZS_VEG_TREE_GAP : ZS_VEG_BUSH_GAP, gap2 = gap * gap;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      for (const o of rawCell(t, cx + dx, cz + dz)) {
+        if (o === c || o.group !== c.group || o.pr >= c.pr) continue;
+        if ((o.x - c.x) ** 2 + (o.z - c.z) ** 2 < gap2) return false;
+      }
+    }
+    return true;
+  });
+  thinCache.set(key, keep);
+  return keep;
+}
+
 /** Árvores das células em volta de (hx, hz): perto = completas; longe = só copa das grandes. Puro (testável). */
 export function zsVegetationAround(t: ZsTerrain, hx: number, hz: number, near = ZS_VEG_NEAR, far = ZS_VEG_FAR): ZsVegItem[] {
+  if (t !== cacheT) { rawCache.clear(); thinCache.clear(); cacheT = t; }
   const out: ZsVegItem[] = [];
   const c0x = Math.floor((hx - far) / ZS_VEG_CELL), c1x = Math.floor((hx + far) / ZS_VEG_CELL);
   const c0z = Math.floor((hz - far) / ZS_VEG_CELL), c1z = Math.floor((hz + far) / ZS_VEG_CELL);
@@ -197,34 +303,36 @@ export function zsVegetationAround(t: ZsTerrain, hx: number, hz: number, near = 
     const d = Math.hypot(ccx - hx, ccz - hz);
     if (d > far) continue;
     const isNear = d <= near;
-    for (let k = 0; k < 7; k++) {
-      const x = (cx + zsHash(cx, cz, k * 3 + 1)) * ZS_VEG_CELL, z = (cz + zsHash(cx, cz, k * 3 + 2)) * ZS_VEG_CELL;
-      const s = zsSurfAt(t, x, z), y = zsHeightAt(t, x, z);
-      if (y < ZS_WATER_Y + 0.1 || s === ZS_SURF.sea || s === ZS_SURF.lagoon || s === ZS_SURF.out || s === ZS_SURF.road) continue; // nada no meio da rua
-      if (!caveMouthClear(x, z)) continue; // boca da caverna limpa
-      const slope = zsSlopeDeg(t, x, z), r = zsHash(cx, cz, k * 3 + 3), r2 = zsHash(cx, cz, k * 3 + 40);
-      let kind: ZsVegKind | null = null;
-      if (s === ZS_SURF.beach) { if (k < 1 && r < 0.35) kind = 'palm'; }
-      else if (slope > 40) kind = null;                                     // paredão de granito: pelado
-      else {
-        const lowland = y < 4 && s !== ZS_SURF.forest;
-        const dense = lowland ? 3 : 5;                                      // baixada (ruína tomada) mais aberta; morro fechado
-        if (k >= dense) continue;
-        if (slope > 32) kind = r < 0.5 ? 'bush' : null;                    // encosta forte: só mato baixo
-        else if (r < 0.03 && !lowland) kind = 'emergent';
-        else if (r < (lowland ? 0.4 : 0.6)) kind = 'canopy';
-        else if (r < (lowland ? 0.58 : 0.78)) kind = 'fern';
-        else if (r < (lowland ? 0.68 : 0.82) && slope < 20) kind = 'farm';
-        else kind = 'bush';
-      }
-      if (!kind) continue;
+    for (const c of cellVeg(t, cx, cz)) {
+      let kind = c.kind;
       if (!isNear) { if (kind !== 'canopy' && kind !== 'emergent') continue; kind = 'far'; }
       else if (kind === 'canopy' && d > ZS_VEG_DETAIL) kind = 'canopyMid'; // mesma árvore, sem as folhinhas (02/11)
       const range = kind === 'far' || kind === 'canopyMid' ? ZS_TREE_H.canopy : ZS_TREE_H[kind];
-      out.push({ kind, x, y, z, h: range[0] + (range[1] - range[0]) * r2, yaw: r * Math.PI * 2 });
+      out.push({ kind, x: c.x, y: c.y, z: c.z, h: range[0] + (range[1] - range[0]) * c.r2, yaw: c.r * Math.PI * 2 });
     }
   }
   return out;
+}
+
+/** Carrega a máscara das ruas pra folga da pista (1 vez; o navegador já baixou a imagem pro chão). */
+let roadMaskAsked = false;
+function requestVegRoadMask(): void {
+  if (roadMaskAsked || typeof window === 'undefined' || typeof document === 'undefined') return;
+  roadMaskAsked = true;
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      if (!g) return;
+      g.drawImage(img, 0, 0);
+      const px = g.getImageData(0, 0, img.width, img.height).data, data = new Uint8Array(img.width * img.height);
+      for (let i = 0; i < data.length; i++) data[i] = px[i * 4]!;
+      setZsVegRoadMask({ data, w: img.width, h: img.height });
+    } catch { /* sem canvas: fica a folga da grade do mapa */ }
+  };
+  img.src = ZS_ROAD_MASK.url;
 }
 
 export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3> }) {
@@ -246,10 +354,13 @@ export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.Muta
     return { ...m, sh };
   }, []);
   const lastCell = useRef('');
+  const seenVersion = useRef(vegVersion);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const bases = useRef<{ pb: unknown; nb: unknown; boxes: number[][] }>({ pb: undefined, nb: undefined, boxes: [] });
+  useEffect(() => { requestVegRoadMask(); }, []);
   useFrame(() => {
     const hx = heroRef.current.x, hz = heroRef.current.z;
+    if (seenVersion.current !== vegVersion) { seenVersion.current = vegVersion; lastCell.current = ''; } // a pista chegou
     // base nova/mudou (minha ou de outro jogador): refaz a mata em volta sem nada dentro do quadrado dela
     const pb = useGameStore.getState().playerBase, nb = useNet.getState().bases;
     if (pb !== bases.current.pb || nb !== bases.current.nb) { bases.current = { pb, nb, boxes: baseBoxes(pb, nb) }; lastCell.current = ''; }
