@@ -66,6 +66,14 @@ export const CAVE_TUNNELS: CaveTunnel[] = [
     P(84, -416, 13.4, 3.8, 5), P(68, -432, 11, 4.6, 6.5), P(32, -402, 6, 5.6, 7.5), P(2, -372, 2, 6, 8),
     P(-24, -336, -1, 6, 8), P(-42, -290, -2, 6, 8), P(-50, -245, -2, 6, 8)] },
   { id: 'cosme-encruzilhada', name: 'túnel do Cosme Velho', pts: [P(-54, -205, -2, 6, 8), P(-62, -170, 0, 6, 8), P(-70, -140, 2.5, 6.5, 8.5), P(-76, -124, 4, 6.5, 8.5)] },
+  // TÚNEL ZUZU ANGEL (02/11 noite, Pedro: "faz os túneis; o da Gávea–São Conrado, Zuzu, pode ter uma entrada no meio dele
+  // pra cave"): a reta do OSM (São Conrado (−690, 449) → Gávea (−537, 320)); estrada de 2 faixas (11 m × 6,5 m), piso
+  // subindo ~1% de São Conrado (12,07 m) pra Gávea (13,96 m). As bocas ficam onde a encosta já cobre o arco (a de São
+  // Conrado 0,2 da reta pra dentro). Passa POR CIMA do túnel do Leblon (~7 m de rocha — ANDARES). No meio (J) sai a
+  // ENTRADA DA CAVERNA: rampa de ~115 m (~15%) que desce até a passagem da Gávea.
+  { id: 'zuzu-sc', name: 'Túnel Zuzu Angel', mouth: true, pts: [P(-659.4, 423.2, 12.07, 5.5, 6.5), P(-641, 407.7, 12.3, 5.5, 6.5), P(-600, 373.1, 13, 5.5, 6.5)] },
+  { id: 'zuzu-gavea', name: 'Túnel Zuzu Angel', mouth: true, pts: [P(-537, 320, 13.96, 5.5, 6.5), P(-569.5, 347.5, 13.5, 5.5, 6.5), P(-600, 373.1, 13, 5.5, 6.5)] },
+  { id: 'zuzu-caverna', name: 'descida do Zuzu pra caverna', pts: [P(-600, 373.1, 13, 4.6, 6.5), P(-621, 348, 8, 4.6, 6.5), P(-624, 305, 2, 4.6, 6.5), P(-603, 265, -5, 5, 7)] }, // a ponta no EIXO da passagem (junção de verdade)
 ];
 
 export const CAVE_ROOMS: CaveRoom[] = [
@@ -259,37 +267,98 @@ function roomFloor(r: Room, u: number, v: number): number {
   return y;
 }
 
-/** Chão da caverna em (x, z) (null = rocha: não tem caverna ali). Plano por trecho, emendado suave; nas bocas nunca
- *  passa da encosta (o chão do túnel encontra o chão do mapa). */
-export function caveFloorAt(x: number, z: number): number | null {
-  const c = cellOf(x, z);
-  if (!c) return null;
-  return floorIn(c, x, z);
-}
-function floorIn(c: GCell, x: number, z: number): number | null {
-  let sw = 0, sf = 0;
+/** ANDARES (02/11 noite, Pedro: o Zuzu Angel passa POR CIMA do túnel do Leblon; galerias em andares no abismo do Pico
+ *  da Tijuca): onde os chãos das peças em volta de um ponto diferem mais que CAVE_STACK m, cada grupo de chãos parecidos
+ *  é um ANDAR — com o seu chão e o seu teto — e os andares se somam (laje de rocha entre eles). Onde não (toda a caverna
+ *  de 30–31/10), a conta é EXATAMENTE a de antes (um chão por ponto, emendado suave). */
+export const CAVE_STACK = 4;
+// peças em volta do ponto (reaproveitado — nada criado por chamada): chão, peso, código (seg ≥ 0 · salão = −1 − i), andar
+const PN_MAX = 96;
+const PF = new Float64Array(PN_MAX), PW = new Float64Array(PN_MAX), PK = new Int32Array(PN_MAX), PL = new Int32Array(PN_MAX);
+let PN = 0;
+const LV_F = new Float64Array(16), LV_W = new Float64Array(16), LV_LO = new Float64Array(16);
+let LVN = 0;
+/** Junta as peças da célula com o chão (projeção) e o peso de cada uma em (x, z). */
+function gather(c: GCell, x: number, z: number): void {
+  PN = 0;
   for (const i of c.segs) {
     const s = SEGS[i]!;
     let t = ((x - s.ax) * s.abx + (z - s.az) * s.abz) / s.l2;
-    if (s.cap && t < -0.12) continue; // boca: o chão vai só um pouquinho além do plano (o corte fica contínuo)
+    const out = s.cap && t < -0.12; // boca: o chão vai só um pouquinho além do plano (o corte fica contínuo)
     t = t < 0 ? 0 : t > 1 ? 1 : t;
     const r = s.ra + (s.rb - s.ra) * t;
     const d = Math.hypot(x - (s.ax + s.abx * t), z - (s.az + s.abz * t));
-    const w = smooth01((1.4 * r - d) / (0.85 * r));
-    if (w <= 0) continue;
-    sw += w; sf += w * (s.ay + (s.by - s.ay) * t);
+    if (PN >= PN_MAX) break;
+    PF[PN] = s.ay + (s.by - s.ay) * t; PW[PN] = out ? 0 : smooth01((1.4 * r - d) / (0.85 * r)); PK[PN] = i; PN++;
   }
   for (const i of c.rooms) {
     const r = ROOMS[i]!;
     const [u, v] = roomUV(r, x, z);
     const e = Math.hypot(u / r.rx, v / r.rz);
-    const w = smooth01((1.3 - e) / 0.5);
-    if (w <= 0) continue;
-    sw += w; sf += w * roomFloor(r, u, v);
+    if (PN >= PN_MAX) break;
+    PF[PN] = roomFloor(r, u, v); PW[PN] = smooth01((1.3 - e) / 0.5); PK[PN] = -1 - i; PN++;
+  }
+}
+/** Andares do ponto (depois de `gather`): agrupa os chãos (peças com peso) com folga ≤ CAVE_STACK; cada peça (até as sem
+ *  peso) vai pro andar de chão mais perto. false = um andar só (a conta de antes). */
+function levels(): boolean {
+  let lo = Infinity, hi = -Infinity;
+  for (let k = 0; k < PN; k++) if (PW[k]! > 0) { lo = Math.min(lo, PF[k]!); hi = Math.max(hi, PF[k]!); }
+  if (!(hi - lo > CAVE_STACK)) return false;
+  // chãos com peso, em ordem; corta onde o salto passa de CAVE_STACK
+  const ord: number[] = [];
+  for (let k = 0; k < PN; k++) if (PW[k]! > 0) ord.push(k);
+  ord.sort((a, b) => PF[a]! - PF[b]!);
+  LVN = 0;
+  let prev = -Infinity;
+  for (const k of ord) {
+    if (PF[k]! - prev > CAVE_STACK && LVN < 16) { LV_F[LVN] = 0; LV_W[LVN] = 0; LV_LO[LVN] = PF[k]!; LVN++; }
+    prev = PF[k]!;
+    const L = LVN - 1; LV_F[L] = LV_F[L]! + PW[k]! * PF[k]!; LV_W[L] = LV_W[L]! + PW[k]!; PL[k] = L;
+  }
+  if (LVN <= 1) return false; // descida contínua (sem salto > CAVE_STACK): um andar só — a conta de antes, idêntica
+  for (let L = 0; L < LVN; L++) LV_F[L] = LV_F[L]! / LV_W[L]!;
+  for (let k = 0; k < PN; k++) if (!(PW[k]! > 0)) { let b = 0; for (let L = 1; L < LVN; L++) if (Math.abs(PF[k]! - LV_F[L]!) < Math.abs(PF[k]! - LV_F[b]!)) b = L; PL[k] = b; }
+  return true;
+}
+/** Andar de quem está com os pés em `yRef`: o de chão mais ALTO até `tol` acima do pé; abaixo de todos, o mais baixo. */
+function levelAt(yRef: number, tol: number): number {
+  let best = -1;
+  for (let L = 0; L < LVN; L++) if (LV_F[L]! <= yRef + tol && (best < 0 || LV_F[L]! > LV_F[best]!)) best = L;
+  return best < 0 ? 0 : best;
+}
+
+/** Chão da caverna em (x, z) (null = rocha: não tem caverna ali). Plano por trecho, emendado suave; nas bocas nunca
+ *  passa da encosta (o chão do túnel encontra o chão do mapa). Com ANDARES, `yRef` (o pé) escolhe o andar; sem ele, o
+ *  de baixo. */
+export function caveFloorAt(x: number, z: number, yRef?: number, tol = 0.9): number | null {
+  const c = cellOf(x, z);
+  if (!c) return null;
+  return floorIn(c, x, z, yRef, tol);
+}
+function floorIn(c: GCell, x: number, z: number, yRef?: number, tol = 0.9): number | null {
+  gather(c, x, z);
+  let sw = 0, sf = 0;
+  if (levels()) {
+    const L = yRef === undefined ? 0 : levelAt(yRef, tol);
+    sw = LV_W[L]!; sf = LV_F[L]! * sw;
+  } else {
+    for (let k = 0; k < PN; k++) { const w = PW[k]!; if (w <= 0) continue; sw += w; sf += w * PF[k]!; }
   }
   if (sw <= 1e-6) return null;
   // 5 cm abaixo do chão do mapa quando o segue (beira baixa da boca): o chão do mapa cobre, sem piscar
   return Math.min(sf / sw, groundAt(x, z) - 0.05);
+}
+/** Rugosidade + pilares em cima do valor das peças, e o chão (igual pra cada andar). */
+function finish(c: GCell, f: number, fl: number, x: number, y: number, z: number): number {
+  const amp = roughAt(x, y, z);
+  if (amp > 0) f += ((caveNoise(x * 0.16, y * 0.16, z * 0.16) - 0.5) * 2 + (caveNoise(x * 0.42 + 17, y * 0.42, z * 0.42) - 0.5) * 0.7) * amp;
+  for (const i of c.pillars) {
+    const p = PILLARS[i]!;
+    const d = Math.hypot(x - p.x, z - p.z) - p.r * (1 + 0.22 * (caveNoise(x * 0.3, y * 0.25, z * 0.3) - 0.5));
+    f = Math.max(f, -d);
+  }
+  return Math.max(f, fl - y);
 }
 
 /**
@@ -299,20 +368,30 @@ function floorIn(c: GCell, x: number, z: number): number | null {
 export function caveField(x: number, y: number, z: number): number {
   const c = cellOf(x, z);
   if (!c) return CAVE_BIG;
-  const fl = floorIn(c, x, z);
-  if (fl === null) return CAVE_BIG;
-  let f = CAVE_BIG;
-  for (const i of c.segs) f = smin(f, segVal(SEGS[i]!, x, y, z));
-  for (const i of c.rooms) f = smin(f, roomVal(ROOMS[i]!, x, y, z));
-  if (f >= CAVE_BIG * 0.5) return CAVE_BIG;
-  const amp = roughAt(x, y, z);
-  if (amp > 0) f += ((caveNoise(x * 0.16, y * 0.16, z * 0.16) - 0.5) * 2 + (caveNoise(x * 0.42 + 17, y * 0.42, z * 0.42) - 0.5) * 0.7) * amp;
-  for (const i of c.pillars) {
-    const p = PILLARS[i]!;
-    const d = Math.hypot(x - p.x, z - p.z) - p.r * (1 + 0.22 * (caveNoise(x * 0.3, y * 0.25, z * 0.3) - 0.5));
-    f = Math.max(f, -d);
+  gather(c, x, z);
+  if (!levels()) {
+    // um andar só: a conta de sempre (o mesmo chão de `floorIn`, sem juntar as peças de novo)
+    let sw = 0, sf = 0;
+    for (let k = 0; k < PN; k++) { const w = PW[k]!; if (w <= 0) continue; sw += w; sf += w * PF[k]!; }
+    if (sw <= 1e-6) return CAVE_BIG;
+    const fl = Math.min(sf / sw, groundAt(x, z) - 0.05);
+    let f = CAVE_BIG;
+    for (const i of c.segs) f = smin(f, segVal(SEGS[i]!, x, y, z));
+    for (const i of c.rooms) f = smin(f, roomVal(ROOMS[i]!, x, y, z));
+    if (f >= CAVE_BIG * 0.5) return CAVE_BIG;
+    return finish(c, f, fl, x, y, z);
   }
-  return Math.max(f, fl - y);
+  // ANDARES: cada um é uma caverna com o seu chão; o ar é a soma deles
+  const g = groundAt(x, z) - 0.05;
+  let best = CAVE_BIG;
+  // (segVal/roomVal/finish não juntam peças: PK/PL/LV_F seguem valendo no laço)
+  for (let L = 0; L < LVN; L++) {
+    let f = CAVE_BIG;
+    for (let k = 0; k < PN; k++) if (PL[k] === L) f = smin(f, PK[k]! >= 0 ? segVal(SEGS[PK[k]!]!, x, y, z) : roomVal(ROOMS[-1 - PK[k]!]!, x, y, z));
+    if (f >= CAVE_BIG * 0.5) continue;
+    best = Math.min(best, finish(c, f, Math.min(LV_F[L]!, g), x, y, z));
+  }
+  return best;
 }
 
 /** Ar da caverna em (x, y, z)? */
@@ -367,7 +446,7 @@ export function caveMouthClear(x: number, z: number, pad = 4): boolean {
 export function zsCaveUnder(t: ZsTerrain): UnderLayer {
   setCaveTerrain(t);
   return {
-    floor: (x, z, feetY) => (caveInside(x, feetY, z) ? caveFloorAt(x, z) : null),
+    floor: (x, z, feetY) => (caveInside(x, feetY, z) ? caveFloorAt(x, z, feetY) : null),
     floorAt: caveFloorAt,
     step: caveCreatureStep,
     layer: caveLayer,
@@ -419,8 +498,8 @@ export function caveOreSpots(): { id: string; x: number; z: number; y: number }[
   return out;
 }
 /** Chão onde cabe um corpo EM PÉ em (x, z) (null = rocha/parede). */
-export function caveStandAt(x: number, z: number): number | null {
-  const fl = caveFloorAt(x, z);
+export function caveStandAt(x: number, z: number, yRef?: number): number | null {
+  const fl = caveFloorAt(x, z, yRef);
   return fl !== null && bodyFits(x, fl, z) ? fl : null;
 }
 /**
@@ -432,7 +511,7 @@ export function caveMove(t: ZsTerrain, x: number, z: number, feetY: number, dx: 
   const nx0 = x + dx, nz0 = z + dz;
   if (!here && !caveInside(nx0, feetY, nz0)) return null;
   const at = (px: number, pz: number): CaveMove | null => {
-    const fl = caveFloorAt(px, pz);
+    const fl = caveFloorAt(px, pz, feetY);
     if (fl !== null && fl - feetY < STEP_UP && caveInside(px, Math.max(fl, feetY - 2), pz) && bodyFits(px, fl, pz)) {
       const w = cavePoolY(px, pz);
       return { x: px, z: pz, ground: fl, inCave: true, wading: w !== null && fl < w - 0.15 };
@@ -444,19 +523,19 @@ export function caveMove(t: ZsTerrain, x: number, z: number, feetY: number, dx: 
     return null;
   };
   if (Math.abs(dx) + Math.abs(dz) < 1e-9) {
-    const fl = caveFloorAt(x, z) ?? feetY, w = cavePoolY(x, z);
+    const fl = caveFloorAt(x, z, feetY) ?? feetY, w = cavePoolY(x, z);
     return { x, z, ground: fl, inCave: true, wading: w !== null && fl < w - 0.15 };
   }
   const r = at(nx0, nz0) ?? at(nx0, z) ?? at(x, nz0);
   if (r) return r;
-  const fl = caveFloorAt(x, z) ?? feetY, w = cavePoolY(x, z);
+  const fl = caveFloorAt(x, z, feetY) ?? feetY, w = cavePoolY(x, z);
   return { x, z, ground: fl, inCave: here, wading: w !== null && fl < w - 0.15 };
 }
 /** Passo de BICHO na caverna (x, z; o chão sai de `caveFloorAt`). Fora dela: o passo como veio. */
 export function caveCreatureStep(ox: number, oz: number, nx: number, nz: number, feetY: number): [number, number] {
   if (!caveInside(ox, feetY, oz) && !caveInside(nx, feetY, nz)) return [nx, nz];
   const ok = (px: number, pz: number) => {
-    const fl = caveFloorAt(px, pz);
+    const fl = caveFloorAt(px, pz, feetY);
     if (fl !== null && fl - feetY < STEP_UP && bodyFits(px, fl, pz)) return true;
     return groundAt(px, pz) - feetY < STEP_UP; // sai pela boca (o chão do mapa na altura do pé)
   };
