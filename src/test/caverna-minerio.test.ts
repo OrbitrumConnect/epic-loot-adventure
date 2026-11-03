@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { decodeTerrain, type ZsTerrain, zsHeightAt } from '@/components/zona-sul/zs-terrain-data';
 import { ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
-import { CAVE_ENEMIES, CAVE_ORE, caveEnemySpots, caveInside, caveLayer, caveOreSpots, cavePoolY, caveStandAt, setCaveTerrain } from '@/components/zona-sul/zs-cave';
+import { CAVE_ENEMIES, CAVE_ORE, caveEnemySpots, caveInside, caveLayer, caveOreSpots, cavePoolY, caveStandAt, caveTunnelEnemySpots, setCaveTerrain } from '@/components/zona-sul/zs-cave';
 import { createCaveCreatures, createCaveOreNodes } from '@/components/zona-sul/zs-world-profile';
 import { HARVEST_NODES } from '@/game/data/harvest-nodes';
 import { useGameStore } from '@/game/state/game-store';
@@ -92,7 +92,9 @@ describe('mais inimigos na caverna + navio no 35', () => {
       expect(fl, s.id).not.toBeNull();
       expect(caveLayer(s.x, fl!, s.z), s.id).toBe(1);
     }
-    expect(createCaveCreatures().filter((c) => c.id.startsWith('wild_cave_'))).toHaveLength(27);
+    // 03/11: + os dos TÚNEIS (caverna-inimigos-tuneis), no fim — os 27 dos salões seguem iguais
+    expect(createCaveCreatures().filter((c) => c.id.startsWith('wild_cave_') && !c.id.startsWith('wild_cave_tn_'))).toHaveLength(27);
+    expect(createCaveCreatures().filter((c) => c.id.startsWith('wild_cave_tn_'))).toHaveLength(caveTunnelEnemySpots().length);
   });
   it('navio de guerra libera no nível 35', () => {
     expect(UNLOCK_LEVEL['war_ship']).toBe(35);

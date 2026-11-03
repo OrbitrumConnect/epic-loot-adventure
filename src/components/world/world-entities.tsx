@@ -29,6 +29,8 @@ import { mitigateDamage } from '@/game/systems/attributesSystem';
 import { effectiveMaxHp } from '@/game/systems/equipmentStatsSystem';
 import { pvpBaseDamage, pvpPlayerDamage } from '@/game/systems/pvpSystem';
 import { mergeResumedWorld } from '@/game/systems/wildlifeSystem';
+import { WORLD } from '@/game/data/world-profile';
+import { creatureLayer, layers } from '@/game/systems/layerSystem';
 
 const SYNC_INTERVAL = 0.2;
 export const ISO_CREATURE_RENDER_RADIUS = 85; // medição: câmera iso vê até 69 m
@@ -39,16 +41,35 @@ const CREATURE_CULL_INTERVAL = 0.25;
  *  corpos no MESMO quadro (clone do esqueleto + animações + shader) = travada de 100–500 ms. Agora o corte decide quem
  *  entra, mas entram no máximo MOUNTS_PER_FRAME por quadro, o MAIS PERTO primeiro. Sair do raio continua na hora. */
 export const MOUNTS_PER_FRAME = 1;
+/**
+ * OUTRA CAMADA, LONGE NA ALTURA (03/11, Pedro: "verificar o que pode travar/lagar"): o corte era só no plano (x, z). Na
+ * caverna embaixo do maciço da Tijuca, os bichos do MORRO lá em cima (100–300 m acima) contavam como "perto" e montavam
+ * corpo: medido na passagem da Gávea, 90 bichos com esqueleto (5.446 ossos recalculados por quadro) contra 22 na
+ * superfície. Agora, bicho e herói em camadas DIFERENTES (um na caverna, outro fora) só montam se estiverem a menos de
+ * MOUNT_MAX_DY na altura — na boca (mesma altura) segue montando dos dois lados (dá pra ver pela boca). Mesma camada:
+ * igual a antes (o bicho no morro visto lá de baixo continua aparecendo).
+ */
+// 15 m: na boca a diferença é de poucos metros; medido na passagem da Gávea, os cervos/coelhos no morro baixo logo acima
+// (17–29 m acima, atrás da rocha) ainda montavam com 30
+export const MOUNT_MAX_DY = 15;
+/** O bicho está ao alcance da vista na ALTURA? (puro) `crLayer`/`crY` do bicho, `pLayer`/`pY` do herói. */
+export function mountByHeight(crLayer: number, crY: number, pLayer: number, pY: number): boolean {
+  return crLayer === pLayer || Math.abs(crY - pY) < MOUNT_MAX_DY;
+}
+
 /** Fila de entrada (puro, testável): quem já está montado e segue no raio fica; os novos entram na fila por distância. */
 export function planCreatureMounts(
   creatures: readonly { id: string; position: { x: number; z: number } }[],
   player: { x: number; z: number }, radius: number, mounted: ReadonlySet<string>, cameraMode: CameraMode,
+  /** (Zona Sul) false = outra camada e longe na altura: não monta */
+  inSight?: (cr: { id: string; position: { x: number; z: number } }) => boolean,
 ): { keep: Set<string>; queue: string[] } {
   const keep = new Set<string>(), add: { id: string; d2: number }[] = [];
   for (const cr of creatures) {
     const dx = cr.position.x - player.x, dz = cr.position.z - player.z, d2 = dx * dx + dz * dz;
     const was = mounted.has(cr.id);
     if (!shouldMountCreature(d2, radius, was, cameraMode)) continue;
+    if (inSight && !inSight(cr)) continue;
     if (was) keep.add(cr.id); else add.push({ id: cr.id, d2 });
   }
   add.sort((a, b) => a.d2 - b.d2);
@@ -118,7 +139,18 @@ export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: R
     const radius = cameraMode === 'iso'
       ? ISO_CREATURE_RENDER_RADIUS
       : cameraMode === 'third' ? THIRD_CREATURE_RENDER_RADIUS : FREE_CREATURE_RENDER_RADIUS;
-    const { keep, queue } = planCreatureMounts(creatures, player, radius, renderBodyIds.current, cameraMode);
+    // Zona Sul (mundo com caverna): camada e altura de cada um — o bicho da caverna pelo id (mora lá) ou pela IA
+    const u = WORLD.under, h = WORLD.height;
+    let inSight: ((cr: { id: string; position: { x: number; z: number } }) => boolean) | undefined;
+    if (u && h) {
+      const pY = playerRef.current?.position.y ?? h(player.x, player.z), pLayer = layers.player;
+      inSight = (cr) => {
+        const cave = creatureLayer(cr.id) === 1 || u.homeY(cr.id, cr.position.x, cr.position.z) !== null;
+        const y = cave ? (u.floorAt(cr.position.x, cr.position.z) ?? h(cr.position.x, cr.position.z)) : h(cr.position.x, cr.position.z);
+        return mountByHeight(cave ? 1 : 0, y, pLayer, pY);
+      };
+    }
+    const { keep, queue } = planCreatureMounts(creatures, player, radius, renderBodyIds.current, cameraMode, inSight);
     const removed = keep.size !== renderBodyIds.current.size;
     renderBodyIds.current = keep;
     mountQueue.current = queue;

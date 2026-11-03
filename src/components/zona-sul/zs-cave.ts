@@ -531,7 +531,7 @@ function bodyFits(x: number, fl: number, z: number): boolean {
 /** Onde nasce cada inimigo da caverna (`CAVE_ENEMIES`): no salão, num chão onde cabe em pé (se a posição pedida cair na
  *  parede, puxa pro meio do salão). Puro. */
 export function caveEnemySpots(): { id: string; speciesId: string; x: number; z: number }[] {
-  return CAVE_ENEMIES.map(([room, speciesId, fu, fv], i) => {
+  const rooms = CAVE_ENEMIES.map(([room, speciesId, fu, fv], i) => {
     const r = ROOMS.find((q) => q.id === room)!;
     for (let k = 1; k >= 0; k -= 0.1) {
       const u = fu * r.rx * k, v = fv * r.rz * k, x = r.x + u * r.c - v * r.s, z = r.z + u * r.s + v * r.c;
@@ -539,6 +539,48 @@ export function caveEnemySpots(): { id: string; speciesId: string; x: number; z:
     }
     return { id: `wild_cave_${room}_${i}`, speciesId, x: r.x, z: r.z };
   });
+  return [...rooms, ...caveTunnelEnemySpots()]; // os dos salões primeiro (ids de sempre), os dos túneis no fim
+}
+
+/**
+ * INIMIGOS NOS TÚNEIS (03/11, Pedro: "boa parte da cave nos caminhos retos não vejo nenhum inimigo, bicho, nada pra matar —
+ * fica tudo reto, sem perigo nenhum, fácil demais"). Os de `CAVE_ENEMIES` ficam só nos SALÕES; os túneis compridos
+ * (Leblon ~280 m, passagem da Gávea ~330 m, Laranjeiras ~250 m, galerias grandes ~300 m) não tinham nada. Agora: um ponto a
+ * cada CAVE_TUNNEL_STEP m ao longo de cada túnel de CAVERNA (os de rua — Zuzu, Novo — não), a ≥ CAVE_TUNNEL_MOUTH_CLEAR m
+ * de qualquer boca e fora dos salões (eles já têm os deles); Aberração e Fauce de Sílex alternando e, a cada 3º ponto, uma
+ * DUPLA lado a lado. Sempre no ANDAR do túnel (onde um túnel passa por cima de outro, o ponto fica de fora — o
+ * renascer acha o chão sem saber o andar). Ids `wild_cave_tn_<túnel>_<n>` (fauna da caverna: força pela região, renasce em
+ * casa). Puro.
+ */
+export const CAVE_TUNNEL_STEP = 60, CAVE_TUNNEL_MOUTH_CLEAR = 35;
+export function caveTunnelEnemySpots(): { id: string; speciesId: string; x: number; z: number }[] {
+  const out: { id: string; speciesId: string; x: number; z: number }[] = [];
+  let alt = 0;
+  for (const tn of CAVE_TUNNELS) {
+    if (tn.road) continue;
+    const segs: { a: CaveTunnelPt; b: CaveTunnelPt; l: number }[] = [];
+    for (let i = 1; i < tn.pts.length; i++) { const a = tn.pts[i - 1]!, b = tn.pts[i]!; segs.push({ a, b, l: Math.hypot(b.x - a.x, b.z - a.z) }); }
+    const L = segs.reduce((s, q) => s + q.l, 0);
+    let n = 0, k = 0;
+    for (let s = CAVE_TUNNEL_STEP / 2; s < L; s += CAVE_TUNNEL_STEP) {
+      let rest = s, sg = segs[0]!;
+      for (const q of segs) { sg = q; if (rest <= q.l) break; rest -= q.l; }
+      const f = Math.min(1, rest / sg.l), x = sg.a.x + (sg.b.x - sg.a.x) * f, z = sg.a.z + (sg.b.z - sg.a.z) * f, y = sg.a.y + (sg.b.y - sg.a.y) * f;
+      const r = sg.a.r + (sg.b.r - sg.a.r) * f, nx = -(sg.b.z - sg.a.z) / sg.l, nz = (sg.b.x - sg.a.x) / sg.l;
+      if (ZS_CAVE_MOUTHS.some((m) => Math.hypot(x - m.ax, y - m.ay, z - m.az) < CAVE_TUNNEL_MOUTH_CLEAR)) continue;
+      if (ROOMS.some((q) => Math.hypot(x - q.x, z - q.z) < Math.max(q.rx, q.rz) + 8 && Math.abs(y - q.y) < q.h)) continue;
+      const pair = k++ % 3 === 2;
+      for (const side of pair ? [-0.3, 0.3] : [0]) {
+        const px = Math.round((x + nx * side * r) * 10) / 10, pz = Math.round((z + nz * side * r) * 10) / 10;
+        const fl = caveStandAt(px, pz, y);
+        if (fl === null || Math.abs(fl - y) > 2.5) continue;          // em pé no chão DESTE túnel
+        const top = caveFloorAt(px, pz);
+        if (top === null || Math.abs(top - fl) > 0.5) continue;       // túnel por cima/por baixo: fica de fora
+        out.push({ id: `wild_cave_tn_${tn.id}_${n++}`, speciesId: alt++ % 2 ? 'flintmaw' : 'monster', x: px, z: pz });
+      }
+    }
+  }
+  return out;
 }
 /** Raios tentados (fração do pedido): o pedido; um pouco pra fora (salão com POÇA no meio — o seco é a beira); depois
  *  pro meio. Em cada um, o ângulo pedido e ±25°/±50°. */
