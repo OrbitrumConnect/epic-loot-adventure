@@ -22,7 +22,10 @@ export const HERO_EXTRA_CLIPS = {
   slash3: '/models/red/slash_3.glb',
   // PvP (02/11, Pedro: "pular atirando, agachar… aproveitar o máximo do pack, sem quebrar; o idle não muda"):
   crouchIdle: '/models/red/crouch_idle.glb',      // Sword&Shield "crouch idle"
-  crouchWalk: '/models/red/crouch_walk.glb',      // Sword&Shield "crouching" (anda agachado ~0,55 m/s)
+  // 02/11 (Pedro: "ao andar fica bugando"): o "crouching" do Sword&Shield era a transição agachado → EM PÉ (em loop o
+  // boneco levantava e agachava). Agora: o NOSSO walk com quadril baixo, tronco inclinado, passo curto e pernas por IK
+  // (pé plantado) — tools/crouch-walk-bake.mjs. Ciclo de 1 s, 2 passos, emenda.
+  crouchWalk: '/models/red/crouch_walk.glb',
   aimGunIdle: '/models/red/aim_gun_idle.glb',     // Shooter "rifle aiming idle" (só a metade de cima → agachado de fuzil)
   jumpGunFwd: '/models/red/jump_gun_fwd.glb',     // Shooter "jump forward"
   jumpGunBack: '/models/red/jump_gun_back.glb',   // Shooter "jump backward"
@@ -30,8 +33,9 @@ export const HERO_EXTRA_CLIPS = {
 export type HeroExtraClip = keyof typeof HERO_EXTRA_CLIPS;
 /** Clips de AGACHAR: o quadril DESCE (não trava na altura de pé, como os outros clips do herói "fooled"). */
 export const CROUCH_CLIPS: readonly HeroExtraClip[] = ['crouchIdle', 'crouchWalk'];
-/** Velocidade (m/s) que o clip de andar agachado anda no Mixamo — a cadência acompanha a velocidade real. */
-export const CROUCH_WALK_CLIP_SPEED = 0.55;
+/** Velocidade (m/s) que o clip de andar agachado anda (medida pelo tools/crouch-walk-bake.mjs: 1,215 m em 1 s) — a
+ *  cadência acompanha a velocidade real (agachado ~0,9–1,1 m/s → ~0,75–0,9×, pé sem patinar). */
+export const CROUCH_WALK_CLIP_SPEED = 1.215;
 
 /** Agachado (parado / andando / atirando)? */
 export function isCrouchAction(a: string | null | undefined): boolean {
