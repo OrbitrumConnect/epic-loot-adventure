@@ -288,7 +288,7 @@ export const isZsBandit = (id: string) => id.startsWith(ZS_BANDIT_PREFIX);
 const banditGround = (q: ZsQuery, x: number, z: number) =>
   (q.surf(x, z) === SURF.forest || q.surf(x, z) === SURF.land) && q.height(x, z) >= 45 && q.slope(x, z) < 28;
 
-export function createZsBandits(q: ZsQuery, camps: CampPlacement[] = [], seed = 20261102, groups = ZS_BANDIT_GROUPS): CreatureState[] {
+export function createZsBandits(q: ZsQuery, camps: CampPlacement[] = [], seed = 20261102, groups = ZS_BANDIT_GROUPS, avoid: Position[] = []): CreatureState[] {
   const def = CREATURES['raider_scout'];
   if (!def) return [];
   const rand = rng32(seed);
@@ -298,6 +298,7 @@ export function createZsBandits(q: ZsQuery, camps: CampPlacement[] = [], seed = 
     const p = { x: Math.round(minX + 30 + rand() * (maxX - minX - 60)), z: Math.round(minZ + 30 + rand() * (maxZ - minZ - 60)) };
     if (!banditGround(q, p.x, p.z) || !freeOfSpawn(q, p.x, p.z)) continue;
     if (anchors.some((a) => d2(a, p) < BANDIT_GROUP_SPACING * BANDIT_GROUP_SPACING)) continue;
+    if (avoid.some((a) => d2(a, p) < BANDIT_GROUP_SPACING * BANDIT_GROUP_SPACING)) continue; // 03/11: longe das duplas que já existem
     if (camps.some((c) => d2(c.position, p) < ((CAMPS[c.defId]?.radius ?? 10) + 30) ** 2)) continue;
     anchors.push(p);
   }
@@ -372,4 +373,116 @@ export function pickZsCampSites(q: ZsQuery, count = 8, seed = 291029, spacing = 
     out.push({ id: `zs_camp_${out.length}`, defId, position: p });
   }
   return out;
+}
+
+/**
+ * BICHOS ESPALHADOS PELO MAPA (03/11, Pedro: "preciso ver quanto mais inimigos e mutantes, bichos pra farmar pelo mapa —
+ * acho que tá pouco, o mapa é grande"). Medido: cada espécie nasce num grupo SÓ (1 âncora por bioma, 110 m de raio) — os
+ * mansos em 3 lugares; o maciço da Tijuca/Alto da Boa Vista, Copacabana, Ipanema, Leblon e São Conrado sem bicho. Esta
+ * leva SOMA zonas novas no mapa inteiro (terreno de agora), cada uma a ≥ ZS_SPREAD_GAP de qualquer bicho/inimigo que já
+ * existe e das outras zonas, com os bichos do chão dela: mata ALTA = mutantes (Aberração, Fauce de Sílex) + cervo; mata
+ * baixa = cervo, coelho, faisão; campo = leoa, búfalo; cidade = pombo + leoa/búfalo. Os tipos vão em rodízio (os
+ * mutantes aparecem em toda volta). Sorteio próprio → nada do que existe muda. Ids `wild_<espécie>_sp<n>` (perigo pela
+ * região e renascer iguais aos da fauna). Custo medido: dobrar os bichos soltos (+235) tirou ~8% do FPS; esta leva é ~metade.
+ */
+export const ZS_SPREAD_ZONES = 16;
+export const ZS_SPREAD_GAP = 200;
+/** raio de cada zona (m) */
+export const ZS_SPREAD_R = 60;
+export type ZsSpreadKind = 'high' | 'low' | 'field' | 'city';
+export const ZS_SPREAD_MIX: Record<ZsSpreadKind, { speciesId: string; count: number; spacing: number }[]> = {
+  high: [{ speciesId: 'monster', count: 2, spacing: 25 }, { speciesId: 'flintmaw', count: 2, spacing: 30 }, { speciesId: 'deer', count: 2, spacing: 15 }],
+  low: [{ speciesId: 'deer', count: 3, spacing: 15 }, { speciesId: 'rabbit', count: 3, spacing: 10 }, { speciesId: 'pheasant', count: 2, spacing: 12 }],
+  field: [{ speciesId: 'wolf_alpha', count: 2, spacing: 20 }, { speciesId: 'bear', count: 2, spacing: 20 }, { speciesId: 'pigeon', count: 2, spacing: 8 }],
+  city: [{ speciesId: 'pigeon', count: 4, spacing: 8 }, { speciesId: 'wolf_alpha', count: 1, spacing: 20 }, { speciesId: 'bear', count: 1, spacing: 20 }],
+};
+const SPREAD_ORDER: ZsSpreadKind[] = ['high', 'low', 'city', 'high', 'low', 'field'];
+const SPREAD_OK: Record<string, (q: ZsQuery, x: number, z: number) => boolean> = {
+  monster: highForest, flintmaw: highForest, deer: lowForest, rabbit: lowForest, pheasant: lowForest,
+  wolf_alpha: openField, bear: openField, pigeon: cityGround,
+};
+/** O tipo de zona que o chão de (x, z) aceita (null = nenhum: praia, água, paredão…). */
+export function zsSpreadKindAt(q: ZsQuery, x: number, z: number): ZsSpreadKind | null {
+  if (q.height(x, z) < 0.5) return null;
+  if (highForest(q, x, z)) return 'high';
+  if (lowForest(q, x, z)) return 'low';
+  if (openField(q, x, z)) return 'field';
+  if (cityGround(q, x, z)) return 'city';
+  return null;
+}
+/** Grade grossa (8 m) do chão que se alcança A PÉ do nascedouro (sem cruzar mar/Lagoa) — as Cagarras ficam de fora. */
+const REACH_CELL = 8;
+export function zsReachable(q: ZsQuery): (x: number, z: number) => boolean {
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const W = Math.ceil((maxX - minX) / REACH_CELL), H = Math.ceil((maxZ - minZ) / REACH_CELL);
+  const seen = new Uint8Array(W * H);
+  const walk = (i: number, j: number) => { const s = q.surf(minX + (i + 0.5) * REACH_CELL, minZ + (j + 0.5) * REACH_CELL); return s !== SURF.sea && s !== SURF.lagoon && s !== SURF.out; };
+  const i0 = Math.floor((ZS_SAFE.x - minX) / REACH_CELL), j0 = Math.floor((ZS_SAFE.z - minZ) / REACH_CELL);
+  const stack = [j0 * W + i0];
+  seen[j0 * W + i0] = 1;
+  while (stack.length) {
+    const k = stack.pop()!, i = k % W, j = (k - i) / W;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const a = i + di, b = j + dj;
+      if (a < 0 || b < 0 || a >= W || b >= H || seen[b * W + a] || !walk(a, b)) continue;
+      seen[b * W + a] = 1; stack.push(b * W + a);
+    }
+  }
+  return (x, z) => { const i = Math.floor((x - minX) / REACH_CELL), j = Math.floor((z - minZ) / REACH_CELL); return i >= 0 && j >= 0 && i < W && j < H && seen[j * W + i] === 1; };
+}
+export function createZsSpreadFauna(q: ZsQuery, avoid: Position[], camps: CampPlacement[] = [], seed = 0x73707264, zones = ZS_SPREAD_ZONES): { creatures: CreatureState[]; zones: { kind: ZsSpreadKind; x: number; z: number }[] } {
+  const rand = rng32(seed);
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const gap2 = ZS_SPREAD_GAP * ZS_SPREAD_GAP;
+  const reach = zsReachable(q);
+  const centers: { kind: ZsSpreadKind; x: number; z: number }[] = [];
+  for (let zi = 0; centers.length < zones && zi < zones * 3; zi++) {
+    const want = SPREAD_ORDER[zi % SPREAD_ORDER.length]!;
+    // entre os lugares que servem, o MAIS LONGE de tudo (enche primeiro os maiores buracos do mapa)
+    let best: Position | null = null, bestD = -1;
+    for (let tries = 0, found = 0; tries < 20000 && found < 300; tries++) {
+      const p = { x: Math.round(minX + 40 + rand() * (maxX - minX - 80)), z: Math.round(minZ + 40 + rand() * (maxZ - minZ - 80)) };
+      if (!freeOfSpawn(q, p.x, p.z) || zsSpreadKindAt(q, p.x, p.z) !== want || !reach(p.x, p.z)) continue;
+      if (camps.some((c) => d2(c.position, p) < ((CAMPS[c.defId]?.radius ?? 10) + 40) ** 2)) continue;
+      let dmin = Infinity;
+      for (const a of avoid) dmin = Math.min(dmin, d2(a, p));
+      for (const c of centers) dmin = Math.min(dmin, d2(c, p));
+      if (dmin < gap2) continue;
+      found++;
+      if (dmin > bestD) { bestD = dmin; best = p; }
+    }
+    if (best) centers.push({ kind: want, ...best });
+  }
+  const out: CreatureState[] = [];
+  const nBy: Record<string, number> = {};
+  for (const c of centers) {
+    for (const m of ZS_SPREAD_MIX[c.kind]) {
+      const def = CREATURES[m.speciesId], ok = SPREAD_OK[m.speciesId];
+      if (!def || !ok) continue;
+      const mine: Position[] = [];
+      for (let tries = 0; mine.length < m.count && tries < 400; tries++) {
+        const r = Math.sqrt(rand()) * ZS_SPREAD_R, a = rand() * Math.PI * 2;
+        const p = { x: Math.round((c.x + Math.cos(a) * r) * 100) / 100, z: Math.round((c.z + Math.sin(a) * r) * 100) / 100 };
+        if (p.x < minX + 20 || p.x > maxX - 20 || p.z < minZ + 20 || p.z > maxZ - 20) continue;
+        if (q.height(p.x, p.z) < 0.5 || !freeOfSpawn(q, p.x, p.z) || !ok(q, p.x, p.z) || !reach(p.x, p.z)) continue;
+        if (mine.some((o) => d2(o, p) < m.spacing * m.spacing) || out.some((o) => d2(o.position, p) < 36)) continue;
+        if (camps.some((cp) => d2(cp.position, p) < ((CAMPS[cp.defId]?.radius ?? 10) + 12) ** 2)) continue;
+        mine.push(p);
+        const n = (nBy[m.speciesId] = (nBy[m.speciesId] ?? -1) + 1);
+        out.push({
+          id: `wild_${m.speciesId}_sp${n}`, speciesId: m.speciesId, name: def.name,
+          hp: scaleEnemyHp(def.maxHp), maxHp: scaleEnemyHp(def.maxHp), attackPower: def.attackPower, armor: def.armor,
+          attackCooldown: def.attackCooldown, lastAttackAt: 0, position: p,
+          behavior: def.peaceful ? 'idle' : 'patrol', lootTable: [], respawnAt: null,
+        });
+      }
+    }
+  }
+  return { creatures: out, zones: centers };
+}
+/** + duplas de bandidos (03/11: "mais inimigos"): mesmas regras das de sempre, longe delas; ids `wild_bandit_sp<n>`. */
+export const ZS_SPREAD_BANDIT_GROUPS = 4;
+export function createZsSpreadBandits(q: ZsQuery, existing: CreatureState[], camps: CampPlacement[] = []): CreatureState[] {
+  const avoid = existing.filter((c) => isZsBandit(c.id)).map((c) => c.position);
+  return createZsBandits(q, camps, 0x62616e64, ZS_SPREAD_BANDIT_GROUPS, avoid).map((c) => ({ ...c, id: c.id.replace(/_(\d+)$/, '_sp$1') }));
 }

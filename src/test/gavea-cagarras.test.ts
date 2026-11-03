@@ -104,7 +104,9 @@ describe('Gávea + Cagarras — sem mexer no que existe', () => {
     expect(zs).toContain('const query = zsQuery(st); // SORTEIOS no terreno de 28/10');
     expect(zs).toContain('const prof = zsWorldProfile(tt, zsQuery(tt), query);');
     expect(zs).toContain('createZsSharks(query, zsSharkPeaks(st))');
-    expect(zs).toContain('const base = createZsHarvestNodes(query); return [...base, ...createZsNewAreaTrees(zsQuery(tt), query.bounds, base), ...createCaveOreNodes()];');
+    // 03/11: + farm espalhada (terreno de agora, nos vazios) — a de sempre segue no de 28/10
+    expect(zs).toContain('const base = createZsHarvestNodes(query), withNew = [...base, ...createZsNewAreaTrees(zsQuery(tt), query.bounds, base)];');
+    expect(zs).toContain('...createZsWildlife(query, undefined, ZS_FAUNA, prof.camps)');
     expect(zs).toContain('<ZsLamps t={t} spotsFrom={spawnT ?? t} heroRef={heroRef} />');
     expect(zs).toContain('<SurfBreak t={spawnT ?? t} shoreX={ZS_SPAWN.x} shoreZ={ZS_SPAWN.z} />');
     expect(zs).toContain('<SorrisoBreak t={spawnT ?? t} />');

@@ -58,6 +58,42 @@ export function createZsNewAreaTrees(q: ZsQuery, oldBounds: ZsQuery['bounds'], e
   }
   return out;
 }
+/**
+ * FARM ESPALHADA (03/11, Pedro: "árvore e pedra dá pra pôr no mapa ainda — acho que tá pouco, o mapa é grande"). Medido:
+ * 328 no mapa e o maciço da Tijuca/Alto da Boa Vista (1/3 do mapa) só com as 30 da área nova. Esta leva SOMA no mapa
+ * inteiro (terreno de agora), só onde não tem farm a menos de ZS_FARM_SPREAD_EMPTY (enche os VAZIOS, não amontoa onde já
+ * tem), com as mesmas regras (chão seco, fora da praia, folga de pista/água, nada no paredão, pedra fora da mata).
+ * Árvore/pedra são desenhadas em lote: medido, dobrar a farm quase não mexe no FPS. Ids `zs_hn_<tipo>_sp<n>`.
+ */
+export const ZS_FARM_SPREAD: { kind: 'tree' | 'pebble' | 'rock'; count: number }[] = [
+  { kind: 'tree', count: 90 },
+  { kind: 'rock', count: 40 },
+  { kind: 'pebble', count: 30 },
+];
+export const ZS_FARM_SPREAD_EMPTY = 30;
+export function createZsSpreadHarvest(q: ZsQuery, existing: HarvestNodeState[], seed = 0x66726d73, extraOk: (x: number, z: number) => boolean = () => true): HarvestNodeState[] {
+  const rand = rng32(seed), out: HarvestNodeState[] = [];
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const clear2 = ZS_FARM_EXTRA_CLEAR * ZS_FARM_EXTRA_CLEAR, empty2 = ZS_FARM_SPREAD_EMPTY * ZS_FARM_SPREAD_EMPTY;
+  for (const target of ZS_FARM_SPREAD) {
+    const def = HARVEST_NODES[target.kind];
+    let added = 0;
+    for (let tries = 0; added < target.count && tries < target.count * 4000; tries++) {
+      const x = minX + 8 + rand() * Math.max(1, maxX - minX - 16), z = minZ + 8 + rand() * Math.max(1, maxZ - minZ - 16);
+      if (!dryGround(q, x, z) || q.surf(x, z) === SURF.beach || q.slope(x, z) > 30) continue;
+      if ((x - ZS_SAFE.x) ** 2 + (z - ZS_SAFE.z) ** 2 < clear2) continue;
+      if (target.kind !== 'tree' && q.surf(x, z) === SURF.forest) continue; // pedra fora da mata (igual às outras levas)
+      if (!clearOfRoadAndWater(q, x, z) || !extraOk(x, z)) continue;
+      const position = { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
+      if (existing.some((n) => distance2(n.position, position) < empty2)) continue;        // só nos vazios
+      if (out.some((n) => distance2(n.position, position) < NODE_SPACING ** 2)) continue;
+      out.push({ id: `zs_hn_${target.kind}_sp${added}`, kind: target.kind, position, quantity: def.capacity, maxQuantity: def.capacity, depleted: false, respawnAt: null, seed: rand() });
+      added++;
+    }
+  }
+  return out;
+}
+
 /** a 2ª leva chega até aqui do nascedouro (a zona segura tem 45 m) */
 export const ZS_FARM_EXTRA_CLEAR = 70;
 /** "perto da praia/Lagoa": areia ou água da Lagoa a até isto (m) */
