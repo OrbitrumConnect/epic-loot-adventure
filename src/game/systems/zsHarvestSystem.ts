@@ -94,6 +94,42 @@ export function createZsSpreadHarvest(q: ZsQuery, existing: HarvestNodeState[], 
   return out;
 }
 
+/**
+ * FARM NA MATA (03/11, Pedro: "eu vejo assim: umas 30, 40 árvores de cenário e 1 de farm só no meio, outra lá longe").
+ * Medido: ~360 árvores de farm no mapa todo (1 a cada ~70 m) contra milhares de cenário (até 5 a cada 16 × 16 m no morro).
+ * Esta leva SOMA ZS_FARM_FOREST_TREES árvores de farm no VERDE do mapa inteiro (terreno de agora), a ≥ ZS_FARM_FOREST_GAP
+ * de qualquer nó, com as regras de sempre (chão seco, fora da praia, folga de pista/água, nada no paredão nem na boca da
+ * caverna, longe do nascedouro). Sorteio próprio, ids `zs_hn_tree_mt<n>` — nada do que existe muda. Custo medido no build
+ * de produção (+1.200 injetadas): andando ~4% de FPS (a árvore de farm é mais detalhada que a de cenário), colhendo igual.
+ */
+export const ZS_FARM_FOREST_TREES = 1000;
+export const ZS_FARM_FOREST_GAP = 16;
+export function createZsForestFarm(q: ZsQuery, existing: HarvestNodeState[], seed = 0x6d617461, extraOk: (x: number, z: number) => boolean = () => true): HarvestNodeState[] {
+  const rand = rng32(seed), def = HARVEST_NODES.tree, out: HarvestNodeState[] = [];
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const clear2 = ZS_FARM_EXTRA_CLEAR * ZS_FARM_EXTRA_CLEAR, gap2 = ZS_FARM_FOREST_GAP * ZS_FARM_FOREST_GAP;
+  // grade de 16 m pra checar o vão rápido (1.000 + ~800 nós)
+  const grid = new Map<string, Position[]>(), key = (x: number, z: number) => `${Math.floor(x / ZS_FARM_FOREST_GAP)},${Math.floor(z / ZS_FARM_FOREST_GAP)}`;
+  const add = (p: Position) => { const k = key(p.x, p.z); const l = grid.get(k); if (l) l.push(p); else grid.set(k, [p]); };
+  const free = (p: Position) => {
+    const cx = Math.floor(p.x / ZS_FARM_FOREST_GAP), cz = Math.floor(p.z / ZS_FARM_FOREST_GAP);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) for (const o of grid.get(`${cx + dx},${cz + dz}`) ?? []) if (distance2(o, p) < gap2) return false;
+    return true;
+  };
+  for (const n of existing) if (!n.layer) add(n.position);
+  for (let tries = 0; out.length < ZS_FARM_FOREST_TREES && tries < ZS_FARM_FOREST_TREES * 400; tries++) {
+    const x = minX + 8 + rand() * Math.max(1, maxX - minX - 16), z = minZ + 8 + rand() * Math.max(1, maxZ - minZ - 16);
+    if (!dryGround(q, x, z) || q.surf(x, z) === SURF.beach || q.slope(x, z) > 30) continue;
+    if ((x - ZS_SAFE.x) ** 2 + (z - ZS_SAFE.z) ** 2 < clear2) continue;
+    if (!clearOfRoadAndWater(q, x, z) || !extraOk(x, z)) continue;
+    const position = { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 };
+    if (!free(position)) continue;
+    add(position);
+    out.push({ id: `zs_hn_tree_mt${out.length}`, kind: 'tree', position, quantity: def.capacity, maxQuantity: def.capacity, depleted: false, respawnAt: null, seed: rand() });
+  }
+  return out;
+}
+
 /** a 2ª leva chega até aqui do nascedouro (a zona segura tem 45 m) */
 export const ZS_FARM_EXTRA_CLEAR = 70;
 /** "perto da praia/Lagoa": areia ou água da Lagoa a até isto (m) */

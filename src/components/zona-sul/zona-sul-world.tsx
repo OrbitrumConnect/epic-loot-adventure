@@ -69,7 +69,7 @@ import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-pro
 import { createZsBandits, createZsNewAreaCreatures, createZsSharks, createZsSpreadBandits, createZsSpreadFauna, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
-import { createZsHarvestNodes, createZsNewAreaTrees, createZsSpreadHarvest } from '@/game/systems/zsHarvestSystem';
+import { createZsForestFarm, createZsHarvestNodes, createZsNewAreaTrees, createZsSpreadHarvest } from '@/game/systems/zsHarvestSystem';
 import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
 import { useZsTouch, zsAttack, zsCave, zsCrouch, zsCtx, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
@@ -1446,7 +1446,9 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
         // + FARM ESPALHADA nos vazios do mapa (03/11; nada na boca da caverna)
         harvestNodes: (() => {
           const base = createZsHarvestNodes(query), withNew = [...base, ...createZsNewAreaTrees(zsQuery(tt), query.bounds, base)];
-          return [...withNew, ...createZsSpreadHarvest(zsQuery(tt), withNew, undefined, caveMouthClear), ...createCaveOreNodes()];
+          const spread = [...withNew, ...createZsSpreadHarvest(zsQuery(tt), withNew, undefined, caveMouthClear)];
+          // + FARM NA MATA (03/11: "30, 40 árvores de cenário e 1 de farm"): árvores de farm espalhadas no verde todo
+          return [...spread, ...createZsForestFarm(zsQuery(tt), spread, undefined, caveMouthClear), ...createCaveOreNodes()];
         })(),
         position: { x: at.x, z: at.z },
       });
