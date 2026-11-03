@@ -79,12 +79,14 @@ export const useArcExtras = create<{ inner: ArcButton[] | null; outer: ArcButton
 
 type Stick = { bx: number; by: number; kx: number; ky: number };
 
-export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAttack: () => void; canAim?: boolean; powers?: ArcButton[] }) {
+/** `canAim` = câmera de OMBRO (encostar no ATACAR atira no centro da mira); `aimButton` = mostra o MIRAR (padrão = `canAim`;
+ *  a câmera de cima da Zona Sul mostra o Mirar sem ser de ombro — mirando, a câmera desce pro ombro, 03/11). */
+export function MobileControls({ onAttack, canAim = false, aimButton = canAim, powers = [] }: { onAttack: () => void; canAim?: boolean; aimButton?: boolean; powers?: ArcButton[] }) {
   const aiming = useAim(s => s.active);
   // Câmera de ombro do celular: herói à esquerda enquanto os controles de toque estão na tela.
   useEffect(() => { setTouchLayout(true); return () => setTouchLayout(false); }, []);
   // Sem 3ª pessoa (ou desmontou): nunca fica preso mirando.
-  useEffect(() => { if (!canAim) setAiming(false); return () => setAiming(false); }, [canAim]);
+  useEffect(() => { if (!canAim) setAiming(false); return () => setAiming(false); }, [canAim]); // trocou de câmera: nunca fica preso mirando
   const toggleAim = (e: React.PointerEvent) => { e.preventDefault(); setAiming(!useAim.getState().active); };
   const origin = useRef<{ x: number; y: number; id: number } | null>(null);
   const [stick, setStick] = useState<Stick | null>(null);
@@ -160,7 +162,7 @@ export function MobileControls({ onAttack, canAim = false, powers = [] }: { onAt
   const inner: ArcButton[] = extras.inner ?? [
     { id: 'jump', label: 'Pular', icon: <ChevronsUp />, onPress: () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })) },
     ...powers.filter((p) => p.id === 'Q' || p.id === 'R' || p.id === 'Y'), // Y = Esquiva (26/10) no anel de dentro
-    ...(canAim ? [{ id: 'aim', label: 'Mirar', icon: <Crosshair />, onPress: () => setAiming(!useAim.getState().active) }] : []),
+    ...(aimButton ? [{ id: 'aim', label: 'Mirar', icon: <Crosshair />, onPress: () => setAiming(!useAim.getState().active) }] : []),
   ];
   const outer = [...extras.outer, ...powers.filter((p) => p.id !== 'Q' && p.id !== 'R' && p.id !== 'Y')];
   const innerR = arcRadius(inner.length, ARC_INNER);

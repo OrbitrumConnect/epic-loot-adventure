@@ -130,10 +130,14 @@ type KindAssets = {
   fade: FadeSphere[];
 };
 
+/** `seeThrough` (03/11, câmera de cima da Zona Sul): quem desenha pode pôr o corte "ver através" na árvore de farm — o
+ *  Vale não passa nada e fica igual. */
+const withSee = <T extends THREE.Material>(m: T, see?: (m: THREE.Material) => unknown): T => { see?.(m); return m; };
+
 /** `cave` (02/11): o veio de ferro da CAVERNA — na luz fraca e quente de lá as manchas de metal (cinza-escuro) sumiam e
  *  o veio lia como pedra marrom. Lá as manchas são prata, um pouco maiores, e o veio cintila fraco (como o de ouro). A
  *  superfície (Vale) fica igual. */
-function buildAssets(c: Palette, cave = false): { assets: Record<HarvestNodeKind, KindAssets>; deadMat: THREE.Material } {
+function buildAssets(c: Palette, cave = false, seeThrough?: (m: THREE.Material) => unknown): { assets: Record<HarvestNodeKind, KindAssets>; deadMat: THREE.Material } {
   const rockDark = mixColor(c.rock, c.dark, 0.35);
   const rubble = mixColor(c.rock, c.ground, 0.45);
   const ironBody = mixColor(c.rock, c.dark, 0.55);
@@ -165,7 +169,7 @@ function buildAssets(c: Palette, cave = false): { assets: Record<HarvestNodeKind
       { g: box(0.3, 0.08, 0.14), color: c.trunk, pos: [0.55, 0.05, 0.1], rot: [0, 0.6, 0] },
       { g: box(0.22, 0.07, 0.1), color: c.trunk, pos: [-0.5, 0.04, -0.2], rot: [0, -0.4, 0] },
     ]),
-    liveMat: fadeMat(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 })),
+    liveMat: withSee(fadeMat(new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.9 })), seeThrough),
     labelY: 4.9,
     castShadow: true,
     fade: [[0, 3.7, 0, 1.5], [0, 1.4, 0, 0.5]],
@@ -719,10 +723,10 @@ function HarvestLabel({
  * ------------------------------------------------------------------ */
 /** `layer` (02/11, minério da caverna): desenha só os nós desta CAMADA (0 = superfície, como sempre; 1 = caverna — o
  *  mundo monta um segundo, fora do grupo da superfície). As pedras/cristais em GLB são só da superfície. */
-export function HarvestNodes({ c, layer = 0 }: { c: Palette; layer?: number }) {
+export function HarvestNodes({ c, layer = 0, seeThrough }: { c: Palette; layer?: number; seeThrough?: (m: THREE.Material) => unknown }) {
   const all = useGameStore(s => s.harvestNodes);
   const nodes = useMemo(() => all.filter(n => (n.layer ?? 0) === layer), [all, layer]);
-  const built = useMemo(() => buildAssets(c, layer === 1), [c, layer]);
+  const built = useMemo(() => buildAssets(c, layer === 1, seeThrough), [c, layer, seeThrough]);
   const hover = useRef<Hover>({ id: null });
 
   return (

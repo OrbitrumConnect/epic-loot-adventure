@@ -38,7 +38,10 @@ import { takeKnockback } from '@/game/systems/knockbackSystem';
 import { isGrabbed } from '@/game/systems/grabSystem';
 import { effectiveAttributes } from '@/game/systems/attributesSystem';
 import { audioManager } from '@/game/audio/audio-manager';
-import { heroFacing } from '@/components/world/free-aim';
+import { heroFacing, setIsoCursor } from '@/components/world/free-aim';
+import { housePlayerFeetY, housePlayerInside } from '@/components/world/house-collider';
+import { pinchDist, toggleZsCam, useZsCam, ZS_MOBA, ZS_SHOULDER_DIST } from './zs-camera';
+import { withSeeThrough, zsSeeThrough } from './zs-see-through';
 import { takeVirtualLook, touchLayout, virtualMove } from '@/components/world/virtual-input';
 import { LightPool } from '@/components/world/light-pool';
 import { ZsWarmOverlay, ZsWarmUp } from './zs-warmup';
@@ -189,7 +192,15 @@ const input = { keys: new Set<string>(), stick: { x: 0, z: 0 }, yaw: 0.6, pitch:
   /** tecla P: mostrador de FPS / desenhos / triângulos */
   perf: false,
   /** NAVIO DE GUERRA: segurando a mira (botão direito) · pedido de tiro ('aim' = lado pra onde a câmera olha) */
-  cannonAim: false, cannonFire: null as WarshipSide | 'aim' | null };
+  cannonAim: false, cannonFire: null as WarshipSide | 'aim' | null,
+  /** câmera DE CIMA (03/11): distância própria (roda/pinça) — a do ombro (`dist`) fica guardada pra quando voltar */
+  mobaDist: ZS_MOBA.DIST as number,
+  /** mouse no PC (coordenada da tela −1..1): na câmera de cima o TIRO LIVRE vai no cursor, igual ao Vale */
+  mouse: { x: 0, y: 0, at: -Infinity } };
+/** Câmera de cima valendo AGORA pro arrasto/roda/pinça: a pé, fora da caverna e sem mirar (mirando = ombro). */
+const mobaOn = () => useZsCam.getState().mode === 'cima' && drive.mode === 'foot' && !zsCave.inCave && !input.overview && !useAim.getState().active;
+/** rascunho do cursor no chão (câmera de cima no PC) — criados 1×, nunca por quadro */
+const zsCursorRay = new THREE.Raycaster(), zsCursorNdc = new THREE.Vector2(), zsCursorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), zsCursorHit = new THREE.Vector3();
 /** Altura do OLHO do motorista sentado acima do pé (m) e campo de visão de dentro (mais aberto). */
 const EYE_SEATED = 1.12, COCKPIT_FOV = 74, CHASE_FOV = 55;
 
@@ -245,6 +256,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const onRamp = useRef(false);
   /** caverna: na poça (anda mais devagar) · quanto da distância da câmera cabe sem entrar na rocha (0..1) */
   const caveWade = useRef(false), camFit = useRef(1);
+  /** câmera DE CIMA (03/11): 0 = ombro, 1 = de cima — anda suave na troca (e vira ombro sozinha na caverna) */
+  const mobaK = useRef(useZsCam.getState().mode === 'cima' ? 1 : 0);
   const action = useRef<HeroAction>('idle');
   const speed = useRef(0);
   const vy = useRef(0);
@@ -289,6 +302,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const dt = Math.min(0.05, dtRaw), clockT = frame.clock.elapsedTime;
     const p = heroRef.current, k = input.keys;
     zsBoardWake.active = false; // o surf liga de novo se estiver em pé na onda neste quadro
+    // câmera de cima: o "ver através" e o teto da casa só ligam lá embaixo, na câmera a pé (carro/navio/mapa = desligado)
+    zsSeeThrough.on.value = 0; housePlayerInside.current = false;
     // CAVERNA (30/10): dentro dela (ou perto da boca) a caverna desenha; quanto mais fundo, mais escuro (lanterna acende)
     {
       const inside = drive.mode === 'foot' && caveInside(p.x, p.y, p.z), md = caveMouthDist(p.x, p.y, p.z);
@@ -317,7 +332,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       fog.near = 900; fog.far = 6000;
       action.current = 'idle'; speed.current = 0;
       hudAcc.current += dt;
-      if (hudAcc.current > 0.25) { hudAcc.current = 0; onHud({ x: o.x, z: o.z, y: o.alt, state: `vista de cima (${Math.round(o.alt)} m)`, near: '', overview: true }); }
+      if (hudAcc.current > 0.25) { hudAcc.current = 0; onHud({ x: o.x, z: o.z, y: o.alt, state: `vista do mapa (${Math.round(o.alt)} m)`, near: '', overview: true }); }
       return;
     }
     if (wasOverview.current) { wasOverview.current = false; fog.near = 200; fog.far = 2200; }
@@ -371,7 +386,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const rk = Math.exp(-dt * 14); recoil.current.x *= rk; recoil.current.y *= rk;
     // CELULAR: o arrasto no botão de ATACAR (joystick de câmera do jogo) gira a câmera
     const vl = takeVirtualLook();
-    if (vl.dx || vl.dy) { const sens = 0.005 * aimSensitivityScale(); input.yaw -= vl.dx * sens; input.pitch = Math.max(-0.5, Math.min(1.35, input.pitch + vl.dy * sens)); input.lookAt = now; noteManualLook(); }
+    // (câmera de cima: só GIRA — o ângulo é fixo)
+    if (vl.dx || vl.dy) { const sens = 0.005 * aimSensitivityScale(); input.yaw -= vl.dx * sens; if (!mobaOn()) input.pitch = Math.max(-0.5, Math.min(1.35, input.pitch + vl.dy * sens)); input.lookAt = now; noteManualLook(); }
     // posição no JOGO (inimigos, tiro, piloto, coleta) — ~7×/s, como no Vale
     posAcc.current += dt;
     if (posAcc.current > 0.15) { posAcc.current = 0; const cur = gs.player.position; if (cur.x !== p.x || cur.z !== p.z) useGameStore.setState(s => ({ player: { ...s.player, position: { x: p.x, z: p.z } } })); }
@@ -1025,12 +1041,21 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     aimK.current += ((aiming ? 1 : 0) - aimK.current) * Math.min(1, dt * 10);
     const ak = aimK.current, touchAim = touchLayout.on;
     const tk = tubeCam.current;
-    let camDist = input.dist + (TUBE_CAM_DIST - input.dist) * tk;
+    // CÂMERA DE CIMA (MOBA, 03/11 — zs-camera.ts): ângulo fixo, lente longa e distância própria; mirando desce pro ombro
+    // (a inclinação do ombro, `input.pitch`, fica guardada); na caverna vira ombro sozinha e volta ao sair
+    const wantMoba = useZsCam.getState().mode === 'cima' && !zsCave.inCave ? 1 : 0;
+    mobaK.current += (wantMoba - mobaK.current) * Math.min(1, dt * ZS_MOBA.BLEND);
+    if (Math.abs(wantMoba - mobaK.current) < 0.002) mobaK.current = wantMoba;
+    const mk = mobaK.current;
+    const baseDist = input.dist + (input.mobaDist - input.dist) * mk;
+    const basePitch = input.pitch + (ZS_MOBA.PITCH - input.pitch) * mk * (1 - ak);
+    const baseFov = CHASE_FOV + (ZS_MOBA.FOV - CHASE_FOV) * mk;
+    let camDist = baseDist + (TUBE_CAM_DIST - baseDist) * tk;
     camDist += ((touchAim ? AIM_DIST_TOUCH : AIM_DIST) - camDist) * ak;
-    const camPitch = input.pitch + (TUBE_CAM_PITCH - input.pitch) * tk - recoil.current.x; // coice levanta a mira
+    const camPitch = basePitch + (TUBE_CAM_PITCH - basePitch) * tk - recoil.current.x; // coice levanta a mira
     const yawC = input.yaw + recoil.current.y;
     const persp = camera as THREE.PerspectiveCamera;
-    const wantFov = CHASE_FOV + ((touchAim ? AIM_FOV_TOUCH : AIM_FOV) / Math.max(1, aim.zoom) - CHASE_FOV) * ak;
+    const wantFov = baseFov + ((touchAim ? AIM_FOV_TOUCH : AIM_FOV) / Math.max(1, aim.zoom) - baseFov) * ak;
     if (Math.abs(persp.fov - wantFov) > 0.05) { persp.fov = wantFov; persp.updateProjectionMatrix(); }
     // câmera em órbita, sem entrar no chão; mirando, o apoio vai pro ombro (celular: o OUTRO ombro, longe dos botões)
     const sh = AIM_SHOULDER * ak * (touchAim ? -1 : 1);
@@ -1055,6 +1080,19 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       camera.position.set(cx, cyy, cz);
     }
     camera.lookAt(tx, ty, tz);
+    if (mk > 0.5) {
+      // de cima: a árvore NA FRENTE do herói some em pontilhado (zs-see-through) — mirando (no ombro) não
+      if (ak < 0.5 && !zsCave.inCave) { zsSeeThrough.on.value = 1; zsSeeThrough.cam.value.copy(camera.position); zsSeeThrough.hero.value.set(p.x, ty - 0.5, p.z); }
+      // dentro da casa da base: o telhado some (igual à câmera de cima do Vale); no 2º andar, o de cima
+      housePlayerFeetY.current = houseWalkFloorY(p.x, p.z, p.y);
+      housePlayerInside.current = !zsCave.inCave && houseFloorSurfaceY(p.x, p.z) !== -Infinity;
+      // PC: TIRO LIVRE no cursor (chão na altura do herói), como no Vale — "fresco" enquanto o mouse se mexe
+      if (!touchLayout.on && input.mouse.at > 0) {
+        zsCursorRay.setFromCamera(zsCursorNdc.set(input.mouse.x, input.mouse.y), camera);
+        zsCursorPlane.constant = -p.y;
+        if (zsCursorRay.ray.intersectPlane(zsCursorPlane, zsCursorHit)) setIsoCursor(zsCursorHit.x, zsCursorHit.z, input.mouse.at);
+      }
+    }
     const shake = impactShake(); // soco de impacto quando um golpe acerta
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.3; camera.position.y += (Math.random() - 0.5) * shake * 0.3; camera.position.z += (Math.random() - 0.5) * shake * 0.3; }
     // sol + sombra seguem o herói
@@ -1131,16 +1169,26 @@ function Controls() {
       // apertado o jogo liga o "Sair do site?" (esbarrou no W: pergunta antes de fechar). Ctrl+A/S/D/Espaço: o jogo segura.
       if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && !e.repeat) { input.crouchTap = true; armLeaveGuard(); }
       if (e.ctrlKey && (e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD' || e.code === 'Space')) e.preventDefault();
-      // V a pé = alterna 3ª pessoa ↔ de cima (igual ao V do Vale, que cicla seguir/de-cima); V dirigindo = câmera do carro.
+      // V a pé = troca a câmera de JOGO: ombro ↔ de cima (MOBA), igual ao V e ao botão Câmera do Vale (03/11 — antes
+      // levava pra vista do mapa, solta do herói; essa segue no K). Na vista do mapa, V volta pro jogo. Dirigindo = carro.
       if (e.code === 'KeyV' && !e.repeat) {
         if (drive.mode === 'driving') { input.carCam = input.carCam === 'chase' ? 'cockpit' : 'chase'; input.cockYaw = 0; input.cockPitch = 0; }
-        else input.overview = !input.overview;
+        else if (input.overview) input.overview = false;
+        else toggleZsCam();
       }
       input.keys.add(e.code); if (e.code === 'Space') e.preventDefault();
     };
     const ku = (e: KeyboardEvent) => { input.keys.delete(e.code); if (e.code === 'ControlLeft' || e.code === 'ControlRight') releaseLeaveGuard(); };
     const blur = () => { input.keys.clear(); releaseLeaveGuard(); };
     const look = new Map<number, { x: number; y: number }>(), stick = new Map<number, { x: number; y: number }>();
+    /** PINÇA (03/11, celular): os DEDOS (não o mouse) que estão no mundo — com 2, abrir/fechar = zoom, sem girar */
+    const touchLook = new Set<number>();
+    let pinchSpan = 0;
+    const span = () => {
+      let a: { x: number; y: number } | undefined, b: { x: number; y: number } | undefined;
+      for (const id of touchLook) { const v = look.get(id); if (!v) continue; if (!a) a = v; else if (!b) b = v; }
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
     /** clique ESQUERDO curto (sem arrastar) = atacar; arrastar = girar a câmera */
     let press: { x: number; y: number; at: number } | null = null;
     const locked = () => document.pointerLockElement === el;
@@ -1175,7 +1223,10 @@ function Controls() {
       if (e.pointerType === 'mouse' && e.button !== 0) return; // direito = mira (mdown); arrastar gira só com o esquerdo
       // celular: com os controles do JOGO na tela (joystick/atacar/poderes), o dedo no mundo só gira a câmera
       if (e.pointerType === 'touch' && !touchLayout.on && e.clientX < el.clientWidth * 0.45) stick.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      else look.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      else {
+        look.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (e.pointerType === 'touch') { touchLook.add(e.pointerId); pinchSpan = span(); }
+      }
     };
     const move = (e: PointerEvent) => {
       if (locked()) { // mira com o mouse preso: giro pelo movimento (sensibilidade cai com o zoom)
@@ -1183,6 +1234,11 @@ function Controls() {
         input.yaw -= e.movementX * sens; input.pitch = Math.max(-0.5, Math.min(1.35, input.pitch + e.movementY * sens));
         input.lookAt = performance.now(); noteManualLook();
         return;
+      }
+      // mouse no PC (câmera de cima: o tiro livre vai no cursor)
+      if (e.pointerType === 'mouse') {
+        const r = el.getBoundingClientRect();
+        input.mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1; input.mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1; input.mouse.at = performance.now();
       }
       if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 6) press = null;
       const l = look.get(e.pointerId);
@@ -1194,9 +1250,21 @@ function Controls() {
           l.x = e.clientX; l.y = e.clientY;
           return;
         }
+        // PINÇA: 2 dedos no mundo = zoom (de cima: a distância dela; ombro/carro: a de sempre; mapa: a altura)
+        if (touchLook.size >= 2 && touchLook.has(e.pointerId)) {
+          l.x = e.clientX; l.y = e.clientY;
+          const sp = span();
+          if (pinchSpan > 0 && sp > 0 && !useAim.getState().active) {
+            if (input.overview) input.ov.alt = pinchDist(input.ov.alt, pinchSpan, sp, 60, 2600);
+            else if (mobaOn()) input.mobaDist = pinchDist(input.mobaDist, pinchSpan, sp, ZS_MOBA.MIN, ZS_MOBA.MAX);
+            else input.dist = pinchDist(input.dist, pinchSpan, sp, ZS_SHOULDER_DIST.MIN, ZS_SHOULDER_DIST.MAX);
+          }
+          pinchSpan = sp;
+          return;
+        }
         input.yaw -= (e.clientX - l.x) * 0.006;
         if (input.overview) input.ov.pitch = Math.max(0.35, Math.min(1.5, input.ov.pitch + (e.clientY - l.y) * 0.004));
-        else input.pitch = Math.max(-0.15, Math.min(1.35, input.pitch + (e.clientY - l.y) * 0.005));
+        else if (!mobaOn()) input.pitch = Math.max(-0.15, Math.min(1.35, input.pitch + (e.clientY - l.y) * 0.005)); // de cima: só gira
         l.x = e.clientX; l.y = e.clientY;
       }
       const s = stick.get(e.pointerId);
@@ -1204,13 +1272,15 @@ function Controls() {
     };
     const up = (e: PointerEvent) => {
       look.delete(e.pointerId); if (stick.delete(e.pointerId)) { input.stick.x = 0; input.stick.z = 0; }
+      if (touchLook.delete(e.pointerId)) pinchSpan = span();
     };
     const menu = (e: MouseEvent) => e.preventDefault(); // botão direito é a mira, não o menu do navegador
     const wheel = (e: WheelEvent) => {
       if (useAim.getState().active) { aimZoomStep(e.deltaY < 0 ? 1 : -1); e.preventDefault(); return; } // mirando: zoom da mira
       const f = e.deltaY > 0 ? 1.12 : 0.89;
       if (input.overview) input.ov.alt = Math.max(60, Math.min(2600, input.ov.alt * f));
-      else input.dist = Math.max(3, Math.min(40, input.dist * f));
+      else if (mobaOn()) input.mobaDist = Math.max(ZS_MOBA.MIN, Math.min(ZS_MOBA.MAX, input.mobaDist * f)); // de cima: a dela
+      else input.dist = Math.max(ZS_SHOULDER_DIST.MIN, Math.min(ZS_SHOULDER_DIST.MAX, input.dist * f));
       e.preventDefault();
     };
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); window.addEventListener('blur', blur);
@@ -1257,8 +1327,8 @@ function ZsHudView({ touch }: { touch: boolean }) {
         {/* celular (Pedro 02/11: "um card muito grande, horrível"): sem "Espaço sobe · C desce · E sai…" — são os botões do arco */}
         {(touch ? hud.carTouch : hud.car) && <em>{touch ? hud.carTouch : hud.car}</em>}
         <small className="zs-hud__keys">{hud.overview
-          ? 'VISTA DE CIMA · WASD move · Shift rápido · roda sobe/desce · K volta'
-          : touch ? 'joystick anda · arraste a tela gira a câmera' : 'WASD anda · clique ataca · botão direito mira · Espaço pula · Ctrl agacha · E carro/pegar · C mergulha · K vista de cima · P FPS'}</small>
+          ? 'VISTA DO MAPA · WASD move · Shift rápido · roda sobe/desce · K volta'
+          : touch ? 'joystick anda · arraste gira a câmera · 2 dedos = zoom' : 'WASD anda · clique ataca · botão direito mira · Espaço pula · Ctrl agacha · E carro/pegar · C mergulha · V câmera (ombro/de cima) · K mapa · P FPS'}</small>
       </div>
       {hud.canPop && (
         <button type="button" className="zs-btn zs-btn--pop" onPointerDown={() => { input.popTap = true; }}>LEVANTAR <small>(Espaço)</small></button>
@@ -1386,7 +1456,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const gearRef = useMemo(() => ({ get glider() { return gliderPose.current; }, get skate() { return skatePose.current; } }), []);
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
-  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip, warship: shipRef, drive, input, aim: warshipAim, muzzle: heroMuzzle, warshipDeck: zsWarshipDeck, touch: useZsTouch, net: useNet, remoteDecks, ramp: zsRamp };
+  if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zs?: unknown }).__zs = { hero: heroRef.current, car: carRef, terrain: () => t, store: useGameStore, movement, setEpoch: setWorldEpoch, nightFactor, worldEpoch, amb: () => ({ ...AMB }), ship: zsShip, warship: shipRef, drive, input, aim: warshipAim, muzzle: heroMuzzle, warshipDeck: zsWarshipDeck, touch: useZsTouch, net: useNet, remoteDecks, ramp: zsRamp, cam: useZsCam, see: zsSeeThrough };
   useEffect(() => {
     zsPause.on = paused;
     if (paused) { input.keys.clear(); input.stick.x = 0; input.stick.z = 0; }
@@ -1517,7 +1587,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
                   coleta eram desenhadas embaixo da rocha — 851 mil triângulos que ninguém via) */}
               <Suspense fallback={null}><ZsSurface><Camps c={c} /></ZsSurface></Suspense>
               {/* recursos de colher (madeira na mata, pedra no campo — PR #14): a mesma peça do Vale, VISÍVEIS */}
-              <Suspense fallback={null}><ZsSurface><HarvestNodes c={cFarm} /></ZsSurface></Suspense>
+              <Suspense fallback={null}><ZsSurface><HarvestNodes c={cFarm} seeThrough={withSeeThrough} /></ZsSurface></Suspense>
               {/* MINÉRIO DA CAVERNA (02/11): os nós da camada de baixo, fora da superfície (que some no fundo da caverna) */}
               <Suspense fallback={null}><HarvestNodes c={cFarm} layer={1} /></Suspense>
               <Suspense fallback={null}><Enemies c={c} playerRef={playerRef} cameraMode="third" /></Suspense>

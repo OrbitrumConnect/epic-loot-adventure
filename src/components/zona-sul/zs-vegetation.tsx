@@ -14,6 +14,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ZS_ROAD_MASK, ZS_SURF } from './zona-sul-meta';
 import { type ZsTerrain, zsHash, zsHeightAt, zsSlopeDeg, zsSurfAt, ZS_WATER_Y } from './zs-terrain-data';
 import { caveMouthClear } from './zs-cave';
+import { withSeeThrough } from './zs-see-through';
 import { useGameStore } from '@/game/state/game-store';
 import { useNet } from '@/net/multiplayer';
 import { BASE_GRID, type PlayerBaseState } from '@/game/types/playerbase';
@@ -340,6 +341,8 @@ export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.Muta
     const m = {} as Record<ZsVegKind, THREE.InstancedMesh>;
     for (const k of KINDS) {
       const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: k === 'fern' || k === 'palm' ? THREE.DoubleSide : THREE.FrontSide, flatShading: true });
+      // câmera DE CIMA (03/11): a árvore na frente do herói some em pontilhado (zs-see-through); a de longe ('far') não precisa
+      if (k !== 'far') withSeeThrough(mat);
       const im = new THREE.InstancedMesh(kindGeometry(k), mat, CAP[k]);
       // sombra só das árvores grandes e PERTO (a malha "sh" abaixo); samambaia, coqueiro e arbusto não: pesa e quase não se vê
       im.count = 0; im.frustumCulled = false; im.castShadow = false; im.receiveShadow = false;

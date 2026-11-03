@@ -64,6 +64,7 @@ import { setWorldMap, useWorldMap } from '@/components/world/world-map-choice';
 // 30/10: M saiu daqui — na Zona Sul abre o mapa DELA (zs-map, PR #14 do Caio)
 const ZS_SKIP_KEYS = new Set(['KeyE', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyK']);
 import { zsCtx } from '@/components/zona-sul/zs-context';
+import { toggleZsCam, useZsCam } from '@/components/zona-sul/zs-camera';
 /** Itens do menu que são do mapa velho (fila do piloto, mapa do vale) — somem na Zona Sul até ganharem a versão dela. */
 const ZS_HIDE_NAV = new Set(['objectives']);
 import { BossSpawner } from '@/components/world/boss-spawner';
@@ -249,6 +250,8 @@ function Index() {
   const editorActive = useEditorStore(s => s.active);
   const worldMap = useWorldMap();
   const zs = worldMap === 'zona-sul';
+  // câmera da Zona Sul a pé (03/11): ombro ou de cima (MOBA) — o mundo dela lê direto da loja, sem re-render do 3D
+  const zsCam = useZsCam(s => s.mode);
   const setEditorActive = useEditorStore(s => s.setActive);
   const [cameraMode, setCameraMode] = useState<'iso' | 'third' | 'free'>('iso');
   const [deathCountdown, setDeathCountdown] = useState(0);
@@ -455,10 +458,10 @@ function Index() {
     if (nearest && bestDist <= range) attack(nearest);
     // TIRO LIVRE (Pedro 26/10: "só consigo atirar perto de inimigo"): arma de longe sem alvo no alcance → atira
     // mesmo assim, no cursor (PC, câmera de cima) ou pra onde o herói olha (celular). Gasta munição normal.
-    else if (weaponFor(heldId).ranged) useGameStore.getState().fireMiss(freeShotPoint(p, range, cameraMode === 'iso' && !zs));
+    else if (weaponFor(heldId).ranged) useGameStore.getState().fireMiss(freeShotPoint(p, range, zs ? zsCam === 'cima' : cameraMode === 'iso'));
     // Câmera de ombro com espada: ninguém no alcance → golpe no AR (animação/som), como jogo de ação. Zona Sul = sempre ombro.
     else if (!((zs || cameraMode === 'third') && useGameStore.getState().swingAir())) useGameStore.getState().setMessage('Nenhum inimigo próximo.');
-  }, [attack, cameraMode, zs]);
+  }, [attack, cameraMode, zs, zsCam]);
 
   const inCity = ui.mode === 'city';
   // Controles de toque: tela estreita OU tela de toque (celular DEITADO também — 26/10).
@@ -641,7 +644,10 @@ function Index() {
       {player.level >= BOOST_UNLOCK_LEVEL && (
         <Button variant="ghost" className="world-action" data-combat data-cooldown={boostLeft > 0} aria-label="Boost Fire" title="Boost Fire — pistola e rifle 2× mais rápidos por 4 s · T" onClick={() => useGameStore.getState().boostFire()}><Flame />{boostLeft > 0 && <span className="cd">{boostLeft}</span>}</Button>
       )}
-      {!zs && <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>}
+      {/* Zona Sul (03/11, Pedro: "no mobile mudar câmera MOBA de cima saiu?!"): o botão volta — ombro ↔ de cima (zs-camera) */}
+      {zs
+        ? <Button variant="ghost" className="world-action" data-on={zsCam === 'cima' || undefined} aria-label="Câmera" title={`Câmera: ${zsCam === 'cima' ? 'de cima (MOBA)' : 'ombro (3ª pessoa)'} · V`} onClick={toggleZsCam}><Camera /></Button>
+        : <Button variant="ghost" className="world-action" aria-label="Câmera" title={`Câmera: ${cameraMode === 'iso' ? 'Isométrica' : '3ª Pessoa'} · V`} onClick={toggleCamera}><Camera /></Button>}
       <Button variant="ghost" className="world-action" aria-label="Retornar à base" title="Terminal de retorno" onClick={() => open('home')}><Home /></Button>
       {!playerBase && (
         <Button variant="ghost" className="world-action" data-on="true" aria-label="Reivindicar base"
@@ -775,7 +781,7 @@ function Index() {
               <ZonaSulWorld paused={Boolean(panel) || editorActive} onAttack={hitNearest} />
             </Suspense>
           )}
-          {worldOn && !inCity && <AimCrosshair shoulder={zs || cameraMode === 'third'} />}
+          {worldOn && !inCity && <AimCrosshair shoulder={zs ? zsCam === 'ombro' : cameraMode === 'third'} />}
           {worldOn && perfOn && !zs && <PerfHud />}
           {/* Cartas de um toque + lateral UPAR (Pedro 25/10: sem precisar ir à cidade). */}
           {worldOn && !inCity && !player.dead && <CardHost />}
@@ -987,7 +993,8 @@ function Index() {
             </div>
             <div className="world-actions world-actions--overlay">{actionButtons}</div>
           </div>)}
-          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={zs || cameraMode === 'third'} powers={mobilePowers} />}
+          {/* câmera de cima da Zona Sul: ATACAR pega o mais perto (não o centro da tela); o Mirar fica (desce pro ombro) */}
+          {isMobile && !panel && !player.dead && <MobileControls onAttack={hitNearest} canAim={zs ? zsCam === 'ombro' : cameraMode === 'third'} aimButton={zs || cameraMode === 'third'} powers={mobilePowers} />}
           </>)}
 
           {!inCity && !panel && <PiecePicker />}
