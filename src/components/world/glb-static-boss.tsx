@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { HeroAction } from './glb-hero';
+import { inflateBounds } from './skinned-bounds';
 
 /** Bounding box a partir das GEOMETRIAS (estável; independe de pose/timing). */
 function measureGeo(root: THREE.Object3D): THREE.Box3 {
@@ -82,11 +83,7 @@ export function GlbStaticBoss({
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
-        if (m.geometry && !m.geometry.userData['_inflated']) {
-          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
-          if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
-          m.geometry.userData['_inflated'] = true;
-        }
+        inflateBounds(m); // (03/11) também a bolha do corpo com esqueleto
         if (tint) {
           const mats = Array.isArray(m.material) ? m.material : [m.material];
           for (const mm of mats) { const sm = mm as THREE.MeshStandardMaterial; if (sm && sm.color) { sm.color.set(tint); sm.metalness = 0; sm.roughness = 0.9; } }

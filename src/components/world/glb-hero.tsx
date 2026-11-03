@@ -3,6 +3,7 @@ import { createPortal, useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { inflateBounds } from './skinned-bounds';
 
 /**
  * Herói GLB (Quaternius Modular Character Outfits) com animações da Universal
@@ -141,11 +142,7 @@ export function GlbHero({
         m.castShadow = true;
         // Culling LIGADO (fora da tela não renderiza = horda barata). Infla o
         // bounding (bind-pose) p/ cobrir a animação e não sumir na borda.
-        if (m.geometry && !m.geometry.userData['_inflated']) {
-          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
-          if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
-          m.geometry.userData['_inflated'] = true;
-        }
+        inflateBounds(m); // (03/11) também a bolha do corpo com esqueleto
       }
     });
   }, [cloned, names]);

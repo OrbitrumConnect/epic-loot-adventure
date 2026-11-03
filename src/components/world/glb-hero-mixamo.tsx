@@ -27,6 +27,7 @@ import {
   upperBodyOnly, type HeroExtraClip, type MoveDir,
   ATTACK_UPPER_WEIGHT, CROUCH_CLIPS, CROUCH_WALK_CLIP_SPEED, attackUpperFor, crouchClipFor, isCrouchAction, jumpClipFor, lowerPlusUpper, scaleHipsTo,
 } from './hero-moves';
+import { inflateBounds } from './skinned-bounds';
 
 const EXTRA_KEYS = Object.keys(HERO_EXTRA_CLIPS) as HeroExtraClip[];
 const EXTRA_URLS = EXTRA_KEYS.map((k) => HERO_EXTRA_CLIPS[k]);
@@ -432,11 +433,7 @@ export function GlbHeroMixamo({
       if (m.isMesh) {
         m.castShadow = true;
         list.push(m);
-        if (m.geometry && !m.geometry.userData['_inflated']) {
-          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
-          if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
-          m.geometry.userData['_inflated'] = true;
-        }
+        inflateBounds(m); // bolha inflada 1,8× — também a do corpo com esqueleto (03/11)
       }
     });
     meshes.current = list;

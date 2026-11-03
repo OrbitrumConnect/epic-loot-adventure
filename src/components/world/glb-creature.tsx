@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { useGameStore } from '@/game/state/game-store';
 import { hitStopScale } from './hit-stop';
+import { inflateBounds } from './skinned-bounds';
 
 /** Distância² (m²) além da qual a criatura para de lançar sombra e de animar
  *  (com ~70 bichos, é o maior ganho de FPS — longe ninguém nota). */
@@ -235,12 +236,8 @@ export function GlbCreature({
       if (m.isMesh) {
         m.castShadow = true;
         collected.push(m);
-        // Culling LIGADO + bounding inflado (não renderiza fora da tela).
-        if (m.geometry && !m.geometry.userData['_inflated']) {
-          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
-          if (m.geometry.boundingSphere) m.geometry.boundingSphere.radius *= 1.8;
-          m.geometry.userData['_inflated'] = true;
-        }
+        // Culling LIGADO + bounding inflado (não renderiza fora da tela) — e o corpo com esqueleto usa essa bolha (03/11)
+        inflateBounds(m);
         if (tint) {
           // GLB "demo" sem baseColor → tinta a cor natural (combina com o cel-shade).
           const mats = Array.isArray(m.material) ? m.material : [m.material];
