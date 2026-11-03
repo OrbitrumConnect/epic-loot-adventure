@@ -56,7 +56,9 @@ describe('caverna da Zona Sul — onde fica', () => {
     expect(j.ra * j.ha).toBeLessThan(r.ra * r.ha);
   });
   it('túneis por dentro mais altos e largos (Pedro 31/10): ≥ 6 m de largura e ≥ 7 m de altura fora das bocas', () => {
-    for (const tn of CAVE_TUNNELS) tn.pts.slice(tn.mouth ? 2 : 0).forEach((p) => { expect(p.r * 2, tn.id).toBeGreaterThanOrEqual(9); expect(p.h, tn.id).toBeGreaterThanOrEqual(6.2); });
+    for (const tn of CAVE_TUNNELS.filter((q) => !q.road)) tn.pts.slice(tn.mouth ? 2 : 0).forEach((p) => { expect(p.r * 2, tn.id).toBeGreaterThanOrEqual(9); expect(p.h, tn.id).toBeGreaterThanOrEqual(6.2); });
+    // TÚNEIS DE ESTRADA (02/11 noite: Zuzu, Novo, Velho — no tamanho que o morro do jogo deixa): cabe gente e carro
+    for (const tn of CAVE_TUNNELS.filter((q) => q.road)) tn.pts.forEach((p) => { expect(p.r * 2, tn.id).toBeGreaterThanOrEqual(6.5); expect(p.h, tn.id).toBeGreaterThanOrEqual(4.2); });
   });
   it('o salão do chefe é o ponto MAIS FUNDO; tem galeria com ÁGUA e uma caverna GRANDE', () => {
     const boss = CAVE_ROOMS.find((r) => r.id === 'chefe')!;

@@ -26,7 +26,9 @@ import { type ZsTerrain, zsHeightAt, zsSurfAt } from './zs-terrain-data';
 /** Ponto de túnel: chão `y`, meia-largura `r` e altura do arco `h` (m). */
 export type CaveTunnelPt = { x: number; z: number; y: number; r: number; h: number };
 /** Túnel: polilinha; `mouth` = o 1º ponto é uma BOCA (corte reto, chão = encosta); `rocks` = pedras em volta da boca. */
-export type CaveTunnel = { id: string; name: string; pts: CaveTunnelPt[]; mouth?: boolean; rocks?: boolean };
+/** `road` = TÚNEL DE ESTRADA (Zuzu Angel, Novo, Velho — do OSM, no tamanho que o morro do jogo deixa). */
+/** `open` = túnel CURTO de rua (o Novo, 34 m): de dentro se vê as duas bocas — conta como superfície o tempo todo. */
+export type CaveTunnel = { id: string; name: string; pts: CaveTunnelPt[]; mouth?: boolean; rocks?: boolean; road?: boolean; open?: boolean };
 /** Poça no salão (no referencial do salão: u ao longo de `yaw`): o chão afunda até `depth`, a água fica no chão. */
 export type CavePool = { u: number; v: number; rx: number; rz: number; depth: number };
 export type CaveRoom = {
@@ -77,8 +79,8 @@ export const CAVE_TUNNELS: CaveTunnel[] = [
   // subindo ~1% de São Conrado (12,07 m) pra Gávea (13,96 m). As bocas ficam onde a encosta já cobre o arco (a de São
   // Conrado 0,2 da reta pra dentro). Passa POR CIMA do túnel do Leblon (~7 m de rocha — ANDARES). No meio (J) sai a
   // ENTRADA DA CAVERNA: rampa de ~115 m (~15%) que desce até a passagem da Gávea.
-  { id: 'zuzu-sc', name: 'Túnel Zuzu Angel', mouth: true, pts: [P(-659.4, 423.2, 12.07, 5.5, 6.5), P(-641, 407.7, 12.3, 5.5, 6.5), P(-600, 373.1, 13, 5.5, 6.5)] },
-  { id: 'zuzu-gavea', name: 'Túnel Zuzu Angel', mouth: true, pts: [P(-537, 320, 13.96, 5.5, 6.5), P(-569.5, 347.5, 13.5, 5.5, 6.5), P(-600, 373.1, 13, 5.5, 6.5)] },
+  { id: 'zuzu-sc', name: 'Túnel Zuzu Angel', mouth: true, road: true, pts: [P(-659.4, 423.2, 12.07, 5.5, 6.5), P(-641, 407.7, 12.3, 5.5, 6.5), P(-600, 373.1, 13, 5.5, 6.5)] },
+  { id: 'zuzu-gavea', name: 'Túnel Zuzu Angel', mouth: true, road: true, pts: [P(-537, 320, 13.96, 5.5, 6.5), P(-569.5, 347.5, 13.5, 5.5, 6.5), P(-600, 373.1, 13, 5.5, 6.5)] },
   { id: 'zuzu-caverna', name: 'descida do Zuzu pra caverna', pts: [P(-600, 373.1, 13, 4.6, 6.5), P(-621, 348, 8, 4.6, 6.5), P(-624, 305, 2, 4.6, 6.5), P(-603, 265, -5, 5, 7)] }, // a ponta no EIXO da passagem (junção de verdade)
   // ABISMO DO PICO DA TIJUCA (02/11 noite, Pedro: "entrada de cave no Pico da Tijuca, agora que tem essa parede grande; a
   // galeria pode ser grande lá dentro, de cima vê lá embaixo, vai descendo; a boca média, com pedras rodeando; a que vem
@@ -89,6 +91,15 @@ export const CAVE_TUNNELS: CaveTunnel[] = [
   // do FUNDO do poço sai a GALERIA GRANDE (15 m) por baixo do maciço até o salão do Alto da Boa Vista…
   { id: 'galeria-alto', name: 'galeria grande do Alto da Boa Vista', pts: [
     P(-1159.9, -271.6, 42, 6.5, 9), P(-1100, -250, 34, 7.5, 11), P(-1000, -200, 22, 7.5, 11), P(-940, -170, 14, 7.5, 11), P(-905, -153, 9, 7.5, 11)] },
+  // TÚNEL NOVO (02/11 noite, Pedro: "o túnel da Princesa Isabel que pega Copa pra Botafogo ali perto da Urca"), Botafogo ↔
+  // Leme/Copacabana, pela linha do OSM. No jogo o morro é uma CRISTA baixa (~18 m no eixo): bocas em rampa (o buraco do
+  // chão abre a trincheira) e o meio coberto. As 2 mãos num túnel só (13 × 5,6 m), piso 4,05 → 6,53 m com o meio ~1 m
+  // mais baixo (a silhueta de longe do morro é baixa).
+  // TÚNEL VELHO: NÃO entrou — no jogo o morro em cima dele é uma crista de ~13 m, estreita e caindo rápido pro oeste; mesmo
+  // estreito (6,8 × 4,4 m) e com o piso descendo no meio o arco sai pela encosta (41 pontos no teste). Pra ter o Velho é
+  // preciso subir um pouco essa crista (mexe no mapa de antes) — esperando o OK do Pedro.
+  { id: 'novo-botafogo', name: 'Túnel Novo', mouth: true, road: true, open: true, pts: [P(312.5, -55.5, 4.05, 6.5, 6), P(316.8, -47.1, 4.5, 6.5, 5.6), P(320.2, -40.4, 4.4, 6.5, 5.6)] },
+  { id: 'novo-copa', name: 'Túnel Novo', mouth: true, road: true, open: true, pts: [P(328, -25.4, 6.53, 6.5, 6), P(322.4, -36.1, 4.8, 6.5, 5.6), P(320.2, -40.4, 4.4, 6.5, 5.6)] },
   // …e do salão até a passagem da Gávea (a caverna de sempre): o mundo de baixo inteiro ligado
   { id: 'galeria-gavea', name: 'galeria grande do Alto da Boa Vista', pts: [
     P(-852, -125, 6.5, 7, 10), P(-820, -110, 2, 7, 10), P(-760, -80, -2, 6.5, 9.5), P(-700, -50, -6, 6.5, 9), P(-650, -25, -9, 6.2, 8.5), P(-610, -8, -11, 6, 8), P(-570, 5, -12, 5.6, 7.2)] },
@@ -169,6 +180,18 @@ export const CAVE_BOSS = { id: 'zs_cave_boss', speciesId: 'raider_mushroom', x: 
 /** Os primeiros metros de cada boca contam como SUPERFÍCIE (bicho de fora entra atrás de você; ninguém briga através
  *  da rocha mais pra dentro). */
 export const CAVE_MOUTH_ZONE = 14;
+/** Caixas dos túneis curtos de rua (`open`, 03/11): o meio do Novo fica a ~17 m das bocas — passaria da zona da boca e
+ *  quem está lá fora (bicho, amigo, luz da rua) sumiria por uns metros. Dentro da caixa é SUPERFÍCIE. */
+const OPEN_BOXES = CAVE_TUNNELS.filter((t) => t.open).map((t) => {
+  const pad = Math.max(...t.pts.map((p) => p.r)) + 2;
+  return { x0: Math.min(...t.pts.map((p) => p.x)) - pad, x1: Math.max(...t.pts.map((p) => p.x)) + pad, z0: Math.min(...t.pts.map((p) => p.z)) - pad, z1: Math.max(...t.pts.map((p) => p.z)) + pad, y1: Math.max(...t.pts.map((p) => p.y + p.h)) + 2 };
+});
+/** Mais pra dentro que a zona da boca (= camada da caverna)? `md` = caveMouthDist já calculado. Túnel curto de rua: não. */
+export function caveDeep(x: number, y: number, z: number, md = caveMouthDist(x, y, z)): boolean {
+  if (md <= CAVE_MOUTH_ZONE) return false;
+  for (const b of OPEN_BOXES) if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1 && y < b.y1) return false;
+  return true;
+}
 /** Água das poças: a lâmina fica 4 cm abaixo do chão do salão. */
 const POOL_Y = -0.04;
 /** O buraco do chão do mapa começa este tanto (m) DEPOIS do plano da boca: o chão do mapa cobre o cantinho arredondado
@@ -442,7 +465,7 @@ export function caveInside(x: number, feetY: number, z: number): boolean { retur
 /** Camada: 1 = caverna (mais de CAVE_MOUTH_ZONE m pra dentro), 0 = superfície (inclui a boca). */
 export function caveLayer(x: number, y: number, z: number): number {
   if (!caveInside(x, y, z)) return 0;
-  return caveMouthDist(x, y, z) > CAVE_MOUTH_ZONE ? 1 : 0;
+  return caveDeep(x, y, z) ? 1 : 0;
 }
 /** Rocha MESMO (pra tiro/visão de dentro da caverna): fora do ar da caverna e abaixo do chão do mapa. */
 export function caveSolid(x: number, y: number, z: number): boolean { return caveField(x, y, z) > 0 && y < groundAt(x, z); }

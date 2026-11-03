@@ -74,7 +74,7 @@ import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimma
 import { useZsTouch, zsAttack, zsCave, zsCrouch, zsCtx, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
-import { CAVE_ABYSS, CAVE_MOUTH_ZONE, caveCamFit, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
+import { CAVE_ABYSS, caveCamFit, caveDeep, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
 import { ZsCave, ZsCaveMouthRocks } from './zs-cave-view';
 import { layers, resetLayers, sameLayerAsPlayer } from '@/game/systems/layerSystem';
 import { shipGround, zsShip, ZsShip } from './zs-ship';
@@ -292,7 +292,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     // CAVERNA (30/10): dentro dela (ou perto da boca) a caverna desenha; quanto mais fundo, mais escuro (lanterna acende)
     {
       const inside = drive.mode === 'foot' && caveInside(p.x, p.y, p.z), md = caveMouthDist(p.x, p.y, p.z);
-      layers.inside = inside; layers.player = inside && md > CAVE_MOUTH_ZONE ? 1 : 0;
+      layers.inside = inside; layers.player = inside && caveDeep(p.x, p.y, p.z, md) ? 1 : 0;
       zsCave.inCave = inside;
       const want = inside && !input.overview ? Math.min(1, Math.max(0, (md - 6) / 28)) : 0;
       zsCave.dark += (want * want * (3 - 2 * want) - zsCave.dark) * Math.min(1, dt * 2.5);
