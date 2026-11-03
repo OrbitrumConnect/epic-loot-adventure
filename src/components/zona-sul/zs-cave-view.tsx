@@ -15,7 +15,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLight } from '@/components/world/light-pool';
 import type { ZsTerrain } from './zs-terrain-data';
-import { CAVE_ROOMS, type CaveDecor, type CaveTile, caveDecor, caveField, caveFloorAt, caveMeshJob, cavePools } from './zs-cave';
+import { CAVE_ABYSS, CAVE_ROOMS, type CaveDecor, type CaveTile, caveDecor, caveField, caveFloorAt, caveMeshJob, caveMouthRocks, cavePools } from './zs-cave';
+/** Até onde (m) da câmera um pedaço da caverna desenha (02/11 noite: a caverna cresceu — abismo + galeria grande). */
+export const CAVE_TILE_DRAW_M = 260;
 import { zsCave } from './zs-context';
 
 const caveUniforms = { uInside: { value: 0 }, uGlow: { value: 0.06 } };
@@ -144,6 +146,26 @@ function CaveCrystals({ list, heroRef }: { list: CaveDecor[]; heroRef: React.Mut
 }
 useGLTF.preload(CRYSTAL_URL);
 
+/** PEDRAS EM VOLTA DA BOCA (02/11 noite, Pedro: "a boca média, pedras rodeando — fica legal"): um desenho só (instâncias),
+ *  rocha facetada no tom da encosta, meio enterradas. Na superfície (some no fundo da caverna junto com ela). */
+export function ZsCaveMouthRocks({ t }: { t: ZsTerrain }) {
+  const list = useMemo(() => caveMouthRocks(t), [t]);
+  const geo = useMemo(() => new THREE.DodecahedronGeometry(0.5, 0), []);
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.36, 0.34, 0.31), roughness: 0.95, flatShading: true }), []);
+  useEffect(() => () => { geo.dispose(); mat.dispose(); }, [geo, mat]);
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  useEffect(() => {
+    const m = mesh.current; if (!m) return;
+    list.forEach((r, i) => {
+      tmpQ.setFromEuler(tmpE.set(0.25 * Math.sin(r.yaw * 3), r.yaw, 0.2 * Math.cos(r.yaw * 2)));
+      m.setMatrixAt(i, tmpM.compose(tmpP.set(r.x, r.y, r.z), tmpQ, tmpS.set(r.s * 1.25, r.s * 0.85, r.s)));
+    });
+    m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere();
+  }, [list]);
+  if (!list.length) return null;
+  return <instancedMesh ref={mesh} args={[geo, mat, list.length]} castShadow receiveShadow />;
+}
+
 export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRefObject<THREE.Vector3> }) {
   const tiles = useCaveTiles(t);
   // só em desenvolvimento: os testes de tela leem a caverna (o jogo publicado não expõe nada)
@@ -211,10 +233,16 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
   }, [kinds]);
   const water = useRef<THREE.Mesh>(null);
 
-  useFrame(() => {
+  useFrame((state) => {
     const near = zsCave.near;
     caveUniforms.uInside.value = zsCave.dark;
-    for (const g of geos) g.setDrawRange(0, near ? Infinity : 0);
+    // 02/11 noite (abismo + galeria grande: a malha foi de 80 → 143 mil triângulos): só os pedaços a até CAVE_TILE_DRAW_M
+    // da câmera desenham (de mais longe a rocha esconde) — o desenhado fica MENOR que antes (máx. ~49 mil × 80 mil)
+    const cam = state.camera.position;
+    for (let i = 0; i < geos.length; i++) {
+      const tl = tiles![i]!;
+      geos[i]!.setDrawRange(0, near && Math.hypot(tl.cx - cam.x, tl.cz - cam.z) < CAVE_TILE_DRAW_M ? Infinity : 0);
+    }
     water.current?.geometry.setDrawRange(0, near ? Infinity : 0);
     for (const k of ['stalactite', 'stalagmite', 'mushroom'] as const) { const m = refs[k].current; if (m) m.count = near ? kinds[k].length : 0; }
     if (!near) return;
@@ -222,10 +250,13 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
     const h = heroRef.current;
     if (zsCave.dark > 0.12) requestLight(h.x, h.y + 1.6, h.z, LANTERN, 7.5 * zsCave.dark, 21, 1.4);
     if (zsCave.inCave) {
+      // ABISMO (02/11 noite): a luz grande do fundo do poço (de cima se vê o fundo) — e só 1 cristal, pra ela ter a vaga
+      const ab = CAVE_ABYSS, inAbyss = Math.hypot(h.x - ab.x, h.z - ab.z) < ab.near;
+      if (inAbyss) requestLight(ab.light.x, ab.light.y, ab.light.z, CRYSTAL_LIGHT, ab.light.i, ab.light.d, 1.2);
       let n = 0;
       for (const s of glowSpots) { s.d = (s.x - h.x) ** 2 + (s.z - h.z) ** 2; }
       const sorted = glowSpots.filter((s) => s.d < 45 * 45).sort((a, b) => a.d - b.d);
-      for (const s of sorted) { if (n++ >= 3) break; requestLight(s.x, s.y, s.z, s.c, s.i, s.c === FUNGUS_LIGHT ? 34 : 11, 1.6); }
+      for (const s of sorted) { if (n++ >= (inAbyss ? 1 : 3)) break; requestLight(s.x, s.y, s.z, s.c, s.i, s.c === FUNGUS_LIGHT ? 34 : 11, 1.6); }
     }
   });
 

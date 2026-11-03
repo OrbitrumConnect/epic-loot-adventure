@@ -63,7 +63,8 @@ describe('caverna da Zona Sul — onde fica', () => {
     expect(Math.min(...CAVE_ROOMS.map((r) => r.y))).toBe(boss.y);
     expect(CAVE_ROOMS.some((r) => (r.pools?.length ?? 0) > 0)).toBe(true);
     const big = CAVE_ROOMS.find((r) => r.id === 'grande')!;
-    expect(big.rx * big.rz).toBeGreaterThanOrEqual(Math.max(...CAVE_ROOMS.map((r) => r.rx * r.rz)));
+    // (02/11 noite: o abismo do Pico da Tijuca é um POÇO — shaft — maior; a grande caverna segue o maior SALÃO)
+    expect(big.rx * big.rz).toBeGreaterThanOrEqual(Math.max(...CAVE_ROOMS.filter((r) => !r.shaft).map((r) => r.rx * r.rz)));
   });
 });
 
@@ -98,7 +99,8 @@ describe('caverna — uma camada EMBAIXO do mapa (não fura nada)', () => {
 
 describe('caverna — dá pra andar dela inteira', () => {
   it('da boca do Rebouças se chega (a pé, sem pular parede) em TODOS os salões, no fundo do chefe e na boca do Leblon', () => {
-    const S = 2, X0 = -680, Z0 = -460, W = Math.ceil((120 - X0) / S), H = Math.ceil((420 - Z0) / S);
+    // 02/11 noite: a área vai até o abismo do Pico da Tijuca (oeste)
+    const S = 2, X0 = -1260, Z0 = -460, W = Math.ceil((120 - X0) / S), H = Math.ceil((420 - Z0) / S);
     const fl = new Float32Array(W * H).fill(NaN);
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       const x = X0 + i * S, z = Z0 + j * S;
@@ -130,7 +132,7 @@ describe('caverna — dá pra andar dela inteira', () => {
       expect(k, room.name).toBeGreaterThanOrEqual(0);
       expect(seen[k], room.name).toBe(1);
     }
-    for (const id of ['leblon', 'laranjeiras']) {
+    for (const id of ['leblon', 'laranjeiras', 'pico-tijuca']) {
       const l = mouth(id);
       const lk = near(l.ax + (l.bx - l.ax) * 0.15, l.az + (l.bz - l.az) * 0.15);
       expect(seen[lk], id).toBe(1);
@@ -234,14 +236,21 @@ describe('caverna — camada: ninguém briga através da rocha', () => {
 });
 
 describe('caverna — leve', () => {
-  it('a malha sai da mesma conta (marching cubes) e cabe no orçamento: < 90 mil triângulos (túneis maiores + Laranjeiras), < 70 pedaços', () => {
+  // 02/11 noite (abismo + galeria grande): o total foi de ~80 → ~143 mil, mas só os pedaços a até CAVE_TILE_DRAW_M (260 m)
+  // da câmera desenham — o desenhado de uma vez fica MENOR que antes (os ~80 mil inteiros)
+  it('a malha sai da mesma conta (marching cubes) e cabe no orçamento: < 160 mil no total, < 100 pedaços, ≤ 55 mil a até 260 m de qualquer ponto', () => {
     const job = caveMeshJob(triTable);
     let r = job.next();
     while (!r.done) r = job.next();
     const tris = r.value.reduce((s, x) => s + x.idx.length / 3, 0);
     expect(tris).toBeGreaterThan(20000);
-    expect(tris).toBeLessThan(90000);
-    expect(r.value.length).toBeLessThan(70);
+    expect(tris).toBeLessThan(160000);
+    expect(r.value.length).toBeLessThan(100);
+    for (const [x, z] of [[-70, -63], [-446, 366], [-600, 373], [-878, -139], [-1195, -290], [-1114, -205], [-570, 5], [-452, -165]] as const) {
+      const near = r.value.filter((q) => Math.hypot(q.cx - x, q.cz - z) < 260).reduce((s2, q) => s2 + q.idx.length / 3, 0);
+      expect(near, `perto de ${x}, ${z}`).toBeLessThan(55000);
+    }
+    expect(fs.readFileSync('src/components/zona-sul/zs-cave-view.tsx', 'utf8')).toContain('near && Math.hypot(tl.cx - cam.x, tl.cz - cam.z) < CAVE_TILE_DRAW_M ? Infinity : 0');
     // as normais apontam pro AR (de dentro da caverna)
     const tile = r.value[0]!;
     let ok = 0;

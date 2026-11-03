@@ -46,7 +46,7 @@ describe('grama leve da Zona Sul', () => {
   it('ligada: dentro da superfície (some no fundo da caverna), em volta do mesmo foco da mata; celular com raio menor', () => {
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
     // (02/11: a rampa de voo livre entrou logo depois, também dentro da superfície)
-    expect(zs).toMatch(/<ZsVegetation t=\{t\} heroRef=\{focusRef\} \/>\s+\{\/\*[^]*?\*\/\}\s+<ZsGrass t=\{t\} heroRef=\{focusRef\} \/>\s+(?:\{\/\*[^]*?\*\/\}\s+<ZsRampView t=\{t\} \/>\s+)?<\/ZsSurface>/);
+    expect(zs).toMatch(/<ZsVegetation t=\{t\} heroRef=\{focusRef\} \/>\s+\{\/\*[^]*?\*\/\}\s+<ZsGrass t=\{t\} heroRef=\{focusRef\} \/>\s+(?:\{\/\*[^]*?\*\/\}\s+<ZsRampView t=\{t\} \/>\s+)?(?:\{\/\*[^]*?\*\/\}\s+<ZsCaveMouthRocks t=\{t\} \/>\s+)?<\/ZsSurface>/); // (02/11 noite: + as pedras da boca do Pico)
     expect(ZS_GRASS.R_MOBILE).toBeLessThan(ZS_GRASS.R);
     // material SIMPLES (o de fade fazia a grama sumir — 21/10)
     const src = fs.readFileSync('src/components/zona-sul/zs-grass.tsx', 'utf8');

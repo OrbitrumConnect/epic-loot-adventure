@@ -53,5 +53,5 @@ describe('Couraça e Fúngico −15% + passo sem patinar', () => {
     expect(WALK_BODYLEN_PER_S).toBeCloseTo(1.182, 3);
     // Couraça: corpo ~2,8 m (cabeça→dedão de 3,32 m), anda 3,69 m/s → ~1,1× (antes 1× fixo, patinava)
     expect(3.69 / (WALK_BODYLEN_PER_S * 2.8)).toBeGreaterThan(1.05);
-  });
+  }, 30_000); // 03/11: carrega GLB (~6 s sozinho) — com a suíte cheia em paralelo passava dos 5 s padrão
 });

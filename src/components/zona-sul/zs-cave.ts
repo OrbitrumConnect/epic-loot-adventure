@@ -25,8 +25,8 @@ import { type ZsTerrain, zsHeightAt, zsSurfAt } from './zs-terrain-data';
 
 /** Ponto de túnel: chão `y`, meia-largura `r` e altura do arco `h` (m). */
 export type CaveTunnelPt = { x: number; z: number; y: number; r: number; h: number };
-/** Túnel: polilinha; `mouth` = o 1º ponto é uma BOCA (corte reto, chão = encosta). */
-export type CaveTunnel = { id: string; name: string; pts: CaveTunnelPt[]; mouth?: boolean };
+/** Túnel: polilinha; `mouth` = o 1º ponto é uma BOCA (corte reto, chão = encosta); `rocks` = pedras em volta da boca. */
+export type CaveTunnel = { id: string; name: string; pts: CaveTunnelPt[]; mouth?: boolean; rocks?: boolean };
 /** Poça no salão (no referencial do salão: u ao longo de `yaw`): o chão afunda até `depth`, a água fica no chão. */
 export type CavePool = { u: number; v: number; rx: number; rz: number; depth: number };
 export type CaveRoom = {
@@ -35,6 +35,12 @@ export type CaveRoom = {
   lobe: number; pools?: CavePool[]; pillars?: { x: number; z: number; r: number }[];
   /** tom da rocha */
   tint: readonly [number, number, number];
+  /** POÇO (02/11 noite, o abismo do Pico da Tijuca): expoente do eixo vertical — paredes quase retas e teto em cúpula
+   *  (2 = a cúpula de sempre). */
+  shaft?: number;
+  /** RAMPA EM ESPIRAL colada na parede: o anel de fora (e > `inner`, em fração do raio) desce de `yTop` até o fundo
+   *  (`y` do salão) ao longo de `sweep` rad a partir do ângulo `a0` (no sentido `dir`); o miolo é o fundo do poço. */
+  spiral?: { yTop: number; inner: number; a0: number; sweep: number; dir: 1 | -1 };
 };
 
 const P = (x: number, z: number, y: number, r: number, h: number): CaveTunnelPt => ({ x, z, y, r, h });
@@ -74,6 +80,18 @@ export const CAVE_TUNNELS: CaveTunnel[] = [
   { id: 'zuzu-sc', name: 'Túnel Zuzu Angel', mouth: true, pts: [P(-659.4, 423.2, 12.07, 5.5, 6.5), P(-641, 407.7, 12.3, 5.5, 6.5), P(-600, 373.1, 13, 5.5, 6.5)] },
   { id: 'zuzu-gavea', name: 'Túnel Zuzu Angel', mouth: true, pts: [P(-537, 320, 13.96, 5.5, 6.5), P(-569.5, 347.5, 13.5, 5.5, 6.5), P(-600, 373.1, 13, 5.5, 6.5)] },
   { id: 'zuzu-caverna', name: 'descida do Zuzu pra caverna', pts: [P(-600, 373.1, 13, 4.6, 6.5), P(-621, 348, 8, 4.6, 6.5), P(-624, 305, 2, 4.6, 6.5), P(-603, 265, -5, 5, 7)] }, // a ponta no EIXO da passagem (junção de verdade)
+  // ABISMO DO PICO DA TIJUCA (02/11 noite, Pedro: "entrada de cave no Pico da Tijuca, agora que tem essa parede grande; a
+  // galeria pode ser grande lá dentro, de cima vê lá embaixo, vai descendo; a boca média, com pedras rodeando; a que vem
+  // descendo do Alto da Boa Vista/Pico da Tijuca vai cortando tudo, grande; mundo subterrâneo interligado"):
+  // BOCA MÉDIA (8,4 m × 5,5 m) na encosta virada pro Alto da Boa Vista, a ~109 m → túnel curto até o BALCÃO no alto do poço
+  { id: 'pico-tijuca', name: 'boca do Pico da Tijuca', mouth: true, rocks: true, pts: [
+    P(-1114.6, -205.7, 108.6, 4.2, 5.5), P(-1130.2, -221.3, 106, 4.4, 5.8), P(-1142.9, -234, 103.8, 4.6, 6.5), P(-1170.6, -261.6, 99, 4.6, 6.5)] },
+  // do FUNDO do poço sai a GALERIA GRANDE (15 m) por baixo do maciço até o salão do Alto da Boa Vista…
+  { id: 'galeria-alto', name: 'galeria grande do Alto da Boa Vista', pts: [
+    P(-1159.9, -271.6, 42, 6.5, 9), P(-1100, -250, 34, 7.5, 11), P(-1000, -200, 22, 7.5, 11), P(-940, -170, 14, 7.5, 11), P(-905, -153, 9, 7.5, 11)] },
+  // …e do salão até a passagem da Gávea (a caverna de sempre): o mundo de baixo inteiro ligado
+  { id: 'galeria-gavea', name: 'galeria grande do Alto da Boa Vista', pts: [
+    P(-852, -125, 6.5, 7, 10), P(-820, -110, 2, 7, 10), P(-760, -80, -2, 6.5, 9.5), P(-700, -50, -6, 6.5, 9), P(-650, -25, -9, 6.2, 8.5), P(-610, -8, -11, 6, 8), P(-570, 5, -12, 5.6, 7.2)] },
 ];
 
 export const CAVE_ROOMS: CaveRoom[] = [
@@ -93,6 +111,13 @@ export const CAVE_ROOMS: CaveRoom[] = [
     pools: [{ u: 0, v: 0, rx: 7, rz: 6, depth: 0.8 }], tint: [0.35, 0.41, 0.41] },
   { id: 'cosme', name: 'galeria do Cosme Velho', x: -52, z: -225, y: -2, rx: 16, rz: 20, h: 12, yaw: 0.15, lobe: 2.2,
     pools: [{ u: -4, v: 6, rx: 7, rz: 9, depth: 0.8 }], tint: [0.38, 0.41, 0.4] },
+  // ABISMO (02/11 noite): POÇO de ~85 m de diâmetro debaixo do Pico da Tijuca — fundo a 42 m, cúpula a 130 m (o pico lá em
+  // cima tem ~190). A RAMPA EM ESPIRAL sai do balcão (100 m, onde chega o túnel da boca) e desce 330° colada na parede
+  // até o fundo (~29%); o miolo é o fundo do poço, ~58 m abaixo do balcão. Da volta que falta (30°) sai a galeria grande.
+  { id: 'abismo', name: 'abismo do Pico da Tijuca', x: -1195, z: -290, y: 42, rx: 44, rz: 40, h: 88, yaw: 0, lobe: 2.5, shaft: 6,
+    spiral: { yTop: 100, inner: 0.72, a0: Math.PI / 4, sweep: (330 * Math.PI) / 180, dir: 1 }, tint: [0.4, 0.4, 0.45] },
+  // SALÃO do Alto da Boa Vista, no meio da galeria grande (embaixo do vale — 7 m de piso, ~10 m de rocha por cima)
+  { id: 'salao-alto', name: 'salão do Alto da Boa Vista', x: -878, z: -139, y: 7, rx: 30, rz: 22, h: 14, yaw: 0.45, lobe: 2.2, tint: [0.42, 0.4, 0.38] },
 ];
 
 /** INIMIGOS DA CAVERNA (31/10, Pedro: "falta os inimigos dentro da cave"): Fauce de Sílex e Aberração (os bichos da mata
@@ -115,6 +140,9 @@ export const CAVE_ENEMIES: readonly (readonly [string, string, number, number])[
   ['poco', 'flintmaw', -0.45, -0.35],
   ['cristais', 'monster', 0.05, -0.1],
   ['cosme', 'flintmaw', 0.1, 0.5],
+  // 02/11 noite: o abismo do Pico da Tijuca (no fundo do poço) e o salão do Alto da Boa Vista — no FIM (ids de cima iguais)
+  ['abismo', 'monster', 0.2, 0.1], ['abismo', 'flintmaw', -0.3, -0.2], ['abismo', 'monster', -0.1, 0.35],
+  ['salao-alto', 'flintmaw', 0.3, 0.3], ['salao-alto', 'monster', -0.4, -0.2], ['salao-alto', 'monster', 0.1, -0.5],
 ];
 
 /** MINÉRIO DE FERRO NA CAVERNA (02/11, Pedro: "minério dentro da cave — exato e um pouco mais"; e a Zona Sul não tinha
@@ -131,6 +159,9 @@ export const CAVE_ORE: readonly (readonly [string, number, number])[] = [
   ['cristais', 80, 0.66], ['cristais', 250, 0.66],
   ['poco', 160, 0.6],
   ['cosme', 30, 0.68], ['cosme', 210, 0.66],
+  // 02/11 noite (no FIM — ids de cima iguais): fundo do abismo e salão do Alto da Boa Vista
+  ['abismo', 120, 0.6], ['abismo', 250, 0.55],
+  ['salao-alto', 30, 0.7], ['salao-alto', 160, 0.7], ['salao-alto', 280, 0.7],
 ];
 
 /** O CHEFE mora no salão do fundo: a Aberração Fúngica (o chefão das hordas), com 1,5× a vida — é o fim da caverna. */
@@ -254,12 +285,22 @@ function roomUV(r: Room, x: number, z: number): [number, number] {
 }
 function roomVal(r: Room, x: number, y: number, z: number): number {
   const [u, v] = roomUV(r, x, z);
-  const q = (u / r.rx) ** 2 + (v / r.rz) ** 2 + ((y - r.y) / r.h) ** 2;
+  // poço (abismo): eixo vertical com expoente alto = parede quase reta; o resto, a cúpula de sempre (conta igual)
+  const q = (u / r.rx) ** 2 + (v / r.rz) ** 2 + (r.shaft ? Math.abs((y - r.y) / r.h) ** r.shaft : ((y - r.y) / r.h) ** 2);
   const lobe = (caveNoise(x * 0.05 + r.seed, y * 0.07, z * 0.05) - 0.5) * 2 * r.lobe;
   return (Math.sqrt(q) - 1) * r.m - lobe;
 }
+const TAU = Math.PI * 2;
+/** Altura da RAMPA EM ESPIRAL no ponto (u, v) do salão; null = miolo (fundo do poço) ou fora da volta. */
+export function spiralY(r: Pick<CaveRoom, 'rx' | 'rz' | 'y' | 'spiral'>, u: number, v: number): number | null {
+  const sp = r.spiral;
+  if (!sp || Math.hypot(u / r.rx, v / r.rz) <= sp.inner) return null;
+  const a = ((sp.dir * (Math.atan2(v / r.rz, u / r.rx) - sp.a0)) % TAU + TAU) % TAU; // 0..2π a partir do começo
+  return a <= sp.sweep ? sp.yTop - (a / sp.sweep) * (sp.yTop - r.y) : null;
+}
 function roomFloor(r: Room, u: number, v: number): number {
   let y = r.y;
+  if (r.spiral) { const s = spiralY(r, u, v); if (s !== null) y = Math.max(y, s); }
   for (const p of r.pools ?? []) {
     const e = Math.hypot((u - p.u) / p.rx, (v - p.v) / p.rz);
     if (e < 1) y -= p.depth * smooth01((1 - e) / 0.6);
@@ -567,7 +608,9 @@ const MOUTH_PLANES = ZS_CAVE_MOUTHS.map((m) => {
 });
 /** Tamanho do voxel (m), voxels por bloco, blocos por pedaço desenhado. */
 export const CAVE_VOXEL = 1.6, CAVE_BLOCK = 16, CAVE_TILE_BLOCKS = 2;
-const Y_MIN = -46, Y_MAX = 30;
+// 02/11 noite: Y_MAX 30 → 140 (o abismo do Pico da Tijuca vai até ~133 m; os blocos só existem onde há peça — a caverna
+// de antes sai igual)
+const Y_MIN = -46, Y_MAX = 140;
 
 /** Caixas 3D das peças (onde vale a pena calcular). */
 function shapeBoxes(): { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[] {
@@ -734,7 +777,8 @@ export function caveDecor(): CaveDecor[] {
       if (pick < 0.62) out.push({ kind: 'stalactite', x, y: y + 0.3, z, s: 0.8 + hash3(ri, k, 4) * 1.8, yaw: a, tilt: 0 });
       else if (e > 0.55) out.push({ kind: 'stalagmite', x, y: fl - 0.1, z, s: 0.6 + hash3(ri, k, 5) * 1.3, yaw: a, tilt: 0 });
     }
-    const crystals = r.id === 'cristais' ? 26 : r.id === 'grande' || r.id === 'corcovado' ? 6 : r.id === 'chefe' ? 0 : 3;
+    // 02/11 noite: o ABISMO tem muitos (no fundo e na rampa — de cima se vê o fundo brilhando) e o salão do Alto, 10
+    const crystals = r.id === 'cristais' ? 26 : r.id === 'abismo' ? 34 : r.id === 'salao-alto' ? 10 : r.id === 'grande' || r.id === 'corcovado' ? 6 : r.id === 'chefe' ? 0 : 3;
     for (let k = 0; k < crystals; k++) {
       const a = hash3(ri, k, 11) * Math.PI * 2, e = 0.6 + hash3(ri, k, 12) * 0.3;
       const u = Math.cos(a) * e * r.rx, v = Math.sin(a) * e * r.rz;
@@ -753,6 +797,34 @@ export function caveDecor(): CaveDecor[] {
         if (fl === null || !caveAir(x, fl + 1, z)) continue;
         out.push({ kind: 'mushroom', x, y: fl - 0.05, z, s: 0.7 + hash3(ri, k, 23) * 1.2, yaw: a, tilt: (hash3(ri, k, 24) - 0.5) * 0.4 });
       }
+    }
+  });
+  return out;
+}
+
+/** LUZ DO ABISMO (02/11 noite, "de cima vê lá embaixo"): uma luz grande no fundo do poço (pedida quando o herói está na
+ *  caverna a até `near` m do centro) + a névoa da caverna fica mais longa ali (`fogFar`). */
+export const CAVE_ABYSS = (() => {
+  const r = CAVE_ROOMS.find((q) => q.id === 'abismo')!;
+  return { x: r.x, z: r.z, floor: r.y, top: r.spiral!.yTop, near: 95, light: { x: r.x, y: r.y + 9, z: r.z, i: 24, d: 100 }, fogFar: 190 };
+})();
+
+/** PEDRAS EM VOLTA DA BOCA (02/11 noite, "a boca média, pedras rodeando — fica legal"): bocas com `rocks` ganham um
+ *  meio anel de pedras na encosta, dos lados e na frente (nunca dentro do buraco). Determinístico. [x, y, z, tamanho,
+ *  giro]. */
+export function caveMouthRocks(t: ZsTerrain): { x: number; y: number; z: number; s: number; yaw: number }[] {
+  const out: { x: number; y: number; z: number; s: number; yaw: number }[] = [];
+  CAVE_TUNNELS.forEach((tn, ti) => {
+    if (!tn.mouth || !tn.rocks) return;
+    const a = tn.pts[0]!, b = tn.pts[1]!, L = Math.hypot(b.x - a.x, b.z - a.z), dx = (b.x - a.x) / L, dz = (b.z - a.z) / L;
+    for (let k = 0; k < 16; k++) {
+      // de −110° a +110° em volta da direção pra FORA da boca, a 1,3–2,6 raios do centro
+      const ang = (-110 + (220 * k) / 15 + (hash3(ti, k, 41) - 0.5) * 10) * (Math.PI / 180), rr = a.r * (1.3 + hash3(ti, k, 42) * 1.3);
+      const ox = -dx, oz = -dz, c = Math.cos(ang), s = Math.sin(ang);
+      const x = a.x + (ox * c - oz * s) * rr, z = a.z + (ox * s + oz * c) * rr;
+      if (!caveMouthClear(x, z, 0.8)) continue;
+      const sz = 1.1 + hash3(ti, k, 43) * 2.2;
+      out.push({ x, y: zsHeightAt(t, x, z) - sz * 0.25, z, s: sz, yaw: hash3(ti, k, 44) * Math.PI * 2 });
     }
   });
   return out;

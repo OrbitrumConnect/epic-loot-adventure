@@ -74,8 +74,8 @@ import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimma
 import { useZsTouch, zsAttack, zsCave, zsCrouch, zsCtx, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
-import { CAVE_MOUTH_ZONE, caveCamFit, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
-import { ZsCave } from './zs-cave-view';
+import { CAVE_ABYSS, CAVE_MOUTH_ZONE, caveCamFit, caveField, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
+import { ZsCave, ZsCaveMouthRocks } from './zs-cave-view';
 import { layers, resetLayers, sameLayerAsPlayer } from '@/game/systems/layerSystem';
 import { shipGround, zsShip, ZsShip } from './zs-ship';
 import { type AmbienceState, zsAmbience } from './zs-ambience';
@@ -321,7 +321,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       return;
     }
     if (wasOverview.current) { wasOverview.current = false; fog.near = 200; fog.far = 2200; }
-    { const d2 = zsCave.dark * zsCave.dark; fog.near = 200 + (5 - 200) * d2; fog.far = 2200 + (75 - 2200) * d2; } // caverna: breu ao longe
+    { // caverna: breu ao longe — no ABISMO (02/11 noite) a névoa vai mais longe: de cima se vê o fundo do poço
+      const d2 = zsCave.dark * zsCave.dark, ab = zsCave.inCave && Math.hypot(p.x - CAVE_ABYSS.x, p.z - CAVE_ABYSS.z) < CAVE_ABYSS.near;
+      fog.near = 200 + (5 - 200) * d2; fog.far = 2200 + ((ab ? CAVE_ABYSS.fogFar : 75) - 2200) * d2;
+    }
     const car = carRef.current, ship = shipRef.current, now = performance.now();
     const gs = useGameStore.getState();
     // ONLINE (igual ao Vale): a pose vai pra rede COM A ALTURA — quem está na caverna aparece NA caverna pros outros.
@@ -1488,6 +1491,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             <ZsGrass t={t} heroRef={focusRef} />
             {/* RAMPA DE VOO LIVRE da Pedra Bonita (02/11): deck pisável; saindo pela ponta com a asa-delta ela abre */}
             <ZsRampView t={t} />
+            {/* PEDRAS EM VOLTA DA BOCA do Pico da Tijuca (02/11 noite) */}
+            <ZsCaveMouthRocks t={t} />
           </ZsSurface>
           {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}
           <ZsCave t={t} heroRef={heroRef} />
