@@ -52,6 +52,9 @@ export type RemotePose = {
   /** VEÍCULOS de quem envia (01/11, Pedro online: "um no barco, outro na praia — não vejo o barco"): de carona na pose.
    *  Ausente = cliente antigo / sem veículo. */
   v?: NetVehicle[];
+  /** EQUIPAMENTO em uso (02/11, Pedro online: "não vejo o skate dele; na prancha em pé"): [tipo (1 prancha · 2 skate ·
+   *  3 asa-delta), altura acima do pé, rumo, rolagem, inclinação]. Ausente = nada (ou cliente antigo). */
+  g?: number[];
 };
 
 /** Veículo visto pela rede: `k` 's' = navio de guerra · 'c' = carro voador; `y` = altura (carro); `s` = velocidade;
@@ -385,7 +388,7 @@ export const useNet = create<NetState>((set, get) => ({
 
 /** Envia a pose do jogador local (chamar do loop; throttla sozinho a ~11Hz). */
 let lastSent = 0;
-export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number, y?: number, weapon?: string | null, vehicles?: NetVehicle[] | null): void {
+export function broadcastPose(x: number, z: number, yaw: number, action: string, level: number, hp: number, maxHp: number, y?: number, weapon?: string | null, vehicles?: NetVehicle[] | null, gear?: number[] | null): void {
   if (!channel || !useNet.getState().connected) return;
   const now = performance.now();
   if (now - lastSent < 88) return;
@@ -404,6 +407,7 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
       ...(weapon ? { w: weapon } : {}),
       ...(troops ? { tr: troops } : {}),
       ...(vehicles && vehicles.length ? { v: vehicles.map((v) => ({ ...v })) } : {}), // cópia: quem chama reaproveita a lista
+      ...(gear ? { g: gear.slice() } : {}),
     } satisfies RemotePose,
   });
 }

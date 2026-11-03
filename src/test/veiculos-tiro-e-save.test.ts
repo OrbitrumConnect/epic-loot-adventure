@@ -69,10 +69,13 @@ describe('navio e carro salvos entre sessões', () => {
     const s = newWarship(-300, 520, 1.2); damageWarship(s, 1800);
     const saved = parseSavedVehicles(JSON.stringify(vehiclesSnapshot(s, null)))!;
     const back = restoreWarship(saved.ship, dock, sea)!;
-    expect([back.x, back.z, back.yaw, back.hp]).toEqual([-300, 520, 1.2, 3200]);
+    expect([back.x, back.z, back.yaw, back.hp]).toEqual([-300, 520, 1.2, WARSHIP.HP - 1800]);
     const dry = restoreWarship(saved.ship, dock, () => false)!;
-    expect([dry.x, dry.z, dry.hp]).toEqual([dock.x, dock.z, 3200]);
+    expect([dry.x, dry.z, dry.hp]).toEqual([dock.x, dock.z, WARSHIP.HP - 1800]);
     expect(restoreWarship(undefined, dock, sea)!.hp).toBe(WARSHIP.HP); // 1ª vez: inteiro na âncora
+    // 02/11 noite: navio 5 mil → 50 mil. Save antigo (sem `max`) = de 5 mil: guarda a PROPORÇÃO (inteiro volta inteiro)
+    expect(restoreWarship({ x: -300, z: 520, yaw: 0, hp: 4200 }, dock, sea)!.hp).toBe(42000);
+    expect(restoreWarship({ x: -300, z: 520, yaw: 0, hp: 5000 }, dock, sea)!.hp).toBe(WARSHIP.HP);
     expect(restoreWarship(saved.ship, null, sea)).toBeNull();          // mapa sem âncora: como antes
   });
   it('afundou (ou estava afundando) = continua perdido: constrói outro na âncora', () => {

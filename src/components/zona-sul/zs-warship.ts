@@ -31,7 +31,8 @@ export const WARSHIP = {
   UNLOCK_ID: 'war_ship',
   /** VIDA do navio (Pedro 01/11: "navio 5k vida"): só canhão de jogador INIMIGO tira (pela rede). Zerou: afunda
    *  (SINK_S), quem está nele cai na água, e outro se CONSTRÓI na âncora com recurso da bolsa (BUILD_COST). */
-  HP: 5000,
+  // 02/11 (Pedro, depois de brigar com o amigo online: "a vida do barco boa é 50k — 2 tiros em cheio estourou o barco")
+  HP: 50000,
   SINK_S: 6,
   BUILD_COST: VEHICLE_COST.war_ship as readonly { id: string; n: number }[], // 600 madeira + 240 ferro + 120 pedra (3×)
   /** E a até isto (m) da âncora com o navio afundado = construir outro */

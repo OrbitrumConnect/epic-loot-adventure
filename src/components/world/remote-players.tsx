@@ -23,15 +23,28 @@ function sameLayerAsMe(p: { x: number; z: number; y?: number | undefined }): boo
 
 // 02/11 (PvP): agachado parado/andando/atirando e atirando no ar — os outros veem igual
 const ACTIONS = new Set(['idle', 'walk', 'run', 'attack', 'jump', 'crouch', 'crouch_walk', 'crouch_attack', 'jump_shoot']);
+
+/** KIT de um mundo com animações próprias (Zona Sul, 02/11 — Pedro online: "amigo nadando vejo ele em pé; não vejo o
+ *  skate; na prancha em pé"): os clips extras do herói, os cortes, as ações aceitas pela rede e o desenho do equipamento
+ *  dele (prancha/skate/asa). Sem kit (Vale): como sempre. */
+export type RemoteZsKit = {
+  clips: Record<string, string>;
+  cut: NonNullable<React.ComponentProps<typeof GlbHeroMixamo>['customClipCut']>;
+  actions: readonly string[];
+  Gear: React.ComponentType<{ id: string; bodyRef: React.RefObject<THREE.Group | null> }>;
+};
 const LABEL_RANGE = 12;
 const REMOTE_SOUND_RANGE = 35; // m: além disso o ataque do outro é mudo
 const noRaycast = () => {};
 
 /** Um jogador remoto: lê a pose do net (via getState, sem re-render) e interpola
  *  posição/giro suave. Usa o mesmo herói (Survivor Red) que o jogador local. */
-function RemotePlayer({ id }: { id: string }) {
+function RemotePlayer({ id, zs }: { id: string; zs?: RemoteZsKit | undefined }) {
   const group = useRef<THREE.Group>(null);
   const action = useRef<HeroAction>('idle');
+  /** ações aceitas (com o kit do mundo) e a velocidade dele (ritmo da remada/nado, como no meu herói) */
+  const allowed = useMemo(() => (zs ? new Set([...ACTIONS, ...zs.actions]) : ACTIONS), [zs]);
+  const speed = useRef(0);
   const inited = useRef(false);
   const labelGroup = useRef<THREE.Group>(null);
   const hpFill = useRef<THREE.Mesh>(null);
@@ -45,7 +58,7 @@ function RemotePlayer({ id }: { id: string }) {
     const g = group.current;
     const p = useNet.getState().players[id];
     if (!g || !p) return;
-    action.current = (ACTIONS.has(p.action) ? p.action : 'idle') as HeroAction;
+    action.current = (allowed.has(p.action) ? p.action : 'idle') as HeroAction;
     // SOM do ataque dele (online): quando a ação vira 'attack', toca o som da arma que ele tem na
     // mão, mais baixo quanto mais longe (some a partir de ~35 m).
     const atk = (a: string) => a === 'attack' || a === 'crouch_attack' || a === 'jump_shoot';
@@ -64,8 +77,10 @@ function RemotePlayer({ id }: { id: string }) {
     if (!inited.current) { g.position.set(p.x, targetY(p), p.z); g.rotation.y = p.yaw; inited.current = true; }
     const dt = Math.min(delta, 0.1);
     const t = 1 - Math.exp(-15 * dt);
+    const px0 = g.position.x, pz0 = g.position.z;
     g.position.x += (p.x - g.position.x) * t;
     g.position.z += (p.z - g.position.z) * t;
+    if (dt > 0) speed.current += (Math.hypot(g.position.x - px0, g.position.z - pz0) / dt - speed.current) * Math.min(1, dt * 6);
     g.position.y = Number.isFinite(p.y)
       ? g.position.y + ((p.y as number) - g.position.y) * t
       : groundAt(g.position.x, g.position.z);
@@ -110,6 +125,8 @@ function RemotePlayer({ id }: { id: string }) {
     }
   });
   return (
+    <>
+    {zs && <zs.Gear id={id} bodyRef={group} />}
     <group ref={group} onPointerDown={(event) => {
       if (event.button !== 0) return;
       // Mouse travado (3ª pessoa): o clique é da mira central (`aimFire`), não do cursor parado.
@@ -135,10 +152,17 @@ function RemotePlayer({ id }: { id: string }) {
         store.setMessage(`⚔️ Atacando ${p.name}!`);
       }
     }}>
-      <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack
-        heldItemOf={() => useNet.getState().players[id]?.w ?? null}
-        hpOf={() => useNet.getState().players[id]?.hp ?? 0}
-        weapon={<RemoteHeld id={id} />} />
+      {zs ? (
+        <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack speedRef={speed} customClips={zs.clips} customClipCut={zs.cut}
+          heldItemOf={() => useNet.getState().players[id]?.w ?? null}
+          hpOf={() => useNet.getState().players[id]?.hp ?? 0}
+          weapon={<RemoteHeld id={id} />} />
+      ) : (
+        <GlbHeroMixamo actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack
+          heldItemOf={() => useNet.getState().players[id]?.w ?? null}
+          hpOf={() => useNet.getState().players[id]?.hp ?? 0}
+          weapon={<RemoteHeld id={id} />} />
+      )}
       {/* Anel vermelho sob INIMIGOS (PvP). Fica invisível pra aliado; toggle no useFrame. */}
       <mesh ref={enemyRing} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} visible={false} raycast={noRaycast}>
         <ringGeometry args={[0.55, 0.72, 36]} />
@@ -159,6 +183,7 @@ function RemotePlayer({ id }: { id: string }) {
         </mesh>
       </group>
     </group>
+    </>
   );
 }
 
@@ -171,8 +196,8 @@ function RemoteHeld({ id }: { id: string }) {
 
 /** Renderiza todos os jogadores remotos. Re-renderiza só quando a LISTA muda
  *  (entrar/sair) — as poses atualizam no useFrame, sem custo de re-render. */
-export function RemotePlayers() {
+export function RemotePlayers({ zs }: { zs?: RemoteZsKit } = {}) {
   const ids = useNet(useShallow((s) => Object.keys(s.players)));
   if (ids.length === 0) return null;
-  return <>{ids.map((id) => <RemotePlayer key={id} id={id} />)}</>;
+  return <>{ids.map((id) => <RemotePlayer key={id} id={id} zs={zs} />)}</>;
 }

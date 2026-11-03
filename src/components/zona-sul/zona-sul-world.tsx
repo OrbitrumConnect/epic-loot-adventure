@@ -104,18 +104,13 @@ import { HELM_U, syncWarshipDeck, WARSHIP_DRAFT, warshipAim, warshipBoardSpot, w
 import { WAKE_BOARD, WAKE_SHIP, ZsWake, zsBoardWake } from './zs-wake';
 import { heroMuzzle } from '@/components/world/muzzle';
 import { type CarDims, ZsCarView } from './zs-car-view';
+import { ZS_GEAR, ZS_HERO_CLIPS, ZS_HERO_CUT } from './zs-hero-clips';
+import { ZS_REMOTE_KIT } from './zs-remote-gear';
 
-/** Clips extras do herói só na Zona Sul (Mixamo do Pedro): dirigir, abrir a porta, nadar, boiar. */
-const HERO_CLIPS = { drive: '/zona-sul/anim/drive.glb', open_door: '/zona-sul/anim/open_door.glb', swim: '/zona-sul/anim/swim.glb', tread: '/zona-sul/anim/tread.glb',
-  // SURF (28/10): remar = o nado deitado na prancha; levantar e base = Zombie Stand Up (Pedro: "só levanta direito depois
-  // de 30%; a pose final é boa, meio surfista")
-  paddle: '/zona-sul/anim/swim.glb', popup: '/zona-sul/anim/zombie_stand_up.glb', surf: '/zona-sul/anim/zombie_stand_up.glb',
-  // ASA-DELTA (30/10): "Flying" do Mixamo (do Pedro) — corpo deitado, braços à frente, pendurado sob a asa
-  glide: '/zona-sul/anim/glide.glb' };
-/** Cortes: levantar = 30%→100% a 2× (≈ RIDE.POPUP_S); base = só o finalzinho (a pose final, segurada). */
-// remar/nadar: o RITMO dos braços segue a velocidade real (Pedro 29/10: "remar parece câmera lenta" — a remada tocava
-// fixa a 0,8×): remando 3,8 m/s = 1×, com Shift 6,1 = 1,6×; nadando 2,4 = 1×, rápido 4,2 = 1,75×
-const HERO_CUT = { open_door: { fixHips: true }, popup: { from: 0.3, speed: 2 }, surf: { from: 0.97 }, paddle: { sync: 1 / 3.8, syncMin: 0.6, syncMax: 1.7 }, swim: { sync: 1 / 2.4, syncMin: 0.6, syncMax: 1.8 } };
+/** Clips extras do herói só na Zona Sul (dirigir, porta, nadar, boiar, surf, asa) e os cortes — num módulo próprio desde
+ *  02/11: o boneco dos OUTROS jogadores usa os mesmos (zs-hero-clips.ts). */
+const HERO_CLIPS = ZS_HERO_CLIPS;
+const HERO_CUT = ZS_HERO_CUT;
 /** Pé na prancha: altura do DECK acima da água (m). Giro do corpo em relação ao bico (base de surfista, de lado). */
 const BOARD_DECK = 0.12, STANCE = -Math.PI / 2;
 /** Raio do corpo do herói contra muro/casa da base (o mesmo do Vale). */
@@ -132,6 +127,8 @@ const LEAN_BODY = 0.8;
 const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving' | 'sailing', enterAt: 0 };
 /** veículos que vão de carona na pose (reaproveitado — nada criado por quadro) */
 const netVehicles: NetVehicle[] = [];
+/** equipamento em uso que vai de carona na pose (reaproveitado): [tipo, altura acima do pé, rumo, rolagem, inclinação] */
+const netGear: number[] = [0, 0, 0, 0, 0];
 /** ÂNCORA do navio de guerra (onde ele nasce e onde se CONSTRÓI outro depois de afundar — 01/11) */
 const warshipDock: { at: { x: number; z: number; yaw: number } | null } = { at: null };
 /** GARAGEM do carro voador (onde ele nasce e onde se CONSTRÓI outro depois de explodir — 01/11) */
@@ -331,7 +328,12 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     netVehicles.length = 0;
     if (ship && !warshipGone(ship)) netVehicles.push({ k: 's', x: r2(ship.x), z: r2(ship.z), yaw: r3(ship.yaw), s: r2(ship.speed), h: ship.hp });
     if (car && !carGone(car)) netVehicles.push({ k: 'c', x: r2(car.x), z: r2(car.z), yaw: r3(car.yaw), y: r2(car.y), h: car.hp });
-    broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs), netVehicles);
+    // 02/11 (Pedro online: "não vejo o skate dele; na prancha em pé"): o EQUIPAMENTO em uso vai junto (asa > skate > prancha)
+    { const gp = gearRef.glider, sp = gearRef.skate, bp = boardRef.current;
+      const src = gp.visible ? gp : sp.visible ? sp : bp.visible ? bp : null;
+      if (src) { netGear[0] = src === gp ? ZS_GEAR.glider : src === sp ? ZS_GEAR.skate : ZS_GEAR.board; netGear[1] = r2(src.y - p.y); netGear[2] = r3(src.yaw); netGear[3] = r3(src.roll); netGear[4] = r3(src.pitch ?? 0); } }
+    const gearOn = gearRef.glider.visible || gearRef.skate.visible || boardRef.current.visible;
+    broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs), netVehicles, gearOn ? netGear : null);
     // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
     if (gs.player.dead && gs.player.respawnAt > 0 && Date.now() >= gs.player.respawnAt) {
       // renasce na CAMA da base, se já tiver uma; senão na zona segura (igual ao Vale)
@@ -1448,7 +1450,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
               {/* ONLINE (31/10): bases e jogadores dos outros (com a altura real — caverna/casa), mundo do host */}
               <AssetBoundary label="ZsOnline" fallback={null}>
                 <Suspense fallback={null}><NetBases c={c} /></Suspense>
-                <Suspense fallback={null}><RemotePlayers /></Suspense>
+                <Suspense fallback={null}><RemotePlayers zs={ZS_REMOTE_KIT} /></Suspense>
                 <MultiplayerWorldSync />
               </AssetBoundary>
               <BurstRuntime paused={paused} />

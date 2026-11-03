@@ -5,12 +5,12 @@ import { damageWarship, newWarship, WARSHIP, warshipGone, warshipStep } from '@/
 /* Pedro 01/11: "navio 5k vida" (online: "ver o navio dar dano, atacar outro player e ser atacado"). */
 describe('navio de guerra — vida, afundar e construir outro', () => {
   const sea = () => true;
-  it('5 mil de vida; canhão tira; zerou = afunda (parado), some depois de SINK_S', () => {
-    expect(WARSHIP.HP).toBe(5000);
+  it('50 mil de vida (02/11: 5 mil estourava em 2 tiros em cheio); canhão tira; zerou = afunda (parado), some depois de SINK_S', () => {
+    expect(WARSHIP.HP).toBe(50000);
     const s = newWarship(0, 0, 0);
-    expect(s.hp).toBe(5000);
+    expect(s.hp).toBe(50000);
     expect(damageWarship(s, 1200)).toBe(false);
-    expect(s.hp).toBe(3800);
+    expect(s.hp).toBe(48800);
     expect(damageWarship(s, 99999)).toBe(true); // afundou agora
     expect(s.hp).toBe(0);
     expect(damageWarship(s, 100)).toBe(false);  // já afundando: não conta de novo
