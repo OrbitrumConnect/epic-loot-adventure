@@ -37,10 +37,28 @@ describe('Gávea + Cagarras — o que entrou', () => {
       expect(maxH(old, x, z, 80), nome).toBeLessThan(0);
     }
   });
-  it('o maciço da Tijuca (atrás da Gávea, fora desde 28/10) continua FORA: lá é a faixa que desce pro mar', () => {
-    expect(ZS_LANDMARKS.some((l) => l.name === 'Pico da Tijuca')).toBe(false);
-    expect(zsHeightAt(now, gx(-43.2867), gz(-22.9440))).toBeLessThan(0);
-    expect(zsSurfAt(now, gx(-43.2867), gz(-22.9440))).toBe(ZS_SURF.sea);
+  // 02/11 noite (Pedro, vendo o mapa de cima: "aquele vazio estranho — põe o Alto da Boa Vista, a descida pra Tijuca e
+  // beira de praia igual o restante"): o maciço da Tijuca ENTROU (até então ficava fora e o vazio era um paredão pro mar)
+  it('o maciço da Tijuca ENTROU: Pico da Tijuca (~200 m, o mais alto do mapa), Bico do Papagaio, platô do Alto da Boa Vista', () => {
+    expect(ZS_LANDMARKS.some((l) => l.name === 'Pico da Tijuca')).toBe(true);
+    expect(maxH(now, gx(-43.2853), gz(-22.9437), 40)).toBeGreaterThan(190);
+    expect(maxH(now, gx(-43.2754), gz(-22.9473), 40)).toBeGreaterThan(140);
+    const ab = zsHeightAt(now, gx(-43.2792), gz(-22.9660));          // Alto da Boa Vista: platô a ~70 m
+    expect(ab).toBeGreaterThan(55); expect(ab).toBeLessThan(90);
+    expect(zsSurfAt(now, gx(-43.2792), gz(-22.9660))).not.toBe(ZS_SURF.sea);
+  });
+  it('a borda norte do maciço DESCE até a praia (sem paredão): no máx. ~40° entre vizinhos, e chega no mar', () => {
+    const zEdge = gz(-22.932);
+    for (const lon of [-43.295, -43.285, -43.275, -43.265]) {
+      const x = gx(lon); let worst = 0, sea = false;
+      for (let z = zEdge; z > zEdge - 300; z -= 4) {
+        const a = zsHeightAt(now, x, z), b = zsHeightAt(now, x, z - 4);
+        if (a > 0.2) worst = Math.max(worst, (a - b) / 4);
+        if (zsSurfAt(now, x, z) === ZS_SURF.sea) { sea = true; break; }
+      }
+      expect(worst, `lon ${lon}`).toBeLessThan(Math.tan(40 * Math.PI / 180));
+      expect(sea, `lon ${lon}`).toBe(true);
+    }
   });
 });
 
@@ -73,7 +91,7 @@ describe('Gávea + Cagarras — sem mexer no que existe', () => {
   it('o (0, 0) e a partida no mesmo lugar; o meta traz o canto (mapa não é mais centrado); o mapa (M) e o mar cobrem tudo', () => {
     expect(ZS_SPAWN).toEqual({ x: 90, z: 390, name: 'Praia do Arpoador' });
     expect(zsSurfAt(now, ZS_SPAWN.x, ZS_SPAWN.z)).toBe(ZS_SURF.beach);
-    expect(ZS_TERRAIN.z0).toBe(old.z0);                 // o norte não mudou
+    expect(ZS_TERRAIN.z0).toBe(old.z0 - 64 * 4);        // o norte cresceu SÓ a faixa da descida do maciço (NORTH_PX)
     expect(ZS_TERRAIN.x0).toBeLessThan(old.x0 - 600);   // cresceu pra oeste
     expect(ZS_MAP_BOUNDS.minX).toBe(ZS_TERRAIN.x0);
     const { r0 } = zsSeaRadius(now);

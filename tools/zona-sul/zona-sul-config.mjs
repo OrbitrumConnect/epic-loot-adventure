@@ -15,11 +15,14 @@ export const BBOX_V1 = BBOX;
 /** EXPANSÃO (02/11, Pedro: "abrir até a Pedra da Gávea e fazer aparecer as Ilhas Cagarras, sem bugar nada"): oeste
  *  até depois da Pedra da Gávea (−43,2847) e sul até as Cagarras. Arredonda pra fora no pixel da grade antiga. */
 export const EXPAND_TO = { w: -43.298, s: -23.045 };
-/** O que da faixa oeste vira terreno de verdade: só ao SUL desta latitude (Pedra da Gávea, Pedra Bonita, Rocinha alta,
- *  São Conrado). Ao norte é o maciço da Tijuca (Pico da Tijuca 1021 m…) — fora, como o Pedro pediu em 28/10 ("o maciço
- *  atrás da Gávea, muito acidentado"); ali vale a mesma FAIXA que desce pro mar das bordas do mapa. A faixa sul (mar até
- *  as Cagarras) entra inteira. */
-export const EXPAND_KEEP = { westNorth: -22.972 };
+/** MACIÇO DA TIJUCA (02/11 noite, Pedro vendo o mapa de cima: "aquela parte vazia estranha — põe o Alto da Boa Vista,
+ *  a descida pra Tijuca e beira de praia igual o restante"). Até então a faixa oeste só entrava ao sul de −22,972 (o
+ *  maciço ficava fora — 28/10: "muito acidentado") e o vazio virava um PAREDÃO descendo pro mar. Agora a faixa oeste entra
+ *  INTEIRA (Pico da Tijuca ~200 m no jogo, Bico do Papagaio, Alto da Boa Vista — platô a ~72 m). A borda norte dele
+ *  ainda é morro (70–110 m no jogo) → a grade cresce NORTH_PX pro norte só pra uma DESCIDA LONGA até a praia (no lado
+ *  oeste: altura × k, até `max` m; no resto da borda norte, a descida de sempre). Nada do mapa de 28/10 muda. */
+export const NORTH_PX = 64;
+export const NORTH_DESCENT = { k: 2.4, max: NORTH_PX * 4 - 14, blendPx: 24 };
 /** ILHAS CAGARRAS mais altas (02/11, Pedro: "ilhas mais altas"): o relevo de 30 m do satélite achata ilha pequena (Ilha
  *  Cagarra ~14 m no jogo; Palmas ~4 m). Como o Cristo (PEAK_BOOST) e a Pedra do Arpoador: realce SÓ dentro do contorno
  *  de cada ilha do arquipélago (pela costa do OSM), pra aparecerem de Ipanema. Fora do recorte antigo (nada dele muda). */

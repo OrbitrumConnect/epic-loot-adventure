@@ -11,7 +11,7 @@
 //     LAGOA (água do OSM) com fundo próprio; PRAIA = declive suave até a água.
 import fs from 'node:fs';
 import sharp from 'sharp';
-import { APRON_PX, BBOX_V1, CANAL_ALAH, EXPAND_KEEP, EXPAND_TO, ISLAND_BEACH, ISLAND_BOOST, LAGOA_MAX_DEPTH, LAGOA_SLOPE, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
+import { APRON_PX, BBOX_V1, CANAL_ALAH, EXPAND_TO, ISLAND_BEACH, ISLAND_BOOST, LAGOA_MAX_DEPTH, LAGOA_SLOPE, NORTH_DESCENT, NORTH_PX, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
 import { loadDem } from './dem.mjs';
 import { buildMasks, joinRings } from './masks.mjs';
 import { buildRoads, MAX_GRADE, rasterRoadMask } from './roads.mjs';
@@ -28,18 +28,20 @@ const M_LAT = 110574, M_LON = 111320 * Math.cos((BBOX_V1.s + BBOX_V1.n) / 2 * Ma
 const PXM = CELL * SCALE; // m reais por pixel
 const W_OLD = Math.round((BBOX_V1.e - BBOX_V1.w) * M_LON / PXM), H_OLD = Math.round((BBOX_V1.n - BBOX_V1.s) * M_LAT / PXM);
 const KX = Math.max(0, Math.ceil((BBOX_V1.w - EXPAND_TO.w) * M_LON / PXM)), KY = Math.max(0, Math.ceil((BBOX_V1.s - EXPAND_TO.s) * M_LAT / PXM));
-const BBOX = { n: BBOX_V1.n, e: BBOX_V1.e, w: BBOX_V1.w - KX * PXM / M_LON, s: BBOX_V1.s - KY * PXM / M_LAT };
-const W = W_OLD + KX, H = H_OLD + KY;
+// 02/11 noite: + KN linhas ao NORTE (só a descida longa do maciço da Tijuca até a praia — não é terreno do satélite)
+const KN = NORTH_PX;
+const BBOX = { n: BBOX_V1.n + KN * PXM / M_LAT, e: BBOX_V1.e, w: BBOX_V1.w - KX * PXM / M_LON, s: BBOX_V1.s - KY * PXM / M_LAT };
+const W = W_OLD + KX, H = KN + H_OLD + KY;
 const latOf = (j) => BBOX.n - (j + 0.5) * PXM / M_LAT, lonOf = (i) => BBOX.w + (i + 0.5) * PXM / M_LON;
 const toPx = (lat, lon) => [(lon - BBOX.w) * M_LON / PXM, (BBOX.n - lat) * M_LAT / PXM];
 const idx = (i, j) => Math.max(0, Math.min(H - 1, j)) * W + Math.max(0, Math.min(W - 1, i));
 /** pixel (grade nova) → coordenada do jogo (x leste, z SUL; origem no centro do recorte ANTIGO) */
-const OX = KX + W_OLD / 2, OZ = H_OLD / 2;
+const OX = KX + W_OLD / 2, OZ = KN + H_OLD / 2;
 const gameX = (px) => (px - OX) * CELL, gameZ = (py) => (py - OZ) * CELL;
-/** O que é terreno de verdade (o resto da grade nova = faixa que desce pro mar): o recorte antigo, a faixa sul inteira e
- *  a faixa oeste só ao sul de EXPAND_KEEP.westNorth (o maciço da Tijuca fica fora). */
+/** O que é terreno de verdade: tudo abaixo das KN linhas do norte — o recorte antigo, a faixa sul e (desde 02/11 noite) a
+ *  faixa oeste INTEIRA (maciço da Tijuca). As KN linhas do norte = a descida que vai pro mar. */
 const inside = new Uint8Array(W * H);
-for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) inside[j * W + i] = i >= KX || j >= H_OLD || latOf(j) <= EXPAND_KEEP.westNorth ? 1 : 0;
+for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) inside[j * W + i] = j >= KN ? 1 : 0;
 const insideAt = (px, py) => { const i = Math.floor(px), j = Math.floor(py); return i >= 0 && j >= 0 && i < W && j < H && inside[j * W + i] === 1; };
 
 // 02/11 (Pedro, item 3: "consertar o furo antigo da Urca/Pão de Açúcar"): o conserto do lixo do satélite vale no mapa
@@ -47,15 +49,27 @@ const insideAt = (px, py) => { const i = Math.floor(px), j = Math.floor(py); ret
 const { at } = await loadDem();
 const e = new Float32Array(W * H); // altitude REAL (m)
 for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) e[j * W + i] = at(latOf(j), lonOf(i));
-const { sea, water, forest } = buildMasks(W, H, toPx);
+// As KN linhas do norte (02/11 noite) NÃO são terreno: aqui elas repetem a linha da borda (= o que a grade fazia ao
+// chegar no limite) — assim nenhuma conta de vizinhança (baixada, praia, costa) muda dentro do mapa. As máscaras saem da
+// MESMA grade de antes (sem as linhas novas): a costa do OSM acaba na borda antiga e, com linhas a mais, a terra e o mar
+// se ligavam por cima e o mapa inteiro virava mar.
+for (let j = 0; j < KN; j++) for (let i = 0; i < W; i++) e[j * W + i] = e[KN * W + i];
+const { sea, water, forest } = (() => {
+  const m = buildMasks(W, H - KN, (lat, lon) => { const [x, y] = toPx(lat, lon); return [x, y - KN]; });
+  const pad = (a) => { const o = new Uint8Array(W * H); o.set(a, KN * W); for (let j = 0; j < KN; j++) o.copyWithin(j * W, KN * W, KN * W + W); return o; };
+  return { sea: pad(m.sea), water: pad(m.water), forest: pad(m.forest) };
+})();
 const osm = JSON.parse(fs.readFileSync('tools/zona-sul/raw/osm.json', 'utf8')).elements;
 
 // (2) baixada: abertura (mínimo depois máximo, raio R) tira calombo de prédio; depois média; mistura só abaixo de ~50 m
 const R = 3;
-const filt = (src, op) => { const out = new Float32Array(W * H); for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { let v = op === 'min' ? Infinity : -Infinity; for (let b = -R; b <= R; b++) for (let a = -R; a <= R; a++) { const s = src[idx(i + a, j + b)]; v = op === 'min' ? Math.min(v, s) : Math.max(v, s); } out[j * W + i] = v; } return out; };
+// 02/11 noite: o filtro enxerga a borda norte do mapa de VERDADE como antes (índice preso nela) — senão a 2ª etapa lia
+// resultados intermediários das KN linhas novas e mudava as 5 primeiras linhas do mapa (até 2 m)
+const idxB = (i, j) => idx(i, Math.max(KN, j));
+const filt = (src, op) => { const out = new Float32Array(W * H); for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { let v = op === 'min' ? Infinity : -Infinity; for (let b = -R; b <= R; b++) for (let a = -R; a <= R; a++) { const s = src[idxB(i + a, j + b)]; v = op === 'min' ? Math.min(v, s) : Math.max(v, s); } out[j * W + i] = v; } return out; };
 const opened = filt(filt(e, 'min'), 'max');
 const smooth = new Float32Array(W * H);
-for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { let s = 0, n = 0; for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) { s += opened[idx(i + a, j + b)]; n++; } smooth[j * W + i] = s / n; }
+for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { let s = 0, n = 0; for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) { s += opened[idxB(i + a, j + b)]; n++; } smooth[j * W + i] = s / n; }
 const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 for (let p = 0; p < W * H; p++) { const w = 1 - sstep(35, 60, e[p]); e[p] = e[p] * (1 - w) + smooth[p] * w; }
 
@@ -64,10 +78,13 @@ for (let p = 0; p < W * H; p++) { const w = 1 - sstep(35, 60, e[p]); e[p] = e[p]
 //      (medido: cortar só o pixel deixava ~5 m de ponta);
 //   b) ALTURA: onde o relevo (30 m, arredondado) ficou abaixo da altitude do OSM, soma um perfil de TOPO LARGO E CHATO
 //      (super-gaussiana, raio ≥ 90 m reais) até a altitude oficial — volta a altura sem recriar a ponta.
+// 02/11 noite: os picos só enxergam o mapa de VERDADE (as KN linhas do norte = fora da grade, como antes; índice preso
+// na linha da borda — igual ao idx de antes)
+const idxIn = (i, j) => idx(i, Math.max(KN, j));
 const topOf = (el) => {
   const [px, py] = toPx(el.lat, el.lon), r = Math.ceil(120 / PXM);
   let best = -Infinity, bi = 0, bj = 0;
-  for (let b = -r; b <= r; b++) for (let a = -r; a <= r; a++) { const i = Math.round(px) + a, j = Math.round(py) + b; if (i < 0 || j < 0 || i >= W || j >= H) continue; if (e[j * W + i] > best) { best = e[j * W + i]; bi = i; bj = j; } }
+  for (let b = -r; b <= r; b++) for (let a = -r; a <= r; a++) { const i = Math.round(px) + a, j = Math.round(py) + b; if (i < 0 || j < KN || i >= W || j >= H) continue; if (e[j * W + i] > best) { best = e[j * W + i]; bi = i; bj = j; } }
   return { best, bi, bj };
 };
 // (só os picos de DENTRO: o maciço da Tijuca, fora da expansão, não é esculpido — a cúpula vazaria pra dentro da borda)
@@ -80,8 +97,8 @@ for (const el of peaks) {
     const cp = new Map();
     for (let b = -4; b <= 4; b++) for (let a = -4; a <= 4; a++) {
       if (a * a + b * b > 16) continue;
-      let s = 0; for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) s += e[idx(bi + a + x, bj + b + y)];
-      cp.set(idx(bi + a, bj + b), s / 9);
+      let s = 0; for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) s += e[idxIn(bi + a + x, bj + b + y)];
+      cp.set(idxIn(bi + a, bj + b), s / 9);
     }
     for (const [p, v] of cp) e[p] = Math.min(e[p], v);
   }
@@ -94,12 +111,14 @@ for (const el of peaks) {
   const deficit = ele - best; if (deficit < 8) continue;
   const sigma = Math.max(120, Math.min(220, deficit * 0.9)) / PXM, rr = Math.ceil(sigma * 2.2);
   for (let b = -rr; b <= rr; b++) for (let a = -rr; a <= rr; a++) {
-    const i = bi + a, j = bj + b; if (i < 0 || j < 0 || i >= W || j >= H) continue;
+    const i = bi + a, j = bj + b; if (i < 0 || j < KN || i >= W || j >= H) continue;
     const q = (a * a + b * b) / (sigma * sigma);
     e[j * W + i] += deficit * Math.exp(-0.5 * q * q);
   }
   sculpted++;
 }
+// as KN linhas do norte voltam a repetir a borda (já esculpida) — as contas seguintes enxergam o mesmo que antes
+for (let j = 0; j < KN; j++) for (let i = 0; i < W; i++) e[j * W + i] = e[KN * W + i];
 
 // distância (px) até a água (mar/lagoa) e até a terra — duas passadas (chamfer)
 function distTo(target) {
@@ -204,9 +223,11 @@ for (const r of ROCK_LANDMARKS) {
 // Tijuca): a partir do pixel de dentro mais perto (altura h0, superfície s0) a `dm` m dele. Terra desce até uma praia no
 // pé e o mar; água continua água. Uma conta só pros dois.
 const A = APRON_PX;
-function apronAt(h0, s0, dm) {
+/** `long` 0..1 (02/11 noite): a DESCIDA LONGA da borda norte do maciço da Tijuca (altura × k, até max m) — sem paredão */
+function apronAt(h0, s0, dm, long = 0) {
   if (h0 <= 0.05 || s0 === SURF.sea || s0 === SURF.lagoon) return [Math.max(-12, Math.min(h0, -(0.4 + dm * 0.08))), SURF.sea];
-  const Dd = Math.max(24, Math.min(A * CELL - 14, h0 * 0.8)); // morro alto desce mais longe (no máx. o que cabe na faixa)
+  const D0 = Math.max(24, Math.min(A * CELL - 14, h0 * 0.8)); // morro alto desce mais longe (no máx. o que cabe na faixa)
+  const Dd = D0 + (Math.max(D0, Math.min(NORTH_DESCENT.max, h0 * NORTH_DESCENT.k)) - D0) * long;
   if (dm < Dd) return [0.15 + (h0 - 0.15) * (1 - sstep(0, Dd, dm)), dm > Dd - ISLAND_BEACH ? SURF.beach : s0 === SURF.forest ? SURF.forest : s0 === SURF.beach ? SURF.beach : SURF.land];
   return [-Math.min(12, 0.4 + (dm - Dd) * 0.08), SURF.sea];
 }
@@ -222,15 +243,22 @@ function apronAt(h0, s0, dm) {
   let outPx = 0;
   for (let p = 0; p < W * H; p++) {
     if (inside[p] || src[p] < 0) continue;
-    const [h, s] = apronAt(hg[src[p]], surf[src[p]], Math.sqrt(d2(p, src[p])) * CELL);
+    // descida longa no lado oeste (maciço), a de sempre no resto da borda norte — com transição de blendPx colunas
+    const long = 1 - sstep(KX, KX + NORTH_DESCENT.blendPx, p % W);
+    const [h, s] = apronAt(hg[src[p]], surf[src[p]], Math.sqrt(d2(p, src[p])) * CELL, long);
     hg[p] = h; surf[p] = s; outPx++;
   }
   console.log(JSON.stringify({ expansao: { KX, KY, grade: `${W}x${H}`, foraDaExpansao_px: outPx } }));
 }
 
 // RUAS (avenidas reais do OSM): nivelamento leve com travas (≤ MAX_GRADE m; praia/água intocadas; costão íngreme não)
-const RD = buildRoads({ osm, toPx, W, H, CELL, hg, surf, SURF, gameX, gameZ, minX: gameX(0), maxX: gameX(W), minZ: gameZ(0), maxZ: gameZ(H),
-  fx: (x) => x / CELL + OX - 0.5, fz: (z) => z / CELL + OZ - 0.5 });
+// 02/11 noite: na MESMA grade de antes (sem as KN linhas do norte, que são só a descida pro mar) — com elas, a rua que
+// cruza a borda norte "via" a descida lá em cima e nivelava diferente a 1ª linha do mapa (+3 a +13 cm, 373 px)
+const RD = (() => {
+  const off = KN * W, gz = (py) => gameZ(py + KN);
+  return buildRoads({ osm, toPx: (lat, lon) => { const [x, y] = toPx(lat, lon); return [x, y - KN]; }, W, H: H - KN, CELL, hg: hg.subarray(off), surf: surf.subarray(off), SURF,
+    gameX, gameZ: gz, minX: gameX(0), maxX: gameX(W), minZ: gz(0), maxZ: gz(H - KN), fx: (x) => x / CELL + OX - 0.5, fz: (z) => z / CELL + OZ - KN - 0.5 });
+})();
 fs.mkdirSync('public/zona-sul', { recursive: true });
 console.log(JSON.stringify({ ruas: RD.roads.length, km_jogo: +RD.km.toFixed(2), nivelados_px: RD.graded, maiorMudanca_m: +RD.maxDelta.toFixed(2), trava_m: MAX_GRADE }));
 
