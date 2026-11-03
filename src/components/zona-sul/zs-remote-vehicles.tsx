@@ -23,6 +23,9 @@ type Pose = { x: number; z: number; yaw: number };
  *  colisor do convés dele. `tick` = quadro em que foi atualizado. */
 export type RemoteDeck = { id: string; c: ShipCollider; pose: Pose; prev: Pose; tick: number };
 export const remoteDecks = new Map<string, RemoteDeck>();
+/** CARRO de cada outro jogador, com a pose SUAVIZADA (a mesma do desenho) — a CARONA (02/11) senta nele. */
+export type RemoteCar = { id: string; x: number; y: number; z: number; yaw: number; hp: number };
+export const remoteCars = new Map<string, RemoteCar>();
 export const remoteDeckTick = { n: 0 };
 
 /** Suavização da pose (1/s) — a pose chega ~11×/s. */
@@ -42,7 +45,7 @@ export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefOb
   const car = useGLTF(CAR_URL).scene;
   const root = useRef<THREE.Group>(null);
   const slots = useRef(new Map<string, Slot>());
-  useEffect(() => () => { remoteDecks.clear(); }, []);
+  useEffect(() => () => { remoteDecks.clear(); remoteCars.clear(); }, []);
 
   useFrame((state, dtRaw) => {
     const g = root.current;
@@ -98,12 +101,17 @@ export function ZsRemoteVehicles({ myShip, myCar }: { myShip: React.MutableRefOb
           // vida do carro dele (01/11): barra igual à do herói quando ferido
           const ch = v.h ?? CAR.HP;
           if (s.bar) { s.bar.group.position.set(s.pose.x, s.y + 2.5, s.pose.z); s.bar.set(ch / CAR.HP, !same && ch > 0 && ch < CAR.HP, state.camera); }
+          // CARONA (02/11): a pose suavizada fica disponível pra quem senta no carro dele
+          const rc = remoteCars.get(id) ?? { id, x: 0, y: 0, z: 0, yaw: 0, hp: 0 };
+          rc.x = s.pose.x; rc.y = s.y + bob; rc.z = s.pose.z; rc.yaw = s.pose.yaw; rc.hp = ch;
+          remoteCars.set(id, rc);
         }
       }
     }
     // saiu da sala / parou de mandar: some
     for (const [key, s] of slots.current) if (!live.has(key)) { g.remove(s.obj); if (s.bar) g.remove(s.bar.group); slots.current.delete(key); }
     for (const id of [...remoteDecks.keys()]) if (!live.has(`${id}:s`)) remoteDecks.delete(id);
+    for (const id of [...remoteCars.keys()]) if (!live.has(`${id}:c`)) remoteCars.delete(id);
   });
 
   return <group ref={root} />;

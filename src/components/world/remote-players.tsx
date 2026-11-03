@@ -32,6 +32,8 @@ export type RemoteZsKit = {
   cut: NonNullable<React.ComponentProps<typeof GlbHeroMixamo>['customClipCut']>;
   actions: readonly string[];
   Gear: React.ComponentType<{ id: string; bodyRef: React.RefObject<THREE.Group | null> }>;
+  /** Sentado num carro (ação "drive"): o banco do carro que EU vejo (sem o atraso da pose dele). null = solto. */
+  seatSnap?: (x: number, y: number, z: number) => { x: number; y: number; z: number; yaw: number } | null;
 };
 const LABEL_RANGE = 12;
 const REMOTE_SOUND_RANGE = 35; // m: além disso o ataque do outro é mudo
@@ -88,6 +90,11 @@ function RemotePlayer({ id, zs }: { id: string; zs?: RemoteZsKit | undefined }) 
     while (dy > Math.PI) dy -= Math.PI * 2;
     while (dy < -Math.PI) dy += Math.PI * 2;
     g.rotation.y += dy * t;
+    // SENTADO num carro (carona/motorista, 02/11): no banco do carro que eu vejo, sem atraso
+    if (zs?.seatSnap && p.action === 'drive') {
+      const s = zs.seatSnap(p.x, Number.isFinite(p.y) ? (p.y as number) : g.position.y, p.z);
+      if (s) { g.position.set(s.x, s.y, s.z); g.rotation.y = s.yaw; }
+    }
     const player = useGameStore.getState().player.position;
     const dist = Math.hypot(player.x - g.position.x, player.z - g.position.z);
     const sameL = sameLayerAsMe(p); // nada através da rocha: nem plaquinha nem PvP

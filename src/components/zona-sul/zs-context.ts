@@ -9,7 +9,8 @@ export const zsCtx = { inWater: false, driving: false };
  *  quando MUDA — a tela não re-renderiza por quadro. */
 /** `shipAct` (01/11): o que o E/botão faz no navio de guerra agora — subir a bordo, pilotar (no timão) ou descer. */
 export const useZsTouch = create<{ driving: boolean; nearCar: boolean; inWater: boolean; sailing: boolean; nearShip: boolean; shipAct: 'pilotar' | 'descer' | 'subir' | 'construir' | 'construir_carro' | null;
-  /** agachado agora (02/11 — o botão do arco vira "Levantar") */ crouched: boolean }>(() => ({ driving: false, nearCar: false, inWater: false, sailing: false, nearShip: false, shipAct: null, crouched: false }));
+  /** agachado agora (02/11 — o botão do arco vira "Levantar") */ crouched: boolean;
+  /** de CARONA no carro de outro jogador (02/11 — o botão do arco vira "Sair da carona") */ riding: boolean }>(() => ({ driving: false, nearCar: false, inWater: false, sailing: false, nearShip: false, shipAct: null, crouched: false, riding: false }));
 /** AGACHAR (02/11, PvP — Pedro: "agachar… pro PvP fluido"): `on` = agachado (Ctrl alterna; celular: botão no arco);
  *  `k` = 0..1 suave (a câmera desce junto). Velocidade, câmera e o alvo menor na mira dos outros saem daqui. */
 export const zsCrouch = { on: false, k: 0 };

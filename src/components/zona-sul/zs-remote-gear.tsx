@@ -13,6 +13,8 @@ import type { RemoteZsKit } from '@/components/world/remote-players';
 import { newBoardPose, ZsBoardView } from './zs-board-view';
 import { ZsGearView } from './zs-gear-view';
 import { ZS_GEAR, ZS_HERO_ACTIONS, ZS_HERO_CLIPS, ZS_HERO_CUT } from './zs-hero-clips';
+import { caronaMine, caronaSeatSnap } from './zs-carona';
+import { remoteCars } from './zs-remote-vehicles';
 
 export function ZsRemoteGear({ id, bodyRef }: { id: string; bodyRef: React.RefObject<THREE.Group | null> }) {
   const board = useRef(newBoardPose()), skate = useRef(newBoardPose()), glider = useRef(newBoardPose());
@@ -36,5 +38,15 @@ export function ZsRemoteGear({ id, bodyRef }: { id: string; bodyRef: React.RefOb
   );
 }
 
+/** Carros que eu vejo (o meu + os dos outros) — pra encaixar quem está sentado no banco (carona, 02/11). */
+const seatCars: { x: number; y: number; z: number; yaw: number }[] = [];
 /** O kit da Zona Sul pro boneco dos outros jogadores. */
-export const ZS_REMOTE_KIT: RemoteZsKit = { clips: ZS_HERO_CLIPS, cut: ZS_HERO_CUT, actions: ZS_HERO_ACTIONS, Gear: ZsRemoteGear };
+export const ZS_REMOTE_KIT: RemoteZsKit = {
+  clips: ZS_HERO_CLIPS, cut: ZS_HERO_CUT, actions: ZS_HERO_ACTIONS, Gear: ZsRemoteGear,
+  seatSnap: (x, y, z) => {
+    seatCars.length = 0;
+    if (caronaMine.car) seatCars.push(caronaMine.car);
+    for (const c of remoteCars.values()) seatCars.push(c);
+    return caronaSeatSnap(x, y, z, seatCars, caronaMine.dims);
+  },
+};

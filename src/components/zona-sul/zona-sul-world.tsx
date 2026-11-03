@@ -54,7 +54,8 @@ import { TargetRoute } from '@/components/world/target-route';
 import { houseFloorSurfaceY, houseWalkFloorY, pushOutBasePieces, pushOutHouseWalls } from '@/components/world/base-collision';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { broadcastCannon, broadcastPose, type NetVehicle, registerCarHitHandler, registerShipHitHandler, useNet } from '@/net/multiplayer';
-import { remoteDecks, remoteDeckTick, ZsRemoteVehicles } from './zs-remote-vehicles';
+import { remoteCars, remoteDecks, remoteDeckTick, ZsRemoteVehicles } from './zs-remote-vehicles';
+import { carSeatWorld, caronaCarNear, caronaMine, freeCarSeat } from './zs-carona';
 import { CombatFeedback } from '@/components/world/combat-feedback';
 import { Projectiles } from '@/components/world/projectiles';
 import { HeroPowers } from '@/components/world/hero-powers';
@@ -124,7 +125,9 @@ const TUBE_CAM_DIST = 1.7, TUBE_CAM_PITCH = 0.06;
 /** Quanto o corpo acompanha a inclinação da prancha no carving. */
 const LEAN_BODY = 0.8;
 /** a pé → abrindo a porta (ENTER_MS) → dirigindo. E entra/sai. */
-const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving' | 'sailing', enterAt: 0 };
+const drive = { mode: 'foot' as 'foot' | 'entering' | 'driving' | 'sailing' | 'riding', enterAt: 0,
+  /** CARONA (02/11, Pedro: "aliado de qualquer nível entra no carro que o outro aliado dirige"): de quem é o carro e o banco */
+  rideWho: null as string | null, seat: 1 };
 /** veículos que vão de carona na pose (reaproveitado — nada criado por quadro) */
 const netVehicles: NetVehicle[] = [];
 /** equipamento em uso que vai de carona na pose (reaproveitado): [tipo, altura acima do pé, rumo, rolagem, inclinação] */
@@ -328,6 +331,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     netVehicles.length = 0;
     if (ship && !warshipGone(ship)) netVehicles.push({ k: 's', x: r2(ship.x), z: r2(ship.z), yaw: r3(ship.yaw), s: r2(ship.speed), h: ship.hp });
     if (car && !carGone(car)) netVehicles.push({ k: 'c', x: r2(car.x), z: r2(car.z), yaw: r3(car.yaw), y: r2(car.y), h: car.hp });
+    caronaMine.car = car && !carGone(car) ? car : null; caronaMine.dims = dimsRef.current; // quem pega carona comigo senta no banco
     // 02/11 (Pedro online: "não vejo o skate dele; na prancha em pé"): o EQUIPAMENTO em uso vai junto (asa > skate > prancha)
     { const gp = gearRef.glider, sp = gearRef.skate, bp = boardRef.current;
       const src = gp.visible ? gp : sp.visible ? sp : bp.visible ? bp : null;
@@ -399,11 +403,13 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     const shipAct = shipSel?.act ?? null;
     /** pose do navio da ação (o meu ou o do outro) */
     const selPose = shipSel?.who ? remoteDecks.get(shipSel.who)?.pose ?? null : ship;
+    // CARONA (02/11): carro de ALIADO perto (a pé) — E senta num banco livre dele
+    const caronaCar = drive.mode === 'foot' && !dead && remoteCars.size ? caronaCarNear(p.x, p.z, remoteCars.values(), (id) => { const n = useNet.getState(); return n.players[id]?.side === 'enemy' || n.selfSide === 'enemy'; }) : null;
     {
       const tc = useZsTouch.getState(), drv = drive.mode === 'driving', wet = zsCtx.inWater && drive.mode === 'foot';
-      const near = !!car && car.wreckT === null && drive.mode === 'foot' && !dead && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST;
-      const sail = drive.mode === 'sailing', act = near ? null : shipAct, nearSh = !!act, cr = zsCrouch.on;
-      if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet || tc.sailing !== sail || tc.nearShip !== nearSh || tc.shipAct !== act || tc.crouched !== cr) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet, sailing: sail, nearShip: nearSh, shipAct: act, crouched: cr });
+      const near = (!!car && car.wreckT === null && drive.mode === 'foot' && !dead && Math.hypot(car.x - p.x, car.z - p.z) < CAR.ENTER_DIST) || !!caronaCar;
+      const sail = drive.mode === 'sailing', act = near ? null : shipAct, nearSh = !!act, cr = zsCrouch.on, rid = drive.mode === 'riding';
+      if (tc.driving !== drv || tc.nearCar !== near || tc.inWater !== wet || tc.sailing !== sail || tc.nearShip !== nearSh || tc.shipAct !== act || tc.crouched !== cr || tc.riding !== rid) useZsTouch.setState({ driving: drv, nearCar: near, inWater: wet, sailing: sail, nearShip: nearSh, shipAct: act, crouched: cr, riding: rid });
     }
     ambAcc.current += dt;
     if (ambAcc.current > 0.1) { ambAcc.current = 0; zsAmbience.update(ambienceAt(t, p, car, ride.current?.mode === 'ride' ? ride.current.speed : 0, ship && (drive.mode === 'sailing' || onDeck.current) ? ship.speed : 0)); }
@@ -427,6 +433,30 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
         // rente ao chão: desce do lado, em pé (igual antes); no ar: sai na altura do banco e CAI (o carro vazio desce sozinho)
         if (car.altitude < CAR.EXIT_MAX_ALT || seatY <= g + 0.3) { p.y = g; grounded.current = true; }
         else { p.y = seatY; grounded.current = false; }
+      } else if (drive.mode === 'riding') {
+        // SAI DA CARONA (02/11): desce pelo lado do banco; no ar, sai na altura do banco e CAI (igual ao motorista)
+        const rc = drive.rideWho ? remoteCars.get(drive.rideWho) : undefined;
+        drive.mode = 'foot'; drive.rideWho = null;
+        if (group.current) group.current.visible = true;
+        if (rc) {
+          const sx = ((CAR_SEATS[drive.seat]?.x ?? 0.12) >= 0 ? 1 : -1) * ((dimsRef.current?.width ?? 2.2) / 2 + 1.1);
+          p.x = rc.x + Math.cos(rc.yaw) * sx; p.z = rc.z - Math.sin(rc.yaw) * sx;
+          const g = zsHeightAt(t, p.x, p.z), seatY = carSeatWorld(rc, drive.seat, dimsRef.current).y;
+          facing.current = rc.yaw; vy.current = 0;
+          if (seatY - g < CAR.EXIT_MAX_ALT + 0.6) { p.y = g; grounded.current = true; } else { p.y = seatY; grounded.current = false; }
+          movement.current.set(p.x, 0, p.z);
+        }
+        useGameStore.getState().setMessage('🚗 Desceu da carona.');
+      } else if (drive.mode === 'foot' && caronaCar) {
+        // PEGA CARONA (02/11): banco livre do carro do ALIADO — qualquer nível (o nível só trava quem dirige)
+        const others = Object.values(useNet.getState().players).filter((o) => o.id !== caronaCar.id).map((o) => ({ x: o.x, z: o.z }));
+        const seat = freeCarSeat(caronaCar, dimsRef.current, others), who = useNet.getState().players[caronaCar.id]?.name ?? 'outro jogador';
+        if (seat === null) useGameStore.getState().setMessage(`🚗 O carro de ${who} está cheio.`);
+        else {
+          drive.mode = 'riding'; drive.rideWho = caronaCar.id; drive.seat = seat;
+          ride.current = null; dive.current = 0; swimVel.current.set(0, 0); vy.current = 0; zsCrouch.on = false;
+          useGameStore.getState().setMessage(`🚗 De carona com ${who}! E = descer`);
+        }
       } else if (ship && shipAct === 'pilotar' && !shipSel?.who) {
         // NAVIO DE GUERRA (01/11): no convés, no TIMÃO (popa) → pilota (nível 70)
         if (!isUnlocked(WARSHIP.UNLOCK_ID, lvl)) useGameStore.getState().setMessage(lockedMessage('Pilotar o navio de guerra', WARSHIP.UNLOCK_ID));
@@ -486,6 +516,39 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     // parado a onda empurra ele") — antes ele só se mexia com alguém dirigindo
     // sem motorista no AR (saiu voando): desce normal, sozinho
     if (drive.mode !== 'driving' && car) carStep(t, car, { throttle: 0, steer: 0, down: drive.mode === 'foot' && car.altitude > 0.3 }, dt, now);
+    // ===== DE CARONA (02/11): sentado no banco do carro do aliado, na pose suavizada dele (a mesma do desenho) =====
+    if (drive.mode === 'riding') {
+      const rc = drive.rideWho ? remoteCars.get(drive.rideWho) : undefined;
+      if (!rc || rc.hp <= 0) {
+        // o carro sumiu (ele saiu da sala / guardou) ou EXPLODIU: cai de onde está
+        drive.mode = 'foot'; drive.rideWho = null; vy.current = 0; grounded.current = false;
+        if (group.current) group.current.visible = true;
+        useGameStore.getState().setMessage(rc ? '🔥 O carro explodiu — você caiu!' : '🚗 A carona acabou (o carro sumiu).');
+      } else {
+        const st = carSeatWorld(rc, drive.seat, dimsRef.current);
+        p.set(st.x, st.y, st.z); movement.current.set(p.x, 0, p.z); focusRef.current.copy(p);
+        grounded.current = true; vy.current = 0; facing.current = rc.yaw; yawNow.current = rc.yaw;
+        if (group.current) { group.current.position.set(st.x, st.y, st.z); group.current.rotation.y = rc.yaw; group.current.visible = true; }
+        action.current = 'drive'; speed.current = 0;
+        // câmera atrás do carro (a mesma de quem dirige), segue amortecida e gira junto com o carro
+        if (now - input.lookAt > 1500) { let d = rc.yaw + Math.PI - input.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; input.yaw += d * Math.min(1, dt * 3); }
+        const ct = camTarget.current, follow = 1 - Math.exp(-8 * dt);
+        ct.x += (rc.x - ct.x) * follow; ct.y += (rc.y + 1.8 - ct.y) * follow; ct.z += (rc.z - ct.z) * follow;
+        const dist = Math.max(input.dist, 10), cp = Math.cos(input.pitch);
+        const cx = ct.x + Math.sin(input.yaw) * cp * dist, cz = ct.z + Math.cos(input.yaw) * cp * dist;
+        let cyy = ct.y + Math.sin(input.pitch) * dist;
+        const gcam = Math.max(zsHeightAt(t, cx, cz), ZS_WATER_Y) + 0.6; if (cyy < gcam) cyy = gcam;
+        camera.position.set(cx, cyy, cz); camera.lookAt(ct.x, ct.y, ct.z);
+        if (sun.current) followSun(sun.current, p);
+        hudAcc.current += dt;
+        if (hudAcc.current > 0.25) {
+          hudAcc.current = 0;
+          const who = useNet.getState().players[drive.rideWho!]?.name ?? 'outro jogador';
+          onHud({ x: p.x, z: p.z, y: p.y, state: 'de carona com ' + who + ' · E desce (no ar você cai)', near: '', overview: false });
+        }
+        return;
+      }
+    }
     if (drive.mode === 'driving' && car) {
       const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
       const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
@@ -1254,7 +1317,7 @@ const carBtn = (label: string, icon: React.ReactNode): ArcButton => ({ id: 'zs-c
 function ZsTouchArc() {
   const driving = useZsTouch(s => s.driving), nearCar = useZsTouch(s => s.nearCar), inWater = useZsTouch(s => s.inWater);
   const sailing = useZsTouch(s => s.sailing), nearShip = useZsTouch(s => s.nearShip), shipAct = useZsTouch(s => s.shipAct);
-  const crouched = useZsTouch(s => s.crouched);
+  const crouched = useZsTouch(s => s.crouched), riding = useZsTouch(s => s.riding);
   const shipLabel = shipAct === 'pilotar' ? 'Pilotar (timão)' : shipAct === 'descer' ? 'Descer do navio' : shipAct === 'construir' ? 'Construir navio' : shipAct === 'construir_carro' ? 'Construir carro' : 'Subir no navio';
   useEffect(() => {
     if (sailing) {
@@ -1265,6 +1328,9 @@ function ZsTouchArc() {
           { id: 'zs-cannon-star', label: 'Canhões ⟶', icon: <ArrowRight />, onPress: fire('starboard') }, carBtn('Soltar o timão', <LogOut />)],
         outer: [],
       });
+    } else if (riding) {
+      // DE CARONA (02/11): só o botão de descer
+      useArcExtras.setState({ inner: null, outer: [carBtn('Sair da carona', <LogOut />)] });
     } else if (driving) {
       useArcExtras.setState({
         inner: [holdBtn('zs-up', 'Subir', <ArrowUp />, 'Space'), holdBtn('zs-down', 'Descer', <ArrowDown />, 'KeyC'),
@@ -1281,7 +1347,7 @@ function ZsTouchArc() {
     }
     // trocou o momento com o dedo num botão de segurar: a tecla não fica presa
     return () => { for (const k of ARC_HELD) input.keys.delete(k); ARC_HELD.clear(); useArcExtras.setState({ inner: null, outer: [] }); };
-  }, [driving, nearCar, inWater, sailing, nearShip, shipLabel, crouched]);
+  }, [driving, nearCar, inWater, sailing, nearShip, shipLabel, crouched, riding]);
   return null;
 }
 
