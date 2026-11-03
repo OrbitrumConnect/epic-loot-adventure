@@ -20,7 +20,8 @@ describe('hit stop', () => {
   });
   it('dispara no crítico e no abate (nunca no golpe que eu tomo); mixers de bicho e herói obedecem', () => {
     const fb = fs.readFileSync('src/components/world/combat-feedback.tsx', 'utf8');
-    expect(fb).toMatch(/if \(ev\.kind === 'death' \|\| \(ev\.kind === 'damage' && ev\.critical && !ev\.onPlayer\)\) triggerHitStop\(\);/);
+    // 02/11: + só no que é comigo ou perto de mim (`mine` — a briga na base, longe, não trava/treme)
+    expect(fb).toMatch(/if \(mine && \(ev\.kind === 'death' \|\| \(ev\.kind === 'damage' && ev\.critical && !ev\.onPlayer\)\)\) triggerHitStop\(\);/);
     for (const f of ['glb-creature', 'glb-hero-mixamo']) expect(fs.readFileSync(`src/components/world/${f}.tsx`, 'utf8')).toMatch(/if \(mixer\) mixer\.timeScale = hitStopScale\(\);/);
   });
 });

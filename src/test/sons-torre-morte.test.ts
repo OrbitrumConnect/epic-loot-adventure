@@ -32,7 +32,8 @@ describe('sons de torre e de morte', () => {
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
     expect(store.match(/towerSfx\(tower, state\.player\.position\);/g)!.length).toBe(3);
     const fb = fs.readFileSync('src/components/world/combat-feedback.tsx', 'utf8');
-    expect(fb).toMatch(/if \(ev\.kind === 'death'\) \{ markImpact\(1\.6\); playDeathSfx\(ev\); \}/);
+    // 02/11: o som da morte toca SEMPRE no evento do sangue; só o tremor de câmera ficou pra o que é perto de mim
+    expect(fb).toMatch(/if \(ev\.kind === 'death'\) \{ if \(mine\) markImpact\(1\.6\); playDeathSfx\(ev\); \}/);
   });
 });
 

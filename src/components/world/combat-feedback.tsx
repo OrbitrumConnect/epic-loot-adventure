@@ -28,6 +28,13 @@ import { triggerHitStop } from './hit-stop';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 import { creatureById } from './hostile-ai';
 
+/** Até onde (m) um golpe/abate ainda é "meu" pra tremer a câmera e dar hit stop (02/11: a briga na base, longe, não). */
+export const IMPACT_NEAR = 40;
+/** O golpe é comigo ou perto de mim (tremor/hit stop)? Puro. */
+export function impactNear(ev: Pick<FeedbackEvent, 'onPlayer' | 'position'>, px: number, pz: number): boolean {
+  return !!ev.onPlayer || Math.hypot(ev.position.x - px, ev.position.z - pz) <= IMPACT_NEAR;
+}
+
 const NUMBER_POOL = 18;
 const PARTICLE_POOL = 200; // 26/10: 120 → 200 (golpe com mais gotas + rajada de 8 tiros sem apagar as primeiras)
 const DECAL_POOL = 40;
@@ -257,9 +264,13 @@ export function CombatFeedback() {
         if (ev.kind === 'damage' || ev.kind === 'death') spawnBurst(ev);
         // Soco de impacto → a câmera tremula (peso do golpe).
         // Hit stop: crítico ou abate (nunca no golpe que EU tomo — não trava quem está apanhando).
-        if (ev.kind === 'death' || (ev.kind === 'damage' && ev.critical && !ev.onPlayer)) triggerHitStop();
-        if (ev.kind === 'death') { markImpact(1.6); playDeathSfx(ev); }
-        else if (ev.kind === 'damage') markImpact(ev.onPlayer ? 0.7 : ev.critical ? 1.4 : 1.0);
+        // 02/11 (Pedro: "a onda rolando na minha base, eu longe, e a câmera tremendo como se eu estivesse lá lutando"):
+        // tremor e hit stop SÓ no que é comigo ou perto de mim (IMPACT_NEAR) — a briga longe (tropas/torres) não mexe
+        const pp = useGameStore.getState().player.position;
+        const mine = impactNear(ev, pp.x, pp.z);
+        if (mine && (ev.kind === 'death' || (ev.kind === 'damage' && ev.critical && !ev.onPlayer))) triggerHitStop();
+        if (ev.kind === 'death') { if (mine) markImpact(1.6); playDeathSfx(ev); }
+        else if (ev.kind === 'damage' && mine) markImpact(ev.onPlayer ? 0.7 : ev.critical ? 1.4 : 1.0);
       }
       if (seenIds.size > 400) {
         const live = new Set(fb.map(e => e.id));
