@@ -163,12 +163,12 @@ function RemotePlayer({ id, zs }: { id: string; zs?: RemoteZsKit | undefined }) 
       }
     }}>
       {zs ? (
-        <GlbHeroMixamo key={skin.id} charUrl={skin.url} bindFix={skin.bindFix} actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack speedRef={speed} customClips={zs.clips} customClipCut={zs.cut}
+        <GlbHeroMixamo key={skin.id} charUrl={skin.url} bindFix={skin.bindFix} handFix={skin.handFix} tone={skin.tone} actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack speedRef={speed} customClips={zs.clips} customClipCut={zs.cut}
           heldItemOf={() => useNet.getState().players[id]?.w ?? null}
           hpOf={() => useNet.getState().players[id]?.hp ?? 0}
           weapon={<RemoteHeld id={id} />} />
       ) : (
-        <GlbHeroMixamo key={skin.id} charUrl={skin.url} bindFix={skin.bindFix} actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack
+        <GlbHeroMixamo key={skin.id} charUrl={skin.url} bindFix={skin.bindFix} handFix={skin.handFix} tone={skin.tone} actionRef={action} autoHeight={HERO_HEIGHT * 1.04} rangedAttack
           heldItemOf={() => useNet.getState().players[id]?.w ?? null}
           hpOf={() => useNet.getState().players[id]?.hp ?? 0}
           weapon={<RemoteHeld id={id} />} />

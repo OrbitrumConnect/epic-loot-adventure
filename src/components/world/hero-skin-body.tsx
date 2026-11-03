@@ -8,9 +8,9 @@ import { setPoseSkin } from '@/net/multiplayer';
  * ficha do personagem: os 3 mostram a mesma skin. Só este pedaço re-renderiza ao trocar; a `key` remonta limpo (mixer e
  * medidas do modelo novo). Também avisa a rede (os outros jogadores desenham a mesma skin).
  */
-export function LocalHeroBody(props: Omit<ComponentProps<typeof GlbHeroMixamo>, 'charUrl' | 'bindFix'> & { noNet?: boolean }) {
+export function LocalHeroBody(props: Omit<ComponentProps<typeof GlbHeroMixamo>, 'charUrl' | 'bindFix' | 'handFix' | 'tone'> & { noNet?: boolean }) {
   const skin = useHeroSkin();
   const { noNet, ...rest } = props;
   useEffect(() => { if (!noNet) setPoseSkin(skin.id); }, [skin.id, noNet]);
-  return <GlbHeroMixamo key={skin.id} charUrl={skin.url} bindFix={skin.bindFix} {...rest} />;
+  return <GlbHeroMixamo key={skin.id} charUrl={skin.url} bindFix={skin.bindFix} handFix={skin.handFix} tone={skin.tone} {...rest} />;
 }
