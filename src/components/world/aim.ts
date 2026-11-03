@@ -15,6 +15,7 @@ import { creatureAnchors } from './hostile-ai';
 import { markPvpHit, pvpStrike } from './pvp-attack';
 import { bigWallBetween } from './base-collision';
 import { glbSurfaceY, worldBlocksShot, worldShotHitDistance } from './terrain-collision';
+import { terrainHeight } from './world-kit';
 import { isHostileBaseOwner, STRIKABLE_REMOTE, strikeRemotePiece, strikeRemoteTroop } from './remote-base-strike';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
 import { aimedRangeFor, weaponFor, weaponRangeFor } from '@/game/data/weapons';
@@ -164,7 +165,8 @@ export function pickAimTarget(camera: THREE.Camera): AimTarget | null {
       if (!STRIKABLE_REMOTE.has(pc.kind) || pc.hp <= 0) continue;
       const ctr = cellCenter(pc.cell);
       const tower = pc.kind === 'tower';
-      const p = new THREE.Vector3(ctr.x, glbSurfaceY(ctr.x, ctr.z, 0) + (tower ? 2.5 : 1.2), ctr.z);
+      // chão do MAPA ATIVO de reserva (02/11: na Zona Sul não há malha do Vale — com 0 a mira ficava no nível do mar)
+      const p = new THREE.Vector3(ctr.x, glbSurfaceY(ctr.x, ctr.z, terrainHeight(ctr.x, ctr.z)) + (tower ? 2.5 : 1.2), ctr.z);
       const s = aimScore(origin, dir, p, tower ? 1.2 : 1.1);
       if (s !== null) cands.push({ ang: s, t: { kind: 'piece', ownerId, pieceId: pc.id }, p });
     }
@@ -174,7 +176,9 @@ export function pickAimTarget(camera: THREE.Camera): AimTarget | null {
     if (!isHostileBaseOwner(ownerId)) continue;
     for (const t of net.troops[ownerId] ?? []) {
       if (t.h <= 0) continue;
-      const p = new THREE.Vector3(t.x, glbSurfaceY(t.x, t.z, 0) + 1.0, t.z);
+      // 02/11 (Pedro online: "atacado pelas minhas tropas, tentou matar e não deu dano em nenhuma"): a mira punha a tropa
+      // na altura 0 na Zona Sul (sem malha do Vale) — o tiro passava por cima. Agora o chão do mapa ativo, igual ao desenho
+      const p = new THREE.Vector3(t.x, glbSurfaceY(t.x, t.z, terrainHeight(t.x, t.z)) + 1.0, t.z);
       const s = aimScore(origin, dir, p, 0.5);
       if (s !== null) cands.push({ ang: s, t: { kind: 'troop', ownerId, troopId: t.i }, p });
     }
