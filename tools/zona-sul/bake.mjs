@@ -11,7 +11,7 @@
 //     LAGOA (água do OSM) com fundo próprio; PRAIA = declive suave até a água.
 import fs from 'node:fs';
 import sharp from 'sharp';
-import { APRON_PX, BBOX_V1, CANAL_ALAH, EXPAND_TO, ISLAND_BEACH, ISLAND_BOOST, LAGOA_MAX_DEPTH, LAGOA_SLOPE, NORTH_DESCENT, NORTH_PX, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
+import { APRON_PX, BBOX_V1, CANAL_ALAH, EXPAND_TO, ISLAND_BEACH, ISLAND_BOOST, ISLAND_GROW, LAGOA_MAX_DEPTH, LAGOA_SLOPE, NORTH_DESCENT, NORTH_PX, PEAK_BOOST, RELIEF, ROCK_LANDMARKS, SCALE } from './zona-sul-config.mjs';
 import { loadDem } from './dem.mjs';
 import { buildMasks, joinRings } from './masks.mjs';
 import { buildRoads, MAX_GRADE, rasterRoadMask } from './roads.mjs';
@@ -209,14 +209,54 @@ for (const r of ROCK_LANDMARKS) {
 
 // ILHAS CAGARRAS mais altas (02/11, ISLAND_BOOST): só a TERRA dentro do contorno de cada ilha do arquipélago sobe
 {
-  let px = 0, top = 0;
+  let px = 0, top = 0; const islandMasks = [];
   for (const el of osm) {
     if (el.type !== 'way' || !el.geometry || !ISLAND_BOOST.names.includes(el.tags?.name)) continue;
     const mask = new Uint8Array(W * H);
-    for (const ring of joinRings([el.geometry])) fillPoly(mask, ring.map((g) => toPx(g.lat, g.lon)));
+    const rings = joinRings([el.geometry]).map((ring) => ring.map((g) => toPx(g.lat, g.lon)));
+    for (const pts of rings) fillPoly(mask, pts);
     for (let p = 0; p < W * H; p++) if (mask[p] && inside[p] && !sea[p] && hg[p] > 0.15) { hg[p] = 0.15 + (hg[p] - 0.15) * ISLAND_BOOST.k; px++; top = Math.max(top, hg[p]); }
+    islandMasks.push({ name: el.tags.name, mask, rings });
   }
   console.log(JSON.stringify({ ilhasRealcadas_px: px, ilhaMaisAlta_m: +top.toFixed(1) }));
+  // ILHAS MAIORES COM TERRAÇO (ISLAND_GROW): a forma cresce s× em volta do centro; altura = o maior entre o TERRAÇO
+  // (areia → sobe → plano a `plateau` m) e o morro original espalhado (mesma altura no topo, encosta s× mais longa)
+  const G = ISLAND_GROW, rep = [];
+  const hg0 = hg.slice(), land0 = (p) => inside[p] && !sea[p] && hg0[p] > 0.15;
+  const h0At = (x, y) => { // altura original (bilinear; fora da terra da ilha = 0,15)
+    const i = Math.floor(x), j = Math.floor(y), ax = x - i, ay = y - j;
+    const v = (a, b) => { const p = idx(a, b); return land0(p) ? hg0[p] : 0.15; };
+    return (v(i, j) * (1 - ax) + v(i + 1, j) * ax) * (1 - ay) + (v(i, j + 1) * (1 - ax) + v(i + 1, j + 1) * ax) * ay;
+  };
+  for (const { name, mask, rings } of islandMasks) {
+    let n = 0, cx = 0, cy = 0, i0 = W, i1 = 0, j0 = H, j1 = 0;
+    for (let p = 0; p < W * H; p++) if (mask[p]) { const i = p % W, j = (p - i) / W; n++; cx += i; cy += j; i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); }
+    if (!n) continue;
+    cx /= n; cy /= n;
+    const big = new Uint8Array(W * H), r = G.s;
+    const bi0 = Math.max(0, Math.floor(cx + (i0 - cx) * r) - 2), bi1 = Math.min(W - 1, Math.ceil(cx + (i1 - cx) * r) + 2);
+    const bj0 = Math.max(KN, Math.floor(cy + (j0 - cy) * r) - 2), bj1 = Math.min(H - 1, Math.ceil(cy + (j1 - cy) * r) + 2);
+    // o CONTORNO do OSM ampliado (borda lisa como o resto da costa — ampliar os pixels deixava a borda em escadinha)
+    for (const pts of rings) fillPoly(big, pts.map(([x, y]) => [cx + 0.5 + (x - cx - 0.5) * r, cy + 0.5 + (y - cy - 0.5) * r]));
+    for (let p = 0; p < W * H; p++) { const i = p % W, j = (p - i) / W; if (!inside[p] || j < bj0 || j > bj1 || i < bi0 || i > bi1) big[p] = 0; }
+    const din = distTo((p) => !big[p]);
+    let area = 0;
+    for (let p = 0; p < W * H; p++) {
+      if (!big[p]) continue;
+      const i = p % W, j = (p - i) / W, d = din[p];
+      const terrace = d <= G.beachPx ? 0.15 + 0.3 * d / G.beachPx : 0.45 + (G.plateau - 0.45) * sstep(G.beachPx, G.beachPx + G.risePx, d);
+      hg[p] = Math.max(terrace, h0At(cx + (i - cx) / G.peakS, cy + (j - cy) / G.peakS));
+      surf[p] = d <= G.beachPx ? SURF.beach : SURF.land; sea[p] = 0; area++; // a borda (1ª volta) é areia
+    }
+    // mar em volta: rampa rasa até a areia nova (sem degrau de água funda colado na ilha)
+    const dI = distTo((p) => big[p] === 1);
+    for (let p = 0; p < W * H; p++) if (!big[p] && sea[p] && dI[p] <= G.shelfPx) hg[p] = Math.max(hg[p], -(0.35 + dI[p] * CELL * 0.12));
+    // terraço medido: terra com inclinação < 10° (vizinhos)
+    const lim = Math.tan(10 * Math.PI / 180) * CELL;
+    let flat = 0; for (let p = 0; p < W * H; p++) if (big[p] && hg[p] > 0.4) { const i = p % W, j = (p - i) / W; if (Math.abs(hg[idx(i + 1, j)] - hg[idx(i - 1, j)]) / 2 < lim && Math.abs(hg[idx(i, j + 1)] - hg[idx(i, j - 1)]) / 2 < lim) flat++; }
+    rep.push({ ilha: name, antes_m2: n * CELL * CELL, depois_m2: area * CELL * CELL, plano_m2: flat * CELL * CELL });
+  }
+  console.log(JSON.stringify({ ilhasMaiores: rep }));
 }
 
 // FAIXA QUE DESCE PRO MAR (a das bordas do mapa, abaixo; e, desde 02/11, o bloco de FORA da expansão — o maciço da

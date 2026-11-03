@@ -27,6 +27,13 @@ export const NORTH_DESCENT = { k: 2.4, max: NORTH_PX * 4 - 14, blendPx: 24 };
  *  Cagarra ~14 m no jogo; Palmas ~4 m). Como o Cristo (PEAK_BOOST) e a Pedra do Arpoador: realce SÓ dentro do contorno
  *  de cada ilha do arquipélago (pela costa do OSM), pra aparecerem de Ipanema. Fora do recorte antigo (nada dele muda). */
 export const ISLAND_BOOST = { k: 1.7, names: ['Ilha Cagarra', 'Ilha das Palmas', 'Ilha Comprida', 'Ilhota Cagarra', 'Ilhota Grande', 'Ilhota Pequena', 'Laje da Cagarra'] };
+/** ILHAS MAIORES COM TERRAÇO (02/11 noite, Pedro: "as ilhas podem ter mais área plana e espaço pra andar, tão
+ *  pequenas"): cada ilha do arquipélago cresce `s`× em volta do centro (mesma forma; ~s² de área) e ganha, em volta do
+ *  morro, um TERRAÇO plano a `plateau` m: areia na borda (`beachPx`), sobe em `risePx` e fica plano até o morro. O morro
+ *  fica QUASE do tamanho original no meio (`peakS`× — se espalhasse junto, o plano era pouco: Cagarra só 464 m²). O pico
+ *  (com o realce acima) continua no meio, na mesma altura. O mar em volta ganha rampa rasa (`shelfPx`). Fora do mapa
+ *  antigo (nada dele muda). */
+export const ISLAND_GROW = { s: 2.2, peakS: 1.1, plateau: 3.5, beachPx: 1, risePx: 2, shelfPx: 6 }; // terraço a 3,5 m, rampa ~23° (sobe andando)
 /** Faixa NOVA em volta do mapa (px de 4 m): a terra da borda desce por ela até uma praia e o mar. */
 export const APRON_PX = 18;
 /** Largura (m no jogo) da praia no pé da descida. */

@@ -71,4 +71,18 @@ describe('área nova — Cagarras mais altas', () => {
     const cfg = fs.readFileSync('tools/zona-sul/zona-sul-config.mjs', 'utf8');
     expect(cfg).toMatch(/export const ISLAND_BOOST = \{ k: 1\.7,/);
   });
+  // Pedro 02/11 noite: "as ilhas podem ter mais área plana e espaço pra andar, tão pequenas"
+  it('Ilha Cagarra MAIOR com TERRAÇO: ~4,8× a área (era ~1.600 m²) e mais de 2.000 m² quase planos pra andar/pôr coisa', () => {
+    const V1 = { s: -22.993, w: -43.252, n: -22.932 }, PXM = 29.6, M_LON = 111320 * Math.cos((V1.s + V1.n) / 2 * Math.PI / 180);
+    const cx = ((-43.1925 - V1.w) * M_LON / PXM - 182) * 4, cz = ((V1.n + 23.0268) * 110574 / PXM - 114) * 4;
+    let land = 0, flat = 0; const lim = Math.tan(10 * Math.PI / 180) * 4;
+    for (let x = cx - 100; x <= cx + 100; x += 4) for (let z = cz - 70; z <= cz + 70; z += 4) {
+      const h = zsHeightAt(now, x, z); if (h <= 0.3) continue;
+      land++;
+      if (Math.abs(zsHeightAt(now, x + 4, z) - zsHeightAt(now, x - 4, z)) / 2 < lim && Math.abs(zsHeightAt(now, x, z + 4) - zsHeightAt(now, x, z - 4)) / 2 < lim) flat++;
+    }
+    expect(land * 16).toBeGreaterThan(6000);
+    expect(flat * 16).toBeGreaterThan(2000);
+    expect(fs.readFileSync('tools/zona-sul/zona-sul-config.mjs', 'utf8')).toMatch(/export const ISLAND_GROW = \{ s: 2\.2, peakS: 1\.1, plateau: 3\.5,/);
+  });
 });
