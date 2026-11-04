@@ -14,6 +14,7 @@ import type { CreatureDefinition, CreatureState, Position } from '../types';
 import { scaleEnemyHp } from '../data/creatures';
 import { CAMP_PLACEMENTS, PLAYER_SPAWN } from '../data/camps';
 import { WORLD } from '../data/world-profile';
+import { caveTuneFor } from '../data/cave-tune';
 
 /** Raios (m, a partir do nascedouro) que separam as zonas 1→2→3→4→5. */
 export const ZONE_RADII = [30, 55, 80, 105] as const;
@@ -100,7 +101,11 @@ export function applyWorldLevel(
   c: CreatureState, def: CreatureDefinition, level: number, rng: () => number, rollElite: boolean, night = false,
 ): CreatureState {
   const elite = rollElite ? rng() < eliteChance(level, night) : !!c.elite;
-  const st = difficultyStats(def, level, elite);
+  const base = difficultyStats(def, level, elite);
+  // CAVERNA (03/11): a versão "comum" de quem é chefe noutro lugar — o redutor vale DEPOIS da força pela região (sem isto
+  // o Canibal da caverna renascia com 15 mil de vida: a região refaz tudo a partir da ficha)
+  const tune = caveTuneFor(c.id, def.id);
+  const st = tune ? { ...base, maxHp: Math.max(1, Math.round(base.maxHp * tune.hp)), attackPower: Math.max(1, Math.round(base.attackPower * tune.atk)) } : base;
   const name = elite ? `${def.name}${ELITE_SUFFIX}` : def.name;
   if (c.maxHp === st.maxHp && c.attackPower === st.attackPower && !!c.elite === elite && c.name === name && c.scaledLevel === level) return c;
   return { ...c, maxHp: st.maxHp, hp: st.maxHp, attackPower: st.attackPower, elite, name, scaledLevel: level };

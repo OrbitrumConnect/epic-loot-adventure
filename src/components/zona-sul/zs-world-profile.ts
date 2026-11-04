@@ -10,7 +10,7 @@ import { HARVEST_NODES } from '@/game/data/harvest-nodes';
 import { pickZsCampSites, ZS_HILLTOP_CAMPS, ZS_SAFE, ZS_SHARK_MIN_DEPTH, ZS_ZONE_RADII, type ZsQuery } from '@/game/systems/zsSpawnSystem';
 import { type ZsTerrain, zsBounds, zsHeightAt, zsSeaBounds, zsSlopeDeg, zsSurfAt, ZS_WATER_Y, zsWaterYAt } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
-import { CAVE_BOSS, caveEnemySpots, caveLayer, caveOreSpots, zsCaveUnder } from './zs-cave';
+import { CAVE_BOSS, CAVE_TUNE, caveEnemySpots, caveLayer, caveOreSpots, zsCaveUnder } from './zs-cave';
 
 /** Os BICHOS da caverna (31/10): Fauce de Sílex e Aberração nos salões — mesmo formato da fauna (`wild_cave_*` → força
  *  pela região e renascer iguais aos da mata); nascem no chão da caverna (`homeY`). Precisa do chão ligado (zsCaveUnder). */
@@ -19,9 +19,10 @@ export function createCaveCreatures(): CreatureState[] {
   for (const s of caveEnemySpots()) {
     const def = CREATURES[s.speciesId];
     if (!def) continue;
-    const hp = scaleEnemyHp(def.maxHp);
+    const k = CAVE_TUNE[def.id] ?? { hp: 1, atk: 1 }; // versão "comum" de quem é chefe noutro lugar (03/11)
+    const hp = Math.round(scaleEnemyHp(def.maxHp) * k.hp);
     out.push({
-      id: s.id, speciesId: def.id, name: def.name, hp, maxHp: hp, attackPower: def.attackPower, armor: def.armor,
+      id: s.id, speciesId: def.id, name: def.name, hp, maxHp: hp, attackPower: Math.round(def.attackPower * k.atk), armor: def.armor,
       attackCooldown: def.attackCooldown, lastAttackAt: 0, position: { x: s.x, z: s.z }, behavior: 'patrol', lootTable: [], respawnAt: null,
     });
   }

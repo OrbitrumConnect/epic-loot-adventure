@@ -154,7 +154,16 @@ export const CAVE_ENEMIES: readonly (readonly [string, string, number, number])[
   // 02/11 noite: o abismo do Pico da Tijuca (no fundo do poço) e o salão do Alto da Boa Vista — no FIM (ids de cima iguais)
   ['abismo', 'monster', 0.2, 0.1], ['abismo', 'flintmaw', -0.3, -0.2], ['abismo', 'monster', -0.1, 0.35],
   ['salao-alto', 'flintmaw', 0.3, 0.3], ['salao-alto', 'monster', -0.4, -0.2], ['salao-alto', 'monster', 0.1, -0.5],
+  // 03/11 (Pedro: "cave pode por mais uns 15–20% de inimigos VARIADOS"; e antes: "canibal dentro da cave, espalhado"):
+  // +11 (62 → 73, +17,7%) com espécies NOVAS na caverna — no FIM (ids de cima iguais). Canibal só nos salões grandes (3,4 m,
+  // versão comum: CAVE_TUNE), brutamontes, e o Puglin (minion rápido) pelos salões menores.
+  ['grande', 'raider_cannibal', -0.1, 0.15], ['abismo', 'raider_cannibal', 0.35, -0.35], ['salao-alto', 'raider_cannibal', -0.15, 0.4],
+  ['corcovado', 'raider_brute', -0.15, -0.45], ['cristais', 'raider_brute', 0.45, -0.2], ['cosme', 'raider_brute', -0.2, -0.45],
+  ['encruzilhada', 'raider_puglin', 0.1, 0.45], ['agua', 'raider_puglin', -0.3, 0.3], ['poco', 'raider_puglin', 0.05, -0.5],
+  ['agua2', 'raider_puglin', 0.1, -0.1], ['grande', 'raider_puglin', 0.45, 0.05],
 ];
+/** Força na CAVERNA por espécie: `game/data/cave-tune` (vale também depois da força pela região). */
+export { CAVE_TUNE } from '@/game/data/cave-tune';
 
 /** MINÉRIO DE FERRO NA CAVERNA (02/11, Pedro: "minério dentro da cave — exato e um pouco mais"; e a Zona Sul não tinha
  *  veio de ferro: o skate/carro/navio custam ferro). Igual ARK (metal na caverna): veios no chão dos salões, perto da

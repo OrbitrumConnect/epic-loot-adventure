@@ -84,16 +84,16 @@ describe('minério de ferro na caverna', () => {
 describe('mais inimigos na caverna + navio no 35', () => {
   // 02/11 noite: 21 → 27 (abismo do Pico da Tijuca + salão do Alto da Boa Vista, no FIM da lista)
   it('13 → 27 inimigos (os 13 de antes com os MESMOS ids), todos em pé no chão da caverna', () => {
-    expect(CAVE_ENEMIES).toHaveLength(27);
+    expect(CAVE_ENEMIES).toHaveLength(38); // 03/11: +11 variados (Canibal, brutamontes, Puglin) no FIM — os 27 de antes iguais
     const spots = caveEnemySpots();
-    expect(spots.slice(0, 13).map((s) => s.id)).toEqual(CAVE_ENEMIES.slice(0, 13).map(([room], i) => `wild_cave_${room}_${i}`));
+    expect(spots.slice(0, 27).map((s) => s.id)).toEqual(CAVE_ENEMIES.slice(0, 27).map(([room], i) => `wild_cave_${room}_${i}`));
     for (const s of spots) {
       const fl = caveStandAt(s.x, s.z);
       expect(fl, s.id).not.toBeNull();
       expect(caveLayer(s.x, fl!, s.z), s.id).toBe(1);
     }
     // 03/11: + os dos TÚNEIS (caverna-inimigos-tuneis), no fim — os 27 dos salões seguem iguais
-    expect(createCaveCreatures().filter((c) => c.id.startsWith('wild_cave_') && !c.id.startsWith('wild_cave_tn_'))).toHaveLength(27);
+    expect(createCaveCreatures().filter((c) => c.id.startsWith('wild_cave_') && !c.id.startsWith('wild_cave_tn_'))).toHaveLength(38);
     expect(createCaveCreatures().filter((c) => c.id.startsWith('wild_cave_tn_'))).toHaveLength(caveTunnelEnemySpots().length);
   });
   it('navio de guerra libera no nível 35', () => {
