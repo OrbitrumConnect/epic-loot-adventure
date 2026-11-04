@@ -78,7 +78,8 @@ function FleetUnit({ id, gun }: { id: string; gun: boolean }) {
   return (
     <group ref={g}>
       <Suspense fallback={null}>
-        <GlbHeroMixamo charUrl="/models/raiders/pirate.glb" actionRef={action} autoHeight={1.8} standFixX={Math.PI / 2} bindFix deathClip="back"
+        {/* 04/11: o mesmo Saqueador do mapa (1,85 m — o herói menos ~10 cm) */}
+        <GlbHeroMixamo charUrl="/models/raiders/pirate.glb" actionRef={action} autoHeight={MIXAMO_RAIDER['raider_scout']!.height} standFixX={Math.PI / 2} bindFix deathClip="back"
           forceGun={gun} weapon={gun ? <Suspense fallback={null}><RifleModel /></Suspense> : undefined} />
       </Suspense>
     </group>

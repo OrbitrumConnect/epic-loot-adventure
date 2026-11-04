@@ -78,7 +78,8 @@ describe('assenta ao NASCER, em qualquer distância', () => {
   it('inimigos de acampamento: autoGround ligado e −30% SÓ no acampamento (horda no tamanho original)', async () => {
     const fs = await import('node:fs');
     const r = fs.readFileSync('src/components/world/raider.tsx', 'utf8');
-    expect(r).toMatch(/pirate\.glb', standFixX: Math\.PI \/ 2, height: 1\.8, bindFix: true, autoGround: true/);
+    // 04/11: 1,8 → 1,85 (Pedro: "do tamanho do herói, uns 10 cm a menos")
+    expect(r).toMatch(/pirate\.glb', standFixX: Math\.PI \/ 2, height: 1\.85, bindFix: true, autoGround: true/);
     expect(r).toMatch(/scrap_brute\.glb', standFixX: Math\.PI \/ 2, height: 2\.3, bindFix: true, autoGround: true/);
     expect(r).toMatch(/rope_archer\.glb', standFixX: Math\.PI \/ 2, height: 1\.85, forceBow: true, twistFix: true, autoGround: true/);
     expect(r).toMatch(/swamp\.glb', standFixX: Math\.PI \/ 2, height: 1\.9, bindFix: true, autoGround: true/);
@@ -86,7 +87,8 @@ describe('assenta ao NASCER, em qualquer distância', () => {
     expect(r).toMatch(/const sizeK = isCampSpawn\(creatureId\) \? \(CAMP_SCALE_BY\[speciesId\] \?\? CAMP_SCALE\) : 1;/);
     // Couraça ~2,9 m no acampamento — 03/11: a da horda ficou 2,49 m (−25%), a do fortim segue ~2,9 (2,49 × 1,16)
     // 03/11 (Pedro: "o saqueador xamã está pequeno"): + o xamã (arqueiro) 0,75 no acampamento
-    expect(r).toMatch(/export const CAMP_SCALE_BY: Record<string, number> = \{ raider_samurai: 1\.16, raider_shaman: 0\.75 \};/);
+    // 04/11: os `bindFix` no acampamento no tamanho de projeto (o ×0,49 compensava o bug dos gigantes — tamanho-bindfix)
+    expect(r).toMatch(/export const CAMP_SCALE_BY: Record<string, number> = \{ raider_samurai: 1\.16, raider_shaman: 0\.75, raider_scout: 1, raider_warrior: 1, raider_brute: 1, raider_mushroom: 1 \};/);
     expect(r).toMatch(/raider_samurai: \{ url: '\/models\/raiders\/spiked\.glb', standFixX: Math\.PI \/ 2, height: 2\.49,/);
     expect(r).toMatch(/autoHeight=\{mx\.height \* sizeK\}/);
   });

@@ -62,7 +62,11 @@ export const CAMP_SCALE = 0.49;
  *  0,87 (3,32 → ~2,9 m, +1,25 m sobre os 1,63 do −51%). Horda/mapa seguem no tamanho original (3,32 m). */
 // 03/11: a Couraça da HORDA ficou 25% menor (2,49 m); a do fortim mantém os ~2,9 m de antes (0,87 × 3,32 ÷ 2,49)
 // 03/11 (Pedro: "o saqueador xamã está pequeno"): o xamã (arqueiro) do acampamento 0,49 → 0,75 (~0,9 → ~1,4 m)
-export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 1.16, raider_shaman: 0.75 };
+// 04/11 (Pedro: "o saqueador batedor ficou pequeno demais nos acampamentos — o normal seria do tamanho do herói, uns 10 cm
+// a menos"): o ×0,49 de 25/10 foi pedido com os modelos `bindFix` 3–4× GIGANTES (bug da régua, corrigido hoje —
+// glb-hero-mixamo `fitFooled`). Com o tamanho certo ele os deixava MENORES que o herói (pirata 0,88 m) → os `bindFix` no
+// acampamento ficam no tamanho de projeto (×1): pirata 1,85 · Pântano 1,9 · Brutamontes 2,3 · Fúngico 2,87; Couraça 1,16.
+export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 1.16, raider_shaman: 0.75, raider_scout: 1, raider_warrior: 1, raider_brute: 1, raider_mushroom: 1 };
 /**
  * ATIRADORES de acampamento (Pedro 25/10: "quais inimigos podemos pôr arma pra atirar nos acampamentos"): o pirata
  * (guarda da frente) atira de FUZIL (o mesmo do herói, Pedro 26/10) de 12 m — mesmo dano/cadência dele, persegue correndo, para no alcance e atira.
@@ -129,7 +133,8 @@ export const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; hei
   raider_indigena: { url: '/models/raiders/indigena.glb', standFixX: 0, height: 1.95, bindFix: true, autoGround: true,
     clips: { base: { attack: '/models/melee/attack_horizontal.glb' } } },
   // 25/10 (Pedro): autoGround (nasciam enterrados até o peito). Tamanho de ACAMPAMENTO = CAMP_SCALE (só quem nasce lá).
-  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8, bindFix: true, autoGround: true },       // pirata
+  // 04/11: 1,8 → 1,85 m (o herói tem ~1,95: "do tamanho do herói, uns 10 cm a menos")
+  raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.85, bindFix: true, autoGround: true },       // pirata
   raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, bindFix: true, autoGround: true, death: 'mutant' },  // brutamontes (maior)
   raider_shaman: { url: '/models/raiders/rope_archer.glb', standFixX: Math.PI / 2, height: 1.85, forceBow: true, twistFix: true, autoGround: true },// arqueiro: só ataque de longe
   raider_warrior: { url: '/models/raiders/swamp.glb', standFixX: Math.PI / 2, height: 1.9, bindFix: true, autoGround: true },      // swamp winged hybrid
