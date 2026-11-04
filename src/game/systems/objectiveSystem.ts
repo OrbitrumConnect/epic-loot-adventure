@@ -1,6 +1,6 @@
 import type {
   AutoIntent, AutoMode, AutoSnapshot, InventoryState, Objective, ObjectiveKind,
-  ObjectiveQueueState, Position,
+  ObjectiveQueueState, ObjectiveUntil, Position,
 } from '../types';
 import { ITEMS } from '../data/items';
 import { getDistance } from './combatSystem';
@@ -70,6 +70,8 @@ export type ObjectiveWorld = {
   camps: { id: string; cleared: boolean; creatureIds: string[] }[];
   /** `canCollect` false = o próximo golpe não cabe na bolsa (ou falta ferramenta). */
   resources: { id: string; depleted: boolean; canCollect?: boolean }[];
+  /** Bolsa comporta mais coleta? `false` = cheia (usado por `until: bag_full`). Ausente = sem info. */
+  gatherCapacity?: boolean;
 };
 
 export type ObjectiveTickResult = {
@@ -105,7 +107,7 @@ export function hasPendingObjective(
 
 export function addObjective(
   queue: ObjectiveQueueState,
-  input: { kind: ObjectiveKind; targetId: string | null; position: Position; label: string; radius?: number },
+  input: { kind: ObjectiveKind; targetId: string | null; position: Position; label: string; radius?: number; until?: ObjectiveUntil },
   now: number,
 ): ObjectiveQueueState {
   if (hasPendingObjective(queue, input.kind, input.targetId)) return queue;
@@ -118,6 +120,7 @@ export function addObjective(
     position: { ...input.position },
     label: input.label,
     ...(input.radius != null ? { radius: input.radius } : {}),
+    ...(input.until ? { until: input.until } : {}),
     status: 'queued',
     createdAt: now,
     startedAt: null,
@@ -173,7 +176,29 @@ type Verdict = { status: 'done' } | { status: 'failed'; reason: string } | { sta
 
 const RUNNING: Verdict = { status: 'running' };
 
-function judge(objective: Objective, world: ObjectiveWorld): Verdict {
+/**
+ * Veredito do critério de término `until` (vale pra `farm_area`/`hunt_area`).
+ * Sem `until` devolve `null` (o chamador decide o legado).
+ *   - `bag_full` → done quando a bolsa está cheia (`world.gatherCapacity === false`).
+ *   - `time`     → done quando `now - startedAt >= durationMs`.
+ *   - `items`    → done quando `progress >= count`.
+ */
+function untilVerdict(objective: Objective, world: ObjectiveWorld, now: number): Verdict | null {
+  const until = objective.until;
+  if (!until) return null;
+  if (until.mode === 'bag_full') {
+    return world.gatherCapacity === false ? { status: 'done' } : RUNNING;
+  }
+  if (until.mode === 'time') {
+    if (objective.startedAt == null || until.durationMs == null) return RUNNING;
+    return now - objective.startedAt >= until.durationMs ? { status: 'done' } : RUNNING;
+  }
+  // items
+  if (until.count == null) return RUNNING;
+  return (objective.progress ?? 0) >= until.count ? { status: 'done' } : RUNNING;
+}
+
+function judge(objective: Objective, world: ObjectiveWorld, now: number): Verdict {
   if (objective.kind === 'clear_camp') {
     const camp = world.camps.find(c => c.id === objective.targetId);
     if (!camp) return { status: 'failed', reason: 'Acampamento não existe mais.' };
@@ -197,8 +222,19 @@ function judge(objective: Objective, world: ObjectiveWorld): Verdict {
     return RUNNING;
   }
 
-  // Área de caça nunca termina sozinha: só some se o jogador cancelar.
-  if (objective.kind === 'hunt_area') return RUNNING;
+  // Farmar zona: honra `until`; sem ele, o padrão é encerrar com a bolsa cheia
+  // (nunca fica eterno, ao contrário da caça de zona legada).
+  if (objective.kind === 'farm_area') {
+    const v = untilVerdict(objective, world, now);
+    if (v) return v;
+    return world.gatherCapacity === false ? { status: 'done' } : RUNNING;
+  }
+
+  // Área de caça: honra `until` quando presente; sem ele, nunca termina sozinha
+  // (legado — só some se o jogador cancelar).
+  if (objective.kind === 'hunt_area') {
+    return untilVerdict(objective, world, now) ?? RUNNING;
+  }
 
   const arrived = getDistance(world.playerPosition, objective.position) <= ARRIVAL_RADIUS;
   return arrived ? { status: 'done' } : RUNNING;
@@ -229,7 +265,7 @@ export function tickObjectives(
       continue;
     }
 
-    const verdict = judge(objective, world);
+    const verdict = judge(objective, world, now);
     if (verdict.status === 'running') {
       items.push(objective);
       continue;
@@ -737,6 +773,29 @@ export function decideIntent(snapshot: AutoSnapshot, now: number): AutoIntent {
       return { kind: 'move', to: { ...active.position }, reason: active.label };
     }
     return { kind: 'idle', reason: `${active.label}: aguardando criaturas.` };
+  }
+
+  if (active.kind === 'farm_area') {
+    const radius = active.radius ?? HUNT_AREA_RADIUS;
+    // Nó colhível mais próximo DENTRO da zona (centro = posição, raio = radius).
+    let best: AutoSnapshot['resources'][number] | null = null;
+    let bestDist = Infinity;
+    for (const node of snapshot.resources) {
+      if (node.depleted || node.canCollect === false) continue;
+      if (getDistance(active.position, node.position) > radius) continue;
+      const d = getDistance(snapshot.playerPosition, node.position);
+      if (d < bestDist) { bestDist = d; best = node; }
+    }
+    if (best && snapshot.gatherCapacity !== false) {
+      const reach = best.range ?? GATHER_RANGE;
+      if (bestDist <= reach) return { kind: 'gather', nodeId: best.id, to: { ...best.position } };
+      return { kind: 'move', to: { ...best.position }, reason: active.label };
+    }
+    // Sem nó colhível (ou bolsa cheia): fica no centro e deixa judge/tick encerrar via `until`.
+    if (getDistance(snapshot.playerPosition, active.position) > ARRIVAL_RADIUS) {
+      return { kind: 'move', to: { ...active.position }, reason: active.label };
+    }
+    return { kind: 'idle', reason: `${active.label}: aguardando recursos.` };
   }
 
   if (active.kind === 'gather_node') {

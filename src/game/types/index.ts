@@ -17,6 +17,6 @@ export type {
   CampTier, CampStructureKind, CampStructure, CampSpawn, CampDefinition, CampState,
 } from './camp';
 export type {
-  ObjectiveKind, ObjectiveStatus, Objective, AutoMode, ObjectiveQueueState, AutoIntent, AutoSnapshot,
+  ObjectiveKind, ObjectiveStatus, ObjectiveUntil, Objective, AutoMode, ObjectiveQueueState, AutoIntent, AutoSnapshot,
 } from './objective';
 export type { FeedbackKind, FeedbackEvent, HealthBarInfo } from './feedback';

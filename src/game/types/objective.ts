@@ -1,8 +1,21 @@
 import type { Position } from './player';
 
-export type ObjectiveKind = 'clear_camp' | 'hunt_creature' | 'gather_node' | 'travel' | 'hunt_area';
+export type ObjectiveKind = 'clear_camp' | 'hunt_creature' | 'gather_node' | 'travel' | 'hunt_area' | 'farm_area';
 
 export type ObjectiveStatus = 'queued' | 'active' | 'done' | 'failed' | 'cancelled';
+
+/**
+ * Critério de término escolhido pelo jogador para tarefas de zona
+ * (`farm_area`/`hunt_area`): a tarefa encerra por bolsa cheia, por tempo
+ * decorrido ou por nº de itens coletados desde que virou ativa.
+ */
+export type ObjectiveUntil = {
+  mode: 'bag_full' | 'time' | 'items';
+  /** `time`: duração em milissegundos a partir de `startedAt`. */
+  durationMs?: number;
+  /** `items`: quantos itens coletar antes de encerrar. */
+  count?: number;
+};
 
 export type Objective = {
   id: string;
@@ -12,8 +25,12 @@ export type Objective = {
   /** Para onde o jogador precisa ir. Para alvos móveis é só o ponto inicial. */
   position: Position;
   label: string;
-  /** `hunt_area`: raio em metros em torno de `position`. */
+  /** `hunt_area`/`farm_area`: raio em metros em torno de `position`. */
   radius?: number;
+  /** `farm_area`/`hunt_area`: critério de término. Ausente = legado. */
+  until?: ObjectiveUntil;
+  /** Itens coletados desde que a tarefa virou ativa (modo `items`). */
+  progress?: number;
   status: ObjectiveStatus;
   createdAt: number;
   startedAt: number | null;
