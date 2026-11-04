@@ -28,6 +28,14 @@ export function zsDiveStep(dive: number, holdDown: boolean, waterDepth: number, 
 }
 /** Subida máxima por metro andado (1 = 45°). Mais íngreme = paredão de pedra: não sobe, desliza. */
 export const ZS_MAX_CLIMB = 1.0;
+/**
+ * SAIR DA ÁGUA (03/11, Pedro: "no canal do Jardim de Alah, quando entro na água e vou sair do outro lado, às vezes buga a
+ * margem pra subir"). Medido no mapa de verdade: nadando reto até a margem, 130 de 170 pontos do canal travavam — o fundo
+ * sobe até o nível d'água e dali a margem passa de 45° (a regra do andar). Agora, na FAIXA DA MARGEM (até EXIT_LEDGE m
+ * acima d'água), quem sai da água se apoia e sobe rampa até EXIT_CLIMB (~72°); acima da faixa, a regra de sempre
+ * (paredão alto continua parede). Em terra longe d'água: nada muda.
+ */
+export const ZS_EXIT_LEDGE = 1.6, ZS_EXIT_CLIMB = 3;
 const EDGE = 6;
 
 export type ZsMoveResult = { x: number; z: number; ground: number; swimming: boolean; wading: boolean };
@@ -47,9 +55,11 @@ export function zsStep(t: ZsTerrain, x: number, z: number, dx: number, dz: numbe
     if (zsSurfAt(t, nx, nz) === ZS_SURF.out && zsSurfAt(t, x, z) !== ZS_SURF.out) return false; // fora da área jogável
     const run = Math.hypot(nx - x, nz - z);
     if (run < 1e-6) return true;
-    const rise = zsHeightAt(t, nx, nz) - g0;
+    const gn = zsHeightAt(t, nx, nz), rise = gn - g0;
     // nadando dá pra encostar em qualquer margem; paredão só conta acima d'água
-    return rise <= 0.05 || rise / run <= ZS_MAX_CLIMB || zsHeightAt(t, nx, nz) < ZS_WATER_Y;
+    if (rise <= 0.05 || rise / run <= ZS_MAX_CLIMB || gn < ZS_WATER_Y) return true;
+    // saindo da água pela margem (faixa até ZS_EXIT_LEDGE acima d'água): se apoia e sobe até ZS_EXIT_CLIMB
+    return g0 < ZS_WATER_Y + ZS_EXIT_LEDGE && gn <= ZS_WATER_Y + ZS_EXIT_LEDGE && rise / run <= ZS_EXIT_CLIMB;
   };
   let nx = clampX(x + dx), nz = clampZ(z + dz);
   if (!ok(nx, nz)) {
