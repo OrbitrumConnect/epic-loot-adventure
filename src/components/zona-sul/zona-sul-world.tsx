@@ -63,6 +63,7 @@ import { CombatFeedback } from '@/components/world/combat-feedback';
 import { Projectiles } from '@/components/world/projectiles';
 import { HeroPowers } from '@/components/world/hero-powers';
 import { BurstRuntime } from '@/components/world/burst-runtime';
+import { ZsEnemyFleetView } from './zs-enemy-fleet-view';
 import { autoFireItem, manualShot, pressTrigger, releaseTrigger, triggerHeld } from '@/game/systems/burstSystem';
 import { AutoPilot } from '@/components/world/auto-pilot';
 import { BackgroundSim } from '@/components/world/background-sim';
@@ -1625,6 +1626,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             <AssetBoundary label="ZsNavio" fallback={null}><Suspense fallback={null}><ZsShip t={t} /></Suspense></AssetBoundary>
             {/* NAVIO DE GUERRA (nível 70, 01/11): ancorado perto do Arpoador; E embarca, canhões no botão direito/clique */}
             <AssetBoundary label="ZsNavioGuerra" fallback={null}><Suspense fallback={null}><ZsWarshipView shipRef={shipRef} heroRef={heroRef} /></Suspense></AssetBoundary>
+            {/* ESQUADRA PIRATA (03/11): 2–3 navios menores caçam o seu quando você navega; capitão no timão dá pra matar */}
+            <AssetBoundary label="ZsEsquadra" fallback={null}><Suspense fallback={null}><ZsEnemyFleetView shipRef={shipRef} heroRef={heroRef} terrain={t} /></Suspense></AssetBoundary>
             {/* ONLINE (01/11): o navio e o carro dos OUTROS jogadores (de carona na pose) — e o convés do navio deles */}
             <AssetBoundary label="ZsVeiculosRemotos" fallback={null}><Suspense fallback={null}><ZsRemoteVehicles myShip={shipRef} myCar={carRef} /></Suspense></AssetBoundary>
             <ZsTerrainMesh t={t} heroRef={focusRef} />

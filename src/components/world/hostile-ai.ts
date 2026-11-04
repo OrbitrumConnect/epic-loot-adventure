@@ -346,6 +346,23 @@ export function swimStep(swimmable: (x: number, z: number) => boolean, ox: numbe
   return [ox, oz];
 }
 
+/** Dano de FORA no herói local (03/11 — bala de canhão da esquadra pirata): as mesmas regras da mordida (armadura,
+ *  rolando escapa, dirigindo o carro toma, morte com o nome de quem matou). Devolve o dano aplicado. */
+export function hurtPlayerBy(name: string, raw: number, at: { x: number; z: number }, hitMsg: (dmg: number, hp: number, max: number) => string): number {
+  const st = useGameStore.getState();
+  if (st.player.dead || isInvulnerable()) return 0;
+  const dmg = mitigateDamage(Math.max(1, raw), st.player);
+  if (vehicleShield.absorb?.(dmg, name)) return 0;
+  reportDamageToStore('player', dmg, at, true);
+  useGameStore.setState((s) => {
+    if (s.player.dead) return {};
+    const hp = Math.max(0, s.player.hp - dmg);
+    if (hp <= 0) return { player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 }, ui: { ...s.ui, message: `${name} te acertou em cheio!`, deathBy: { name, pvp: false } } };
+    return { player: { ...s.player, hp }, ui: { ...s.ui, message: hitMsg(dmg, hp, s.player.maxHp) } };
+  });
+  return dmg;
+}
+
 /** Pancada do giro da morte no herói local (mesma regra da mordida: armadura + morte). */
 function hurtPlayerFromGrab(name: string, raw: number, at: { x: number; z: number }): void {
   const st = useGameStore.getState();

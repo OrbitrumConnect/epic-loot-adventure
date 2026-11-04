@@ -84,9 +84,9 @@ export function warshipWorld(s: { x: number; z: number; yaw: number }, u: number
   return { x: s.x + u * c + v * sn, z: s.z - u * sn + v * c };
 }
 /** Perto do CASCO (não só do centro — o navio tem 32 m): dentro do retângulo do navio com `margin` m de folga. */
-export function nearWarshipHull(s: { x: number; z: number; yaw: number }, x: number, z: number, halfBeam: number, margin: number): boolean {
+export function nearWarshipHull(s: { x: number; z: number; yaw: number }, x: number, z: number, halfBeam: number, margin: number, len: number = WARSHIP.LENGTH): boolean {
   const { u, v } = warshipLocal(s, x, z);
-  return Math.abs(u) <= halfBeam + margin && Math.abs(v) <= WARSHIP.LENGTH / 2 + margin;
+  return Math.abs(u) <= halfBeam + margin && Math.abs(v) <= len / 2 + margin;
 }
 /** Quem está no convés vai JUNTO quando o navio anda/gira: (x, z) na pose `a` → mesma posição no navio na pose `b`. */
 export function carryOnDeck(a: { x: number; z: number; yaw: number }, b: { x: number; z: number; yaw: number }, x: number, z: number): { x: number; z: number } {
@@ -94,9 +94,10 @@ export function carryOnDeck(a: { x: number; z: number; yaw: number }, b: { x: nu
   return warshipWorld(b, l.u, l.v);
 }
 
-/** O casco cabe em (x, z, yaw)? Proa, popa, meio e as bordas (1/4 da boca) em mar fundo. */
-export function hullFits(swimmable: (x: number, z: number) => boolean, x: number, z: number, yaw: number): boolean {
-  const fx = Math.sin(yaw), fz = Math.cos(yaw), half = WARSHIP.LENGTH / 2, beam = WARSHIP.LENGTH * 0.12;
+/** O casco cabe em (x, z, yaw)? Proa, popa, meio e as bordas (1/4 da boca) em mar fundo. `len` (03/11): navio menor (a
+ *  esquadra inimiga é 35% menor); sem ele, o do herói. */
+export function hullFits(swimmable: (x: number, z: number) => boolean, x: number, z: number, yaw: number, len: number = WARSHIP.LENGTH): boolean {
+  const fx = Math.sin(yaw), fz = Math.cos(yaw), half = len / 2, beam = len * 0.12;
   for (const u of [-half, -half / 2, 0, half / 2, half]) for (const v of [-beam, 0, beam]) {
     if (!swimmable(x + fx * u + fz * v, z + fz * u - fx * v)) return false;
   }
@@ -104,11 +105,11 @@ export function hullFits(swimmable: (x: number, z: number) => boolean, x: number
 }
 
 /** Um passo do navio (mexe em `s`). `swimmable` = mar com fundura suficiente (o mapa diz). */
-export function warshipStep(swimmable: (x: number, z: number) => boolean, s: ZsWarship, inp: WarshipInput, dt: number): void {
+export function warshipStep(swimmable: (x: number, z: number) => boolean, s: ZsWarship, inp: WarshipInput, dt: number, len: number = WARSHIP.LENGTH, maxSpeed: number = WARSHIP.MAX): void {
   if (s.sinkT !== null) { s.sinkT += dt; s.speed = 0; s.yawRate = 0; return; } // afundando: parado
   for (const side of ['port', 'starboard'] as const) s.reload[side] = Math.max(0, s.reload[side] - dt);
   let v = s.speed;
-  if (inp.throttle > 0) v += WARSHIP.ACCEL * inp.throttle * Math.max(0, 1 - v / WARSHIP.MAX) * dt;
+  if (inp.throttle > 0) v += WARSHIP.ACCEL * inp.throttle * Math.max(0, 1 - v / maxSpeed) * dt;
   else if (inp.throttle < 0) v = v > 0.2 ? Math.max(0, v - WARSHIP.BRAKE * -inp.throttle * dt) : Math.max(-WARSHIP.REVERSE, v + WARSHIP.ACCEL * 0.5 * inp.throttle * dt);
   else v *= Math.exp(-WARSHIP.COAST * dt);
   // leme: andando vira tudo; parado ainda gira um pouco (TURN_STOPPED); de ré inverte
@@ -117,12 +118,12 @@ export function warshipStep(swimmable: (x: number, z: number) => boolean, s: ZsW
   s.yawRate += (want - s.yawRate) * Math.min(1, WARSHIP.TURN_RESP * dt);
   const ny = s.yaw + s.yawRate * dt;
   const nx = s.x + Math.sin(ny) * v * dt, nz = s.z + Math.cos(ny) * v * dt;
-  if (hullFits(swimmable, nx, nz, ny)) { s.x = nx; s.z = nz; s.yaw = ny; }
-  else if (Math.abs(v) > 0.05 && scrape(swimmable, s, nx, nz, ny, dt)) v *= Math.exp(-WARSHIP.SCRAPE_DRAG * dt); // raspou e seguiu
-  else if (hullFits(swimmable, s.x, s.z, ny)) { s.yaw = ny; v *= 0.3; }   // não passa: gira no lugar e perde o embalo
+  if (hullFits(swimmable, nx, nz, ny, len)) { s.x = nx; s.z = nz; s.yaw = ny; }
+  else if (Math.abs(v) > 0.05 && scrape(swimmable, s, nx, nz, ny, dt, len)) v *= Math.exp(-WARSHIP.SCRAPE_DRAG * dt); // raspou e seguiu
+  else if (hullFits(swimmable, s.x, s.z, ny, len)) { s.yaw = ny; v *= 0.3; }   // não passa: gira no lugar e perde o embalo
   else { v *= 0.3; s.yawRate *= 0.5; }
   s.speed = v;
-  s.roll += (-s.yawRate * Math.min(1, sp / WARSHIP.MAX) * 0.6 - s.roll) * Math.min(1, dt * 1.5);
+  s.roll += (-s.yawRate * Math.min(1, sp / maxSpeed) * 0.6 - s.roll) * Math.min(1, dt * 1.5);
 }
 
 /**
@@ -136,12 +137,12 @@ const SCRAPE_TRIES: readonly (readonly [number, number])[] = (() => {
   for (const lat of [0, 0.15, -0.15, 0.3, -0.3, 0.5, -0.5]) for (const dy of [0, 0.015, -0.015, 0.03, -0.03]) if (lat || dy) out.push([lat, dy]);
   return out.sort((a, b) => Math.abs(a[0]) + Math.abs(a[1]) * 15 - (Math.abs(b[0]) + Math.abs(b[1]) * 15));
 })();
-function scrape(swimmable: (x: number, z: number) => boolean, s: ZsWarship, nx: number, nz: number, ny: number, dt: number): boolean {
+function scrape(swimmable: (x: number, z: number) => boolean, s: ZsWarship, nx: number, nz: number, ny: number, dt: number, len: number = WARSHIP.LENGTH): boolean {
   const k = Math.min(2, dt * 30);
   for (const [lat, dy] of SCRAPE_TRIES) {
     const yaw = ny + dy * k, rx = Math.cos(yaw), rz = -Math.sin(yaw); // direita do navio
     const x = nx + rx * lat * k, z = nz + rz * lat * k;
-    if (hullFits(swimmable, x, z, yaw)) { s.x = x; s.z = z; s.yaw = yaw; return true; }
+    if (hullFits(swimmable, x, z, yaw, len)) { s.x = x; s.z = z; s.yaw = yaw; return true; }
   }
   return false;
 }

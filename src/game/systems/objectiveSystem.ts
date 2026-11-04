@@ -302,7 +302,9 @@ export function findHealHotbarIndex(inventory: InventoryState): number | null {
 // Decisão do piloto automático
 // ---------------------------------------------------------------------------
 
-function isCreatureAlive(creature: { behavior: string; hp: number }): boolean {
+function isCreatureAlive(creature: { id?: string; behavior: string; hp: number }): boolean {
+  // o CAPITÃO da esquadra pirata (03/11) fica no mar, no timão do navio: o piloto automático não vai atrás (nadaria até lá)
+  if (creature.id?.startsWith('fleet_')) return false;
   return creature.behavior !== 'dead' && creature.behavior !== 'respawning' && creature.hp > 0;
 }
 

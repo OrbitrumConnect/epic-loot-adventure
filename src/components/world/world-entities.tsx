@@ -157,7 +157,8 @@ export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: R
     if (removed) setRenderBodyRoster([...keep].join('|'));
   });
   const list = useMemo(() => {
-    const r = nextEnemyList(cache.current, useGameStore.getState().creatures);
+    // o CAPITÃO da esquadra pirata (`fleet_pilot_*`, 03/11) é desenhado no timão do navio dele (zs-enemy-fleet-view), não aqui
+    const r = nextEnemyList(cache.current, useGameStore.getState().creatures.filter((cr) => !cr.id.startsWith('fleet_')));
     cache.current = r.cache;
     return r.list;
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -465,7 +465,8 @@ export function broadcastBase(base: PlayerBaseState | null, tier = 0): void {
 export function broadcastWorld(creatures: CreatureState[]): void {
   if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
   if (presentGuests.size === 0) return; // ninguém presente pra ver: não gasta tráfego (27/10)
-  const pkt = worldEncoder.encode(creatures, Date.now()); // só o que mudou; foto completa a cada 30 s
+  // a esquadra pirata (`fleet_*`, 03/11) é de quem navega — v1 não vai pra rede (o convidado não tem os navios dela)
+  const pkt = worldEncoder.encode(creatures.filter((c) => !c.id.startsWith('fleet_')), Date.now()); // só o que mudou; foto completa a cada 30 s
   if (!pkt) return;
   const { selfId } = useNet.getState();
   void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, ...pkt, epoch: worldEpoch(), wt: Date.now() } });
