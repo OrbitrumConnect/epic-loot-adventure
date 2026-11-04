@@ -481,6 +481,51 @@ export function createZsSpreadFauna(q: ZsQuery, avoid: Position[], camps: CampPl
   return { creatures: out, zones: centers };
 }
 /** + duplas de bandidos (03/11: "mais inimigos"): mesmas regras das de sempre, longe delas; ids `wild_bandit_sp<n>`. */
+/**
+ * ARQUEIROS NA MATA (03/11, Pedro: "o saqueador xamã está pequeno, inimigo dos acampamentos… seria bom ter ele no mato
+ * rondando, pois é arqueiro, atira de longe — fica maneiro"). DUPLAS de xamã (o arqueiro) em CHÃO DE FLORESTA (≥ 8 m,
+ * encosta andável), âncoras a ≥ 140 m umas das outras, longe dos acampamentos (+30 m), do nascedouro e das duplas de
+ * bandidos (≥ 100 m). Tamanho normal (fora do acampamento); rondam, veem de 24 m e atiram FLECHA de 16 m (raider.tsx).
+ * Ids `wild_archer_<n>` (perigo pela região e renascer iguais aos da fauna).
+ */
+export const ZS_ARCHER_PREFIX = 'wild_archer_';
+export const ZS_ARCHER_GROUPS = 6;
+export const ZS_ARCHERS_PER_GROUP = 2;
+const ARCHER_GROUP_SPACING = 140;
+export const isZsArcher = (id: string) => id.startsWith(ZS_ARCHER_PREFIX);
+const archerGround = (q: ZsQuery, x: number, z: number) => q.surf(x, z) === SURF.forest && q.height(x, z) >= 8 && q.slope(x, z) < 30;
+export function createZsForestArchers(q: ZsQuery, camps: CampPlacement[] = [], avoid: Position[] = [], seed = 0x61726368): CreatureState[] {
+  const def = CREATURES['raider_shaman'];
+  if (!def) return [];
+  const rand = rng32(seed);
+  const { minX, maxX, minZ, maxZ } = q.bounds;
+  const anchors: Position[] = [];
+  for (let tries = 0; anchors.length < ZS_ARCHER_GROUPS && tries < 30000; tries++) {
+    const p = { x: Math.round(minX + 30 + rand() * (maxX - minX - 60)), z: Math.round(minZ + 30 + rand() * (maxZ - minZ - 60)) };
+    if (!archerGround(q, p.x, p.z) || !freeOfSpawn(q, p.x, p.z)) continue;
+    if (anchors.some((a) => d2(a, p) < ARCHER_GROUP_SPACING ** 2)) continue;
+    if (avoid.some((a) => d2(a, p) < 100 ** 2)) continue;
+    if (camps.some((c) => d2(c.position, p) < ((CAMPS[c.defId]?.radius ?? 10) + 30) ** 2)) continue;
+    anchors.push(p);
+  }
+  const out: CreatureState[] = [];
+  for (const a of anchors) {
+    let n = 0;
+    for (let tries = 0; n < ZS_ARCHERS_PER_GROUP && tries < 200; tries++) {
+      const r = 4 + rand() * 8, ang = rand() * Math.PI * 2;
+      const p = { x: Math.round((a.x + Math.sin(ang) * r) * 100) / 100, z: Math.round((a.z + Math.cos(ang) * r) * 100) / 100 };
+      if (!archerGround(q, p.x, p.z) || out.some((o) => d2(o.position, p) < 9)) continue;
+      const hp = scaleEnemyHp(def.maxHp);
+      out.push({
+        id: `${ZS_ARCHER_PREFIX}${out.length}`, speciesId: def.id, name: def.name, hp, maxHp: hp, attackPower: def.attackPower, armor: def.armor,
+        attackCooldown: def.attackCooldown, lastAttackAt: 0, position: p, behavior: 'patrol', lootTable: [], respawnAt: null,
+      });
+      n++;
+    }
+  }
+  return out;
+}
+
 export const ZS_SPREAD_BANDIT_GROUPS = 4;
 export function createZsSpreadBandits(q: ZsQuery, existing: CreatureState[], camps: CampPlacement[] = []): CreatureState[] {
   const avoid = existing.filter((c) => isZsBandit(c.id)).map((c) => c.position);

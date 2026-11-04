@@ -19,7 +19,7 @@ import { deathGroundTime, GlbHeroMixamo, type DeathClip } from './glb-hero-mixam
 import { GlbStaticBoss } from './glb-static-boss';
 import { GlbCreature } from './glb-creature';
 import { isCampSpawn } from '@/game/systems/difficultySystem';
-import { isZsBandit } from '@/game/systems/zsSpawnSystem';
+import { isZsArcher, isZsBandit } from '@/game/systems/zsSpawnSystem';
 import { campChaseScale, HORDE_RUN_FROM, hordeSpeedScale } from '@/game/systems/waveSystem';
 import { clearLeap, isRoaring, leapProgress } from '@/game/systems/leapSystem';
 import { isUnkillable } from '@/game/systems/indigenaSystem';
@@ -61,7 +61,8 @@ export const CAMP_SCALE = 0.49;
 /** Exceção (Pedro 25/10: "a Couraça estava ok grande; só ela pode aumentar 1 a 1,5 m"): no acampamento ela fica
  *  0,87 (3,32 → ~2,9 m, +1,25 m sobre os 1,63 do −51%). Horda/mapa seguem no tamanho original (3,32 m). */
 // 03/11: a Couraça da HORDA ficou 25% menor (2,49 m); a do fortim mantém os ~2,9 m de antes (0,87 × 3,32 ÷ 2,49)
-export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 1.16 };
+// 03/11 (Pedro: "o saqueador xamã está pequeno"): o xamã (arqueiro) do acampamento 0,49 → 0,75 (~0,9 → ~1,4 m)
+export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 1.16, raider_shaman: 0.75 };
 /**
  * ATIRADORES de acampamento (Pedro 25/10: "quais inimigos podemos pôr arma pra atirar nos acampamentos"): o pirata
  * (guarda da frente) atira de FUZIL (o mesmo do herói, Pedro 26/10) de 12 m — mesmo dano/cadência dele, persegue correndo, para no alcance e atira.
@@ -70,6 +71,12 @@ export const CAMP_GUNNERS = new Set(['raider_scout']);
 export const CAMP_GUN_RANGE = 12;
 /** Rajada de 3 (Pedro 25/10: "armados com rajada menor") — só visual/som, o dano é o mesmo golpe. */
 export const CAMP_GUN_BURST = 3;
+/** ARQUEIRO (xamã, 03/11): solta FLECHA visível; o da MATA (`wild_archer_`) vê de 24 m e atira de 16 m, ronda mais longe. */
+export const FOREST_ARCHER = { attackRange: 16, aggroRange: 24, leashRange: 34, provokeRange: 30 } as const;
+export function archerTuning(t: HostileTuning, sizeK: number, forest: boolean): HostileTuning {
+  const shot = { height: 1.35 * sizeK, arrow: true };
+  return forest ? { ...t, ...FOREST_ARCHER, shot } : { ...t, shot };
+}
 export function campGunnerTuning(t: HostileTuning, sizeK: number): HostileTuning {
   return { ...t, attackRange: CAMP_GUN_RANGE, aggroRange: Math.max(t.aggroRange, CAMP_GUN_RANGE + 4), hitVerb: 'atirou', shot: { height: 1.3 * sizeK, burst: CAMP_GUN_BURST } };
 }
@@ -474,7 +481,8 @@ function RaiderImpl({
   // Pirata de ACAMPAMENTO atira de fuzil (Pedro 25–26/10); na horda segue na faca. 01/11: os BANDIDOS armados soltos nos
   // morros da Zona Sul (`wild_bandit_`) também.
   const gunner = (isCampSpawn(creatureId) || isZsBandit(creatureId)) && CAMP_GUNNERS.has(speciesId);
-  const tuning = useMemo(() => (gunner ? campGunnerTuning(spec.tuning, sizeK) : spec.tuning), [gunner, spec.tuning, sizeK]);
+  const archer = speciesId === 'raider_shaman', forestArcher = isZsArcher(creatureId);
+  const tuning = useMemo(() => (gunner ? campGunnerTuning(spec.tuning, sizeK) : archer ? archerTuning(spec.tuning, sizeK, forestArcher) : spec.tuning), [gunner, archer, forestArcher, spec.tuning, sizeK]);
   const bodyRadius = mxBody ? mxBody.height * sizeK * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
 
   useHostileAI({

@@ -296,7 +296,7 @@ export type HostileTuning = {
   peaceful?: boolean;
   /** Atirador (pirata de acampamento, Pedro 25/10): cada golpe sai como TIRO — rastro de bala + som pela distância.
    *  `height` = altura do cano (m). Ausente = golpe normal (todos os outros, números intactos). */
-  shot?: { height: number; burst?: number };
+  shot?: { height: number; burst?: number; arrow?: boolean };
   /** AQUÁTICO (tubarão, 01/11): o pé do bicho fica a esta fundura (m) abaixo da superfície da água. Só vale pra espécie
    *  `aquatic` num mapa com água funda (`WORLD.water`); ausente = bicho de terra. */
   swimDepth?: number;
@@ -392,10 +392,12 @@ export function hurtPlayerFromLeap(name: string, speciesId: string, attackPower:
 /** Intervalo dos tiros da rajada do inimigo (s). A rajada é só visual/som: o dano é o MESMO golpe de antes. */
 export const ENEMY_BURST_GAP_MS = 120;
 /** Tiro de inimigo: rastro de bala (mesmos projéteis do jogador) + som de arma pela distância até mim. */
-function enemyShot(from: { x: number; z: number }, to: { x: number; z: number }, shot: { height: number; burst?: number }, me: { x: number; z: number }): void {
+function enemyShot(from: { x: number; z: number }, to: { x: number; z: number }, shot: { height: number; burst?: number; arrow?: boolean }, me: { x: number; z: number }): void {
   const fire = () => {
-    useGameStore.setState((s) => ({ feedback: pushEvent(s.feedback, shotEvent(from, to, 'bullet', shot.height), Date.now()) }));
-    audioManager.playWorld('gun', distanceGain(Math.hypot(from.x - me.x, from.z - me.z)));
+    // 03/11: o ARQUEIRO (xamã) solta FLECHA visível com som de arco (antes "flechava" sem nada voar)
+    useGameStore.setState((s) => ({ feedback: pushEvent(s.feedback, shotEvent(from, to, shot.arrow ? 'arrow' : 'bullet', shot.height), Date.now()) }));
+    const g = distanceGain(Math.hypot(from.x - me.x, from.z - me.z));
+    if (shot.arrow) audioManager.playRemote('bow', g); else audioManager.playWorld('gun', g);
   };
   fire();
   for (let i = 1; i < (shot.burst ?? 1); i++) setTimeout(fire, i * ENEMY_BURST_GAP_MS);

@@ -70,7 +70,7 @@ import { AssetBoundary } from '@/components/world/asset-boundary';
 import { HarvestNodes } from '@/components/world/harvest-nodes';
 import { SAFE_ZONE } from '@/game/data/camps';
 import { resetWorldProfile, setWorldProfile, WORLD } from '@/game/data/world-profile';
-import { createZsBandits, createZsNewAreaCreatures, createZsSharks, createZsSpreadBandits, createZsSpreadFauna, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
+import { createZsBandits, createZsForestArchers, createZsNewAreaCreatures, createZsSharks, createZsSpreadBandits, isZsBandit, createZsSpreadFauna, createZsWildlife, ZS_FAUNA, ZS_SHARK_PEAKS, type ZsSharkPeak } from '@/game/systems/zsSpawnSystem';
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsForestFarm, createZsHarvestNodes, createZsNewAreaTrees, createZsSpreadHarvest } from '@/game/systems/zsHarvestSystem';
@@ -1573,7 +1573,10 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             ...createZsNewAreaCreatures(zsQuery(tt), query.bounds, prof.camps)]; // + bichos e bandidos da Gávea/São Conrado (02/11)
           // + BICHOS ESPALHADOS (03/11): zonas novas longe de tudo que já tem na superfície (caverna e mar não contam)
           const surface = base.filter((c) => !/^(wild_cave_|zs_cave_|wild_shark_)/.test(c.id)).map((c) => c.position);
-          return [...base, ...createZsSpreadFauna(zsQuery(tt), surface, prof.camps).creatures, ...createZsSpreadBandits(zsQuery(tt), base, prof.camps)];
+          const spreadBandits = createZsSpreadBandits(zsQuery(tt), base, prof.camps);
+          // + ARQUEIROS rondando a mata (03/11), longe das duplas de bandidos
+          const archers = createZsForestArchers(zsQuery(tt), prof.camps, [...base, ...spreadBandits].filter((c) => isZsBandit(c.id)).map((c) => c.position));
+          return [...base, ...createZsSpreadFauna(zsQuery(tt), surface, prof.camps).creatures, ...spreadBandits, ...archers];
         })(),
         // + árvores de farm da área nova (Gávea/São Conrado, no terreno de agora) + veios de ferro da caverna (02/11)
         // + FARM ESPALHADA nos vazios do mapa (03/11; nada na boca da caverna)
