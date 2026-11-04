@@ -20,12 +20,18 @@ export const IND = {
   RETURN_MIN_MS: 120_000, RETURN_MAX_MS: 240_000,
   /** volta depois de você FUGIR dele (ms) */
   LOST_RETURN_MS: 60_000,
-  /** fração da vida com que recua (o "golpe fatal" vira fuga) */
-  FLEE_HP: 0.4,
+  /** fração da vida com que recua (o "golpe fatal" vira fuga). 03/11 (2ª): 40% → 10% — "a vida subiu" parecia cura; ele
+   *  foge FERIDO (o recuo é intocável de qualquer jeito: a armadura do recuo) */
+  FLEE_HP: 0.1,
+  /** …mas no mínimo isto (a 1 por golpe, nem o automático a 10/s esvazia nos ~6–10 s até sumir → sem 2º "abate"/loot) */
+  FLEE_HP_MIN: 200,
   /** some depois de correr isto (ms) ou de abrir esta distância de você (m) */
   FLEE_MS: 6000, FLEE_GONE_DIST: 60,
   /** desiste se você abrir esta distância dele (m) */
   LEAVE_DIST: 140,
+  /** 03/11 (2ª, Pedro: "se não matou o indígena em uns 3 min é melhor ele sair correndo pra mata e voltar depois"):
+   *  luta sem cair por isto (ms) → recua sozinho (sem o loot do abate) e volta em 2–4 min */
+  ENGAGE_MS: 180_000,
   /** não surge perto da SUA base (m) nem na zona segura (+ folga) */
   BASE_CLEAR: 60, SAFE_PAD: 20,
 } as const;
@@ -55,8 +61,24 @@ export function indigenaState(o: { now: number; fleeingSince: number | null; dis
 /** Armadura enquanto recua: todo golpe vira o dano mínimo (1) — não dá pra "abater" de novo e farmar o loot nos 6 s. */
 export const FLEE_ARMOR = 1_000_000;
 
-/** O "golpe fatal" nele: recua ferido (40% da vida, intocável até sumir; o resto do estado igual). Já recuando: fica. */
+/**
+ * Está RECUANDO? (03/11, 2ª — Pedro: "fui até o final, ele subiu a vida, saiu correndo, ataquei ele, ele voltou a me
+ * atacar… e só dá 1 de dano"). Todo golpe num bicho põe ele pra PERSEGUIR (7 lugares no jogo) — no recuo isso apagava o
+ * 'flee': ele voltava a caçar com a armadura do recuo (todo golpe = 1) e o relógio de sumir parava. A ARMADURA do recuo é
+ * a marca que nenhum golpe apaga → recuo = 'flee' OU essa armadura.
+ */
+export function isRetreating(c: { behavior: string; armor: number }): boolean { return c.behavior === 'flee' || c.armor >= FLEE_ARMOR; }
+
+/** O "golpe fatal" nele: recua ferido (10% da vida, intocável até sumir; o resto do estado igual). Já recuando: fica. */
 export function fleeInsteadOfDeath<T extends { maxHp: number; hp: number; armor: number; behavior: string }>(c: T): T {
-  if (c.behavior === 'flee') return { ...c, hp: Math.max(1, c.hp) };
-  return { ...c, hp: Math.max(1, Math.round(c.maxHp * IND.FLEE_HP)), behavior: 'flee', armor: FLEE_ARMOR };
+  if (isRetreating(c)) return { ...c, hp: Math.max(1, c.hp), behavior: 'flee', armor: FLEE_ARMOR };
+  return { ...c, hp: Math.max(1, Math.round(c.maxHp * IND.FLEE_HP), Math.min(c.maxHp, IND.FLEE_HP_MIN)), behavior: 'flee', armor: FLEE_ARMOR };
 }
+/** Cansou (3 min sem cair): recua pra mata com a vida que tem (sem abate = sem loot). */
+export function retreatToForest<T extends { armor: number; behavior: string }>(c: T): T { return { ...c, behavior: 'flee', armor: FLEE_ARMOR }; }
+/** Quando nasceu (o id leva a hora). */
+export function indBornAt(id: string, fallback: number): number { const t = Number(id.slice(IND_PREFIX.length)); return Number.isFinite(t) && t > 0 ? t : fallback; }
+
+/** Força pelo NÍVEL do herói (03/11, 2ª — Pedro: "quem for lvl baixo vai passar sufoco"): nv 5 ≈ 40% (vida e golpe),
+ *  nv 30 ≈ 65%, nv 65+ = 100% (o de sempre; acima disso não cresce). */
+export function indigenaLevelK(level: number): number { return Math.min(1, Math.max(0.4, 0.35 + Math.max(0, level) * 0.01)); }

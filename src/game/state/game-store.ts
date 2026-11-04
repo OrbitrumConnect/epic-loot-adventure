@@ -66,7 +66,7 @@ import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem'
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { lineWalkable } from '@/components/world/map-walk';
 import { behindSpot, isSorceress, nextSorceressAt, SORC, SORC_PREFIX, sorcClock, sorceressMaySpawn } from '../systems/sorceressSystem';
-import { fleeInsteadOfDeath, IND, IND_PREFIX, indClock, indigenaMaySpawn, indigenaState, isUnkillable, nextIndigenaAt } from '../systems/indigenaSystem';
+import { fleeInsteadOfDeath, IND, IND_PREFIX, indBornAt, indClock, indigenaLevelK, indigenaMaySpawn, indigenaState, isRetreating, isUnkillable, nextIndigenaAt, retreatToForest } from '../systems/indigenaSystem';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
@@ -1914,7 +1914,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const st = get(), p = st.player.position;
     const me = st.creatures.find((c) => isUnkillable(c.id));
     if (me) {
-      const fleeing = me.behavior === 'flee';
+      // 3 min caçando sem cair (03/11, 2ª): recua sozinho pra mata e volta depois (sem o loot do abate)
+      if (!isRetreating(me) && now - indBornAt(me.id, now) >= IND.ENGAGE_MS) {
+        indClock.fleeSeen.set(me.id, now);
+        set((s) => ({ creatures: s.creatures.map((c) => (c.id === me.id ? retreatToForest(c) : c)), ui: { ...s.ui, message: `🪶 ${me.name} recuou pra mata… ele vai voltar.` } }));
+        return;
+      }
+      const fleeing = isRetreating(me); // pela armadura do recuo também: golpe no recuo não o tira dele
       if (fleeing && !indClock.fleeSeen.has(me.id)) {
         indClock.fleeSeen.set(me.id, now);
         set((s) => ({ ui: { ...s.ui, message: `🪶 ${me.name} recuou ferido… ele vai voltar.` } }));
@@ -1935,10 +1941,11 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const at = def ? behindSpot(p.x, p.z, yaw, (x, z) => (!WORLD.walkable || WORLD.walkable(x, z)) && lineWalkable(p.x, p.z, x, z)) : null;
     if (!def || !at) return; // sem chão atrás agora: tenta no próximo
     indClock.nextAt = now + IND.LOST_RETURN_MS; // (se algo der errado, não renasce em loop)
-    const hp = scaleEnemyHp(def.maxHp);
+    const lk = indigenaLevelK(st.player.level); // nível baixo: mais fraco (03/11, 2ª); nv 65+ = o de sempre
+    const hp = Math.round(scaleEnemyHp(def.maxHp) * lk);
     const ind: CreatureState = {
       id: `${IND_PREFIX}${now}`, speciesId: def.id, name: def.name, hp, maxHp: hp,
-      attackPower: def.attackPower, armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0,
+      attackPower: Math.round(def.attackPower * lk), armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0,
       position: { x: clampX(at.x, 4), z: clampZ(at.z, 4) }, behavior: 'patrol', lootTable: [], respawnAt: null,
     };
     const again = indClock.returns++ > 0;

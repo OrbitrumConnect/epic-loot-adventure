@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { FLEE_ARMOR, fleeInsteadOfDeath, IND, indClock, indigenaMaySpawn, indigenaState, isUnkillable } from '@/game/systems/indigenaSystem';
+import { FLEE_ARMOR, fleeInsteadOfDeath, IND, indBornAt, indClock, indigenaLevelK, indigenaMaySpawn, indigenaState, isRetreating, isUnkillable, retreatToForest } from '@/game/systems/indigenaSystem';
 import { deadCreature } from '@/game/state/game-store';
 import { CREATURES } from '@/game/data/creatures';
 import { calculateDamage } from '@/game/systems/combatSystem';
@@ -12,10 +12,13 @@ const read = (p: string) => fs.readFileSync(p, 'utf8');
 const mk = (id: string): CreatureState => ({ id, speciesId: 'raider_indigena', name: 'Guerreiro Indígena', hp: 10, maxHp: 1500, attackPower: 40, armor: 14, attackCooldown: 1.6, lastAttackAt: 0, position: { x: 0, z: 0 }, behavior: 'attack', lootTable: [], respawnAt: null });
 
 describe('Guerreiro Indígena: não morre — recua ferido e volta', () => {
-  it('o golpe fatal vira RECUO (40% da vida, intocável até sumir); os outros bichos morrem como sempre', () => {
+  it('o golpe fatal vira RECUO (ferido: 10%, mín. 200 de vida; intocável até sumir); os outros bichos morrem como sempre', () => {
     const d = deadCreature(mk('ind_1'), 1000, () => 0.5);
     expect(d.behavior).toBe('flee');
-    expect(d.hp).toBe(Math.round(1500 * IND.FLEE_HP));
+    expect(IND.FLEE_HP).toBe(0.1); // 03/11 (2ª): 40% "parecia cura" — foge ferido
+    expect(d.hp).toBe(Math.max(Math.round(1500 * IND.FLEE_HP), IND.FLEE_HP_MIN));
+    // nem o automático (10 tiros/s × 1 de dano) esvazia o recuo nos ~10 s até sumir → sem 2º "abate"/loot
+    expect(IND.FLEE_HP_MIN).toBeGreaterThanOrEqual(10 * (IND.FLEE_MS / 1000 + 4) + 50);
     expect(d.armor).toBe(FLEE_ARMOR);
     expect(calculateDamage(99999, d.armor)).toBe(1); // todo golpe = 1 no recuo → não dá pra "abater" de novo e farmar
     expect(fleeInsteadOfDeath({ ...d, hp: 0 }).hp).toBe(1); // já recuando: não cura de novo
@@ -49,8 +52,9 @@ describe('Guerreiro Indígena: não morre — recua ferido e volta', () => {
     const def = CREATURES['raider_indigena']!;
     expect(def.maxHp).toBeGreaterThanOrEqual(1500); expect(def.attackPower).toBeGreaterThanOrEqual(40);
     const ai = read('src/components/world/hostile-ai.ts');
-    expect(ai).toMatch(/if \(!mirror && creature\.behavior === 'flee' && isUnkillable\(creatureId\)\) flee = true;/);
-    expect(ai).toMatch(/const locked = cr\.behavior === 'dead' \|\| cr\.behavior === 'respawning' \|\| \(cr\.behavior === 'flee' && isUnkillable\(cr\.id\)\);/);
+    expect(ai).toMatch(/if \(!mirror && isUnkillable\(creatureId\) && isRetreating\(creature\)\) flee = true;/);
+    expect(ai).toMatch(/const retreat = isUnkillable\(cr\.id\) && isRetreating\(cr\);/);
+    expect(ai).toMatch(/const behavior: CreatureBehavior = retreat \? 'flee' : locked \|\| p\.behavior === null \? cr\.behavior : p\.behavior;/);
     const r = read('src/components/world/raider.tsx');
     expect(r).toMatch(/raider_indigena: \{ url: '\/models\/raiders\/indigena\.glb', standFixX: 0, height: 1\.95, bindFix: true/);
     expect(r).toMatch(/const stalkerRuns = isUnkillable\(creatureId\);/);
@@ -70,5 +74,35 @@ describe('Guerreiro Indígena: não morre — recua ferido e volta', () => {
     expect(b.length).toBeLessThan(2_000_000);
     const atk = fs.readFileSync('public/models/melee/attack_horizontal.glb'), ja = JSON.parse(atk.subarray(20, 20 + atk.readUInt32LE(12)).toString());
     expect(ja.meshes ?? []).toHaveLength(0); expect(ja.animations).toHaveLength(1);
+  });
+
+  it('BUG 03/11 (2ª, Pedro: "ataquei ele no recuo, ele voltou a me atacar, só dá 1 de dano"): golpe no recuo não o tira dele', () => {
+    const d = deadCreature(mk('ind_7'), 1000, () => 0.5);
+    const hit = { ...d, hp: d.hp - 1, behavior: 'chase' as const }; // o que todo golpe faz num bicho
+    expect(isRetreating(hit)).toBe(true); // a armadura do recuo é a marca
+    expect(isRetreating(mk('ind_8'))).toBe(false);
+    const again = fleeInsteadOfDeath({ ...hit, hp: 0 });
+    expect(again.behavior).toBe('flee'); expect(again.hp).toBe(1); expect(again.armor).toBe(FLEE_ARMOR); // sem nova "cura"
+    expect(read('src/game/state/game-store.ts')).toMatch(/const fleeing = isRetreating\(me\);/); // o relógio de sumir conta mesmo levando golpe
+  });
+
+  it('3 min caçando sem cair: recua sozinho pra mata (sem loot) e volta depois', () => {
+    expect(IND.ENGAGE_MS).toBe(180_000);
+    expect(indBornAt('ind_1700000000000', 5)).toBe(1700000000000);
+    expect(indBornAt('ind_x', 5)).toBe(5);
+    const r = retreatToForest(mk('ind_9'));
+    expect(r.behavior).toBe('flee'); expect(r.hp).toBe(10); expect(isRetreating(r)).toBe(true); // a vida que tinha
+    expect(read('src/game/state/game-store.ts')).toMatch(/if \(!isRetreating\(me\) && now - indBornAt\(me\.id, now\) >= IND\.ENGAGE_MS\) \{/);
+  });
+
+  it('força pelo nível do herói: nv 5 ≈ 40%, nv 30 ≈ 65%, nv 65+ = 100% (não cresce acima)', () => {
+    expect(indigenaLevelK(5)).toBeCloseTo(0.4, 5);
+    expect(indigenaLevelK(30)).toBeCloseTo(0.65, 5);
+    expect(indigenaLevelK(65)).toBe(1);
+    expect(indigenaLevelK(105)).toBe(1);
+    expect(indigenaLevelK(1)).toBe(0.4);
+    const gs = read('src/game/state/game-store.ts');
+    expect(gs).toMatch(/const hp = Math\.round\(scaleEnemyHp\(def\.maxHp\) \* lk\);/);
+    expect(gs).toMatch(/attackPower: Math\.round\(def\.attackPower \* lk\)/);
   });
 });
