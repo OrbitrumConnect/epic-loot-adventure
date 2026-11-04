@@ -84,6 +84,13 @@ describe('Kraken das Cagarras — fases', () => {
     expect(k.moving).toBe(false);
     expect(krakenGaveUp(KRAKEN_BOSS.BODY_REACH + 79)).toBe(false);
     expect(krakenGaveUp(KRAKEN_BOSS.BODY_REACH + 81)).toBe(true);
+    // bug do Pedro (04/11): cortou o último tentáculo de LONGE (250 m) → ele tem que vir, não sumir
+    expect(krakenGaveUp(250, 250)).toBe(false);
+    expect(krakenGaveUp(320, 250)).toBe(false);   // fugiu 70 m: ainda vem
+    expect(krakenGaveUp(331, 250)).toBe(true);    // fugiu mais de 80 m do mais perto: despistou
+    expect(krakenGaveUp(200, 120)).toBe(false);   // chegou a 120 m, você está a 200: ainda vem
+    expect(krakenGaveUp(201, 120)).toBe(true);
+    expect(read('src/components/zona-sul/zs-kraken-boss-view.tsx')).toContain('K.bodyOut = true; K.phase = \x27hunt\x27; K.closest = ns ? ns.d : Infinity;');
   });
 });
 

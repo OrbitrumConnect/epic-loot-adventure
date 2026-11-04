@@ -68,13 +68,15 @@ export type KrakenState = {
   phase: KrakenPhase; riseT: number; sinkT: number; lastNearAt: number; nextAt: number;
   /** onde ele está (no covil, ou andando atrás do navio) */
   x: number; z: number; moving: boolean;
+  /** o casco MAIS PERTO que ele chegou nesta perseguição (despista = fugir GIVEUP_EXTRA a partir daqui) */
+  closest: number;
   tents: Tentacle[]; bodyOut: boolean; bodyReload: number; bodyAct: 'idle' | 'attack' | 'death'; bodyActT: number; rockReload: number;
   /** pra onde o corpo olha (o alvo) */
   yaw: number;
 };
 export function newKraken(): KrakenState {
   return {
-    phase: 'sleep', riseT: 0, sinkT: 0, lastNearAt: 0, nextAt: 0, x: KRAKEN_BOSS.LAIR.x, z: KRAKEN_BOSS.LAIR.z, moving: false,
+    phase: 'sleep', riseT: 0, sinkT: 0, lastNearAt: 0, nextAt: 0, x: KRAKEN_BOSS.LAIR.x, z: KRAKEN_BOSS.LAIR.z, moving: false, closest: Infinity,
     bodyOut: false, bodyReload: KRAKEN_BOSS.BODY_SLAM_S, bodyAct: 'idle', bodyActT: 0, rockReload: KRAKEN_BOSS.ROCK_S, yaw: Math.PI,
     tents: Array.from({ length: KRAKEN_BOSS.TENTACLES }, (_, i) => ({ i, alive: true, diedAt: null, reload: 1 + i * 0.7, slam: null })),
   };
@@ -142,7 +144,10 @@ export function krakenWalk(k: KrakenState, target: { x: number; z: number }, hul
   else if (canStand(k.x, nz)) { k.z = nz; k.moving = true; }
 }
 /** Despistou: o casco mais perto ficou além do golpe + GIVEUP_EXTRA (o navio a toda é um pouco mais rápido que ele). */
-export const krakenGaveUp = (hullDist: number) => hullDist > KRAKEN_BOSS.BODY_REACH + KRAKEN_BOSS.GIVEUP_EXTRA;
+// 04/11 (Pedro: "matei os tentáculos, ele tinha que vir atrás de mim e não sumir e voltar — bug?"): media do ALCANCE do
+// golpe — cortado o último tentáculo de longe (canhão até ~270 m), já nascia "despistado". Agora: fugir GIVEUP_EXTRA (80 m)
+// a partir do ponto MAIS PERTO que ele chegou nesta perseguição (nunca menos que golpe + 80).
+export const krakenGaveUp = (hullDist: number, closest = 0) => hullDist > Math.max(closest, KRAKEN_BOSS.BODY_REACH) + KRAKEN_BOSS.GIVEUP_EXTRA;
 /** REDEMOINHO: velocidade (m/s) que puxa o navio em (x, z) pro centro do Kraken — 0 fora de PULL_R ou colado no corpo. */
 export function whirlpoolPull(k: { x: number; z: number }, p: { x: number; z: number }, boost = 1): { x: number; z: number } {
   const dx = k.x - p.x, dz = k.z - p.z, d = Math.hypot(dx, dz), { PULL_R, PULL_MAX, BODY_R } = KRAKEN_BOSS;

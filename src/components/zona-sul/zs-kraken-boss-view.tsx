@@ -260,7 +260,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
           if (near()) useGameStore.getState().setMessage(`🐙 Tentáculo cortado! (${cut}/6)${fresh.length && ts?.ship.owner === me ? ` — ${fresh.length === 1 ? 'uma CRIA subiu' : 'duas CRIAS subiram'} no seu navio!` : ''}`);
         }
         if (allTentaclesCut(K) && !K.bodyOut) {
-          K.bodyOut = true; K.phase = 'hunt';
+          K.bodyOut = true; K.phase = 'hunt'; K.closest = ns ? ns.d : Infinity;
           useGameStore.setState((s) => ({ creatures: [...s.creatures.filter((c) => c.id !== KRAKEN_BODY_ID), krakenCreature(KRAKEN_BODY_ID, 'Kraken das Cagarras', KRAKEN_BOSS.BODY_HP, KRAKEN_BOSS.BODY_ARMOR, K)] }));
           if (near()) useGameStore.getState().setMessage('🐙 Os tentáculos caíram — o KRAKEN SAIU do covil e vem atrás de você! Seu navio é só um pouco mais rápido.');
         }
@@ -276,7 +276,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
           if (!bodyC || bodyC.behavior === 'dead') {
             K.phase = 'dead'; K.nextAt = now + KRAKEN_BOSS.RESPAWN_MS; K.bodyAct = 'death'; K.moving = false; S.removeAt = now + 7000;
             if (near()) useGameStore.getState().setMessage('🏆 O KRAKEN DAS CAGARRAS caiu! (volta em 20 min)');
-          } else if (!ns || krakenGaveUp(ns.d)) {
+          } else if (!ns || krakenGaveUp(ns.d, (K.closest = Math.min(K.closest, ns.d)))) {
             K.phase = 'sink'; K.sinkT = 0; K.moving = false;
             useGameStore.setState((s) => ({ creatures: s.creatures.filter((c) => c.id !== KRAKEN_BODY_ID) }));
             if (near(KRAKEN_BOSS.SLEEP_R * 2)) useGameStore.getState().setMessage('🐙 Você despistou o Kraken — ele afundou e volta INTEIRO pro covil.');
