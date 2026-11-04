@@ -256,6 +256,8 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const group = useRef<THREE.Group>(null);
   /** combate: tique do último ataque visto, tempo de animação restante, especial, giro do R, coice, mira (0..1) */
   const atkTick = useRef(-1), atkT = useRef(0), specTick = useRef(-1), spinT = useRef(0);
+  /** quanto o CORPO sobe acima de p.y (em pé na prancha) — a rede manda o corpo onde ele é desenhado (03/11) */
+  const bodyLift = useRef(0);
   const recoil = useRef({ x: 0, y: 0 }), lastKick = useRef(-1), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0), ambAcc = useRef(0);
   /** ASA-DELTA planando / SKATE VOADOR em cima (null = não) · Espaço do quadro anterior (pulinho só no toque) */
   const glide = useRef<GlideState | null>(null), skate = useRef<SkateState | null>(null), spaceWas = useRef(false);
@@ -366,9 +368,12 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     // 02/11 (Pedro online: "não vejo o skate dele; na prancha em pé"): o EQUIPAMENTO em uso vai junto (asa > skate > prancha)
     { const gp = gearRef.glider, sp = gearRef.skate, bp = boardRef.current;
       const src = gp.visible ? gp : sp.visible ? sp : bp.visible ? bp : null;
-      if (src) { netGear[0] = src === gp ? ZS_GEAR.glider : src === sp ? ZS_GEAR.skate : ZS_GEAR.board; netGear[1] = r2(src.y - p.y); netGear[2] = r3(src.yaw); netGear[3] = r3(src.roll); netGear[4] = r3(src.pitch ?? 0); } }
+      // 03/11 (Pedro online: "vejo meu amigo surfando com a prancha na metade do corpo"): em pé na prancha o corpo é
+      // desenhado SURF_LIFT (0,8 m) acima de p.y — mandava p.y e a prancha relativa a ele → do outro lado o corpo afundava
+      // na prancha. Agora vai a altura do CORPO como ele aparece aqui, e a prancha relativa a ela.
+      if (src) { netGear[0] = src === gp ? ZS_GEAR.glider : src === sp ? ZS_GEAR.skate : ZS_GEAR.board; netGear[1] = r2(src.y - (p.y + bodyLift.current)); netGear[2] = r3(src.yaw); netGear[3] = r3(src.roll); netGear[4] = r3(src.pitch ?? 0); } }
     const gearOn = gearRef.glider.visible || gearRef.skate.visible || boardRef.current.visible;
-    broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y, selectedItemId(gs), netVehicles, gearOn ? netGear : null);
+    broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y + bodyLift.current, selectedItemId(gs), netVehicles, gearOn ? netGear : null);
     // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
     if (gs.player.dead && gs.player.respawnAt > 0 && Date.now() >= gs.player.respawnAt) {
       // renasce na CAMA da base, se já tiver uma; senão na zona segura (igual ao Vale)
@@ -1029,6 +1034,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (group.current) {
       // em pé na prancha: sobe o corpo (pose do Zombie abaixa o quadril); levantando: sobe junto com a animação
       const lift = rm === 'ride' ? SURF_LIFT : rm === 'popup' ? SURF_LIFT * Math.min(1, (ride.current?.t ?? 0) / RIDE.POPUP_S) : 0;
+      bodyLift.current = lift;
       group.current.position.set(p.x, p.y + lift, p.z);
       // MIRANDO: o herói olha pra onde a câmera aponta (mesmo andando de lado) — igual ao Vale
       if (useAim.getState().active && !rm && !dead && !dodging) facing.current = input.yaw + Math.PI;
