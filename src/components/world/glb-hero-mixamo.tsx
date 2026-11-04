@@ -913,9 +913,14 @@ export function GlbHeroMixamo({
       : (st === 'idle' || st === 'walk' || st === 'run') && playingLoco.current ? playingLoco.current
       : st === 'jump' || st === 'jump_shoot' ? playingJump.current
       : isCrouchAction(st) ? playingCrouch.current : st;
-    const rifle = rangedAttack && !!leftHandBone && heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState())) === 'rifle';
+    const heldK = heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState()));
+    const rifle = rangedAttack && !!leftHandBone && heldK === 'rifle';
+    // ARCO na MÃO ESQUERDA (03/11, Pedro: "o arco parece do lado contrário"): as animações de arco (Longbow) seguram o
+    // arco na ESQUERDA e puxam a corda com a direita — preso na direita ele ficava atravessado no quadril. Agora vai na
+    // palma esquerda, EM PÉ (o cima do herói) e com a corda voltada pra ele, em qualquer skin/animação. Só jogadores.
+    const bow = rangedAttack && !!leftHandBone && heldK === 'bow';
     const twoHands = rifle && (aiming || /gun|rifle/i.test(playingNow ?? ''));
-    aimW.current += ((aiming || twoHands ? 1 : 0) - aimW.current) * Math.min(1, dt * 14);
+    aimW.current += ((aiming || twoHands || bow ? 1 : 0) - aimW.current) * Math.min(1, dt * 14);
     if (aimW.current < 0.001) { w.quaternion.copy(gripQuat); w.position.copy(gripPosLocal); return; }
     handBone.updateWorldMatrix(true, false);
     root.updateWorldMatrix(true, false);
@@ -923,17 +928,22 @@ export function GlbHeroMixamo({
     let target: THREE.Quaternion = rootQ;
     let posLocal: THREE.Vector3 = gripPosLocal;
     const holder = holderRef.current;
-    if (twoHands && leftHandBone && holder) {
+    // palma = pulso + (pulso − cotovelo) × 0,28 (sem dedos no esqueleto: a direção do antebraço dá onde a mão "abre")
+    const palm = (hand: THREE.Object3D, fore: THREE.Object3D | undefined, out: THREE.Vector3) => {
+      hand.getWorldPosition(out);
+      if (!fore) return out;
+      fore.updateWorldMatrix(true, false);
+      const d = tmpAimD.copy(out).sub(fore.getWorldPosition(tmpAimF));
+      return out.addScaledVector(d, PALM_K);
+    };
+    if (bow && leftHandBone && holder) {
       leftHandBone.updateWorldMatrix(true, false);
       holder.updateWorldMatrix(false, false);
-      // palma = pulso + (pulso − cotovelo) × 0,28 (sem dedos no esqueleto: a direção do antebraço dá onde a mão "abre")
-      const palm = (hand: THREE.Object3D, fore: THREE.Object3D | undefined, out: THREE.Vector3) => {
-        hand.getWorldPosition(out);
-        if (!fore) return out;
-        fore.updateWorldMatrix(true, false);
-        const d = tmpAimD.copy(out).sub(fore.getWorldPosition(tmpAimF));
-        return out.addScaledVector(d, PALM_K);
-      };
+      posLocal = tmpAimPos.copy(palm(leftHandBone, leftForeBone, tmpAimL)).applyMatrix4(tmpAimInv.copy(holder.matrixWorld).invert());
+      target = rootQ; // arco: +Y = cima do herói, corda (−Z) pra ele, barriga (+Z) pra frente
+    } else if (twoHands && leftHandBone && holder) {
+      leftHandBone.updateWorldMatrix(true, false);
+      holder.updateWorldMatrix(false, false);
       const R = palm(handBone, rightForeBone, tmpAimR), L = palm(leftHandBone, leftForeBone, tmpAimL);
       const fwd = tmpAimFwd.copy(L).sub(R);
       const span = fwd.length(); // distância entre as palmas — a régua do ajuste fino

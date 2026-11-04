@@ -65,7 +65,7 @@ export function PistolModel() {
  * trouxe o arco tribal: 747 mil tri → 14,9 mil, 31 MB → 0,73 MB, só a cor 1024 KTX2, fosco). No arquivo ele está deitado
  * na DIAGONAL (desenho de foto): eixo comprido (0,693; −0,721; 0) com 2,48 de ponta a ponta, a CORDA reta do lado
  * (0,721; 0,693; 0) e a empunhadura no meio do corpo, do outro lado (medido: PCA dos vértices + perfil por fatias).
- * Aqui fica na pega do arco antigo: comprido → +Y (em pé na mão), corda → +X, empunhadura na origem.
+ * Na mão: comprido → +Y (em pé), CORDA → −Z (pra trás, voltada pro herói — 03/11), empunhadura na origem.
  */
 export const BOW_URL = '/models/weapons/bow_tribal.glb';
 export const BOW_FIT = {
@@ -82,9 +82,11 @@ export function BowModel() {
     const centered = new THREE.Group();
     centered.position.set(-BOW_FIT.grip[0], -BOW_FIT.grip[1], -BOW_FIT.grip[2]); // empunhadura → origem
     centered.add(model);
-    // base da mão escrita no espaço do arquivo (corda, comprido, frente) → girar o arquivo pra ela = a inversa
-    const x = new THREE.Vector3(...BOW_FIT.string).normalize(), y = new THREE.Vector3(...BOW_FIT.axis).normalize();
-    const z = new THREE.Vector3().crossVectors(x, y);
+    // base da mão escrita no espaço do arquivo → girar o arquivo pra ela = a inversa. 03/11 (Pedro: "o arco parece do lado
+    // contrário"): a mão é +Z = frente, +Y = cima (a mesma do fuzil) → comprido em pé (+Y), a CORDA pra trás (−Z, voltada
+    // pro herói) e o corpo do arco pra frente — antes a corda ia pro lado (+X).
+    const y = new THREE.Vector3(...BOW_FIT.axis).normalize(), z = new THREE.Vector3(...BOW_FIT.string).normalize().negate();
+    const x = new THREE.Vector3().crossVectors(y, z);
     const turned = new THREE.Group();
     turned.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z)).invert();
     turned.scale.setScalar(BOW_FIT.length / BOW_FIT.span);
@@ -93,3 +95,42 @@ export function BowModel() {
   }, [scene]);
   return <primitive object={obj} />;
 }
+
+/**
+ * FERRAMENTAS GLB (03/11, Pedro: "veja novos GLBs pra picareta, machado etc. — ajustar, otimizado, no tamanho ideal, no
+ * local correto; é só trocar a skin das que já tem"). Do pack do Meshy (550 mil–1,35 mi tri, 45–64 MB cada) →
+ * meshopt + só a cor 1024 KTX2, fosco: machado 7,8 mil tri / 0,55 MB, picareta 6,6 mil / 0,47 MB, tocha 16 mil / 0,85 MB,
+ * adaga pirata (vira a ESPADA) 7,8 mil / 0,52 MB. Mesma pega das desenhadas: CABO → +Z da mão (pé do cabo um pouco atrás
+ * da mão), cabeça/gume → +Y, empunhadura na origem. Eixos e empunhadura MEDIDOS nos vértices (silhueta + fatias):
+ * machado/picareta/tocha em pé no arquivo (+Y), cabeça em cima (gume do machado em −X); a adaga deitada na diagonal.
+ */
+export type PropFit = { url: string; z: readonly [number, number, number]; y: readonly [number, number, number]; grip: readonly [number, number, number]; span: number; length: number };
+export const AXE_FIT: PropFit = { url: '/models/tools/axe.glb', z: [0, 1, 0], y: [-1, 0, 0], grip: [0.246, -0.75, 0.001], span: 1.898, length: 1.06 };
+export const PICKAXE_FIT: PropFit = { url: '/models/tools/pickaxe.glb', z: [0, 1, 0], y: [-1, 0, 0], grip: [-0.022, -0.665, -0.018], span: 1.772, length: 1.08 };
+export const TORCH_FIT: PropFit = { url: '/models/tools/torch.glb', z: [0, 1, 0], y: [1, 0, 0], grip: [-0.014, -0.721, -0.008], span: 1.902, length: 0.95 };
+/** adaga: lâmina (ponta) → +Z; o lado da curva da lâmina → +X (o plano da guarda, igual à espada desenhada) */
+export const DAGGER_FIT: PropFit = { url: '/models/tools/dagger.glb', z: [-0.666, -0.746, 0.003], y: [0, 0, -1], grip: [0.656, 0.596, 0.01], span: 2.608, length: 1.05 };
+function useFitProp(f: PropFit): THREE.Group {
+  const { gl } = useThree();
+  primeKTX2(gl);
+  const { scene } = useGLTF(f.url, true, true, extendKTX2);
+  return useMemo(() => {
+    const model = scene.clone(true);
+    model.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.raycast = () => {}; } });
+    const centered = new THREE.Group();
+    centered.position.set(-f.grip[0], -f.grip[1], -f.grip[2]); // empunhadura → origem
+    centered.add(model);
+    const z = new THREE.Vector3(...f.z).normalize(), y = new THREE.Vector3(...f.y);
+    y.addScaledVector(z, -y.dot(z)).normalize();
+    const x = new THREE.Vector3().crossVectors(y, z);
+    const turned = new THREE.Group();
+    turned.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z)).invert(); // base da mão no arquivo → girar = a inversa
+    turned.scale.setScalar(f.length / f.span);
+    turned.add(centered);
+    return turned;
+  }, [scene, f]);
+}
+export function AxeModel() { return <primitive object={useFitProp(AXE_FIT)} />; }
+export function PickaxeModel() { return <primitive object={useFitProp(PICKAXE_FIT)} />; }
+export function TorchModel() { return <primitive object={useFitProp(TORCH_FIT)} />; }
+export function DaggerModel() { return <primitive object={useFitProp(DAGGER_FIT)} />; }

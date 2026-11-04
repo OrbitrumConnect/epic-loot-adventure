@@ -17,7 +17,7 @@
  */
 import { useFrame } from '@react-three/fiber';
 import { Suspense, useRef } from 'react';
-import { BowModel, PistolModel, RifleModel } from './weapon-models';
+import { AxeModel, BowModel, DaggerModel, PickaxeModel, PistolModel, RifleModel, TorchModel } from './weapon-models';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mixColor, type Palette } from './world-kit';
@@ -25,6 +25,7 @@ import { requestLight } from './light-pool';
 import { heroMuzzle, MUZZLE_OFFSET } from './muzzle';
 
 const tmpTorchV = new THREE.Vector3();
+const tmpTorchQ = new THREE.Quaternion(), tmpTorchSpin = new THREE.Quaternion(), TORCH_UP = new THREE.Vector3(0, 1, 0);
 
 export type HeldKind = 'sword' | 'axe' | 'pickaxe' | 'iron_axe' | 'iron_pickaxe' | 'torch' | 'bow' | 'pistol' | 'rifle' | 'fist';
 
@@ -83,8 +84,9 @@ function kitFor(c: Palette): Kit {
     gold: std(c.gold, { metalness: 0.78, roughness: 0.3 }),
     wrap: std(c.cloak),
     glove: std(c.armor),
-    flame: std(c.crystal, { emissive: new THREE.Color(c.crystal), emissiveIntensity: 2.2 }),
-    flameCore: std(c.gold, { emissive: new THREE.Color(c.gold), emissiveIntensity: 2.6 }),
+    // 03/11: fogo de verdade — laranja/amarelo TRANSLÚCIDO e sem estourar (antes o brilho 2,2–2,6 virava um cone creme liso)
+    flame: std('#ff6a14', { emissive: new THREE.Color('#ff5a0a'), emissiveIntensity: 1.25, transparent: true, opacity: 0.82, depthWrite: false }),
+    flameCore: std('#ffd23a', { emissive: new THREE.Color('#ffc21a'), emissiveIntensity: 1.5, transparent: true, opacity: 0.92, depthWrite: false }),
     char: std(mixColor(c.trunk, c.dark, 0.7)),
   };
   kits.set(key, kit);
@@ -163,7 +165,7 @@ function Pickaxe({ k, iron }: { k: Kit; iron: boolean }) {
   );
 }
 
-function Torch({ k }: { k: Kit }) {
+function Torch({ k, glb = false }: { k: Kit; glb?: boolean }) {
   const flame = useRef<THREE.Group>(null);
   const light = useRef<THREE.PointLight>(null);
   useFrame(({ clock }) => {
@@ -172,7 +174,10 @@ function Torch({ k }: { k: Kit }) {
     if (f) {
       const p = 1 + Math.sin(t * 17) * 0.12 + Math.sin(t * 29) * 0.06;
       f.scale.set(p, 1 + Math.sin(t * 13) * 0.2, p);
-      f.rotation.y = t * 2;
+      // 03/11: a chama aponta SEMPRE pra CIMA (fogo sobe) — presa no eixo da mão ela saía de lado com a tocha apontada pra
+      // frente; gira em volta do vertical como antes
+      if (f.parent) f.quaternion.copy(f.parent.getWorldQuaternion(tmpTorchQ).invert()).multiply(tmpTorchSpin.setFromAxisAngle(TORCH_UP, t * 2));
+      else f.rotation.y = t * 2;
     }
     // Tremeluzir: a tocha realmente ilumina o raio ao redor do jogador.
     const l = light.current;
@@ -184,14 +189,20 @@ function Torch({ k }: { k: Kit }) {
       else { l.visible = true; l.intensity = inten; }
     }
   });
-  return (
+  const stick = (
     <>
       <Handle z0={-0.1} z1={0.7} thick={0.08} mat={k.wood} />
       <Grip k={k} />
       {[-1, 1].map(side => <mesh key={side} geometry={geo.box} material={k.ironDark} position={[side * 0.065, 0, 0.73]} rotation={[0, side * 0.18, 0]} scale={[0.025, 0.13, 0.26]} castShadow />)}
       <mesh geometry={geo.cyl} material={k.char} position={[0, 0, 0.74]} rotation={[Math.PI / 2, 0, 0]} scale={[0.15, 0.2, 0.15]} castShadow />
       <mesh geometry={geo.box} material={k.wrap} position={[0, 0, 0.5]} scale={[0.11, 0.11, 0.07]} />
-      <group ref={flame} position={[0, 0.12, 0.76]}>
+    </>
+  );
+  return (
+    <>
+      {/* 03/11: o corpo da tocha GLB (o pau desenhado de reserva); a CHAMA e a LUZ são as de sempre, no topo dela */}
+      {glb ? <Suspense fallback={stick}><TorchModel /></Suspense> : stick}
+      <group ref={flame} position={glb ? [0, 0.04, 0.84] : [0, 0.12, 0.76]}>
         <mesh geometry={geo.cone} material={k.flame} position={[0, 0.17, 0]} scale={[0.26, 0.5, 0.26]} />
         <mesh geometry={geo.cone} material={k.flameCore} position={[0.02, 0.1, 0.01]} scale={[0.14, 0.28, 0.14]} />
         <pointLight ref={light} color={k.flame.color} intensity={6.5} distance={20} decay={1.6} />
@@ -283,12 +294,14 @@ export function HeldItem({ c, itemId }: { c: Palette; itemId?: string | null }) 
 function HeldModel({ c, kind }: { c: Palette; kind: ReturnType<typeof heldKindFor> }) {
   const k = kitFor(c);
   switch (kind) {
-    case 'sword': return <Sword k={k} />;
-    case 'axe': return <Axe k={k} iron={false} />;
-    case 'iron_axe': return <Axe k={k} iron />;
-    case 'pickaxe': return <Pickaxe k={k} iron={false} />;
-    case 'iron_pickaxe': return <Pickaxe k={k} iron />;
-    case 'torch': return <Torch k={k} />;
+    // 03/11: ferramentas GLB (pack do Meshy) na MESMA pega; a desenhada fica de reserva enquanto carrega. A adaga pirata
+    // vira a espada; machado e picareta de ferro usam o mesmo modelo; a tocha mantém a chama animada e a luz.
+    case 'sword': return <Suspense fallback={<Sword k={k} />}><DaggerModel /></Suspense>;
+    case 'axe': return <Suspense fallback={<Axe k={k} iron={false} />}><AxeModel /></Suspense>;
+    case 'iron_axe': return <Suspense fallback={<Axe k={k} iron />}><AxeModel /></Suspense>;
+    case 'pickaxe': return <Suspense fallback={<Pickaxe k={k} iron={false} />}><PickaxeModel /></Suspense>;
+    case 'iron_pickaxe': return <Suspense fallback={<Pickaxe k={k} iron />}><PickaxeModel /></Suspense>;
+    case 'torch': return <Torch k={k} glb />;
     // 03/11: o arco tribal GLB (o de caixinhas fica de reserva enquanto carrega), empunhadura no lugar da do antigo
     case 'bow': return <Suspense fallback={<Bow k={k} />}><group position={[0, 0, 0.1]}><BowModel /></group></Suspense>;
     // GLB (Pedro, 22/10) na mesma pega; a arma desenhada fica de reserva enquanto carrega.

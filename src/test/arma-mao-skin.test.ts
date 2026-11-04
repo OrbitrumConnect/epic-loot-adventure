@@ -90,7 +90,7 @@ describe('arma na mão das skins novas (homem / mulher)', () => {
     const h = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
     expect(h).toMatch(/<group ref=\{holderRef\} quaternion=\{handFixQ\}>\s*<group\s+ref=\{weaponRef\}/);
     expect(h).toMatch(/aimLocal\.premultiply\(handFixInv\);/);
-    expect(h).toMatch(/const rifle = rangedAttack && !!leftHandBone && heldKindFor\(.*\) === 'rifle';/); // só jogadores, só fuzil
+    expect(h).toMatch(/const heldK = heldKindFor\(.*\);\s*const rifle = rangedAttack && !!leftHandBone && heldK === 'rifle';/); // só jogadores, só fuzil
     expect(h).toMatch(/tmpAimM\.makeBasis\(side, up, fwd\)/);
     expect(h).toMatch(/\(mat as THREE\.MeshStandardMaterial\)\.color\?\.setScalar\(tone\)/); // clarear: absoluto, não acumula
     const body = fs.readFileSync('src/components/world/hero-skin-body.tsx', 'utf8');
