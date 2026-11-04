@@ -40,6 +40,13 @@ export function enemyBallLanded(land: { x: number; z: number }, myShip: ZsWarshi
   }
 }
 
+/** A esquadra passa a caçar `who` (quem atirou nela). */
+export function fleetProvoked(who: string): void {
+  const F = zsFleet;
+  if (F.targetId === who) { F.lostSince = null; return; }
+  F.targetId = who; F.lostSince = null; F.huntSince = null;
+  if (who === (useNet.getState().selfId || 'eu')) useGameStore.getState().setMessage('🏴‍☠️ Você atacou a esquadra pirata — ela vem atrás de você!');
+}
 /** O loot de UM navio afundado (pra quem afundou). */
 export function grantFleetLoot(left: number): void {
   const gs = useGameStore.getState();
@@ -55,6 +62,9 @@ export function grantFleetLoot(left: number): void {
 /** Bala/tiro num navio da esquadra (quem simula aplica): tira vida; afundou = capitão e tripulação vão junto e o loot vai
  *  pra quem afundou (`byId` = outro jogador da sala → por evento; ausente/eu = aqui). Devolve se afundou agora. */
 export function fleetShipHit(s: EnemyShip, dmg: number, byId?: string): boolean {
+  // (04/11, Pedro: "ataquei de longe um navio inimigo — ele deve vir atrás de mim") levou tiro = a esquadra caça QUEM
+  // ATIROU, mesmo além dos 300 m de vista ("quem me bate" manda; o alvo tem que estar a bordo — quem atira de canhão está)
+  if (s.sinkT === null) fleetProvoked(byId || useNet.getState().selfId || 'eu');
   if (!damageWarship(s, dmg)) return false;
   const left = zsFleet.ships.filter((o) => o.sinkT === null).length;
   useGameStore.setState((st) => ({ creatures: st.creatures.filter((c) => c.id !== s.pilotId && !s.crewIds.includes(c.id)) })); // afundam junto

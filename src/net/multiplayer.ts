@@ -109,7 +109,8 @@ export function registerFleetHitHandler(handler: ((intent: FleetHitIntent) => vo
 /** KRAKEN DAS CAGARRAS (04/11, etapa 3): o anfitrião manda fase, olhar e os tentáculos ~4×/s (a VIDA vai na foto do mundo,
  *  como todo bicho). ph: 0 dorme · 1 sobe · 2 luta · 3 morto; rt = subida 0–1; bo = corpo exposto; a = ação do corpo
  *  (0 parado · 1 bate · 2 morre); t = tentáculo vivo; s = chicotada [x, z, idade] ou null. */
-export type NetKraken = { ph: 0 | 1 | 2 | 3; rt: number; y: number; bo: 0 | 1; a: 0 | 1 | 2; t: (0 | 1)[]; s: ([number, number, number] | null)[] };
+// v2 kaiju (04/11): + ph 4 saiu atrás · 5 afundando; x/z onde ele está, mv andando, sk afundando 0–1; b = as CRIAS no convés
+export type NetKraken = { ph: 0 | 1 | 2 | 3 | 4 | 5; rt: number; y: number; bo: 0 | 1; a: 0 | 1 | 2; t: (0 | 1)[]; s: ([number, number, number] | null)[]; x: number; z: number; mv: 0 | 1; sk: number; b: NetFleetBoarder[] };
 export const netKraken: { k: NetKraken | null; at: number } = { k: null, at: 0 };
 export function broadcastKraken(k: NetKraken): void {
   if (!channel || !useNet.getState().connected) return;

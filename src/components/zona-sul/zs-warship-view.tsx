@@ -18,6 +18,7 @@ import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 import { ballAt, type CannonBall, WARSHIP, warshipGone, warshipLocal, warshipWorld, type ZsWarship } from './zs-warship';
 import { zsWaterYAt } from './zs-terrain-data';
 import { fleetShipAt, zsFleet } from './zs-enemy-fleet';
+import { krakenBallHit } from './zs-kraken-boss';
 import { enemyBallLanded, fleetShipHit } from './zs-enemy-fleet-hits';
 
 const URL = '/zona-sul/warship.glb';
@@ -255,7 +256,22 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
         }
         continue;
       }
-      if (bm && nb < MAX_BALLS) { const p = ballAt(fb.b, age); dummy.position.set(p.x, p.y, p.z); dummy.scale.setScalar(1); dummy.updateMatrix(); bm.setMatrixAt(nb++, dummy.matrix); }
+      const p = ballAt(fb.b, age);
+      // (04/11) bala (minha ou de outro da sala) no KRAKEN DAS CAGARRAS: bate NO AR no tentáculo/corpo ("canhões nos
+      // tentáculos"), não só onde cairia na água. Id vazio = o corpo protegido: estoura sem dano. Dano: só de quem atirou,
+      // pelo cannonHit de sempre em cima daquele bicho (convidado → o anfitrião aplica)
+      if (!fb.enemy) {
+        const kid = krakenBallHit(p);
+        if (kid !== null) {
+          fb.hit = true; fb.land = { x: p.x, y: p.y, z: p.z, t: age };
+          fx.splashes.push({ x: p.x, y: p.y, z: p.z, t0: now });
+          if (!fb.remote && kid) { const c = useGameStore.getState().creatures.find((q) => q.id === kid); if (c && c.behavior !== 'dead') useGameStore.getState().cannonHit({ x: c.position.x, z: c.position.z }, 0.5); }
+          const h = heroRef.current;
+          audioManager.playWorld('gun', distanceGain(Math.hypot(p.x - h.x, p.z - h.z)) * 0.8, now);
+          continue;
+        }
+      }
+      if (bm && nb < MAX_BALLS) { dummy.position.set(p.x, p.y, p.z); dummy.scale.setScalar(1); dummy.updateMatrix(); bm.setMatrixAt(nb++, dummy.matrix); }
     }
     fx.balls = fx.balls.filter((fb) => !fb.hit || (now - fb.t0) / 1000 < fb.land.t + 0.1);
     if (bm) { bm.count = nb; bm.instanceMatrix.needsUpdate = true; }

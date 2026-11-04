@@ -60,6 +60,15 @@ export function newWarship(x: number, z: number, yaw: number): ZsWarship {
   return { x, z, yaw, speed: 0, yawRate: 0, roll: 0, reload: { port: 0, starboard: 0 }, hp: WARSHIP.HP, sinkT: null };
 }
 
+/** CORRENTEZA externa no navio do HERÓI (04/11 — o redemoinho do Kraken das Cagarras puxa pro centro dele), em m/s.
+ *  Quem puxa escreve todo quadro (0 = nada). Só o navio do herói (o mundo aplica depois do passo, antes do convés levar
+ *  quem está em pé — ninguém escorrega). */
+export const warshipDrift = { x: 0, z: 0 };
+export function driftWarship(swimmable: (x: number, z: number) => boolean, s: ZsWarship, dt: number): void {
+  if (s.sinkT !== null || (warshipDrift.x === 0 && warshipDrift.z === 0)) return;
+  const nx = s.x + warshipDrift.x * dt, nz = s.z + warshipDrift.z * dt;
+  if (hullFits(swimmable, nx, nz, s.yaw)) { s.x = nx; s.z = nz; }
+}
 /** Canhão INIMIGO acertou o navio: tira vida; zerou = começa a afundar. Devolve se afundou AGORA. */
 export function damageWarship(s: ZsWarship, dmg: number): boolean {
   if (s.sinkT !== null || !(dmg > 0)) return false;

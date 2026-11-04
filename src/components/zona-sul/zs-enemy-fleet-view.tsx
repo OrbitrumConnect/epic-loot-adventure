@@ -149,7 +149,7 @@ const BOARDER_ACT: Record<Boarder['act'], NetFleetBoarder['a']> = { climb: 0, wa
 const BOARDER_ACT_BACK: Boarder['act'][] = ['climb', 'walk', 'attack', 'idle'];
 
 /** O KRAKEN DE ABORDAGEM no convés do navio do dono (etapa 2) — anda com o navio em todas as telas (u/v do navio). */
-function BoarderBody({ b, shipRef, heroRef }: { b: Boarder; shipRef: React.MutableRefObject<ZsWarship | null>; heroRef: React.MutableRefObject<THREE.Vector3> }) {
+export function BoarderBody({ b, shipRef, heroRef }: { b: Boarder; shipRef: React.MutableRefObject<ZsWarship | null>; heroRef: React.MutableRefObject<THREE.Vector3> }) {
   const g = useRef<THREE.Group>(null);
   const action = useRef<HeroAction>('idle');
   const mx = MIXAMO_RAIDER['raider_kraken']!;

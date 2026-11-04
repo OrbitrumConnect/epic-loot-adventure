@@ -106,7 +106,7 @@ import { autoFollowDir, zsDiveStep, zsStep, ZS_RUN, ZS_SWIM, ZS_SWIM_FAST, ZS_SW
 import { CAR, CAR_SEATS, carGone, carStep, damageCar, newCar, SEAT_FOOT_K, type ZsCar } from './zs-car';
 import { costText, VEHICLE_COST } from '@/game/data/vehicle-costs';
 import { vehicleShield } from '@/game/systems/vehicleShield';
-import { ballLanding, cannonElevation, cannonSalvo, cannonSide, cannonSwing, carryOnDeck, damageWarship, findWarshipDock, nearWarshipHull, newWarship, WARSHIP, type WarshipSide, warshipGone, warshipLocal, warshipStep, warshipWorld, type ZsWarship } from './zs-warship';
+import { ballLanding, cannonElevation, cannonSalvo, cannonSide, cannonSwing, carryOnDeck, damageWarship, driftWarship, findWarshipDock, nearWarshipHull, newWarship, WARSHIP, type WarshipSide, warshipGone, warshipLocal, warshipStep, warshipWorld, type ZsWarship } from './zs-warship';
 import { HELM_U, syncWarshipDeck, WARSHIP_DRAFT, warshipAim, warshipBoardSpot, warshipDims, warshipFx, warshipHalfBeam, ZsWarshipView, zsWarshipDeck } from './zs-warship-view';
 import { WAKE_BOARD, WAKE_SHIP, ZsWake, zsBoardWake } from './zs-wake';
 import { heroMuzzle } from '@/components/world/muzzle';
@@ -648,6 +648,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (ship && drive.mode !== 'sailing') {
       const before = { x: ship.x, z: ship.z, yaw: ship.yaw };
       warshipStep(shipSwim, ship, { throttle: 0, steer: 0 }, dt);
+      driftWarship(shipSwim, ship, dt); // (04/11) redemoinho do Kraken: puxa o navio (o convés leva quem está em pé, abaixo)
       syncWarshipDeck(ship, clockT);
       // em pé no CONVÉS: o navio no embalo leva junto (posição e giro)
       if (onDeck.current && drive.mode === 'foot' && (ship.x !== before.x || ship.z !== before.z || ship.yaw !== before.yaw)) {
@@ -679,6 +680,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       const throttle = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) - input.stick.z - virtualMove.z;
       const steer = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + input.stick.x + virtualMove.x;
       warshipStep(shipSwim, ship, { throttle: Math.max(-1, Math.min(1, throttle)), steer: Math.max(-1, Math.min(1, steer)) }, dt);
+      driftWarship(shipSwim, ship, dt); // (04/11) redemoinho do Kraken das Cagarras
       syncWarshipDeck(ship, clockT);
       const wy = zsWaterYAt(ship.x, ship.z), keelY = wy - WARSHIP_DRAFT, fx = Math.sin(ship.yaw), fz = Math.cos(ship.yaw);
       // herói no TIMÃO (popa), em pé, olhando pra frente
