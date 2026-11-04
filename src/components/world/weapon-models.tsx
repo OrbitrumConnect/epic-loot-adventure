@@ -8,8 +8,10 @@
  * `grip` = ponto da mão em fração da caixa (x ao longo do comprimento, y da altura).
  */
 import { useGLTF } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import { extendKTX2, primeKTX2 } from './ktx2-gltf';
 
 export const RIFLE_URL = '/models/weapons/rifle.glb';
 export const PISTOL_URL = '/models/weapons/pistol.glb';
@@ -56,4 +58,38 @@ export function RifleModel() {
 }
 export function PistolModel() {
   return <primitive object={useWeapon(PISTOL)} />;
+}
+
+/**
+ * ARCO TRIBAL (03/11, Pedro: "o arco está poly estranho, por quê?!" — era o arco DE CAIXINHAS do código; o pack do Meshy
+ * trouxe o arco tribal: 747 mil tri → 14,9 mil, 31 MB → 0,73 MB, só a cor 1024 KTX2, fosco). No arquivo ele está deitado
+ * na DIAGONAL (desenho de foto): eixo comprido (0,693; −0,721; 0) com 2,48 de ponta a ponta, a CORDA reta do lado
+ * (0,721; 0,693; 0) e a empunhadura no meio do corpo, do outro lado (medido: PCA dos vértices + perfil por fatias).
+ * Aqui fica na pega do arco antigo: comprido → +Y (em pé na mão), corda → +X, empunhadura na origem.
+ */
+export const BOW_URL = '/models/weapons/bow_tribal.glb';
+export const BOW_FIT = {
+  axis: [0.693, -0.721, 0] as const, string: [0.721, 0.693, 0] as const,
+  grip: [-0.397, -0.461, 0.002] as const, span: 2.478, length: 1.15,
+};
+export function BowModel() {
+  const { gl } = useThree();
+  primeKTX2(gl);
+  const { scene } = useGLTF(BOW_URL, true, true, extendKTX2);
+  const obj = useMemo(() => {
+    const model = scene.clone(true);
+    model.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.raycast = () => {}; } });
+    const centered = new THREE.Group();
+    centered.position.set(-BOW_FIT.grip[0], -BOW_FIT.grip[1], -BOW_FIT.grip[2]); // empunhadura → origem
+    centered.add(model);
+    // base da mão escrita no espaço do arquivo (corda, comprido, frente) → girar o arquivo pra ela = a inversa
+    const x = new THREE.Vector3(...BOW_FIT.string).normalize(), y = new THREE.Vector3(...BOW_FIT.axis).normalize();
+    const z = new THREE.Vector3().crossVectors(x, y);
+    const turned = new THREE.Group();
+    turned.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z)).invert();
+    turned.scale.setScalar(BOW_FIT.length / BOW_FIT.span);
+    turned.add(centered);
+    return turned;
+  }, [scene]);
+  return <primitive object={obj} />;
 }

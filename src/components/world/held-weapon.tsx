@@ -17,7 +17,7 @@
  */
 import { useFrame } from '@react-three/fiber';
 import { Suspense, useRef } from 'react';
-import { PistolModel, RifleModel } from './weapon-models';
+import { BowModel, PistolModel, RifleModel } from './weapon-models';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mixColor, type Palette } from './world-kit';
@@ -289,7 +289,8 @@ function HeldModel({ c, kind }: { c: Palette; kind: ReturnType<typeof heldKindFo
     case 'pickaxe': return <Pickaxe k={k} iron={false} />;
     case 'iron_pickaxe': return <Pickaxe k={k} iron />;
     case 'torch': return <Torch k={k} />;
-    case 'bow': return <Bow k={k} />;
+    // 03/11: o arco tribal GLB (o de caixinhas fica de reserva enquanto carrega), empunhadura no lugar da do antigo
+    case 'bow': return <Suspense fallback={<Bow k={k} />}><group position={[0, 0, 0.1]}><BowModel /></group></Suspense>;
     // GLB (Pedro, 22/10) na mesma pega; a arma desenhada fica de reserva enquanto carrega.
     case 'pistol': return <Suspense fallback={<Pistol k={k} />}><PistolModel /></Suspense>;
     case 'rifle': return <Suspense fallback={<Rifle k={k} />}><RifleModel /></Suspense>;
