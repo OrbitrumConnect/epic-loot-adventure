@@ -90,6 +90,9 @@ const tmpEuler = new THREE.Euler();
 // rascunho da mira do fuzil (03/11) — criados 1×, nunca por quadro
 const tmpAimRootQ = new THREE.Quaternion(), tmpAimHandQ = new THREE.Quaternion(), tmpAimTgtQ = new THREE.Quaternion();
 const tmpAimL = new THREE.Vector3(), tmpAimR = new THREE.Vector3(), tmpAimUp = new THREE.Vector3(), tmpAimX = new THREE.Vector3(), tmpAimM = new THREE.Matrix4();
+const tmpAimD = new THREE.Vector3(), tmpAimF = new THREE.Vector3(), tmpAimFwd = new THREE.Vector3(), tmpAimPos = new THREE.Vector3(), tmpAimInv = new THREE.Matrix4();
+/** Palma da mão a partir do pulso: + (pulso − cotovelo) × isto (o esqueleto não tem dedos) — ~6 cm num herói de 1,8 m. */
+export const PALM_K = 0.28;
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
@@ -445,6 +448,10 @@ export function GlbHeroMixamo({
     });
     return b;
   }, [cloned]);
+  // antebraços (palma = pulso + direção do antebraço — fuzil nas duas mãos, 03/11)
+  const findBone = (suffix: string) => { let b: THREE.Object3D | undefined; cloned.traverse((o) => { if (!b && o.name.toLowerCase().replace(/[^a-z0-9]/g, '').endsWith(suffix)) b = o; }); return b; };
+  const rightForeBone = useMemo(() => findBone('rightforearm'), [cloned]); // eslint-disable-line react-hooks/exhaustive-deps
+  const leftForeBone = useMemo(() => findBone('leftforearm'), [cloned]); // eslint-disable-line react-hooks/exhaustive-deps
   // mão ESQUERDA (fuzil: o cano aponta pra ela no tiro — 03/11)
   const leftHandBone = useMemo(() => {
     let b: THREE.Object3D | undefined;
@@ -643,7 +650,7 @@ export function GlbHeroMixamo({
 
     // Clip que está REALMENTE tocando num estado (attack usa o playingAtk; pulo/agachado, o clip escolhido — 02/11).
     const clipOf = (st: HeroAction | null): string | null =>
-      st === 'attack' ? playingAtk.current : (st === 'walk' || st === 'run') && playingLoco.current ? playingLoco.current
+      st === 'attack' ? playingAtk.current : (st === 'walk' || st === 'run' || st === 'idle') && playingLoco.current ? playingLoco.current
         : st === 'jump' || st === 'jump_shoot' ? playingJump.current
         : isCrouchAction(st) && playingCrouch.current ? playingCrouch.current : st;
     // PvP (02/11): arma na mão (pulo/agachado de fuzil e a metade de cima do ataque)
@@ -766,6 +773,12 @@ export function GlbHeroMixamo({
       const mc = moveClipFor(moveDir, kind === 'bow' ? 'bow' : 'other', want === 'run');
       if (mc && actions[mc]) { nextName = mc; directional = true; }
     }
+    // FUZIL NA MÃO (03/11, Pedro: "o fuzil não está apoiado na mão da frente, não encosta na de trás"): parado / andando /
+    // correndo com o fuzil PRONTO nas duas mãos (Shooter Pack), como jogo de tiro. Outras armas e o resto: como antes.
+    if (extras && !directional && heldKind === 'rifle' && (want === 'idle' || want === 'walk' || want === 'run')) {
+      const rn = want === 'idle' ? 'aimGunIdle' : want === 'walk' ? 'rifleWalk' : 'rifleRun';
+      if (actions[rn]) nextName = rn;
+    }
     const curRunning = curClipName ? !!actions[curClipName]?.isRunning() : false;
     if (actions[nextName] && (want !== current.current || !curRunning || curClipName !== nextName)) {
       if (curClipName && curClipName !== nextName && actions[curClipName]) actions[curClipName]!.fadeOut(0.18);
@@ -776,7 +789,8 @@ export function GlbHeroMixamo({
       a.clampWhenFinished = false;
       a.fadeIn(0.15).play();
       current.current = want;
-      playingLoco.current = want === 'walk' || want === 'run' ? nextName : null;
+      // (parado de fuzil também guarda o clip em uso — senão o "idle" não bate com o tocando e reiniciava todo quadro)
+      playingLoco.current = want === 'walk' || want === 'run' || nextName !== want ? nextName : null;
     }
     // Cadência do walk/run acompanha a velocidade real (anti foot-sliding).
     // Run usa um sync MENOR (passada maior → não "patina" o pé).
@@ -789,7 +803,10 @@ export function GlbHeroMixamo({
     if ((current.current === 'walk' || current.current === 'run')) {
       const a = actions[clipOf(current.current) ?? current.current];
       const spd = speedRef ? speedRef.current : Math.hypot(vel.current.x, vel.current.z);
+      const rifleLoco = playingLoco.current === 'rifleWalk' || playingLoco.current === 'rifleRun';
       if (a && directional) a.timeScale = THREE.MathUtils.clamp(spd / (current.current === 'run' ? 4.3 : 1.8), 0.6, 1.5);
+      // fuzil: o passo pela velocidade real ÷ a do clip (andar 1,0 m/s, correr 3,2 m/s — medido no Mixamo)
+      else if (a && rifleLoco) a.timeScale = THREE.MathUtils.clamp(spd / (playingLoco.current === 'rifleRun' ? 3.2 : 1.0), 0.6, 2.4);
       else if (a && speedRef) a.timeScale = THREE.MathUtils.clamp(spd * (current.current === 'run' ? runSync : walkSync), 0.4, 3.0);
       else if (a && strideSync && current.current === 'walk') {
         const len = (cloned.userData['bodyLen'] as number) || 0;
@@ -822,11 +839,13 @@ export function GlbHeroMixamo({
   // RETO pra frente do herói (cano na horizontal), presa na mão; entra/sai suave. Fora do
   // tiro, fica exatamente na pega de sempre (gripRot).
   const weaponRef = useRef<THREE.Group>(null);
+  const holderRef = useRef<THREE.Group>(null); // o suporte girado (handFix) — a conta do punho na palma usa o mundo dele
   const aimW = useRef(0);
   const gripQuat = useMemo(() => new THREE.Quaternion().setFromEuler(new THREE.Euler(gripRot[0], gripRot[1], gripRot[2])), [gripRot]);
   // suporte da arma (skin com outros eixos de mão): gira `handFix`; a mira compensa (o cano segue reto pra frente)
   const handFixQ = useMemo(() => (handFix ? new THREE.Quaternion(handFix[0], handFix[1], handFix[2], handFix[3]).normalize() : new THREE.Quaternion()), [handFix]);
   const handFixInv = useMemo(() => handFixQ.clone().invert(), [handFixQ]);
+  const gripPosLocal = useMemo(() => new THREE.Vector3(gripPos[0] * gripNorm, gripPos[1] * gripNorm, gripPos[2] * gripNorm), [gripPos, gripNorm]);
   useFrame((_, dt) => {
     const w = weaponRef.current;
     const root = inner.current;
@@ -834,18 +853,38 @@ export function GlbHeroMixamo({
     // (02/11: também atirando agachado/no ar e agachado de fuzil — o tronco está apontando a arma)
     const aiming = (current.current === 'attack' && playingAtk.current === 'attackGun') || atkOv.current === 'attackGunUp'
       || (isCrouchAction(current.current) && !!playingCrouch.current?.endsWith('Gun'));
-    aimW.current += ((aiming ? 1 : 0) - aimW.current) * Math.min(1, dt * 14);
-    if (aimW.current < 0.001) { w.quaternion.copy(gripQuat); return; }
+    // FUZIL do JOGADOR (03/11, Pedro: "o fuzil não está apoiado na mão da frente e não encosta na mão de trás"): em toda pose
+    // de fuzil (parado/andando/correndo de fuzil, pulo, agachado, strafe, tiro) a arma vai nas DUAS mãos — PUNHO na palma da
+    // mão direita e o cano passando pela palma da ESQUERDA (o guarda-mão apoiado nela). Fora delas (nadando, carro…): na
+    // mão como sempre. Pistola e inimigos: como antes (no tiro, reta pra frente).
+    const st = current.current;
+    const playingNow = st === 'attack' ? playingAtk.current
+      : (st === 'idle' || st === 'walk' || st === 'run') && playingLoco.current ? playingLoco.current
+      : st === 'jump' || st === 'jump_shoot' ? playingJump.current
+      : isCrouchAction(st) ? playingCrouch.current : st;
+    const rifle = rangedAttack && !!leftHandBone && heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState())) === 'rifle';
+    const twoHands = rifle && (aiming || /gun|rifle/i.test(playingNow ?? ''));
+    aimW.current += ((aiming || twoHands ? 1 : 0) - aimW.current) * Math.min(1, dt * 14);
+    if (aimW.current < 0.001) { w.quaternion.copy(gripQuat); w.position.copy(gripPosLocal); return; }
     handBone.updateWorldMatrix(true, false);
     root.updateWorldMatrix(true, false);
     const rootQ = root.getWorldQuaternion(tmpAimRootQ);
-    // FUZIL nas mãos do JOGADOR (03/11, Pedro: "a arma ficou errada na mão"): no tiro o cano vai da mão direita até a
-    // ESQUERDA (as duas mãos na arma, coronha pro ombro) — antes apontava reto pra frente do corpo e, na pose do tiro (mão
-    // direita no rosto), a coronha flutuava atrás da cabeça e a mão esquerda ficava vazia. Pistola e inimigos: como antes.
     let target: THREE.Quaternion = rootQ;
-    if (rangedAttack && leftHandBone && heldKindFor(heldItemOf ? heldItemOf() : selectedItemId(useGameStore.getState())) === 'rifle') {
+    let posLocal: THREE.Vector3 = gripPosLocal;
+    const holder = holderRef.current;
+    if (twoHands && leftHandBone && holder) {
       leftHandBone.updateWorldMatrix(true, false);
-      const fwd = leftHandBone.getWorldPosition(tmpAimL).sub(handBone.getWorldPosition(tmpAimR));
+      holder.updateWorldMatrix(false, false);
+      // palma = pulso + (pulso − cotovelo) × 0,28 (sem dedos no esqueleto: a direção do antebraço dá onde a mão "abre")
+      const palm = (hand: THREE.Object3D, fore: THREE.Object3D | undefined, out: THREE.Vector3) => {
+        hand.getWorldPosition(out);
+        if (!fore) return out;
+        fore.updateWorldMatrix(true, false);
+        const d = tmpAimD.copy(out).sub(fore.getWorldPosition(tmpAimF));
+        return out.addScaledVector(d, PALM_K);
+      };
+      const R = palm(handBone, rightForeBone, tmpAimR), L = palm(leftHandBone, leftForeBone, tmpAimL);
+      const fwd = tmpAimFwd.copy(L).sub(R);
       if (fwd.lengthSq() > 1e-8) {
         fwd.normalize();
         const up = tmpAimUp.set(0, 1, 0).applyQuaternion(rootQ);
@@ -853,13 +892,15 @@ export function GlbHeroMixamo({
         if (side.lengthSq() > 1e-6) {
           side.normalize();
           up.crossVectors(fwd, side);
-          target = tmpAimTgtQ.setFromRotationMatrix(tmpAimM.makeBasis(side, up, fwd)); // cano (+Z da arma) → mão esquerda
+          target = tmpAimTgtQ.setFromRotationMatrix(tmpAimM.makeBasis(side, up, fwd)); // cano (+Z da arma) → palma esquerda
+          posLocal = tmpAimPos.copy(R).applyMatrix4(tmpAimInv.copy(holder.matrixWorld).invert()); // punho (origem da arma) → palma direita
         }
       }
     }
     const aimLocal = handBone.getWorldQuaternion(tmpAimHandQ).invert().multiply(target);
     aimLocal.premultiply(handFixInv); // dentro do suporte girado (identidade sem handFix)
     w.quaternion.copy(gripQuat).slerp(aimLocal, aimW.current);
+    w.position.copy(gripPosLocal).lerp(posLocal, aimW.current);
   });
 
   return (
@@ -870,7 +911,7 @@ export function GlbHeroMixamo({
       </group>
       {weapon && handBone
         ? createPortal(
-            <group quaternion={handFixQ}>
+            <group ref={holderRef} quaternion={handFixQ}>
               <group
                 ref={weaponRef}
                 position={[gripPos[0] * gripNorm, gripPos[1] * gripNorm, gripPos[2] * gripNorm]}

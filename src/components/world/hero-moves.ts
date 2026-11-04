@@ -29,6 +29,9 @@ export const HERO_EXTRA_CLIPS = {
   aimGunIdle: '/models/red/aim_gun_idle.glb',     // Shooter "rifle aiming idle" (só a metade de cima → agachado de fuzil)
   jumpGunFwd: '/models/red/jump_gun_fwd.glb',     // Shooter "jump forward"
   jumpGunBack: '/models/red/jump_gun_back.glb',   // Shooter "jump backward"
+  // FUZIL NAS DUAS MÃOS (03/11, Pedro: "o fuzil não está apoiado na mão da frente"): andar e correr com o fuzil pronto
+  rifleWalk: '/models/red/rifle_walk.glb',       // Shooter "walking"  (1,0 m/s no clip)
+  rifleRun: '/models/red/rifle_run.glb',         // Shooter "rifle run" (3,2 m/s no clip)
 } as const;
 export type HeroExtraClip = keyof typeof HERO_EXTRA_CLIPS;
 /** Clips de AGACHAR: o quadril DESCE (não trava na altura de pé, como os outros clips do herói "fooled"). */
