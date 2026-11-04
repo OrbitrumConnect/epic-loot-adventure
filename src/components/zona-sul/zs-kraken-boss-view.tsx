@@ -231,7 +231,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
             }
           }
           useGameStore.setState((s) => ({ creatures: [...s.creatures.filter((c) => !isKrakenBoss(c.id)), ...fresh] }));
-          if (near()) useGameStore.getState().setMessage('🐙 O KRAKEN DAS CAGARRAS acordou! (recomendado nível 80+) Corte os 6 tentáculos (canhão/fuzil) — o REDEMOINHO puxa o navio pra ele: não fique perto!');
+          if (near()) useGameStore.getState().setMessage('🐙 O KRAKEN DAS CAGARRAS acordou! (recomendado nível 60+ — em grupo, menos) Corte os 6 tentáculos (canhão/fuzil) — o REDEMOINHO puxa o navio pra ele: não fique perto!');
         }
         if (K.phase === 'sleep') {
           dropCreatures();

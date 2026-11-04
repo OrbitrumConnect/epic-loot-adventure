@@ -35,7 +35,9 @@ export const KRAKEN_BOSS = {
   /** chicotada: levanta (WIND) → bate (STRIKE) → fica na água (LIE) → volta; recarga entre uma e outra */
   TENT_SLAM_S: 5, TENT_WIND_S: 1.3, TENT_STRIKE_S: 0.5, TENT_LIE_S: 1.0,
   TENT_SHIP_DMG: 1400, TENT_HERO_DMG: 90, TENT_HERO_R: 12,
-  BODY_HP: 80_000, BODY_ARMOR: 30, BODY_REACH: 65, BODY_SLAM_S: 5, BODY_SHIP_DMG: 3500, BODY_HERO_DMG: 150,
+  // 04/11 (Pedro: "nível 80 é muito alto, dá pra ser antes"): corpo 80 → 60 mil e pedra 1.100 → 800 → sozinho no nv 60
+  // ~5 min de canhão (bala ~470) contra ~6 min que o navio aguenta de longe; em grupo, bem antes
+  BODY_HP: 60_000, BODY_ARMOR: 30, BODY_REACH: 65, BODY_SLAM_S: 5, BODY_SHIP_DMG: 3500, BODY_HERO_DMG: 150,
   /** saiu do covil: anda um pouco mais devagar que o navio a toda (WARSHIP.MAX 12) */
   WALK_SPEED: WARSHIP.MAX * 0.85, GIVEUP_EXTRA: 80, SINK_S: 5,
   /** redemoinho e a água turva em volta */
@@ -46,7 +48,7 @@ export const KRAKEN_BOSS = {
   SUCK_HERO_R: 12,
   /** tubarões que vêm junto (rondam ele / o navio que chegar perto) */
   SHARKS: 4,
-  ROCK_MIN: 60, ROCK_RANGE: 300, ROCK_S: 6, ROCK_DMG: 1100, ROCK_HERO_DMG: 60,
+  ROCK_MIN: 60, ROCK_RANGE: 300, ROCK_S: 6, ROCK_DMG: 800, ROCK_HERO_DMG: 60,
   /** crias que sobem no navio a cada tentáculo cortado (no máximo SPAWN_MAX vivas) */
   SPAWN_MIN: 1, SPAWN_MAX_EACH: 2, SPAWN_MAX: 5, SPAWN_HP_K: 0.5, SPAWN_ATK_K: 0.6,
   RESPAWN_MS: 20 * 60_000,

@@ -32,9 +32,14 @@ describe('Kraken das Cagarras — kaiju', () => {
     expect(KRAKEN_BOSS.TENT_LEN).toBeGreaterThan(WARSHIP.LENGTH * 2);
     expect(KRAKEN_BOSS.MURK_R).toBeGreaterThan(KRAKEN_BOSS.TENT_RING);  // a água turva cobre o corpo e a base dos tentáculos
   });
-  it('mais vida: tentáculo 8 mil, corpo 80 mil', () => {
+  it('mais vida: tentáculo 8 mil, corpo 60 mil (04/11: recomendado nv 60 — era 80 mil e nv 80)', () => {
     expect(KRAKEN_BOSS.TENT_HP).toBe(8000);
-    expect(KRAKEN_BOSS.BODY_HP).toBe(80_000);
+    expect(KRAKEN_BOSS.BODY_HP).toBe(60_000);
+    expect(KRAKEN_BOSS.ROCK_DMG).toBe(800);
+    // sozinho no nv 60 (bala ~470, 3 por salva a cada 4 s): matar < o navio aguentar de longe (só a pedra)
+    const total = KRAKEN_BOSS.TENT_HP * 6 + KRAKEN_BOSS.BODY_HP, killS = total / (470 * 3 / WARSHIP.RELOAD_S);
+    const shipS = WARSHIP.HP / (KRAKEN_BOSS.ROCK_DMG / KRAKEN_BOSS.ROCK_S);
+    expect(killS).toBeLessThan(shipS);
   });
 });
 
