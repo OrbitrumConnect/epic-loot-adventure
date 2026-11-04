@@ -30,7 +30,7 @@ import { BOARD, boarderStep, elevationFor, FLEET_SHARK_PREFIX, hullRing, hullRin
 import { BoarderBody } from './zs-enemy-fleet-view';
 import {
   allTentaclesCut, hullNearestPoint, isKrakenBoss, KRAKEN_BODY_ID, KRAKEN_BOSS, KRAKEN_SPAWN_PREFIX, krakenGaveUp, krakenPhaseStep, krakenShapes,
-  krakenTentId, krakenWalk, nearestShip, newKraken, slamLean, spawnCount, tentacleBase, tentacleStep, tentacleTarget, whirlpoolOn, whirlpoolPull,
+  krakenTentId, krakenWalk, nearestShip, newKraken, pullBoost, slamLean, spawnCount, suckedDown, tentacleBase, tentacleStep, tentacleTarget, whirlpoolOn, whirlpoolPull,
   zsKraken, type KrakenHero, type KrakenPhase, type KrakenShip,
 } from './zs-kraken-boss';
 import { type ZsTerrain, zsHeightAt, zsWaterYAt } from './zs-terrain-data';
@@ -130,7 +130,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
   const bodyBar = useMemo(() => makeShipHpBar(14, 1.0), []);
   const tentBars = useMemo(() => Array.from({ length: KRAKEN_BOSS.TENTACLES }, () => makeShipHpBar(5, 0.45)), []);
   const tmp = useMemo(() => ({ m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), d: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), zero: new THREE.Matrix4().makeScale(0, 0, 0) }), []);
-  const st = useRef({ netAcc: 0, posAcc: 0, removeAt: 0, msgAt: 0, rise: 0, deadAt: new Map<string, number>(), lastBite: new Map<string, number>() });
+  const st = useRef({ netAcc: 0, posAcc: 0, removeAt: 0, msgAt: 0, rise: 0, sucked: false, deadAt: new Map<string, number>(), lastBite: new Map<string, number>() });
 
   /** tira os bichos do Kraken (tentáculos/corpo) e os tubarões dele; as crias ficam até morrer */
   const dropCreatures = () => {
@@ -342,8 +342,8 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
           useGameStore.setState((s) => ({ creatures: s.creatures.filter((c) => !gs.has(c.id)) }));
         }
       }
-      // olha pro navio mais perto
-      if (ns && K.phase !== 'dead') { const want = Math.atan2(ns.ship.x - K.x, ns.ship.z - K.z); let dy = want - K.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2; K.yaw += dy * Math.min(1, dt * 0.8); }
+      // olha pro navio mais perto (perto o bastante); sem ninguém, volta a olhar pra PRAIA
+      if (K.phase !== 'dead') { const want = ns && ns.d < KRAKEN_BOSS.ROCK_RANGE ? Math.atan2(ns.ship.x - K.x, ns.ship.z - K.z) : KRAKEN_BOSS.FACE_BEACH_YAW; let dy = want - K.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2; K.yaw += dy * Math.min(1, dt * 0.8); }
       // a posição do corpo e das crias na store acompanha (canhão de quem está na sala, rede) ~3×/s
       S.posAcc += dt;
       if (S.posAcc > 0.33 && (K.bodyOut || spawns.list.length)) {
@@ -369,10 +369,16 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     const r0 = rosterOf();
     if (r0 !== roster) setRoster(r0);
 
+    // ═══ SUGADO: o MEU navio afundou no redemoinho com o herói a bordo/perto = morre (renasce na base/praia) — cada um o seu ═══
+    if (my && my.sinkT === null) S.sucked = false;
+    else if (my && !S.sucked && suckedDown(K, my, hero)) {
+      S.sucked = true;
+      useGameStore.setState((s) => (s.player.dead ? {} : { player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 }, ui: { ...s.ui, message: '🌀 O redemoinho do Kraken te SUGOU pro fundo junto com o navio!', deathBy: { name: 'Kraken das Cagarras', pvp: false } } }));
+    }
     // ═══ MÚSICA DO CHEFE (04/11 — a do Pedro): acordado e eu a até KRAKEN_MUSIC_M ═══
     audioManager.setBossMusic(whirlpoolOn(K.phase) && Math.hypot(hero.x - K.x, hero.z - K.z) < KRAKEN_MUSIC_M);
     // ═══ REDEMOINHO puxa o MEU navio (cada um aplica no seu — o mundo move junto quem está no convés) ═══
-    if (my && whirlpoolOn(K.phase) && my.sinkT === null) { const v = whirlpoolPull(K, my); warshipDrift.x = v.x; warshipDrift.z = v.z; }
+    if (my && whirlpoolOn(K.phase) && my.sinkT === null) { const v = whirlpoolPull(K, my, pullBoost(K)); warshipDrift.x = v.x; warshipDrift.z = v.z; }
     else { warshipDrift.x = 0; warshipDrift.z = 0; }
 
     // ═══ DESENHO (todos) ═══

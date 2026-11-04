@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { newWarship, WARSHIP } from '@/components/zona-sul/zs-warship';
 import {
   allTentaclesCut, hullNearestPoint, isKrakenBoss, KRAKEN_BODY_ID, KRAKEN_BOSS, KRAKEN_SPAWN_PREFIX, krakenBallHit, krakenGaveUp, krakenPhaseStep,
-  krakenShapes, krakenTentId, krakenWalk, nearestShip, newKraken, slamLean, SLAM_TOTAL_S, spawnCount, tentacleBase, tentacleStep, tentacleTarget,
-  whirlpoolOn, whirlpoolPull,
+  krakenShapes, krakenTentId, krakenWalk, nearestShip, newKraken, pullBoost, slamLean, SLAM_TOTAL_S, spawnCount, suckedDown, tentacleBase, tentacleStep,
+  tentacleTarget, whirlpoolOn, whirlpoolPull,
 } from '@/components/zona-sul/zs-kraken-boss';
 import { deadCreature } from '@/game/state/game-store';
 import type { CreatureState } from '@/game/types';
@@ -17,9 +17,13 @@ const read = (p: string) => fs.readFileSync(p, 'utf8');
 const HB = WARSHIP.LENGTH * 0.12, L = KRAKEN_BOSS.LAIR;
 
 describe('Kraken das Cagarras — kaiju', () => {
-  it('mora no mar fundo ao norte das Cagarras (~110 m das ilhas Cagarra e Palmas)', () => {
-    expect(Math.hypot(L.x - 96, L.z - 961)).toBeLessThan(130);
-    expect(Math.hypot(L.x + 56, L.z - 955)).toBeLessThan(130);
+  it('mora no mar aberto a OESTE das Palmas (Pedro: "aqui!"), de frente pra praia; as ilhas de fundo, longe dos tentáculos', () => {
+    expect(L).toEqual({ x: -248, z: 932 });
+    const palmas = Math.hypot(L.x + 56, L.z - 955);
+    expect(palmas).toBeGreaterThan(KRAKEN_BOSS.TENT_RING + 100); // nenhum tentáculo em cima da ilha
+    expect(palmas).toBeLessThan(260);                               // mas as Cagarras de fundo
+    expect(KRAKEN_BOSS.FACE_BEACH_YAW).toBeCloseTo(Math.PI, 5);     // olha pro norte (a praia: z menor)
+    expect(read('src/components/zona-sul/zs-kraken-boss-view.tsx')).toContain('ns && ns.d < KRAKEN_BOSS.ROCK_RANGE ? Math.atan2(ns.ship.x - K.x, ns.ship.z - K.z) : KRAKEN_BOSS.FACE_BEACH_YAW');
   });
   it('tamanho: ~65 m pra fora d\'água (Pedro: "uns 50–70 m"), enterrado até a cintura; tentáculos de 95 m', () => {
     expect(KRAKEN_BOSS.BODY_H * (1 - KRAKEN_BOSS.SUBMERGED_K)).toBeGreaterThanOrEqual(50);
@@ -88,6 +92,9 @@ describe('Kraken das Cagarras — redemoinho, tentáculos, crias, bala', () => {
     expect(Math.abs(near.z)).toBeLessThan(WARSHIP.MAX / 2);
     expect(whirlpoolOn('fight')).toBe(true); expect(whirlpoolOn('hunt')).toBe(true);
     expect(whirlpoolOn('sleep')).toBe(false); expect(whirlpoolOn('dead')).toBe(false);
+    // com os tentáculos de pé: +10% (Pedro 04/11)
+    expect(pullBoost({ bodyOut: false })).toBeCloseTo(1.1, 5); expect(pullBoost({ bodyOut: true })).toBe(1);
+    expect(whirlpoolPull(k, { x: 0, z: 120 }, 1.1).z).toBeCloseTo(whirlpoolPull(k, { x: 0, z: 120 }).z * 1.1, 5);
     expect(read('src/components/zona-sul/zona-sul-world.tsx').match(/driftWarship\(shipSwim, ship, dt\);/g)?.length).toBe(2); // parado e navegando
   });
   it('6 tentáculos no anel; chicoteiam o casco ao alcance (ou quem nada); longe, nada', () => {
@@ -169,5 +176,21 @@ describe('esquadra pirata — atacada de longe vem atrás', () => {
     const h = read('src/components/zona-sul/zs-enemy-fleet-hits.ts');
     expect(h).toMatch(/if \(s\.sinkT === null\) fleetProvoked\(byId \|\| useNet\.getState\(\)\.selfId \|\| 'eu'\);\n\s+if \(!damageWarship\(s, dmg\)\) return false;/);
     expect(h).toMatch(/F\.targetId = who; F\.lostSince = null; F\.huntSince = null;/);
+  });
+});
+
+describe('Kraken das Cagarras — sugado com o navio', () => {
+  it('o navio afundou DENTRO do redemoinho com o herói a bordo/perto = sugado (morre e renasce na base/praia)', () => {
+    const k = { phase: 'fight' as const, x: 0, z: 0 };
+    const ship = { x: 0, z: 120, sinkT: 0 as number | null };
+    expect(suckedDown(k, ship, { x: 0, z: 120 })).toBe(true);              // no convés
+    expect(suckedDown(k, ship, { x: 0, z: 150 })).toBe(true);              // na água do lado
+    expect(suckedDown(k, ship, { x: 0, z: 200 })).toBe(false);             // longe do navio (nadou pra longe / desceu antes)
+    expect(suckedDown(k, { ...ship, sinkT: null }, { x: 0, z: 120 })).toBe(false); // navio inteiro
+    expect(suckedDown({ ...k, phase: 'sleep' }, ship, { x: 0, z: 120 })).toBe(false);
+    expect(suckedDown(k, { ...ship, z: KRAKEN_BOSS.PULL_R + 10 }, { x: 0, z: KRAKEN_BOSS.PULL_R + 10 })).toBe(false); // fora do redemoinho
+    const v = read('src/components/zona-sul/zs-kraken-boss-view.tsx');
+    expect(v).toContain('else if (my && !S.sucked && suckedDown(K, my, hero)) {');
+    expect(v).toMatch(/deathBy: { name: 'Kraken das Cagarras', pvp: false }/);
   });
 });

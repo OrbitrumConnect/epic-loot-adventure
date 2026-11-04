@@ -44,3 +44,9 @@
 5. Stub do jsdom no `setup.ts`?
 
 Commit bom de referência: **`ad7bc6c`** (20/10, restauração completa).
+
+## 04/11 — camada CHEFE (acréscimo; nada acima mudou)
+- Arquivo novo: `public/audio/kraken-boss.mp3` (áudio do Pedro) — música do Kraken das Cagarras.
+- `audio-manager.ts`: `BOSS_TRACK_URL` + `setBossMusic(on)` (o `zs-kraken-boss-view` chama todo quadro: acordado e o
+  herói a ≤ 700 m). No `loop`: chefe ligado = normal e combate descem a 0 e a do chefe sobe (fade 0,04/quadro); desligado
+  = some e PAUSA quando zera. `stop()` também pausa a do chefe. Carrega só na 1ª vez que o chefe aparece.

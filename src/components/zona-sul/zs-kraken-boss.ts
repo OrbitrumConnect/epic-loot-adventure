@@ -6,7 +6,7 @@
  * fugiu uns 80 m, ele volta 100%; redemoinhos puxando o barco pro centro dele — não dá pra ficar muito perto; mais vida
  * nele e nos tentáculos; a cada tentáculo destruído 1–2 krakens sobem no barco atrás do herói").
  *
- * Mora no mar fundo ao NORTE das ilhas. Dorme debaixo d'água; NAVIO a ≤ WAKE_R acorda: sobe até a CINTURA (130 m de
+ * Mora no mar aberto a OESTE da Ilha das Palmas, de frente pra praia (Pedro 04/11). Dorme debaixo d'água; NAVIO a ≤ WAKE_R acorda: sobe até a CINTURA (130 m de
  * corpo, ~65 m pra fora, os pés enterrados no fundo; a água turva esconde o que fica embaixo), 6 TENTÁCULOS de 95 m
  * e TUBARÕES em volta.
  *  - REDEMOINHO: navio a ≤ PULL_R do centro é puxado pra ele (até PULL_MAX m/s; o navio a toda escapa).
@@ -22,7 +22,11 @@
 import { WARSHIP, warshipLocal, warshipWorld } from './zs-warship';
 
 export const KRAKEN_BOSS = {
-  LAIR: { x: 28, z: 878 },
+  // 04/11 (Pedro, com foto: "aqui!" — mar aberto, de frente pra praia): a OESTE da ponta da Ilha das Palmas, fundo de
+  // 12 m, a terra mais perto a ~112 m (as ilhas de fundo, nenhum tentáculo em cima delas). Era (28, 878), colado nas ilhas.
+  LAIR: { x: -248, z: 932 },
+  /** parado (sem navio por perto) olha pra PRAIA (norte); com alvo, gira pra ele */
+  FACE_BEACH_YAW: Math.PI,
   WAKE_R: 320, SLEEP_R: 600, SLEEP_MS: 30_000, RISE_S: 6,
   /** corpo inteiro (m) e quanto dele fica DEBAIXO d'água: até a cintura — os pés no fundo */
   // Pedro: "uns 50–70 m de altura? me diga o que fica top" → 130 m de corpo, ~65 m pra fora (3× a Ilha Cagarra)
@@ -36,6 +40,10 @@ export const KRAKEN_BOSS = {
   WALK_SPEED: WARSHIP.MAX * 0.85, GIVEUP_EXTRA: 80, SINK_S: 5,
   /** redemoinho e a água turva em volta */
   PULL_R: 210, PULL_MAX: 3.2, MURK_R: 105,
+  /** com os tentáculos ainda de pé o redemoinho puxa +10% (Pedro 04/11) */
+  PULL_TENT_K: 1.1,
+  /** o navio afundou no redemoinho com o herói a bordo/perto = ele é SUGADO e morre (Pedro 04/11: "dificulta, fica mais legal") */
+  SUCK_HERO_R: 12,
   /** tubarões que vêm junto (rondam ele / o navio que chegar perto) */
   SHARKS: 4,
   ROCK_MIN: 60, ROCK_RANGE: 300, ROCK_S: 6, ROCK_DMG: 1100, ROCK_HERO_DMG: 60,
@@ -134,11 +142,19 @@ export function krakenWalk(k: KrakenState, target: { x: number; z: number }, hul
 /** Despistou: o casco mais perto ficou além do golpe + GIVEUP_EXTRA (o navio a toda é um pouco mais rápido que ele). */
 export const krakenGaveUp = (hullDist: number) => hullDist > KRAKEN_BOSS.BODY_REACH + KRAKEN_BOSS.GIVEUP_EXTRA;
 /** REDEMOINHO: velocidade (m/s) que puxa o navio em (x, z) pro centro do Kraken — 0 fora de PULL_R ou colado no corpo. */
-export function whirlpoolPull(k: { x: number; z: number }, p: { x: number; z: number }): { x: number; z: number } {
+export function whirlpoolPull(k: { x: number; z: number }, p: { x: number; z: number }, boost = 1): { x: number; z: number } {
   const dx = k.x - p.x, dz = k.z - p.z, d = Math.hypot(dx, dz), { PULL_R, PULL_MAX, BODY_R } = KRAKEN_BOSS;
   if (d >= PULL_R || d <= BODY_R + WARSHIP.LENGTH / 2) return { x: 0, z: 0 };
-  const s = PULL_MAX * (1 - (d - BODY_R) / (PULL_R - BODY_R));
+  const s = PULL_MAX * boost * (1 - (d - BODY_R) / (PULL_R - BODY_R));
   return { x: (dx / d) * s, z: (dz / d) * s };
+}
+/** Força do redemoinho agora: +10% com os tentáculos de pé. */
+export const pullBoost = (k: Pick<KrakenState, 'bodyOut'>) => (k.bodyOut ? 1 : KRAKEN_BOSS.PULL_TENT_K);
+/** O navio do herói AFUNDOU (começou agora) dentro do redemoinho com o Kraken acordado e o herói a bordo/perto = sugado. */
+export function suckedDown(k: Pick<KrakenState, 'phase' | 'x' | 'z'>, ship: { x: number; z: number; sinkT: number | null }, hero: { x: number; z: number }): boolean {
+  if (ship.sinkT === null || !whirlpoolOn(k.phase)) return false;
+  if (Math.hypot(ship.x - k.x, ship.z - k.z) > KRAKEN_BOSS.PULL_R) return false;
+  return Math.hypot(hero.x - ship.x, hero.z - ship.z) <= WARSHIP.LENGTH / 2 + KRAKEN_BOSS.SUCK_HERO_R;
 }
 /** O redemoinho está ligado nesta fase? */
 export const whirlpoolOn = (p: KrakenPhase) => p === 'rise' || p === 'fight' || p === 'hunt';
