@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLight } from '@/components/world/light-pool';
 import type { ZsTerrain } from './zs-terrain-data';
-import { CAVE_ABYSS, CAVE_ROOMS, type CaveDecor, type CaveTile, caveDecor, caveField, caveFloorAt, caveMeshJob, caveMouthRocks, cavePools } from './zs-cave';
+import { CAVE_ABYSS, CAVE_LAIR, CAVE_ROOMS, type CaveDecor, type CaveTile, caveDecor, caveField, caveFloorAt, caveMeshJob, caveMouthRocks, cavePools } from './zs-cave';
 /** Até onde (m) da câmera um pedaço da caverna desenha (02/11 noite: a caverna cresceu — abismo + galeria grande). */
 export const CAVE_TILE_DRAW_M = 260;
 import { zsCave } from './zs-context';
@@ -85,6 +85,8 @@ function useCaveTiles(t: ZsTerrain): CaveTile[] | null {
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler(), tmpP = new THREE.Vector3(), tmpS = new THREE.Vector3();
 const CRYSTAL_A = new THREE.Color('#7fe8ff'), CRYSTAL_B = new THREE.Color('#c79bff'), tmpC = new THREE.Color();
 const LANTERN = new THREE.Color('#ffcf9a'), CRYSTAL_LIGHT = new THREE.Color('#8fd8ff'), FUNGUS_LIGHT = new THREE.Color('#ff9a4a');
+/** a brasa do covil do Canibal (04/11) */
+const LAIR_LIGHT = new THREE.Color('#ff7a3a');
 /** CRISTAIS (31/10, Pedro: "temos o nosso cristal azulado já resolvido em GLB… sem perder performance"): a FORMA do
  *  cristal do jogo (models/crystal/crystal.glb, 92 mil tri) numa versão de 798 tri / 12 KB (tools/zona-sul/cave-crystal-glb.mjs),
  *  facetada, brilhando na cor de cada um (azul/violeta). Só os a até CRYSTAL_DRAW_M do herói desenham (lista refeita 4×/s). */
@@ -241,7 +243,8 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
     const cam = state.camera.position;
     for (let i = 0; i < geos.length; i++) {
       const tl = tiles![i]!;
-      geos[i]!.setDrawRange(0, near && Math.hypot(tl.cx - cam.x, tl.cz - cam.z) < CAVE_TILE_DRAW_M ? Infinity : 0);
+      // 04/11: os pedaços do COVIL do Canibal (`deep`) só com o herói no fundo (a superfície some) — de fora nunca aparecem
+      geos[i]!.setDrawRange(0, near && Math.hypot(tl.cx - cam.x, tl.cz - cam.z) < CAVE_TILE_DRAW_M && (!tl.deep || zsCave.deep) ? Infinity : 0);
     }
     water.current?.geometry.setDrawRange(0, near ? Infinity : 0);
     for (const k of ['stalactite', 'stalagmite', 'mushroom'] as const) { const m = refs[k].current; if (m) m.count = near ? kinds[k].length : 0; }
@@ -253,10 +256,13 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
       // ABISMO (02/11 noite): a luz grande do fundo do poço (de cima se vê o fundo) — e só 1 cristal, pra ela ter a vaga
       const ab = CAVE_ABYSS, inAbyss = Math.hypot(h.x - ab.x, h.z - ab.z) < ab.near;
       if (inAbyss) requestLight(ab.light.x, ab.light.y, ab.light.z, CRYSTAL_LIGHT, ab.light.i, ab.light.d, 1.2);
+      // COVIL DO CANIBAL (04/11): a brasa grande da arena (do balcão se vê o fundo) — também tira vagas de cristal
+      const lr = CAVE_LAIR, inLair = Math.hypot(h.x - lr.x, h.z - lr.z) < lr.near;
+      if (inLair) requestLight(lr.light.x, lr.light.y, lr.light.z, LAIR_LIGHT, lr.light.i, lr.light.d, 1.2);
       let n = 0;
       for (const s of glowSpots) { s.d = (s.x - h.x) ** 2 + (s.z - h.z) ** 2; }
       const sorted = glowSpots.filter((s) => s.d < 45 * 45).sort((a, b) => a.d - b.d);
-      for (const s of sorted) { if (n++ >= (inAbyss ? 1 : 3)) break; requestLight(s.x, s.y, s.z, s.c, s.i, s.c === FUNGUS_LIGHT ? 34 : 11, 1.6); }
+      for (const s of sorted) { if (n++ >= (inAbyss || inLair ? 1 : 3)) break; requestLight(s.x, s.y, s.z, s.c, s.i, s.c === FUNGUS_LIGHT ? 34 : 11, 1.6); }
     }
   });
 

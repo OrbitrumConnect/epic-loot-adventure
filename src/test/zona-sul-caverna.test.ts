@@ -60,9 +60,10 @@ describe('caverna da Zona Sul — onde fica', () => {
     // TÚNEIS DE ESTRADA (02/11 noite: Zuzu, Novo, Velho — no tamanho que o morro do jogo deixa): cabe gente e carro
     for (const tn of CAVE_TUNNELS.filter((q) => q.road)) tn.pts.forEach((p) => { expect(p.r * 2, tn.id).toBeGreaterThanOrEqual(6.5); expect(p.h, tn.id).toBeGreaterThanOrEqual(4.2); });
   });
-  it('o salão do chefe é o ponto MAIS FUNDO; tem galeria com ÁGUA e uma caverna GRANDE', () => {
+  it('o salão do chefe é o ponto MAIS FUNDO da rede do Rebouças (04/11: o covil do Canibal, no Pico, é o fundo de tudo); tem ÁGUA e caverna GRANDE', () => {
     const boss = CAVE_ROOMS.find((r) => r.id === 'chefe')!;
-    expect(Math.min(...CAVE_ROOMS.map((r) => r.y))).toBe(boss.y);
+    expect(Math.min(...CAVE_ROOMS.filter((r) => r.id !== 'covil').map((r) => r.y))).toBe(boss.y);
+    expect(Math.min(...CAVE_ROOMS.map((r) => r.y))).toBe(CAVE_ROOMS.find((r) => r.id === 'covil')!.y);
     expect(CAVE_ROOMS.some((r) => (r.pools?.length ?? 0) > 0)).toBe(true);
     const big = CAVE_ROOMS.find((r) => r.id === 'grande')!;
     // (02/11 noite: o abismo do Pico da Tijuca é um POÇO — shaft — maior; a grande caverna segue o maior SALÃO)
@@ -246,13 +247,17 @@ describe('caverna — leve', () => {
     while (!r.done) r = job.next();
     const tris = r.value.reduce((s, x) => s + x.idx.length / 3, 0);
     expect(tris).toBeGreaterThan(20000);
-    expect(tris).toBeLessThan(160000);
+    // 04/11: o COVIL do Canibal (~64 mil) — total ~215 mil, mas os pedaços dele (`deep`) só desenham com o herói no fundo,
+    // quando a SUPERFÍCIE (~1,1 mi) some: perto das bocas a conta segue ≤ 55 mil; lá no fundo, ≤ 130 mil só de caverna
+    expect(tris).toBeLessThan(230000);
     expect(r.value.length).toBeLessThan(100);
+    const sum = (x: number, z: number, deep: boolean) => r.value.filter((q) => Math.hypot(q.cx - x, q.cz - z) < 260 && (deep || !q.deep)).reduce((s2, q) => s2 + q.idx.length / 3, 0);
     for (const [x, z] of [[-70, -63], [-446, 366], [-600, 373], [-878, -139], [-1195, -290], [-1114, -205], [-570, 5], [-452, -165]] as const) {
-      const near = r.value.filter((q) => Math.hypot(q.cx - x, q.cz - z) < 260).reduce((s2, q) => s2 + q.idx.length / 3, 0);
-      expect(near, `perto de ${x}, ${z}`).toBeLessThan(55000);
+      expect(sum(x, z, false), `perto de ${x}, ${z}`).toBeLessThan(55000);
     }
-    expect(fs.readFileSync('src/components/zona-sul/zs-cave-view.tsx', 'utf8')).toContain('near && Math.hypot(tl.cx - cam.x, tl.cz - cam.z) < CAVE_TILE_DRAW_M ? Infinity : 0');
+    expect(sum(-1087, -353, true), 'no fundo do covil (sem superfície)').toBeLessThan(130000);
+    expect(r.value.filter((q) => q.deep).reduce((s2, q) => s2 + q.idx.length / 3, 0)).toBeGreaterThan(50000); // o covil inteiro é `deep`
+    expect(fs.readFileSync('src/components/zona-sul/zs-cave-view.tsx', 'utf8')).toContain('near && Math.hypot(tl.cx - cam.x, tl.cz - cam.z) < CAVE_TILE_DRAW_M && (!tl.deep || zsCave.deep) ? Infinity : 0');
     // as normais apontam pro AR (de dentro da caverna)
     const tile = r.value[0]!;
     let ok = 0;

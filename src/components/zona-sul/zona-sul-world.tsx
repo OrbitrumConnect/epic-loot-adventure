@@ -80,7 +80,7 @@ import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimma
 import { sameVeh, useZsTouch, useZsVehicles, zsAttack, zsCave, zsCrouch, zsCtx, zsVehicleApi, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED, type ZsVehInfo } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
-import { CAVE_ABYSS, caveCamFit, caveDeep, caveField, caveMouthClear, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
+import { CAVE_ABYSS, CAVE_LAIR, caveCamFit, caveDeep, caveField, caveMouthClear, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
 import { ZsCave, ZsCaveMouthRocks } from './zs-cave-view';
 import { layers, resetLayers, sameLayerAsPlayer } from '@/game/systems/layerSystem';
 import { shipGround, zsShip, ZsShip } from './zs-ship';
@@ -355,7 +355,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (wasOverview.current) { wasOverview.current = false; fog.near = 200; fog.far = 2200; }
     { // caverna: breu ao longe — no ABISMO (02/11 noite) a névoa vai mais longe: de cima se vê o fundo do poço
       const d2 = zsCave.dark * zsCave.dark, ab = zsCave.inCave && Math.hypot(p.x - CAVE_ABYSS.x, p.z - CAVE_ABYSS.z) < CAVE_ABYSS.near;
-      fog.near = 200 + (5 - 200) * d2; fog.far = 2200 + ((ab ? CAVE_ABYSS.fogFar : 75) - 2200) * d2;
+      // 04/11: e no COVIL do Canibal ainda mais longe (a arena tem 130 m e o fundo fica 93 m abaixo do balcão)
+      const lair = zsCave.inCave && Math.hypot(p.x - CAVE_LAIR.x, p.z - CAVE_LAIR.z) < CAVE_LAIR.near;
+      fog.near = 200 + (5 - 200) * d2; fog.far = 2200 + ((lair ? CAVE_LAIR.fogFar : ab ? CAVE_ABYSS.fogFar : 75) - 2200) * d2;
     }
     const car = carRef.current, ship = shipRef.current, now = performance.now();
     const gs = useGameStore.getState();

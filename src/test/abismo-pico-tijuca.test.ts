@@ -102,9 +102,11 @@ describe('abismo do Pico da Tijuca', () => {
   it('ligado: luz do fundo (o abismo tira 2 vagas de cristal), névoa longa no abismo, pedras na superfície', () => {
     const v = fs.readFileSync('src/components/zona-sul/zs-cave-view.tsx', 'utf8');
     expect(v).toContain('if (inAbyss) requestLight(ab.light.x, ab.light.y, ab.light.z, CRYSTAL_LIGHT, ab.light.i, ab.light.d, 1.2);');
-    expect(v).toContain('if (n++ >= (inAbyss ? 1 : 3)) break;');
+    // 04/11: o covil do Canibal também tira as vagas de cristal
+    expect(v).toContain('if (n++ >= (inAbyss || inLair ? 1 : 3)) break;');
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
-    expect(zs).toContain('fog.far = 2200 + ((ab ? CAVE_ABYSS.fogFar : 75) - 2200) * d2;');
+    // 04/11: no covil do Canibal a névoa vai ainda mais longe
+    expect(zs).toContain('fog.far = 2200 + ((lair ? CAVE_LAIR.fogFar : ab ? CAVE_ABYSS.fogFar : 75) - 2200) * d2;');
     expect(zs).toContain('<ZsCaveMouthRocks t={t} />');
   });
 });

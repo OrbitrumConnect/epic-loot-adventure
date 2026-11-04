@@ -103,6 +103,10 @@ export const CAVE_TUNNELS: CaveTunnel[] = [
   // …e do salão até a passagem da Gávea (a caverna de sempre): o mundo de baixo inteiro ligado
   { id: 'galeria-gavea', name: 'galeria grande do Alto da Boa Vista', pts: [
     P(-852, -125, 6.5, 7, 10), P(-820, -110, 2, 7, 10), P(-760, -80, -2, 6.5, 9.5), P(-700, -50, -6, 6.5, 9), P(-650, -25, -9, 6.2, 8.5), P(-610, -8, -11, 6, 8), P(-570, 5, -12, 5.6, 7.2)] },
+  // GARGANTA (04/11, Pedro: "o boss dentro da cave profunda — da forma que fizemos a do Pico da Tijuca, que desce
+  // arredondando; precisa mais baixo, lá pro fundo onde tá o boss"): do FUNDO do abismo (42 m, a mesma saída da galeria
+  // grande — vira uma bifurcação) desce ~50 m pela rocha até o BALCÃO do covil (38 m)
+  { id: 'garganta', name: 'garganta do covil', pts: [P(-1159.9, -271.6, 42, 6.5, 9), P(-1143, -290.5, 40, 6.5, 9), P(-1124.1, -311.6, 38, 6.5, 9)] },
 ];
 
 export const CAVE_ROOMS: CaveRoom[] = [
@@ -129,6 +133,11 @@ export const CAVE_ROOMS: CaveRoom[] = [
     spiral: { yTop: 100, inner: 0.72, a0: Math.PI / 4, sweep: (330 * Math.PI) / 180, dir: 1 }, tint: [0.4, 0.4, 0.45] },
   // SALÃO do Alto da Boa Vista, no meio da galeria grande (embaixo do vale — 7 m de piso, ~10 m de rocha por cima)
   { id: 'salao-alto', name: 'salão do Alto da Boa Vista', x: -878, z: -139, y: 7, rx: 30, rz: 22, h: 14, yaw: 0.45, lobe: 2.2, tint: [0.42, 0.4, 0.38] },
+  // COVIL DO CANIBAL (04/11): o 2º poço, ao lado do abismo e bem mais fundo — ~130 m de largura, o chão a −55 m (abaixo
+  // do mar), teto quase reto (shaft 16). A RAMPA EM ESPIRAL sai do balcão (38 m, onde chega a garganta) e desce 345°
+  // colada na parede até o fundo (~25%); o miolo é a ARENA do chefe gigante (o corpo sai do meio do chão).
+  { id: 'covil', name: 'covil do Canibal', x: -1087, z: -353, y: -55, rx: 66, rz: 62, h: 125, yaw: 0, lobe: 2.5, shaft: 16,
+    spiral: { yTop: 38, inner: 0.84, a0: 2.271, sweep: (345 * Math.PI) / 180, dir: 1 }, tint: [0.43, 0.33, 0.3] },
 ];
 
 /** INIMIGOS DA CAVERNA (31/10, Pedro: "falta os inimigos dentro da cave"): Fauce de Sílex e Aberração (os bichos da mata
@@ -673,7 +682,8 @@ export function caveCamFit(t: ZsTerrain, tx: number, ty: number, tz: number, cx:
 
 /* ------------------------------------------------------------------ desenho: marching cubes por blocos */
 
-export type CaveTile = { key: string; cx: number; cz: number; pos: Float32Array; nor: Float32Array; col: Float32Array; top: Float32Array; out: Float32Array; idx: Uint32Array };
+/** `deep` (04/11): pedaço do COVIL do Canibal — só desenha com o herói no fundo da caverna (ver `lairBlock`). */
+export type CaveTile = { key: string; cx: number; cz: number; deep?: boolean; pos: Float32Array; nor: Float32Array; col: Float32Array; top: Float32Array; out: Float32Array; idx: Uint32Array };
 
 /** Plano de cada boca (normal pra DENTRO, no chão): pra malha cortar exatamente nele. */
 const MOUTH_PLANES = ZS_CAVE_MOUTHS.map((m) => {
@@ -684,7 +694,9 @@ const MOUTH_PLANES = ZS_CAVE_MOUTHS.map((m) => {
 export const CAVE_VOXEL = 1.6, CAVE_BLOCK = 16, CAVE_TILE_BLOCKS = 2;
 // 02/11 noite: Y_MAX 30 → 140 (o abismo do Pico da Tijuca vai até ~133 m; os blocos só existem onde há peça — a caverna
 // de antes sai igual)
-const Y_MIN = -46, Y_MAX = 140;
+// 04/11: Y_MIN −46 → −71,6 (o COVIL do Canibal tem o chão a −55 m). Desce EXATAMENTE 1 bloco (16 voxels × 1,6 m): a grade
+// dos voxels e as divisas dos blocos ficam onde estavam — a caverna de antes sai igual, triângulo por triângulo.
+const Y_MIN = -46 - CAVE_BLOCK * CAVE_VOXEL, Y_MAX = 140;
 
 /** Caixas 3D das peças (onde vale a pena calcular). */
 function shapeBoxes(): { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[] {
@@ -707,6 +719,31 @@ const EDGE: readonly (readonly [number, number, number, number, number, number])
   [4, 5, 0, 0, 0, 1], [5, 6, 1, 1, 0, 1], [7, 6, 0, 0, 1, 1], [4, 7, 1, 0, 0, 1],
   [0, 4, 2, 0, 0, 0], [1, 5, 2, 1, 0, 0], [2, 6, 2, 1, 1, 0], [3, 7, 2, 0, 1, 0],
 ];
+
+/** COVIL DO CANIBAL (04/11): blocos do covil (o centro até 1,6× o contorno) SEM nada de outra peça dentro (o abismo a
+ *  mais de 1,25× do contorno dele; outros túneis a mais de 1,5 raio + 4 m — a garganta conta como covil) viram pedaços à
+ *  parte (`deep`): da superfície o covil nunca aparece (fica atrás da rocha, longe das bocas) e lá no fundo a superfície
+ *  some — então nunca se desenha os dois juntos. Conferido em 5×5 pontos do bloco. */
+const LAIR_ROOM = CAVE_ROOMS.find((r) => r.id === 'covil')!;
+const LAIR_TUNNEL = CAVE_TUNNELS.findIndex((t) => t.id === 'garganta');
+function lairBlock(bx: number, bz: number, bs: number): boolean {
+  const cx = bx + bs / 2, cz = bz + bs / 2;
+  if (Math.hypot((cx - LAIR_ROOM.x) / LAIR_ROOM.rx, (cz - LAIR_ROOM.z) / LAIR_ROOM.rz) > 1.6) return false;
+  for (let i = 0; i <= 4; i++) for (let k = 0; k <= 4; k++) {
+    const x = bx + (bs * i) / 4, z = bz + (bs * k) / 4;
+    for (const r of ROOMS) {
+      if (r.id === LAIR_ROOM.id) continue;
+      const [u, v] = roomUV(r, x, z);
+      if (Math.hypot(u / r.rx, v / r.rz) < 1.25 + r.lobe / Math.min(r.rx, r.rz)) return false;
+    }
+    for (const s of SEGS) {
+      if (s.tunnel === LAIR_TUNNEL) continue;
+      let t = ((x - s.ax) * s.abx + (z - s.az) * s.abz) / s.l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      if (Math.hypot(x - (s.ax + s.abx * t), z - (s.az + s.abz * t)) < Math.max(s.ra, s.rb) * 1.5 + 4) return false;
+    }
+  }
+  return true;
+}
 
 /** Tom da rocha num ponto (salão mais perto, senão o padrão). */
 function tintAt(x: number, z: number): readonly [number, number, number] {
@@ -736,7 +773,7 @@ export function* caveMeshJob(triTable: ArrayLike<number>): Generator<number, Cav
   const list = [...active].map((k) => k.split(',').map(Number) as [number, number, number]).sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[1] - b[1]);
   const NY = Math.ceil((Y_MAX - Y0) / V) + 2, NZ = 100000;
   type Acc = { pos: number[]; nor: number[]; col: number[]; top: number[]; out: number[]; idx: number[]; map: Map<number, number> };
-  const tiles = new Map<string, Acc & { cx: number; cz: number }>();
+  const tiles = new Map<string, Acc & { cx: number; cz: number; deep: boolean }>();
   const vals = new Float32Array((B + 1) ** 3);
   const at3 = (i: number, j: number, k: number) => (i * (B + 1) + j) * (B + 1) + k;
   const e = 0.3;
@@ -751,9 +788,11 @@ export function* caveMeshJob(triTable: ArrayLike<number>): Generator<number, Cav
     }
     done++;
     if (!(neg && pos)) { yield done / list.length; continue; }
-    const tcx = Math.floor(bi / CAVE_TILE_BLOCKS), tcz = Math.floor(bk / CAVE_TILE_BLOCKS), tkey = `${tcx},${tcz}`;
+    // covil: pedaços maiores (4×4 blocos) e à parte — o resto, os pedaços de sempre (mesmas chaves, mesmo conteúdo)
+    const lair = lairBlock(bx, bz, BS), TB = lair ? 4 : CAVE_TILE_BLOCKS;
+    const tcx = Math.floor(bi / TB), tcz = Math.floor(bk / TB), tkey = lair ? `covil:${tcx},${tcz}` : `${tcx},${tcz}`;
     let acc = tiles.get(tkey);
-    if (!acc) { acc = { pos: [], nor: [], col: [], top: [], out: [], idx: [], map: new Map(), cx: X0 + (tcx + 0.5) * BS * CAVE_TILE_BLOCKS, cz: Z0 + (tcz + 0.5) * BS * CAVE_TILE_BLOCKS }; tiles.set(tkey, acc); }
+    if (!acc) { acc = { pos: [], nor: [], col: [], top: [], out: [], idx: [], map: new Map(), cx: X0 + (tcx + 0.5) * BS * TB, cz: Z0 + (tcz + 0.5) * BS * TB, deep: lair }; tiles.set(tkey, acc); }
     const A = acc;
     const vert = (gi: number, gj: number, gk: number, axis: number, va: number, vb: number): number => {
       const key = ((gi * NY + gj) * NZ + gk) * 3 + axis;
@@ -823,7 +862,7 @@ export function* caveMeshJob(triTable: ArrayLike<number>): Generator<number, Cav
       flip = agree < 0;
     }
     if (flip) for (let n = 0; n < a.idx.length; n += 3) { const tmp = a.idx[n + 1]!; a.idx[n + 1] = a.idx[n + 2]!; a.idx[n + 2] = tmp; }
-    out.push({ key, cx: a.cx, cz: a.cz, pos: new Float32Array(a.pos), nor: new Float32Array(a.nor), col: new Float32Array(a.col), top: new Float32Array(a.top), out: new Float32Array(a.out), idx: new Uint32Array(a.idx) });
+    out.push({ key, cx: a.cx, cz: a.cz, ...(a.deep ? { deep: true } : {}), pos: new Float32Array(a.pos), nor: new Float32Array(a.nor), col: new Float32Array(a.col), top: new Float32Array(a.top), out: new Float32Array(a.out), idx: new Uint32Array(a.idx) });
   }
   return out;
 }
@@ -881,6 +920,13 @@ export function caveDecor(): CaveDecor[] {
 export const CAVE_ABYSS = (() => {
   const r = CAVE_ROOMS.find((q) => q.id === 'abismo')!;
   return { x: r.x, z: r.z, floor: r.y, top: r.spiral!.yTop, near: 95, light: { x: r.x, y: r.y + 9, z: r.z, i: 24, d: 100 }, fogFar: 190 };
+})();
+
+/** LUZ DO COVIL DO CANIBAL (04/11): igual ao abismo, mais forte e QUENTE (brasa/fogueira lá embaixo) — do balcão se vê
+ *  a arena inteira (130 m) e o fundo 93 m abaixo: a névoa vai mais longe. */
+export const CAVE_LAIR = (() => {
+  const r = CAVE_ROOMS.find((q) => q.id === 'covil')!;
+  return { x: r.x, z: r.z, floor: r.y, top: r.spiral!.yTop, near: 120, light: { x: r.x, y: r.y + 14, z: r.z, i: 40, d: 150 }, fogFar: 240 };
 })();
 
 /** PEDRAS EM VOLTA DA BOCA (02/11 noite, "a boca média, pedras rodeando — fica legal"): bocas com `rocks` ganham um
