@@ -96,6 +96,10 @@ export function useEnemyClick(creatureId: string, name: string) {
 export type CreatureAnchor = { x: number; y: number; z: number; top: number; alive: boolean; r?: number };
 /** Posição de mundo atual de cada criatura, atualizada a cada quadro. */
 export const creatureAnchors = new Map<string, CreatureAnchor>();
+/** ISCA (03/11 — esquadra pirata, etapa 2): bicho com isca, quando não está caçando ninguém, nada até o ponto que ela
+ *  devolve (o anel em volta do navio caçado) em vez de vagar perto de onde nasceu; a CASA dele (coleira/zona) vira esse
+ *  ponto. null = sem isca agora (vaga normal). Sem entrada = nada muda (todo o resto do jogo). */
+export const creatureLure = new Map<string, (t: number) => { x: number; z: number } | null>();
 
 let huntCacheArr: unknown = null;
 let huntCacheId: string | null = null;
@@ -593,6 +597,8 @@ export function useHostileAI(opts: HostileOptions) {
     prevHp.current = creature.hp;
 
     if (!homePos.current) homePos.current = { ...creature.position };
+    const lurePt = creatureLure.get(creatureId)?.(state.clock.elapsedTime) ?? null;
+    if (lurePt) { homePos.current.x = lurePt.x; homePos.current.z = lurePt.z; }
 
     // Perigo pela GEOGRAFIA (difficultySystem): a zona da CASA do bicho define vida/dano/Enfurecido — 1ª vez só
     // (depois só no renascer). O nível do jogador NÃO entra (regra selada "nível não é porta"). Só parado e de vida
@@ -869,6 +875,16 @@ export function useHostileAI(opts: HostileOptions) {
         }
       }
       }
+    } else if (lurePt) {
+      // ISCA: nada até o ponto dela (corre, sem passar dele) e fica rondando ali
+      chaseTimer.current = 0;
+      const d = Math.hypot(lurePt.x - wx, lurePt.z - wz);
+      if (d > 0.3) {
+        const hd = Math.atan2(lurePt.x - wx, lurePt.z - wz), st = Math.min(d, chaseSpeed * dt);
+        targetX = wx + Math.sin(hd) * st; targetZ = wz + Math.cos(hd) * st;
+        moving = true;
+      }
+      chasing = d > 3;
     } else {
       chaseTimer.current = 0;
       wanderTimer.current -= dt;

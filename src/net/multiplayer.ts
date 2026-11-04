@@ -93,11 +93,13 @@ export function broadcastPirateShipHit(ownerId: string, damage: number): void {
 export type NetFleetShip = { i: string; x: number; z: number; yaw: number; r: number; h: number; sk: number | null; pd: 0 | 1 };
 /** rastro de um tiro: de (x, y, z) até (x, y, z) */
 export type NetFleetShot = [number, number, number, number, number, number];
-export const netFleet: { ships: NetFleetShip[]; at: number; shots: NetFleetShot[] } = { ships: [], at: 0, shots: [] };
-export function broadcastFleet(ships: NetFleetShip[], shots: NetFleetShot[]): void {
+/** o KRAKEN no convés (etapa 2): dono do navio, (u, v) no navio, subida 0→1, ação (0 sobe · 1 anda · 2 bate · 3 parado) */
+export type NetFleetBoarder = { i: string; o: string; u: number; v: number; c: number; a: 0 | 1 | 2 | 3 };
+export const netFleet: { ships: NetFleetShip[]; at: number; shots: NetFleetShot[]; k: NetFleetBoarder | null } = { ships: [], at: 0, shots: [], k: null };
+export function broadcastFleet(ships: NetFleetShip[], shots: NetFleetShot[], k: NetFleetBoarder | null = null): void {
   if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
   if (presentGuests.size === 0) return;
-  void channel.send({ type: 'broadcast', event: 'fleet', payload: { id: useNet.getState().selfId, s: ships, sh: shots } });
+  void channel.send({ type: 'broadcast', event: 'fleet', payload: { id: useNet.getState().selfId, s: ships, sh: shots, k } });
 }
 /** Minha bala/tiro num navio da esquadra (CONVIDADO → o anfitrião aplica; `by` = quem leva o loot se afundar). */
 export type FleetHitIntent = { id: string; shipId: string; damage: number };
@@ -352,9 +354,9 @@ export const useNet = create<NetState>((set, get) => ({
     });
     // ESQUADRA PIRATA (03/11): os navios do anfitrião (convidado desenha), o tiro do convidado nela, o loot de quem afundou
     ch.on('broadcast', { event: 'fleet' }, ({ payload }) => {
-      const p = payload as { id: string; s: NetFleetShip[]; sh: NetFleetShot[] };
+      const p = payload as { id: string; s: NetFleetShip[]; sh: NetFleetShot[]; k?: NetFleetBoarder | null };
       if (p.id === selfId || get().isHost || !Array.isArray(p.s)) return;
-      netFleet.ships = p.s.slice(0, 6); netFleet.at = performance.now();
+      netFleet.ships = p.s.slice(0, 6); netFleet.at = performance.now(); netFleet.k = p.k ?? null;
       if (Array.isArray(p.sh)) { netFleet.shots.push(...p.sh.slice(0, 30)); if (netFleet.shots.length > 40) netFleet.shots.splice(0, netFleet.shots.length - 40); }
     });
     ch.on('broadcast', { event: 'fleet-hit' }, ({ payload }) => {

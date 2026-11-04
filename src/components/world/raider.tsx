@@ -108,11 +108,11 @@ type MixClips = { base?: Partial<Record<'idle' | 'walk' | 'run' | 'attack', stri
 /** Só o que a espécie define vira prop (sem `undefined` solto) — quem não tem `clips` (todos de antes): nada muda. */
 /** Correm SEMPRE que perseguem (03/11): os chefes do pack e a Feiticeira (que surge atrás e vem correndo). */
 const CHASE_RUNNERS = new Set(['raider_cannibal', 'raider_kraken', 'raider_sorceress', 'raider_indigena']);
-function mixClipProps(c: MixClips | undefined) {
+export function mixClipProps(c: MixClips | undefined) {
   if (!c) return {};
   return { ...(c.base ? { baseClips: c.base } : {}), ...(c.custom ? { customClips: c.custom } : {}), ...(c.cut ? { customClipCut: c.cut } : {}), ...(c.attackSpeed ? { attackSpeed: c.attackSpeed } : {}) };
 }
-const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean; strideSync?: boolean; death?: DeathClip; clips?: MixClips }> = {
+export const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: number; forceBow?: boolean; twistFix?: boolean; bindFix?: boolean; autoGround?: boolean; strideSync?: boolean; death?: DeathClip; clips?: MixClips }> = {
   // 03/11 (Pedro: "Couraça e Fúngico na onda podem diminuir uns 25%"): 3,32 → 2,49 m (a do FORTIM fica igual: CAMP_SCALE_BY)
   raider_samurai: { url: '/models/raiders/spiked.glb', standFixX: Math.PI / 2, height: 2.49, bindFix: true, autoGround: true, strideSync: true, death: 'mutant' }, // 3,9→3,32 m (−15%, Pedro 25/10: muitos na base embolavam) // autoGround: andava meio enterrado (Pedro 25/10)     // spiked, 2x (Pedro)
   // CHEFES DE ONDA do pack Meshy (03/11): GLB do Meshy (já em pé → standFixX 0), esqueleto salvo noutra pose (bindFix).

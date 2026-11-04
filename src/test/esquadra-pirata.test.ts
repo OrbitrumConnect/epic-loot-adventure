@@ -149,7 +149,8 @@ describe('esquadra pirata — capitão e tripulação', () => {
 
   it('ONLINE (Pedro: "o mesmo navio e inimigos no multiplayer — todos veem"): anfitrião simula e manda; convidado desenha os mesmos', () => {
     const net = read('src/net/multiplayer.ts');
-    expect(net).toContain("event: 'fleet', payload: { id: useNet.getState().selfId, s: ships, sh: shots }");
+    // (etapa 2: o pacote leva também o Kraken de abordagem, `k`)
+    expect(net).toContain("event: 'fleet', payload: { id: useNet.getState().selfId, s: ships, sh: shots, k }");
     expect(net).toContain("if (!hit.mob && hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return; // pirata (mob) vale sempre");
     expect(net).toContain("event: 'fleet-hit'"); expect(net).toContain("event: 'fleet-reward'");
     const fv = read('src/components/zona-sul/zs-enemy-fleet-view.tsx');

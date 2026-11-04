@@ -117,7 +117,9 @@ describe('Feiticeira da Mata: surge atrás, uma por vez', () => {
     expect(behindSpot(0, 0, 0, () => false, rng)).toBeNull(); // sem chão: tenta depois
     const gs = read('src/game/state/game-store.ts');
     expect(gs).toMatch(/if \(isClassicWorld\(\) \|\| !canSimulateSharedWorld\(\)\) return; \/\/ só na Zona Sul/);
-    expect(gs).toMatch(/c\.id\.startsWith\('wave'\) \|\| isSorceress\(c\.id\) \/\/ 03\/11: Feiticeira não renasce/);
+    // (04/11: a mesma regra ganhou a esquadra pirata e a horda de tubarões dela — o comentário subiu uma linha)
+    expect(gs).toMatch(/c\.id\.startsWith\('wave'\) \|\| isSorceress\(c\.id\) \|\| c\.id\.startsWith\('fleet_'\)/);
+    expect(gs).toMatch(/\/\/ 03\/11: Feiticeira não renasce/);
     expect(read('src/routes/index.tsx')).toMatch(/\{worldOn && ui\.mode === 'world' && zs && <SorceressStalker \/>\}/);
   });
 });

@@ -377,7 +377,9 @@ function towerSfx(tower: { x: number; z: number }, me: { x: number; z: number })
 export function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
   // 03/11: o Guerreiro Indígena NÃO MORRE — o golpe fatal o faz recuar ferido (indigenaSystem); volta depois
   if (isUnkillable(c.id)) return fleeInsteadOfDeath(c);
-  const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave') || isSorceress(c.id) // 03/11: Feiticeira não renasce
+  // 03/11: Feiticeira não renasce; a ESQUADRA PIRATA (capitão/tripulação/Kraken `fleet_`) e a horda de tubarões que ela solta
+  // (`wild_shark_fl`) também não — vêm com a esquadra e saem com ela
+  const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave') || isSorceress(c.id) || c.id.startsWith('fleet_') || c.id.startsWith('wild_shark_fl')
     ? null
     : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
   return { ...c, hp: 0, behavior: 'dead', respawnAt };

@@ -70,10 +70,12 @@ export const FLEET_CREW_PREFIX = 'fleet_crew_';
 /** Qualquer um da esquadra (capitão ou tripulante): desenhado no navio, fora da IA de terra, fora da rede. */
 export const isFleetUnit = (id: string) => id.startsWith('fleet_');
 
-export type EnemyShip = ZsWarship & { id: string; pilotId: string; pilotDead: boolean; rewarded: boolean; crewIds: string[]; wp: { x: number; z: number } | null; stuck: number };
+export type EnemyShip = ZsWarship & { id: string; pilotId: string; pilotDead: boolean; rewarded: boolean; crewIds: string[]; wp: { x: number; z: number } | null; stuck: number; sharksOut: boolean };
 /** `targetId` = dono do navio que ela caça (null = patrulha); `lostSince` = desde quando está sem alvo */
-export type FleetState = { ships: EnemyShip[]; nextAt: number; seq: number; targetId: string | null; lostSince: number | null };
-export const zsFleet: FleetState = { ships: [], nextAt: 0, seq: 0, targetId: null, lostSince: null };
+export type FleetState = { ships: EnemyShip[]; nextAt: number; seq: number; targetId: string | null; lostSince: number | null;
+  /** etapa 2: desde quando caça; tubarões soltos na caçada; o Kraken no convés (1 por caçada) */
+  huntSince: number | null; sharkIds: string[]; boarder: Boarder | null; boarded: boolean };
+export const zsFleet: FleetState = { ships: [], nextAt: 0, seq: 0, targetId: null, lostSince: null, huntSince: null, sharkIds: [], boarder: null, boarded: false };
 
 /** Pode chegar AGORA? (sem esquadra no mar e fora do descanso) — ela PATRULHA, não espera ninguém navegar */
 export function fleetMaySpawn(o: { now: number; nextAt: number; present: boolean }): boolean {
@@ -135,6 +137,78 @@ export function fleetSpawnSpots(swim: (x: number, z: number) => boolean, target:
   return [];
 }
 
+/**
+ * ETAPA 2 (03/11, Pedro: "…que dropam hordas de tubarão e kraken do raid que sobe no barco"):
+ *  - TUBARÕES: navio pirata a ≤ SHARK_NEAR do navio caçado solta SHARKS_PER_SHIP tubarões em volta dele (no máx.
+ *    SHARKS_MAX por caçada). São bichos normais (a sala vê, IA de nadar): perigo de CAIR na água — e colados no casco
+ *    MORDEM o navio (SHARK_BITE a cada SHARK_BITE_S).
+ *  - KRAKEN DE ABORDAGEM: depois de KRAKEN_AFTER_S caçando com um pirata a ≤ KRAKEN_NEAR, um Kraken SOBE no convés do
+ *    navio caçado (1 por caçada) — sobe pelo costado (KRAKEN_CLIMB_S), anda no convés atrás de quem está nele e dá a
+ *    pancada (slam) de perto. Vive em coordenadas DO NAVIO (u, v): anda junto com o navio em todas as telas.
+ */
+export const BOARD = {
+  SHARK_NEAR: 90, SHARKS_PER_SHIP: 3, SHARKS_MAX: 6, SHARK_BITE: 120, SHARK_BITE_S: 2, SHARK_BITE_R: 4, SHARK_RING_GAP: 1.8, SHARK_RING_SPEED: 3.2,
+  KRAKEN_NEAR: 120, KRAKEN_AFTER_S: 20, KRAKEN_HP_K: 0.67, KRAKEN_ATK_K: 0.8, KRAKEN_H: 3.0,
+  KRAKEN_SPEED: 2.4, KRAKEN_REACH: 3.2, KRAKEN_SLAM_S: 2.3, KRAKEN_CLIMB_S: 1.6,
+} as const;
+export const FLEET_SHARK_PREFIX = 'wild_shark_fl';
+export const FLEET_KRAKEN_PREFIX = 'fleet_kraken_';
+/** O Kraken no convés: `owner` = dono do navio onde ele está; (u, v) no navio; `climb` 0→1 subindo; `atkT` recarga. */
+export type Boarder = { id: string; owner: string; u: number; v: number; climb: number; atkT: number; side: 1 | -1; act: 'climb' | 'walk' | 'attack' | 'idle' };
+
+/** Onde soltar a horda: anel de 12–28 m em volta do navio caçado, só onde o tubarão nada. */
+/** Ponto do ANEL em volta do casco (o retângulo do navio com `gap` m de folga), andando `d` m pelo contorno: a horda
+ *  ronda o navio COLADA no casco (perto o bastante pra morder) sem passar por baixo dele. */
+export function hullRing(d: number, halfBeam: number, len: number, gap: number): { u: number; v: number } {
+  const A = halfBeam + gap, B = len / 2 + gap, P = 4 * (A + B);
+  let s = ((d % P) + P) % P;
+  if (s < 2 * B) return { u: A, v: -B + s };
+  s -= 2 * B;
+  if (s < 2 * A) return { u: A - s, v: B };
+  s -= 2 * A;
+  if (s < 2 * B) return { u: -A, v: B - s };
+  s -= 2 * B;
+  return { u: -A + s, v: -B };
+}
+/** comprimento do anel (pra espalhar a horda por igual) */
+export const hullRingLen = (halfBeam: number, len: number, gap: number) => 4 * (halfBeam + gap + len / 2 + gap);
+export function sharkDropSpots(swim: (x: number, z: number) => boolean, at: { x: number; z: number }, n: number, rng: () => number): { x: number; z: number }[] {
+  const out: { x: number; z: number }[] = [];
+  for (let k = 0; out.length < n && k < 200; k++) {
+    const a = rng() * Math.PI * 2, r = 12 + rng() * 16, x = at.x + Math.sin(a) * r, z = at.z + Math.cos(a) * r;
+    if (swim(x, z) && out.every((o) => Math.hypot(o.x - x, o.z - z) > 4)) out.push({ x, z });
+  }
+  return out;
+}
+/** O Kraken começa a subir do lado do casco mais perto do pirata que o trouxe. */
+export function newBoarder(id: string, owner: string, ship: { x: number; z: number; yaw: number }, from: { x: number; z: number }, halfBeam: number, len: number, rng: () => number): Boarder {
+  const l = warshipLocalOf(ship, from.x, from.z), side: 1 | -1 = l.u >= 0 ? 1 : -1;
+  return { id, owner, u: side * halfBeam, v: (rng() - 0.5) * len * 0.5, climb: 0, atkT: BOARD.KRAKEN_SLAM_S, side, act: 'climb' };
+}
+/** Um passo do Kraken no convés (mexe em `b`): sobe; depois anda até quem está no convés (`target` em u/v do navio) e
+ *  bate de perto. Devolve true no quadro do GOLPE. Sem ninguém no convés: fica parado no meio. */
+export function boarderStep(b: Boarder, target: { u: number; v: number } | null, dt: number, halfBeam: number, len: number): boolean {
+  if (b.climb < 1) { b.climb = Math.min(1, b.climb + dt / BOARD.KRAKEN_CLIMB_S); b.act = 'climb'; if (b.climb >= 1) b.u = b.side * halfBeam * 0.5; return false; }
+  b.atkT = Math.max(0, b.atkT - dt);
+  if (!target) { b.act = 'idle'; return false; }
+  const du = target.u - b.u, dv = target.v - b.v, d = Math.hypot(du, dv);
+  if (d <= BOARD.KRAKEN_REACH) {
+    if (b.atkT > 0) { b.act = b.atkT > BOARD.KRAKEN_SLAM_S - 1 ? 'attack' : 'idle'; return false; } // a pancada dura ~1 s; depois respira
+    b.atkT = BOARD.KRAKEN_SLAM_S; b.act = 'attack';
+    return true;
+  }
+  const step = Math.min(d - BOARD.KRAKEN_REACH * 0.8, BOARD.KRAKEN_SPEED * dt);
+  b.u = Math.max(-halfBeam * 0.8, Math.min(halfBeam * 0.8, b.u + (du / d) * step));
+  b.v = Math.max(-len / 2 + 2, Math.min(len / 2 - 2, b.v + (dv / d) * step));
+  b.act = 'walk';
+  return false;
+}
+/** u/v de (x, z) no navio (o mesmo de `warshipLocal`). */
+function warshipLocalOf(s: { x: number; z: number; yaw: number }, x: number, z: number): { u: number; v: number } {
+  const dx = x - s.x, dz = z - s.z, c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
+  return { u: dx * c - dz * sn, v: dx * sn + dz * c };
+}
+
 /** Formação da PATRULHA: em linha lado a lado (SPACING) a partir de `center`, todos no rumo `yaw`; só onde o casco cabe. */
 export function fleetFormation(swim: (x: number, z: number) => boolean, center: { x: number; z: number }, yaw: number, n: number): { x: number; z: number; yaw: number }[] {
   const rx = Math.cos(yaw), rz = -Math.sin(yaw), out: { x: number; z: number; yaw: number }[] = [];
@@ -148,7 +222,7 @@ export function fleetFormation(swim: (x: number, z: number) => boolean, center: 
 
 export function newEnemyShip(id: string, at: { x: number; z: number; yaw: number }): EnemyShip {
   return { ...newWarship(at.x, at.z, at.yaw), hp: FLEET.HP, id, pilotId: `${FLEET_PILOT_PREFIX}${id}`, pilotDead: false, rewarded: false,
-    crewIds: Array.from({ length: FLEET.CREW }, (_, i) => `${FLEET_CREW_PREFIX}${id}_${i}`), wp: null, stuck: 0 };
+    crewIds: Array.from({ length: FLEET.CREW }, (_, i) => `${FLEET_CREW_PREFIX}${id}_${i}`), wp: null, stuck: 0, sharksOut: false };
 }
 
 /** O CAPITÃO (alvo de verdade: mira, dano, XP) — não anda sozinho: o mundo o põe no timão todo quadro. */
@@ -189,6 +263,12 @@ const wrap = (a: number) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -
 export function fleetSteer(s: EnemyShip, target: { x: number; z: number }, others: readonly { x: number; z: number }[]): WarshipInput {
   if (s.pilotDead || s.sinkT !== null) return { throttle: 0, steer: 0 };
   const dx = target.x - s.x, dz = target.z - s.z, d = Math.hypot(dx, dz), bearing = Math.atan2(dx, dz);
+  // (04/11) COLADO no seu casco (< ~38 m — você veio pra cima): afasta, proa pra FORA e toda força (não encosta nem
+  // atravessa o navio); a ~70 m volta a pôr o costado
+  if (d < FLEET.PREF * 0.55) {
+    const away = wrap(bearing + Math.PI - s.yaw);
+    return { throttle: 1, steer: Math.max(-1, Math.min(1, -away * 2)) };
+  }
   let want = bearing;
   if (d < FLEET.PREF + 35) {
     // de lado: das duas, a que menos vira (+90° ou −90° do rumo ao alvo)
