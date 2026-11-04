@@ -117,7 +117,9 @@ describe('morto-vivo só à noite', () => {
     const out = mergeResumedWorld([{ id: 'wild_zombie_night_2', speciesId: 'zombie' } as never], []);
     expect(out.length).toBe(1);
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
-    // 31/10: no mapa grande os mortos-vivos vêm em volta de quem joga (no Vale, o mapa todo como antes)
-    expect(store).toMatch(/if \(actZ === 'spawn'\) set\(\(s\) => \(\{ creatures: \[\.\.\.s\.creatures, \.\.\.createNightZombies\(Math\.random, undefined, s\.player\.position\)\] \}\)\);/);
+    // 03/11 (Pedro: "o zumbi verde estranho que aparece à noite pode remover do jogo"): NÃO nasce mais à noite; o relógio
+    // da noite só tira os que vierem de sala retomada (31/10: antes vinham em volta de quem joga)
+    expect(store).not.toMatch(/createNightZombies\(/);
+    expect(store).toMatch(/if \(get\(\)\.creatures\.some\(\(c\) => c\.id\.startsWith\(NIGHT_ZOMBIE_PREFIX\)\)\) set\(\(s\) => \(\{ creatures: s\.creatures\.filter\(\(c\) => !c\.id\.startsWith\(NIGHT_ZOMBIE_PREFIX\)\) \}\)\);/);
   });
 });

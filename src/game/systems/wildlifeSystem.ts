@@ -147,8 +147,24 @@ export function nightFlockAction(night: number, hasFlock: boolean): 'spawn' | 'l
   return null;
 }
 
-/** Cria o bando em volta de `center` (lugares livres, espalhados). */
-export function createNightPigeons(center: Position, rng: () => number = Math.random, count = NIGHT_PIGEONS): CreatureState[] {
+/**
+ * BANDO DO DIA (03/11, Pedro: "pombo vejo mais de noite; poderia ter de dia — sinto falta de alguns deles pelo mapa vindo
+ * atrás de mim, rondando"): de dia os pombos só existiam nas pistas da cidade (Zona Sul) — longe de onde se joga. Agora
+ * 10 pombos a 20–60 m de quem joga enquanto é DIA (≤ 0,2 de noite); ao escurecer (≥ 0,6) vão embora e chega o bando da
+ * noite (25). Se você se afastar 140 m de todos, o bando "voa" pra perto de novo. Id `wild_pigeon_day_<n>`; não vão pro save.
+ */
+export const DAY_PIGEONS = 10;
+export const DAY_FLOCK_PREFIX = 'wild_pigeon_day_';
+export const DAY_FLOCK_FAR = 140;
+export function dayFlockAction(night: number, hasFlock: boolean, farFromPlayer: boolean): 'spawn' | 'leave' | 'move' | null {
+  if (!hasFlock && night <= NIGHT_FLOCK_OFF) return 'spawn';
+  if (hasFlock && night >= NIGHT_FLOCK_ON) return 'leave';
+  if (hasFlock && farFromPlayer) return 'move';
+  return null;
+}
+
+/** Cria o bando em volta de `center` (lugares livres, espalhados). `prefix`: o da noite (padrão) ou o do dia. */
+export function createNightPigeons(center: Position, rng: () => number = Math.random, count = NIGHT_PIGEONS, prefix = NIGHT_FLOCK_PREFIX): CreatureState[] {
   const def = CREATURES['pigeon'];
   if (!def) return [];
   const out: CreatureState[] = [];
@@ -165,7 +181,7 @@ export function createNightPigeons(center: Position, rng: () => number = Math.ra
     if (out.some((c) => dist(c.position, pos) < 4)) continue;
     const hp = scaleEnemyHp(def.maxHp);
     out.push({
-      id: `${NIGHT_FLOCK_PREFIX}${out.length}`, speciesId: 'pigeon', name: def.name, hp, maxHp: hp,
+      id: `${prefix}${out.length}`, speciesId: 'pigeon', name: def.name, hp, maxHp: hp,
       attackPower: def.attackPower, armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0,
       position: pos, behavior: 'patrol', lootTable: [], respawnAt: null,
     });
@@ -190,6 +206,8 @@ export function mergeResumedWorld(snapshot: CreatureState[], current: CreatureSt
 }
 
 /**
+ * (03/11 — Pedro: "o zumbi verde estranho que aparece à noite pode remover do jogo": NÃO nasce mais; `tickNightFlock` só
+ * tira os que vierem de sala retomada. A função fica pra testes/salas antigas.)
  * MORTO-VIVO SÓ À NOITE (26/10): de dia nenhum; ao escurecer (mesma regra do bando de pombos) nascem os 6 espalhados
  * pelo mapa em lugar livre (não em volta do herói); ao clarear vão embora. Id `wild_zombie_night_<n>` (zona/Enfurecido
  * iguais aos do mapa). Não vão pro save.
@@ -219,4 +237,4 @@ export function createNightZombies(rng: () => number = Math.random, count = NIGH
   return out;
 }
 /** Ids que só existem de noite (a retomada de sala e o "some ao clarear" usam). */
-export const NIGHT_PREFIXES = [NIGHT_FLOCK_PREFIX, NIGHT_ZOMBIE_PREFIX];
+export const NIGHT_PREFIXES = [NIGHT_FLOCK_PREFIX, NIGHT_ZOMBIE_PREFIX, DAY_FLOCK_PREFIX];

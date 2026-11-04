@@ -72,7 +72,7 @@ import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecial
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
 import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
-import { createNightPigeons, createNightZombies, createWildCreatures, NIGHT_FLOCK_PREFIX, NIGHT_ZOMBIE_PREFIX, nightFlockAction } from '../systems/wildlifeSystem';
+import { createNightPigeons, createWildCreatures, DAY_FLOCK_FAR, DAY_FLOCK_PREFIX, DAY_PIGEONS, dayFlockAction, NIGHT_FLOCK_PREFIX, NIGHT_ZOMBIE_PREFIX, nightFlockAction } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, applyHordeCall, hordeCallBonus, ZS_EXTRA_PEACE_MS, type WaveState } from '../systems/waveSystem';
 import { eliteLoot, eliteXp } from '../systems/difficultySystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
@@ -1864,11 +1864,16 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const act = nightFlockAction(night, has);
     if (act === 'spawn') set((s) => ({ creatures: [...s.creatures, ...createNightPigeons(s.player.position)] }));
     else if (act === 'leave') set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(NIGHT_FLOCK_PREFIX)) }));
-    // Morto-vivo só à noite (26/10): mesma regra de chegar/ir embora, espalhados pelo mapa.
-    const hasZ = get().creatures.some((c) => c.id.startsWith(NIGHT_ZOMBIE_PREFIX));
-    const actZ = nightFlockAction(night, hasZ);
-    if (actZ === 'spawn') set((s) => ({ creatures: [...s.creatures, ...createNightZombies(Math.random, undefined, s.player.position)] }));
-    else if (actZ === 'leave') set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(NIGHT_ZOMBIE_PREFIX)) }));
+    // MORTO-VIVO DA NOITE SAIU DO JOGO (03/11, Pedro: "o zumbi verde estranho que aparece à noite pode remover"): não
+    // nasce mais; o que vier de sala retomada some.
+    if (get().creatures.some((c) => c.id.startsWith(NIGHT_ZOMBIE_PREFIX))) set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(NIGHT_ZOMBIE_PREFIX)) }));
+    // BANDO DO DIA (03/11): 10 pombos rondando perto de quem joga enquanto é dia; à noite o bando da noite assume
+    const me = get().player.position, day = get().creatures.filter((c) => c.id.startsWith(DAY_FLOCK_PREFIX));
+    const alive = day.filter((c) => c.behavior !== 'dead');
+    const far = alive.length > 0 && alive.every((c) => getDistance(c.position, me) > DAY_FLOCK_FAR);
+    const actD = dayFlockAction(night, day.length > 0, far);
+    if (actD === 'leave' || actD === 'move') set((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith(DAY_FLOCK_PREFIX)) }));
+    if (actD === 'spawn' || actD === 'move') set((s) => ({ creatures: [...s.creatures, ...createNightPigeons(s.player.position, Math.random, DAY_PIGEONS, DAY_FLOCK_PREFIX)] }));
   },
 
   tickSorceress: (now, yaw) => {
