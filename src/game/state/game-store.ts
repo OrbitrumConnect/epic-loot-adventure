@@ -380,6 +380,7 @@ export function deadCreature(c: CreatureState, now: number, rng: () => number): 
   // 03/11: Feiticeira não renasce; a ESQUADRA PIRATA (capitão/tripulação/Kraken `fleet_`) e a horda de tubarões que ela solta
   // (`wild_shark_fl`) também não — vêm com a esquadra e saem com ela
   const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave') || isSorceress(c.id) || c.id.startsWith('fleet_') || c.id.startsWith('wild_shark_fl')
+    || c.id.startsWith('zs_kraken_') // 04/11: o Kraken das Cagarras volta inteiro pelo relógio dele (zs-kraken-boss)
     ? null
     : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
   return { ...c, hp: 0, behavior: 'dead', respawnAt };

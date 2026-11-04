@@ -157,8 +157,9 @@ export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: R
     if (removed) setRenderBodyRoster([...keep].join('|'));
   });
   const list = useMemo(() => {
-    // o CAPITÃO da esquadra pirata (`fleet_pilot_*`, 03/11) é desenhado no timão do navio dele (zs-enemy-fleet-view), não aqui
-    const r = nextEnemyList(cache.current, useGameStore.getState().creatures.filter((cr) => !cr.id.startsWith('fleet_')));
+    // o CAPITÃO da esquadra pirata (`fleet_pilot_*`, 03/11) é desenhado no timão do navio dele (zs-enemy-fleet-view), não aqui;
+    // o KRAKEN DAS CAGARRAS (`zs_kraken_*`, 04/11: corpo e tentáculos) no zs-kraken-boss-view
+    const r = nextEnemyList(cache.current, useGameStore.getState().creatures.filter((cr) => !cr.id.startsWith('fleet_') && !cr.id.startsWith('zs_kraken_')));
     cache.current = r.cache;
     return r.list;
     // eslint-disable-next-line react-hooks/exhaustive-deps

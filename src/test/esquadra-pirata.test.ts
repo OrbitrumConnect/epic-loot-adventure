@@ -128,7 +128,7 @@ describe('esquadra pirata — capitão e tripulação', () => {
     expect(crewHitChance(FLEET.CREW_RANGE)).toBeCloseTo(0.25, 5);
     expect(crewHitChance(FLEET.CREW_RANGE + 1)).toBe(0);
     expect(FLEET.CREW_RANGE).toBeGreaterThanOrEqual(FLEET.PREF + 20); // alcançam de onde os navios seguram
-    expect(read('src/components/world/world-entities.tsx')).toMatch(/creatures\.filter\(\(cr\) => !cr\.id\.startsWith\('fleet_'\)\)/);
+    expect(read('src/components/world/world-entities.tsx')).toMatch(/creatures\.filter\(\(cr\) => !cr\.id\.startsWith\('fleet_'\)/); // (04/11: + o Kraken)
     // ONLINE: capitão e tripulação VÃO na foto do mundo (a sala os vê e acerta pelo caminho dos bichos)
     expect(read('src/net/multiplayer.ts')).toMatch(/const pkt = worldEncoder\.encode\(creatures, Date\.now\(\)\);/);
     expect(read('src/game/systems/objectiveSystem.ts')).toMatch(/if \(creature\.id\?\.startsWith\('fleet_'\)\) return false;/); // piloto automático não nada até lá
@@ -136,7 +136,8 @@ describe('esquadra pirata — capitão e tripulação', () => {
 
   it('ligado: balas da esquadra tiram vida do seu navio/de você; as suas no casco deles; capitão morto = à deriva', () => {
     const v = read('src/components/zona-sul/zs-warship-view.tsx');
-    expect(v).toMatch(/if \(fb\.enemy\) enemyBallLanded\(fb\.land, shipRef\.current, heroRef\.current, warshipHalfBeam\(\)\);/);
+    // (04/11: a mesma bala inimiga leva a PEDRA do Kraken das Cagarras — a origem vai junto)
+    expect(v).toMatch(/if \(fb\.enemy\) enemyBallLanded\(fb\.land, shipRef\.current, heroRef\.current, warshipHalfBeam\(\), fb\.enemy === 'kraken' \? 'kraken' : 'pirata'\);/);
     expect(v).toMatch(/const es = fleetShipAt\(zsFleet\.ships, fb\.land\.x, fb\.land\.z\);/);
     const fv = read('src/components/zona-sul/zs-enemy-fleet-view.tsx');
     expect(fv).toMatch(/if \(!s\.pilotDead && \(!pilot \|\| pilot\.behavior === 'dead'\) && s\.sinkT === null\) \{/);
@@ -159,7 +160,8 @@ describe('esquadra pirata — capitão e tripulação', () => {
     expect(fv).toContain("else broadcastMobHit(tgt.id, FLEET.CREW_DMG, 'Pirata do navio');"); // tiro de fuzil em quem está na sala
     expect(fv).toContain('registerFleetHitHandler((hit) => {');
     const hits = read('src/components/zona-sul/zs-enemy-fleet-hits.ts');
-    expect(hits).toContain('broadcastPirateShipHit(r.id, FLEET.BALL_DMG)'); // a bala no navio de quem está na sala
+    expect(hits).toContain('broadcastPirateShipHit(r.id, shipDmg)'); // a bala no navio de quem está na sala (04/11: dano da origem)
+    expect(hits).toContain('shipDmg = kr ? KRAKEN_BOSS.ROCK_DMG : FLEET.BALL_DMG');
     expect(hits).toContain('else { broadcastFleetReward(byId);'); // o loot vai pra quem afundou
     expect(read('src/components/zona-sul/zs-warship-view.tsx')).toContain('if (isGuestInRoom()) broadcastFleetHit(es.id,');
   });

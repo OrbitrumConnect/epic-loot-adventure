@@ -305,6 +305,8 @@ export function findHealHotbarIndex(inventory: InventoryState): number | null {
 function isCreatureAlive(creature: { id?: string; behavior: string; hp: number }): boolean {
   // o CAPITÃO da esquadra pirata (03/11) fica no mar, no timão do navio: o piloto automático não vai atrás (nadaria até lá)
   if (creature.id?.startsWith('fleet_')) return false;
+  // (04/11) o KRAKEN DAS CAGARRAS mora no mar: luta de navio — o piloto automático não nada até lá
+  if (creature.id?.startsWith('zs_kraken_')) return false;
   return creature.behavior !== 'dead' && creature.behavior !== 'respawning' && creature.hp > 0;
 }
 

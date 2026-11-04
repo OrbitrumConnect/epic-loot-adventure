@@ -11,28 +11,32 @@ import { addItem, canAddItem } from '@/game/systems/inventorySystem';
 import { broadcastFleetReward, broadcastMobHit, broadcastPirateShipHit, useNet } from '@/net/multiplayer';
 import { damageWarship, nearWarshipHull, WARSHIP, type ZsWarship } from './zs-warship';
 import { FLEET, zsFleet, type EnemyShip } from './zs-enemy-fleet';
+import { KRAKEN_BOSS } from './zs-kraken-boss';
 
 let lastShipMsg = 0;
 /** Bala da ESQUADRA caiu em `land`: no SEU navio (casco) tira vida dele; perto de VOCÊ (água/convés) tira a sua. Sendo
  *  anfitrião, também no navio/no herói de quem está na sala (eles aplicam). */
-export function enemyBallLanded(land: { x: number; z: number }, myShip: ZsWarship | null, hero: { x: number; z: number }, halfBeam: number): void {
+export function enemyBallLanded(land: { x: number; z: number }, myShip: ZsWarship | null, hero: { x: number; z: number }, halfBeam: number, src: 'pirata' | 'kraken' = 'pirata'): void {
+  // (04/11) a PEDRA do Kraken das Cagarras cai pelo mesmo caminho, com o dano e a mensagem dela
+  const kr = src === 'kraken', shipDmg = kr ? KRAKEN_BOSS.ROCK_DMG : FLEET.BALL_DMG, heroDmg = kr ? KRAKEN_BOSS.ROCK_HERO_DMG : FLEET.HERO_DMG;
+  const who = kr ? 'Pedra do Kraken' : 'Canhão pirata';
   if (myShip && myShip.sinkT === null && nearWarshipHull(myShip, land.x, land.z, halfBeam, 0.8)) {
-    const sank = damageWarship(myShip, FLEET.BALL_DMG);
+    const sank = damageWarship(myShip, shipDmg);
     const now = Date.now();
-    if (sank) useGameStore.getState().setMessage('🔥 Seu navio AFUNDOU — esquadra pirata! Construa outro na âncora ou no card da base.');
-    else if (now - lastShipMsg > 2500) { lastShipMsg = now; useGameStore.getState().setMessage(`💥 Canhão pirata no seu navio! (${Math.round(myShip.hp / 1000)} mil / ${WARSHIP.HP / 1000} mil)`); }
+    if (sank) useGameStore.getState().setMessage(kr ? '🔥 Seu navio AFUNDOU — o Kraken das Cagarras! Construa outro na âncora ou no card da base.' : '🔥 Seu navio AFUNDOU — esquadra pirata! Construa outro na âncora ou no card da base.');
+    else if (now - lastShipMsg > 2500) { lastShipMsg = now; useGameStore.getState().setMessage(`${kr ? '🪨 Pedra do Kraken' : '💥 Canhão pirata'} no seu navio! (${Math.round(myShip.hp / 1000)} mil / ${WARSHIP.HP / 1000} mil)`); }
   }
   if (Math.hypot(hero.x - land.x, hero.z - land.z) <= WARSHIP.SPLASH_R) {
-    hurtPlayerBy('Canhão pirata', FLEET.HERO_DMG, land, (dmg, hp, max) => `💥 Bala de canhão pirata! -${dmg} HP (${hp}/${max})`);
+    hurtPlayerBy(who, heroDmg, land, (dmg, hp, max) => `${kr ? '🪨 Pedra do Kraken' : '💥 Bala de canhão pirata'}! -${dmg} HP (${hp}/${max})`);
   }
   // ONLINE (anfitrião): o navio e o corpo dos OUTROS jogadores
   const net = useNet.getState();
   if (!net.connected || !net.isHost) return;
   for (const r of Object.values(net.players)) {
     for (const v of r.v ?? []) {
-      if (v.k === 's' && (v.h ?? 1) > 0 && nearWarshipHull(v, land.x, land.z, halfBeam, 0.8)) broadcastPirateShipHit(r.id, FLEET.BALL_DMG);
+      if (v.k === 's' && (v.h ?? 1) > 0 && nearWarshipHull(v, land.x, land.z, halfBeam, 0.8)) broadcastPirateShipHit(r.id, shipDmg);
     }
-    if (r.hp > 0 && Math.hypot(r.x - land.x, r.z - land.z) <= WARSHIP.SPLASH_R) broadcastMobHit(r.id, FLEET.HERO_DMG, 'Canhão pirata');
+    if (r.hp > 0 && Math.hypot(r.x - land.x, r.z - land.z) <= WARSHIP.SPLASH_R) broadcastMobHit(r.id, heroDmg, who);
   }
 }
 

@@ -77,11 +77,12 @@ export function broadcastShipHit(ownerId: string, damage: number, w?: 'gun'): vo
 
 /** Bala da ESQUADRA PIRATA (simulada no anfitrião, 03/11) no navio de um jogador: vale SEMPRE (bicho do mundo, sem
  *  inimizade — como a horda na base). O dono do navio aplica. */
-export function broadcastPirateShipHit(ownerId: string, damage: number): void {
+/** (04/11) `fromName`: o Kraken das Cagarras usa o mesmo caminho (bicho do mundo: vale sem inimizade). */
+export function broadcastPirateShipHit(ownerId: string, damage: number, fromName = 'Esquadra pirata'): void {
   if (!channel || !useNet.getState().connected || !useNet.getState().isHost || !Number.isFinite(damage) || damage <= 0) return;
   const { selfId, selfSide } = useNet.getState();
   if (ownerId === selfId) return;
-  void channel.send({ type: 'broadcast', event: 'ship-hit', payload: { id: selfId, ownerId, damage: Math.round(damage), fromName: 'Esquadra pirata', fromSide: selfSide, mob: true } satisfies ShipHitIntent });
+  void channel.send({ type: 'broadcast', event: 'ship-hit', payload: { id: selfId, ownerId, damage: Math.round(damage), fromName, fromSide: selfSide, mob: true } satisfies ShipHitIntent });
 }
 
 /**
@@ -105,6 +106,15 @@ export function broadcastFleet(ships: NetFleetShip[], shots: NetFleetShot[], k: 
 export type FleetHitIntent = { id: string; shipId: string; damage: number };
 let fleetHitHandler: ((intent: FleetHitIntent) => void) | null = null;
 export function registerFleetHitHandler(handler: ((intent: FleetHitIntent) => void) | null): void { fleetHitHandler = handler; }
+/** KRAKEN DAS CAGARRAS (04/11, etapa 3): o anfitrião manda fase, olhar e os tentáculos ~4×/s (a VIDA vai na foto do mundo,
+ *  como todo bicho). ph: 0 dorme · 1 sobe · 2 luta · 3 morto; rt = subida 0–1; bo = corpo exposto; a = ação do corpo
+ *  (0 parado · 1 bate · 2 morre); t = tentáculo vivo; s = chicotada [x, z, idade] ou null. */
+export type NetKraken = { ph: 0 | 1 | 2 | 3; rt: number; y: number; bo: 0 | 1; a: 0 | 1 | 2; t: (0 | 1)[]; s: ([number, number, number] | null)[] };
+export const netKraken: { k: NetKraken | null; at: number } = { k: null, at: 0 };
+export function broadcastKraken(k: NetKraken): void {
+  if (!channel || !useNet.getState().connected) return;
+  void channel.send({ type: 'broadcast', event: 'kraken', payload: { id: useNet.getState().selfId, k } });
+}
 export function broadcastFleetHit(shipId: string, damage: number): void {
   if (!channel || !useNet.getState().connected || useNet.getState().isHost || !Number.isFinite(damage) || damage <= 0) return;
   void channel.send({ type: 'broadcast', event: 'fleet-hit', payload: { id: useNet.getState().selfId, shipId, damage: Math.round(damage) } satisfies FleetHitIntent });
@@ -358,6 +368,11 @@ export const useNet = create<NetState>((set, get) => ({
       if (p.id === selfId || get().isHost || !Array.isArray(p.s)) return;
       netFleet.ships = p.s.slice(0, 6); netFleet.at = performance.now(); netFleet.k = p.k ?? null;
       if (Array.isArray(p.sh)) { netFleet.shots.push(...p.sh.slice(0, 30)); if (netFleet.shots.length > 40) netFleet.shots.splice(0, netFleet.shots.length - 40); }
+    });
+    ch.on('broadcast', { event: 'kraken' }, ({ payload }) => {
+      const p = payload as { id: string; k: NetKraken };
+      if (p.id === selfId || get().isHost || !p.k || !Array.isArray(p.k.t)) return;
+      netKraken.k = p.k; netKraken.at = performance.now();
     });
     ch.on('broadcast', { event: 'fleet-hit' }, ({ payload }) => {
       const hit = payload as FleetHitIntent;

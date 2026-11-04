@@ -38,7 +38,8 @@ describe('culling de criatura por distância', () => {
     // 27/10: a lista passou a vir do `nextEnemyList` (cache por id, do upstream). O que este
     // teste guarda continua o mesmo: a lista nasce de TODAS as criaturas, sem filtro por distância.
     // 03/11: menos só a esquadra pirata (`fleet_*`, desenhada no navio dela) — nenhum filtro por distância
-    expect(worldEntities).toContain("nextEnemyList(cache.current, useGameStore.getState().creatures.filter((cr) => !cr.id.startsWith('fleet_')))");
+    // (04/11: o filtro ganhou o Kraken das Cagarras, `zs_kraken_*`, desenhado no zs-kraken-boss-view)
+    expect(worldEntities).toContain("nextEnemyList(cache.current, useGameStore.getState().creatures.filter((cr) => !cr.id.startsWith('fleet_') && !cr.id.startsWith('zs_kraken_')))");
     expect(worldEntities).toContain('start: { x: cr.position.x, z: cr.position.z }');
     expect(worldEntities).not.toContain('filter(cr => mountedIds.current.has(cr.id))');
     expect(worldEntities.match(/renderBody=\{renderBodyIds\.current\.has\(cr\.id\)\}/g)?.length).toBe(3);

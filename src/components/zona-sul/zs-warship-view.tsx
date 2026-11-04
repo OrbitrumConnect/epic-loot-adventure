@@ -151,7 +151,7 @@ function scanWarshipDeck(holder: THREE.Object3D, height: number): { c: ShipColli
 /** Balas no ar (o mundo empurra ao atirar; o desenho anima e resolve o impacto). `remote` = salva de OUTRO jogador
  *  (online): só desenho/splash/som — o dano já foi resolvido por quem atirou. */
 /** `enemy` (03/11): bala da ESQUADRA PIRATA — ao cair tira vida do MEU navio / de mim (zs-enemy-fleet-hits). */
-export type FlyingBall = { b: CannonBall; t0: number; land: { x: number; y: number; z: number; t: number }; hit: boolean; remote?: boolean; enemy?: boolean };
+export type FlyingBall = { b: CannonBall; t0: number; land: { x: number; y: number; z: number; t: number }; hit: boolean; remote?: boolean; enemy?: boolean | 'kraken' };
 export const warshipFx: { balls: FlyingBall[]; splashes: { x: number; y: number; z: number; t0: number }[] } = { balls: [], splashes: [] };
 if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zsWarshipFx?: unknown }).__zsWarshipFx = warshipFx; // testes de tela
 /** Mira (o mundo escreve todo quadro): arco da bala do meio da salva + onde cai. */
@@ -238,7 +238,7 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
         if (!fb.hit) {
           fb.hit = true;
           fx.splashes.push({ x: fb.land.x, y: fb.land.y, z: fb.land.z, t0: now });
-          if (fb.enemy) enemyBallLanded(fb.land, shipRef.current, heroRef.current, warshipHalfBeam()); // esquadra pirata → meu navio / eu
+          if (fb.enemy) enemyBallLanded(fb.land, shipRef.current, heroRef.current, warshipHalfBeam(), fb.enemy === 'kraken' ? 'kraken' : 'pirata'); // esquadra pirata → meu navio / eu
           else if (!fb.remote) {
             useGameStore.getState().cannonHit({ x: fb.land.x, z: fb.land.z }, WARSHIP.SPLASH_R); // dano: só de quem atirou
             // caiu num navio da ESQUADRA PIRATA (03/11): tira vida dele (afundou = loot, o capitão vai junto)
