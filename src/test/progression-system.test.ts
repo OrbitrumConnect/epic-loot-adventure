@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AutoSnapshot, Position } from '@/game/types';
 import { CREATURES } from '@/game/data/creatures';
 import {
-  LEVEL_GAINS, MAX_LEVEL, applyXp, createProgression, creatureXp, grantXp, levelUpMessage,
+  LEVEL_GAINS, MAX_LEVEL, applyXp, boostKillXp, createProgression, creatureXp, grantXp, levelUpMessage,
   playerBaseAttack, xpForLevel,
 } from '@/game/systems/progressionSystem';
 import {
@@ -104,7 +104,8 @@ describe('attack concede XP', () => {
     }));
     store.getState().attack(creature.id);
     const after = store.getState().player;
-    expect(after.totalXp).toBe(creatureXp(CREATURES['rabbit']!));
+    expect(after.totalXp).toBe(boostKillXp(creatureXp(CREATURES['rabbit']!))); // 04/11: abate +15% (KILL_XP_BOOST)
+    expect(boostKillXp(100)).toBe(115);
     expect(store.getState().ui.message).toContain('XP');
   });
 

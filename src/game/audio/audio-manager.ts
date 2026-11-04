@@ -18,6 +18,9 @@ export const TRACKS: { id: TrackId; name: string; url: string }[] = [
 /** Faixa que entra no combate (tensa). */
 const COMBAT_TRACK: TrackId = 'cautionary-pacing';
 const COMBAT_HOLD_MS = 5000; // quanto a trilha de combate segura após o último ataque
+/** 3ª camada — CHEFE (04/11, Pedro: "baixei música pra quando o Kraken aparece"): com o chefe acordado por perto, a
+ *  normal e a de combate descem e esta sobe; acabou, volta tudo. Só carrega na 1ª vez que um chefe aparece. */
+export const BOSS_TRACK_URL = '/audio/kraken-boss.mp3';
 
 /** Sons do mundo (torre, morte). Morte = splat (carne) + gemido (humanoide) ou rosnado (bicho). */
 export type WorldSfx = 'tower' | 'gun' | 'splat' | 'groan' | 'growl' | 'cannon';
@@ -60,6 +63,8 @@ class AudioManager {
   master = 0.7;
   ambientTrack: TrackId = 'dry-ground-calls';
   private combatUntil = 0;
+  private boss: HTMLAudioElement | null = null;
+  private bossOn = false;
   private raf = 0;
   private listeners = new Set<Listener>();
   /** O usuário parou a música de propósito → o autoplay não a liga de novo. */
@@ -125,6 +130,7 @@ class AudioManager {
     this.playing = false;
     this.ambient?.pause();
     this.combat?.pause();
+    this.boss?.pause();
     this.campfire?.pause();
     if (this.ambient) this.ambient.volume = 0;
     if (this.combat) this.combat.volume = 0;
@@ -146,6 +152,15 @@ class AudioManager {
     this.emit();
   }
 
+  /** Chefe acordado por perto (o Kraken das Cagarras chama todo quadro). Respeita o player: música parada = nada. */
+  setBossMusic(on: boolean) {
+    if (on === this.bossOn) return;
+    this.bossOn = on;
+    if (on && typeof Audio !== 'undefined') {
+      if (!this.boss) { this.boss = new Audio(BOSS_TRACK_URL); this.boss.loop = true; this.boss.volume = 0; }
+      if (this.playing) void this.boss.play().catch(() => {});
+    }
+  }
   /** Sinaliza um ataque/combate: segura a trilha de combate por alguns segundos. */
   pulseCombat(now = Date.now()) { this.combatUntil = now + COMBAT_HOLD_MS; }
   /** Tiro do herói em RODÍZIO de 4 cópias (Pedro 25/10: "na rajada sai só 1 som — devia sair o de cada bala"):
@@ -231,8 +246,16 @@ class AudioManager {
     if (!this.playing || !this.ambient || !this.combat) { this.raf = 0; return; }
     const inCombat = Date.now() < this.combatUntil;
     // Normal reduzida; no combate ela abaixa e a trilha tensa sobe (+~20% no topo).
-    const ambTarget = this.master * (inCombat ? 0.35 : 0.55);
-    const comTarget = inCombat ? Math.min(1, this.master * 1.2) : 0;
+    // CHEFE por perto (04/11): as duas descem e a do chefe sobe (fade igual); acabou = pausa quando zera.
+    const boss = this.bossOn && !!this.boss;
+    const ambTarget = boss ? 0 : this.master * (inCombat ? 0.35 : 0.55);
+    const comTarget = boss ? 0 : inCombat ? Math.min(1, this.master * 1.2) : 0;
+    if (this.boss) {
+      const bossTarget = boss ? Math.min(1, this.master * 1.1) : 0;
+      this.boss.volume = Math.max(0, Math.min(1, this.boss.volume + (bossTarget - this.boss.volume) * 0.04));
+      if (boss && this.boss.paused) void this.boss.play().catch(() => {});
+      if (!boss && this.boss.volume < 0.01 && !this.boss.paused) this.boss.pause();
+    }
     this.ambient.volume += (ambTarget - this.ambient.volume) * 0.08; // fade suave
     this.combat.volume += (comTarget - this.combat.volume) * 0.08;
     this.raf = requestAnimationFrame(this.loop);

@@ -40,6 +40,8 @@ const SEG = 16;
 const SEG_LEN = KRAKEN_BOSS.TENT_LEN / SEG;
 /** some de vista (corpo, tentáculos, água turva) com a câmera a mais disto (m) — longe não pesa */
 export const KRAKEN_DRAW_M = 1600;
+/** a música do chefe toca com você a até isto dele (m), com ele acordado */
+export const KRAKEN_MUSIC_M = 700;
 const PHASE_OF: KrakenPhase[] = ['sleep', 'rise', 'fight', 'dead', 'hunt', 'sink'];
 const meId = () => useNet.getState().selfId || 'eu';
 const ACT: Record<Boarder['act'], NetFleetBoarder['a']> = { climb: 0, walk: 1, attack: 2, idle: 3 };
@@ -123,6 +125,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     for (const m of [water.murk, water.whirl]) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }
     water.tx.murk.dispose(); water.tx.whirl.dispose();
     warshipDrift.x = 0; warshipDrift.z = 0; krakenShapes.segs = []; krakenShapes.body = null;
+    audioManager.setBossMusic(false);
   }, [tent, water]);
   const bodyBar = useMemo(() => makeShipHpBar(14, 1.0), []);
   const tentBars = useMemo(() => Array.from({ length: KRAKEN_BOSS.TENTACLES }, () => makeShipHpBar(5, 0.45)), []);
@@ -228,7 +231,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
             }
           }
           useGameStore.setState((s) => ({ creatures: [...s.creatures.filter((c) => !isKrakenBoss(c.id)), ...fresh] }));
-          if (near()) useGameStore.getState().setMessage('🐙 O KRAKEN DAS CAGARRAS acordou! Corte os 6 tentáculos (canhão/fuzil) — o REDEMOINHO puxa o navio pra ele: não fique perto!');
+          if (near()) useGameStore.getState().setMessage('🐙 O KRAKEN DAS CAGARRAS acordou! (recomendado nível 80+) Corte os 6 tentáculos (canhão/fuzil) — o REDEMOINHO puxa o navio pra ele: não fique perto!');
         }
         if (K.phase === 'sleep') {
           dropCreatures();
@@ -366,6 +369,8 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     const r0 = rosterOf();
     if (r0 !== roster) setRoster(r0);
 
+    // ═══ MÚSICA DO CHEFE (04/11 — a do Pedro): acordado e eu a até KRAKEN_MUSIC_M ═══
+    audioManager.setBossMusic(whirlpoolOn(K.phase) && Math.hypot(hero.x - K.x, hero.z - K.z) < KRAKEN_MUSIC_M);
     // ═══ REDEMOINHO puxa o MEU navio (cada um aplica no seu — o mundo move junto quem está no convés) ═══
     if (my && whirlpoolOn(K.phase) && my.sinkT === null) { const v = whirlpoolPull(K, my); warshipDrift.x = v.x; warshipDrift.z = v.z; }
     else { warshipDrift.x = 0; warshipDrift.z = 0; }

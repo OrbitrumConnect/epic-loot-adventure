@@ -9,7 +9,9 @@ import type { CreatureDefinition } from '../types';
 // 1,15 → 1,32 (+15% em cima, Pedro 23/10: nv 71 matava rápido demais).
 export const ENEMY_HP_MULT = 1.32;
 /** Reaparecem 20% mais rápido (mundo mais vivo). */
-export const ENEMY_RESPAWN_MULT = 0.8;
+// 04/11 (Pedro: "upar ficou mais difícil — spawn mais rápido melhora?"): 0,8 → 0,6 (acampamento/inimigo volta em
+// 1,8–3 min em vez de 2,4–4; os soltos `wild_*` já voltam em 45 s–1 min 15 s)
+export const ENEMY_RESPAWN_MULT = 0.6;
 /** Bichos SOLTOS do mapa (`wild_*`) voltam mais rápido (Pedro, 22/10 — nv 37 limpava o mapa e o
  *  piloto ficava parado): 3–5 min base × 0,5 = 1,5–2,5 min (era × 0,8 = 2,4–4 min). Acampamentos e
  *  horda seguem com `ENEMY_RESPAWN_MULT`.

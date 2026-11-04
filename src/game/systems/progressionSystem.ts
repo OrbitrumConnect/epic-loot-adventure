@@ -26,6 +26,10 @@ export function creatureXp(def: Pick<CreatureDefinition, 'maxHp' | 'attackPower'
 // chefes (colosso/kaiju) em dezenas. Usado pelo piloto pra evitar alvo forte.
 // ---------------------------------------------------------------------------
 export const CREATURE_XP_PER_LEVEL = 18;
+/** BOOST DE XP (04/11, Pedro: "tá difícil sair do 30 numa outra conta — 10 a 15% a mais já melhora; não quero abandono
+ *  por nível, nem mexer muito"): +15% no XP de ABATE. A curva de nível, o nível dos bichos e o loot não mudam. */
+export const KILL_XP_BOOST = 1.15;
+export const boostKillXp = (xp: number) => Math.max(1, Math.round(xp * KILL_XP_BOOST));
 
 export function creatureLevel(def: Pick<CreatureDefinition, 'maxHp' | 'attackPower' | 'armor'>): number {
   return 1 + Math.floor(creatureXp(def) / CREATURE_XP_PER_LEVEL);

@@ -49,7 +49,8 @@ describe('renascer mais rápido', () => {
       expect(deadCreature(mk(id), 0, () => 0).respawnAt).toBe(45_000);
       expect(deadCreature(mk(id), 0, () => 1).respawnAt).toBe(75_000);
     }
-    expect(deadCreature(mk('zs_camp_1_e_raider_scout_0'), 0, () => 0).respawnAt).toBe(144_000); // 3 min × 0,8 (não mudou)
+    // 04/11 (Pedro: "upar ficou mais difícil — spawn mais rápido melhora?"): acampamento 3 min × 0,8 → × 0,6
+    expect(deadCreature(mk('zs_camp_1_e_raider_scout_0'), 0, () => 0).respawnAt).toBe(108_000);
   });
 });
 

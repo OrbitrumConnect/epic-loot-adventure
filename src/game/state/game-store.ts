@@ -67,7 +67,7 @@ import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world
 import { lineWalkable } from '@/components/world/map-walk';
 import { behindSpot, isSorceress, nextSorceressAt, SORC, SORC_PREFIX, sorcClock, sorceressMaySpawn } from '../systems/sorceressSystem';
 import { fleeInsteadOfDeath, IND, IND_PREFIX, indBornAt, indClock, indigenaLevelK, indigenaMaySpawn, indigenaState, isRetreating, isUnkillable, nextIndigenaAt, retreatToForest } from '../systems/indigenaSystem';
-import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
+import { baseFallLevelLoss, boostKillXp, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
 import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode, tickHarvestNodes } from '../systems/harvestSystem';
@@ -412,7 +412,7 @@ function rewardCreatureDeath(c: CreatureState, player: PlayerState, bags: DeathB
     player = { ...player, inventory: inv };
     if (overflow.length) bags = pushBag(bags, createDeathBag(c.id, c.name, c.position, overflow));
   }
-  const xpGain = eliteXp(creatureXp(def ?? c), c); // Enfurecido: +50% (XP NÃO segue a vida extra)
+  const xpGain = boostKillXp(eliteXp(creatureXp(def ?? c), c)); // Enfurecido: +50% (XP NÃO segue a vida extra); 04/11: +15%
   const granted = grantXp({ ...player, gold: player.gold + 15 }, xpGain);
   player = syncCarry(granted.player);
   drafts.push(deathEvent(c.id, c.name, c.position), xpEvent(xpGain, player.position));
@@ -1200,7 +1200,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         }
       }
       updatedPlayer = { ...updatedPlayer, gold: updatedPlayer.gold + 15 };
-      const xpGain = eliteXp(creatureXp(def ?? creature), creature); // Enfurecido: +50%
+      const xpGain = boostKillXp(eliteXp(creatureXp(def ?? creature), creature)); // Enfurecido: +50%; 04/11: +15%
       const granted = grantXp(updatedPlayer, xpGain);
       updatedPlayer = syncCarry(granted.player);
       msg = granted.message ?? `${msg} +${xpGain} XP.`;

@@ -282,7 +282,9 @@ export const ZS_HILLTOP_CAMPS: readonly CampPlacement[] = [
  */
 export const ZS_BANDIT_PREFIX = 'wild_bandit_';
 export const ZS_BANDIT_GROUPS = 8;
-export const ZS_BANDITS_PER_GROUP = 2;
+// 04/11 (Pedro: "upar ficou mais difícil — add um pouco mais de inimigo; não pombo, veado nem bicho: os inimigos"): dupla → TRIO
+// (os mesmos pontos — sem lugar novo)
+export const ZS_BANDITS_PER_GROUP = 3;
 const BANDIT_GROUP_SPACING = 150;
 export const isZsBandit = (id: string) => id.startsWith(ZS_BANDIT_PREFIX);
 const banditGround = (q: ZsQuery, x: number, z: number) =>
@@ -490,7 +492,7 @@ export function createZsSpreadFauna(q: ZsQuery, avoid: Position[], camps: CampPl
  */
 export const ZS_ARCHER_PREFIX = 'wild_archer_';
 export const ZS_ARCHER_GROUPS = 6;
-export const ZS_ARCHERS_PER_GROUP = 2;
+export const ZS_ARCHERS_PER_GROUP = 3; // 04/11: dupla → trio (mais inimigo pra upar)
 const ARCHER_GROUP_SPACING = 140;
 export const isZsArcher = (id: string) => id.startsWith(ZS_ARCHER_PREFIX);
 const archerGround = (q: ZsQuery, x: number, z: number) => q.surf(x, z) === SURF.forest && q.height(x, z) >= 8 && q.slope(x, z) < 30;
