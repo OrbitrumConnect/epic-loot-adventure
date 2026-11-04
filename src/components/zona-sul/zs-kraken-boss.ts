@@ -39,7 +39,8 @@ export const KRAKEN_BOSS = {
   // ~5 min de canhão (bala ~470) contra ~6 min que o navio aguenta de longe; em grupo, bem antes
   BODY_HP: 60_000, BODY_ARMOR: 30, BODY_REACH: 65, BODY_SLAM_S: 5, BODY_SHIP_DMG: 3500, BODY_HERO_DMG: 150,
   /** saiu do covil: anda um pouco mais devagar que o navio a toda (WARSHIP.MAX 12) */
-  WALK_SPEED: WARSHIP.MAX * 0.85, GIVEUP_EXTRA: 80, SINK_S: 5,
+  // 04/11 (Pedro: "quando ele solta pode vir uns 15% mais lento, só o andar dele"): 10,2 → ~8,7 m/s
+  WALK_SPEED: WARSHIP.MAX * 0.85 * 0.85, GIVEUP_EXTRA: 80, SINK_S: 5,
   /** redemoinho e a água turva em volta */
   PULL_R: 210, PULL_MAX: 3.2, MURK_R: 105,
   /** com os tentáculos ainda de pé o redemoinho puxa +10% (Pedro 04/11) */

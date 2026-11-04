@@ -73,7 +73,7 @@ describe('Kraken das Cagarras — fases', () => {
   });
   it('fora do covil: anda atrás do navio um pouco mais devagar que o navio a toda; só por mar; despistou = casco > golpe + 80 m', () => {
     expect(KRAKEN_BOSS.WALK_SPEED).toBeLessThan(WARSHIP.MAX);
-    expect(KRAKEN_BOSS.WALK_SPEED).toBeGreaterThan(WARSHIP.MAX * 0.75);
+    expect(KRAKEN_BOSS.WALK_SPEED).toBeCloseTo(WARSHIP.MAX * 0.85 * 0.85, 5); // 04/11: 15% mais lento (~8,7 m/s)
     const k = newKraken(); k.x = 0; k.z = 0;
     krakenWalk(k, { x: 0, z: 300 }, 280, 1, () => true);
     expect(k.z).toBeCloseTo(KRAKEN_BOSS.WALK_SPEED, 5);
