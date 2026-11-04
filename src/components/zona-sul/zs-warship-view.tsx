@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh';
 import { type ShipCollider, shipGround } from './zs-ship';
 import { useGameStore } from '@/game/state/game-store';
-import { broadcastShipHit, netCannonInbox } from '@/net/multiplayer';
+import { broadcastFleetHit, broadcastShipHit, isGuestInRoom, netCannonInbox } from '@/net/multiplayer';
 import { remoteDecks } from './zs-remote-vehicles';
 import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 import { ballAt, type CannonBall, WARSHIP, warshipGone, warshipLocal, warshipWorld, type ZsWarship } from './zs-warship';
@@ -243,7 +243,8 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
             useGameStore.getState().cannonHit({ x: fb.land.x, z: fb.land.z }, WARSHIP.SPLASH_R); // dano: só de quem atirou
             // caiu num navio da ESQUADRA PIRATA (03/11): tira vida dele (afundou = loot, o capitão vai junto)
             const es = fleetShipAt(zsFleet.ships, fb.land.x, fb.land.z);
-            if (es) fleetShipHit(es, useGameStore.getState().cannonPower());
+            // (online: sou convidado → o anfitrião aplica; solo/anfitrião → aqui; o loot vai pra quem afundou)
+            if (es) { if (isGuestInRoom()) broadcastFleetHit(es.id, useGameStore.getState().cannonPower()); else fleetShipHit(es, useGameStore.getState().cannonPower()); }
             // caiu NO navio de outro jogador (online, 01/11 — "navio 5k vida"): o dono aplica (com inimizade)
             for (const d of remoteDecks.values()) {
               if (shipGround(d.c, fb.land.x, fb.land.z, 1e6)) { broadcastShipHit(d.id, useGameStore.getState().cannonPower()); break; }

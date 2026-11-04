@@ -6,11 +6,13 @@
  *
  * Lógica PURA (testável), no molde do navio do herói (`zs-warship`): a MESMA física (`warshipStep` com o casco menor), a
  * MESMA salva (`cannonSalvo`) e a mesma bala em arco. Só o "cérebro" é daqui:
- *  - CHEGAM: você NAVEGANDO o seu navio no mar há 1 min (e fora do descanso) → 2–3 navios surgem a ~260 m, em mar fundo.
- *  - CAÇAM: vão até o seu navio; perto (~70 m), viram DE LADO e mantêm o través apontado pra você (como em jogo de navio).
+ *  - PATRULHAM (03/11, 2ª — Pedro: "ainda não vi nenhum navio navegando pelo mapa"): a esquadra fica no MAR o tempo todo,
+ *    navegando entre pontos de mar fundo (visível da praia e do mapa), longe de quem acabou de entrar (≥ 350 m).
+ *  - CAÇAM: alguém A BORDO de um navio a ≤ DETECT m de qualquer navio dela → vão até ele; perto (~70 m), viram DE LADO e
+ *    mantêm o través apontado (como em jogo de navio). Perdeu o alvo (fugiu 520 m / desembarcou 20 s) → volta a patrulhar.
  *  - ATIRAM: com você no través (±31°) e entre 25 e 150 m: a elevação sai da distância (balística) com o ponto previsto
  *    (pra onde você vai) e um ERRO de pontaria. Recarga por lado.
- *  - VÃO EMBORA: você abriu 520 m, ou saiu do navio por 20 s → somem; voltam depois de um descanso.
+ *  - AFUNDADA a esquadra inteira → outra chega em REST_MS, noutro ponto do mar.
  *  - Um pouco mais LENTOS que o seu (10 × 12 m/s): dá pra fugir.
  * Frente do navio = (sin yaw, cos yaw).
  */
@@ -37,12 +39,14 @@ export const FLEET = {
    *  afundava em ~1 min, medido) e no herói (água/convés, antes da armadura) */
   BALL_DMG: 650, HERO_DMG: 45,
   SPAWN_DIST: 260, LEAVE_DIST: 520,
-  /** navegando há isto (ms) no mar pra eles aparecerem */
-  SAIL_MS: 60_000,
-  /** fora do navio por isto (ms) = vão embora */
-  ASHORE_MS: 20_000,
-  /** descanso depois de AFUNDAR a esquadra / de você FUGIR (ms) */
-  REST_MS: 6 * 60_000, ESCAPE_REST_MS: 3 * 60_000,
+  /** alguém a bordo a até isto (m) de um navio da esquadra = ela vem caçar */
+  DETECT: 300,
+  /** sem alvo por isto (ms) = volta a patrulhar */
+  LOST_MS: 20_000,
+  /** patrulha: fração da velocidade; chegou no ponto (m); parado (s) = troca de ponto; nasce longe de todo mundo (m) */
+  PATROL_K: 0.55, WP_REACH: 40, STUCK_S: 8, SPAWN_AWAY: 350,
+  /** descanso depois de AFUNDAR a esquadra inteira (ms) */
+  REST_MS: 6 * 60_000,
   /** o CAPITÃO no timão */
   PILOT_HP: 520,
   /** loot por navio afundado */
@@ -66,13 +70,47 @@ export const FLEET_CREW_PREFIX = 'fleet_crew_';
 /** Qualquer um da esquadra (capitão ou tripulante): desenhado no navio, fora da IA de terra, fora da rede. */
 export const isFleetUnit = (id: string) => id.startsWith('fleet_');
 
-export type EnemyShip = ZsWarship & { id: string; pilotId: string; pilotDead: boolean; rewarded: boolean; crewIds: string[] };
-export type FleetState = { ships: EnemyShip[]; nextAt: number; sailingSince: number | null; ashoreSince: number | null; seq: number };
-export const zsFleet: FleetState = { ships: [], nextAt: 0, sailingSince: null, ashoreSince: null, seq: 0 };
+export type EnemyShip = ZsWarship & { id: string; pilotId: string; pilotDead: boolean; rewarded: boolean; crewIds: string[]; wp: { x: number; z: number } | null; stuck: number };
+/** `targetId` = dono do navio que ela caça (null = patrulha); `lostSince` = desde quando está sem alvo */
+export type FleetState = { ships: EnemyShip[]; nextAt: number; seq: number; targetId: string | null; lostSince: number | null };
+export const zsFleet: FleetState = { ships: [], nextAt: 0, seq: 0, targetId: null, lostSince: null };
 
-/** Pode chegar AGORA? (você navegando há SAIL_MS, sem esquadra, fora do descanso) */
-export function fleetMaySpawn(o: { now: number; sailing: boolean; sailingSince: number | null; nextAt: number; present: boolean }): boolean {
-  return o.sailing && !o.present && o.sailingSince !== null && o.now - o.sailingSince >= FLEET.SAIL_MS && o.now >= o.nextAt;
+/** Pode chegar AGORA? (sem esquadra no mar e fora do descanso) — ela PATRULHA, não espera ninguém navegar */
+export function fleetMaySpawn(o: { now: number; nextAt: number; present: boolean }): boolean {
+  return !o.present && o.now >= o.nextAt;
+}
+
+/** Um ponto de MAR FUNDO onde o casco cabe (sorteado no retângulo `b`), longe de `avoid` (≥ minAway m). null = não achou. */
+export function fleetSeaPoint(swim: (x: number, z: number) => boolean, b: { minX: number; maxX: number; minZ: number; maxZ: number }, rng: () => number,
+  avoid: readonly { x: number; z: number }[] = [], minAway = 0): { x: number; z: number } | null {
+  for (let k = 0; k < 400; k++) {
+    const x = b.minX + rng() * (b.maxX - b.minX), z = b.minZ + rng() * (b.maxZ - b.minZ);
+    if (avoid.some((a) => Math.hypot(a.x - x, a.z - z) < minAway)) continue;
+    // o casco cabe em 3 rumos (mar aberto de verdade, não um poço na beira)
+    if (hullFits(swim, x, z, 0, FLEET_LEN) && hullFits(swim, x, z, Math.PI / 3, FLEET_LEN) && hullFits(swim, x, z, -Math.PI / 3, FLEET_LEN)) return { x, z };
+  }
+  return null;
+}
+
+/** Quem caçar: o navio (com gente A BORDO) mais perto de qualquer navio vivo da esquadra, a ≤ DETECT m. */
+export function fleetPickTarget(ships: readonly EnemyShip[], cands: readonly { id: string; x: number; z: number }[]): string | null {
+  let best: string | null = null, bd: number = FLEET.DETECT;
+  for (const s of ships) {
+    if (s.sinkT !== null) continue;
+    for (const c of cands) { const d = Math.hypot(c.x - s.x, c.z - s.z); if (d <= bd) { bd = d; best = c.id; } }
+  }
+  return best;
+}
+
+/** Patrulha: vela a PATROL_K rumo ao ponto; perto dos outros, desvia. */
+export function fleetPatrolSteer(s: EnemyShip, wp: { x: number; z: number }, others: readonly { x: number; z: number }[]): WarshipInput {
+  if (s.pilotDead || s.sinkT !== null) return { throttle: 0, steer: 0 };
+  let want = Math.atan2(wp.x - s.x, wp.z - s.z);
+  for (const o of others) {
+    const ox = s.x - o.x, oz = s.z - o.z, od = Math.hypot(ox, oz);
+    if (od > 0.1 && od < 35) want = s.yaw + wrap(want - s.yaw) * 0.5 + wrap(Math.atan2(ox, oz) - s.yaw) * 0.5 * (1 - od / 35);
+  }
+  return { throttle: FLEET.PATROL_K, steer: Math.max(-1, Math.min(1, -wrap(want - s.yaw) * 2)) };
 }
 
 /** Onde nascem: a SPAWN_DIST do seu navio, em mar fundo (o casco cabe), proa pra você; os outros AO LADO (SPACING).
@@ -97,9 +135,20 @@ export function fleetSpawnSpots(swim: (x: number, z: number) => boolean, target:
   return [];
 }
 
+/** Formação da PATRULHA: em linha lado a lado (SPACING) a partir de `center`, todos no rumo `yaw`; só onde o casco cabe. */
+export function fleetFormation(swim: (x: number, z: number) => boolean, center: { x: number; z: number }, yaw: number, n: number): { x: number; z: number; yaw: number }[] {
+  const rx = Math.cos(yaw), rz = -Math.sin(yaw), out: { x: number; z: number; yaw: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const side = i === 0 ? 0 : (i % 2 ? 1 : -1) * Math.ceil(i / 2) * FLEET.SPACING;
+    const x = center.x + rx * side, z = center.z + rz * side;
+    if (hullFits(swim, x, z, yaw, FLEET_LEN)) out.push({ x, z, yaw });
+  }
+  return out;
+}
+
 export function newEnemyShip(id: string, at: { x: number; z: number; yaw: number }): EnemyShip {
   return { ...newWarship(at.x, at.z, at.yaw), hp: FLEET.HP, id, pilotId: `${FLEET_PILOT_PREFIX}${id}`, pilotDead: false, rewarded: false,
-    crewIds: Array.from({ length: FLEET.CREW }, (_, i) => `${FLEET_CREW_PREFIX}${id}_${i}`) };
+    crewIds: Array.from({ length: FLEET.CREW }, (_, i) => `${FLEET_CREW_PREFIX}${id}_${i}`), wp: null, stuck: 0 };
 }
 
 /** O CAPITÃO (alvo de verdade: mira, dano, XP) — não anda sozinho: o mundo o põe no timão todo quadro. */
@@ -201,13 +250,15 @@ export function leadAim(target: { x: number; z: number; yaw: number; speed: numb
   return { x: target.x + Math.sin(target.yaw) * target.speed * t + Math.sin(a) * e, z: target.z + Math.cos(target.yaw) * target.speed * t + Math.cos(a) * e };
 }
 
-/** Ir embora? 'stay' | 'escaped' (você abriu LEAVE_DIST ou saiu do navio por ASHORE_MS) | 'beaten' (todos afundaram). */
-export function fleetVerdict(o: { now: number; ships: readonly EnemyShip[]; target: { x: number; z: number } | null; ashoreSince: number | null }): 'stay' | 'escaped' | 'beaten' {
-  const alive = o.ships.filter((s) => s.sinkT === null);
-  if (o.ships.length > 0 && alive.length === 0 && o.ships.every((s) => (s.sinkT ?? 0) >= WARSHIP.SINK_S)) return 'beaten';
-  if (o.ashoreSince !== null && o.now - o.ashoreSince >= FLEET.ASHORE_MS) return 'escaped';
-  if (o.target && alive.length > 0 && alive.every((s) => Math.hypot(s.x - o.target!.x, s.z - o.target!.z) > FLEET.LEAVE_DIST)) return 'escaped';
-  return 'stay';
+/** A esquadra: 'beaten' (todos afundaram — some e outra vem em REST_MS) ou 'stay'. */
+export function fleetVerdict(o: { ships: readonly EnemyShip[] }): 'stay' | 'beaten' {
+  return o.ships.length > 0 && o.ships.every((s) => s.sinkT !== null && s.sinkT >= WARSHIP.SINK_S) ? 'beaten' : 'stay';
+}
+/** Perdeu o alvo? (ele sumiu da lista de quem está a bordo, ou abriu LEAVE_DIST de todos os navios vivos) */
+export function fleetLostTarget(ships: readonly EnemyShip[], target: { x: number; z: number } | null): boolean {
+  if (!target) return true;
+  const alive = ships.filter((s) => s.sinkT === null);
+  return alive.length > 0 && alive.every((s) => Math.hypot(s.x - target.x, s.z - target.z) > FLEET.LEAVE_DIST);
 }
 
 /** A bala do HERÓI caiu em (x, z): acertou o casco de algum navio da esquadra? (o primeiro) */

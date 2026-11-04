@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ballLanding, hullFits, newWarship, WARSHIP } from '@/components/zona-sul/zs-warship';
 import {
-  crewHitChance, crewSpot, elevationFor, FLEET, FLEET_HALF_BEAM, FLEET_LEN, fleetFire, fleetMaySpawn, fleetShipAt, fleetSpawnSpots, fleetSteer,
-  fleetVerdict, isFleetPilot, isFleetUnit, newEnemyShip,
+  crewHitChance, crewSpot, elevationFor, FLEET, FLEET_HALF_BEAM, FLEET_LEN, fleetFire, fleetFormation, fleetLostTarget, fleetMaySpawn, fleetPatrolSteer,
+  fleetPickTarget, fleetSeaPoint, fleetShipAt, fleetSpawnSpots, fleetSteer, fleetVerdict, isFleetPilot, isFleetUnit, newEnemyShip,
 } from '@/components/zona-sul/zs-enemy-fleet';
 
 /* Pedro 03/11: "tropas de navios juntas, 2 3, ~35% menores que o galeão do herói, que luram no barco do herói, atacam com
@@ -26,11 +26,29 @@ describe('esquadra pirata — navios', () => {
     expect(hullFits((x) => narrow(x), 0, 0, Math.PI / 2)).toBe(false);
   });
 
-  it('chegam com você NAVEGANDO há 1 min (fora do descanso), a ~260 m, em mar fundo, de proa pra você e lado a lado', () => {
-    expect(fleetMaySpawn({ now: 70_000, sailing: true, sailingSince: 0, nextAt: 0, present: false })).toBe(true);
-    expect(fleetMaySpawn({ now: 30_000, sailing: true, sailingSince: 0, nextAt: 0, present: false })).toBe(false); // < 1 min
-    expect(fleetMaySpawn({ now: 70_000, sailing: false, sailingSince: null, nextAt: 0, present: false })).toBe(false); // a pé
-    expect(fleetMaySpawn({ now: 70_000, sailing: true, sailingSince: 0, nextAt: 99_000, present: false })).toBe(false); // descanso
+  it('PATRULHAM o mar o tempo todo (Pedro: "ainda não vi nenhum navio navegando pelo mapa"): nascem em mar fundo longe de todo mundo, em linha', () => {
+    expect(fleetMaySpawn({ now: 1, nextAt: 0, present: false })).toBe(true); // não espera ninguém navegar
+    expect(fleetMaySpawn({ now: 1, nextAt: 99_000, present: false })).toBe(false); // descanso depois de afundada
+    expect(fleetMaySpawn({ now: 1, nextAt: 0, present: true })).toBe(false); // uma por vez
+    const b = { minX: -1000, maxX: 1000, minZ: -1000, maxZ: 1000 };
+    const p = fleetSeaPoint(sea, b, rng(), [{ x: 0, z: 0 }], FLEET.SPAWN_AWAY)!;
+    expect(Math.hypot(p.x, p.z)).toBeGreaterThanOrEqual(FLEET.SPAWN_AWAY);
+    expect(fleetSeaPoint(() => false, b, rng())).toBeNull(); // sem mar fundo
+    const line = fleetFormation(sea, { x: 0, z: 0 }, 0, 3);
+    expect(line).toHaveLength(3);
+    expect(Math.max(...line.map((q) => Math.abs(q.x)))).toBeCloseTo(FLEET.SPACING, 5); // lado a lado
+    const s = newEnemyShip('p', { x: 0, z: 0, yaw: 0 });
+    const inp = fleetPatrolSteer(s, { x: 0, z: 400 }, []);
+    expect(inp.throttle).toBe(FLEET.PATROL_K); expect(Math.abs(inp.steer)).toBeLessThan(0.01); // reto pro ponto, devagar
+  });
+
+  it('CAÇAM quem está A BORDO perto (≤ 300 m); perdeu (fugiu 520 m / desembarcou) = volta a patrulhar', () => {
+    const s = newEnemyShip('h', { x: 0, z: 0, yaw: 0 });
+    expect(fleetPickTarget([s], [{ id: 'a', x: 250, z: 0 }, { id: 'b', x: 120, z: 0 }])).toBe('b'); // o mais perto
+    expect(fleetPickTarget([s], [{ id: 'a', x: 400, z: 0 }])).toBeNull(); // longe: segue patrulhando
+    expect(fleetLostTarget([s], { x: 100, z: 0 })).toBe(false);
+    expect(fleetLostTarget([s], { x: 600, z: 0 })).toBe(true);
+    expect(fleetLostTarget([s], null)).toBe(true); // desembarcou (saiu da lista de quem está a bordo)
     const spots = fleetSpawnSpots(sea, { x: 0, z: 0 }, 3, rng());
     expect(spots).toHaveLength(3);
     for (const s of spots) {
@@ -75,13 +93,14 @@ describe('esquadra pirata — navios', () => {
     expect(fleetFire(s, { x: -90, z: 0 }, 4)).toBeNull(); // sem capitão: não atira
   });
 
-  it('vão embora: você abriu 520 m ou saiu do navio por 20 s; derrotados quando todos afundam', () => {
-    const s = newEnemyShip('d', { x: 0, z: 0, yaw: 0 });
-    expect(fleetVerdict({ now: 0, ships: [s], target: { x: 100, z: 0 }, ashoreSince: null })).toBe('stay');
-    expect(fleetVerdict({ now: 0, ships: [s], target: { x: 600, z: 0 }, ashoreSince: null })).toBe('escaped');
-    expect(fleetVerdict({ now: 25_000, ships: [s], target: null, ashoreSince: 0 })).toBe('escaped');
+  it('derrotada quando TODOS afundam (outra vem depois do descanso); enquanto houver navio, fica', () => {
+    const s = newEnemyShip('d', { x: 0, z: 0, yaw: 0 }), t = newEnemyShip('e', { x: 50, z: 0, yaw: 0 });
+    expect(fleetVerdict({ ships: [s, t] })).toBe('stay');
     s.sinkT = WARSHIP.SINK_S;
-    expect(fleetVerdict({ now: 0, ships: [s], target: { x: 100, z: 0 }, ashoreSince: null })).toBe('beaten');
+    expect(fleetVerdict({ ships: [s, t] })).toBe('stay');
+    t.sinkT = WARSHIP.SINK_S;
+    expect(fleetVerdict({ ships: [s, t] })).toBe('beaten');
+    expect(FLEET.REST_MS).toBe(6 * 60_000);
   });
 
   it('minha bala no casco DELE (o casco menor): acerta dentro, erra fora', () => {
@@ -110,7 +129,8 @@ describe('esquadra pirata — capitão e tripulação', () => {
     expect(crewHitChance(FLEET.CREW_RANGE + 1)).toBe(0);
     expect(FLEET.CREW_RANGE).toBeGreaterThanOrEqual(FLEET.PREF + 20); // alcançam de onde os navios seguram
     expect(read('src/components/world/world-entities.tsx')).toMatch(/creatures\.filter\(\(cr\) => !cr\.id\.startsWith\('fleet_'\)\)/);
-    expect(read('src/net/multiplayer.ts')).toMatch(/creatures\.filter\(\(c\) => !c\.id\.startsWith\('fleet_'\)\)/);
+    // ONLINE: capitão e tripulação VÃO na foto do mundo (a sala os vê e acerta pelo caminho dos bichos)
+    expect(read('src/net/multiplayer.ts')).toMatch(/const pkt = worldEncoder\.encode\(creatures, Date\.now\(\)\);/);
     expect(read('src/game/systems/objectiveSystem.ts')).toMatch(/if \(creature\.id\?\.startsWith\('fleet_'\)\) return false;/); // piloto automático não nada até lá
   });
 
@@ -125,5 +145,21 @@ describe('esquadra pirata — capitão e tripulação', () => {
     expect(read('src/components/zona-sul/zona-sul-world.tsx')).toMatch(/<ZsEnemyFleetView shipRef=\{shipRef\} heroRef=\{heroRef\} terrain=\{t\} \/>/);
     const hits = read('src/components/zona-sul/zs-enemy-fleet-hits.ts');
     expect(hits).toMatch(/c\.id !== s\.pilotId && !s\.crewIds\.includes\(c\.id\)/); // afundou: capitão e tripulação vão junto
+  });
+
+  it('ONLINE (Pedro: "o mesmo navio e inimigos no multiplayer — todos veem"): anfitrião simula e manda; convidado desenha os mesmos', () => {
+    const net = read('src/net/multiplayer.ts');
+    expect(net).toContain("event: 'fleet', payload: { id: useNet.getState().selfId, s: ships, sh: shots }");
+    expect(net).toContain("if (!hit.mob && hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return; // pirata (mob) vale sempre");
+    expect(net).toContain("event: 'fleet-hit'"); expect(net).toContain("event: 'fleet-reward'");
+    const fv = read('src/components/zona-sul/zs-enemy-fleet-view.tsx');
+    expect(fv).toContain('if (isGuestInRoom()) {'); // convidado: desenha os navios recebidos
+    expect(fv).toContain('broadcastCannon(shot.balls.map'); // a salva vai pra sala (desenho)
+    expect(fv).toContain("else broadcastMobHit(tgt.id, FLEET.CREW_DMG, 'Pirata do navio');"); // tiro de fuzil em quem está na sala
+    expect(fv).toContain('registerFleetHitHandler((hit) => {');
+    const hits = read('src/components/zona-sul/zs-enemy-fleet-hits.ts');
+    expect(hits).toContain('broadcastPirateShipHit(r.id, FLEET.BALL_DMG)'); // a bala no navio de quem está na sala
+    expect(hits).toContain('else { broadcastFleetReward(byId);'); // o loot vai pra quem afundou
+    expect(read('src/components/zona-sul/zs-warship-view.tsx')).toContain('if (isGuestInRoom()) broadcastFleetHit(es.id,');
   });
 });

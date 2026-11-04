@@ -65,7 +65,7 @@ export type NetVehicle = { k: 's' | 'c'; x: number; z: number; yaw: number; y?: 
 
 /** Canhão de OUTRO jogador acertou o MEU navio (01/11). O dono do navio valida (inimizade) e aplica.
  *  `w` 'gun' (02/11) = tiro de ARMA de mão (fuzil/pistola/arco/espada pela mira); ausente = canhão (cliente antigo). */
-export type ShipHitIntent = { id: string; ownerId: string; damage: number; fromName: string; fromSide: PvpSide; w?: 'gun' };
+export type ShipHitIntent = { id: string; ownerId: string; damage: number; fromName: string; fromSide: PvpSide; w?: 'gun'; mob?: true };
 let shipHitHandler: ((intent: ShipHitIntent) => void) | null = null;
 export function registerShipHitHandler(handler: ((intent: ShipHitIntent) => void) | null): void { shipHitHandler = handler; }
 export function broadcastShipHit(ownerId: string, damage: number, w?: 'gun'): void {
@@ -74,6 +74,49 @@ export function broadcastShipHit(ownerId: string, damage: number, w?: 'gun'): vo
   if (ownerId === selfId) return;
   void channel.send({ type: 'broadcast', event: 'ship-hit', payload: { id: selfId, ownerId, damage: Math.round(damage), fromName: selfName, fromSide: selfSide, ...(w ? { w } : {}) } satisfies ShipHitIntent });
 }
+
+/** Bala da ESQUADRA PIRATA (simulada no anfitrião, 03/11) no navio de um jogador: vale SEMPRE (bicho do mundo, sem
+ *  inimizade — como a horda na base). O dono do navio aplica. */
+export function broadcastPirateShipHit(ownerId: string, damage: number): void {
+  if (!channel || !useNet.getState().connected || !useNet.getState().isHost || !Number.isFinite(damage) || damage <= 0) return;
+  const { selfId, selfSide } = useNet.getState();
+  if (ownerId === selfId) return;
+  void channel.send({ type: 'broadcast', event: 'ship-hit', payload: { id: selfId, ownerId, damage: Math.round(damage), fromName: 'Esquadra pirata', fromSide: selfSide, mob: true } satisfies ShipHitIntent });
+}
+
+/**
+ * ESQUADRA PIRATA ONLINE (03/11, Pedro: "o mesmo navio e inimigos no multiplayer, igual — todos veem normal; igual a tudo
+ * que já temos online funcionando"). O ANFITRIÃO simula; a sala recebe os navios ~5×/s (`fleet`) e os rastros dos tiros
+ * de fuzil da tripulação. Capitão e tripulação vão na foto do mundo (bichos: mira, dano e morte pelo caminho de sempre).
+ * As salvas vão pelo `cannon` de sempre (só desenho); o dano em navio/jogador vai pelo ship-hit (pirata) e mob-hit.
+ */
+export type NetFleetShip = { i: string; x: number; z: number; yaw: number; r: number; h: number; sk: number | null; pd: 0 | 1 };
+/** rastro de um tiro: de (x, y, z) até (x, y, z) */
+export type NetFleetShot = [number, number, number, number, number, number];
+export const netFleet: { ships: NetFleetShip[]; at: number; shots: NetFleetShot[] } = { ships: [], at: 0, shots: [] };
+export function broadcastFleet(ships: NetFleetShip[], shots: NetFleetShot[]): void {
+  if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
+  if (presentGuests.size === 0) return;
+  void channel.send({ type: 'broadcast', event: 'fleet', payload: { id: useNet.getState().selfId, s: ships, sh: shots } });
+}
+/** Minha bala/tiro num navio da esquadra (CONVIDADO → o anfitrião aplica; `by` = quem leva o loot se afundar). */
+export type FleetHitIntent = { id: string; shipId: string; damage: number };
+let fleetHitHandler: ((intent: FleetHitIntent) => void) | null = null;
+export function registerFleetHitHandler(handler: ((intent: FleetHitIntent) => void) | null): void { fleetHitHandler = handler; }
+export function broadcastFleetHit(shipId: string, damage: number): void {
+  if (!channel || !useNet.getState().connected || useNet.getState().isHost || !Number.isFinite(damage) || damage <= 0) return;
+  void channel.send({ type: 'broadcast', event: 'fleet-hit', payload: { id: useNet.getState().selfId, shipId, damage: Math.round(damage) } satisfies FleetHitIntent });
+}
+/** Afundou com o tiro DESTE jogador (anfitrião → ele): o loot é de quem afundou. */
+export type FleetRewardIntent = { id: string; targetId: string };
+let fleetRewardHandler: (() => void) | null = null;
+export function registerFleetRewardHandler(handler: (() => void) | null): void { fleetRewardHandler = handler; }
+export function broadcastFleetReward(targetId: string): void {
+  if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
+  void channel.send({ type: 'broadcast', event: 'fleet-reward', payload: { id: useNet.getState().selfId, targetId } satisfies FleetRewardIntent });
+}
+/** Em sala e NÃO sou o anfitrião (vejo a esquadra dele). */
+export function isGuestInRoom(): boolean { const s = useNet.getState(); return s.connected && !s.isHost; }
 
 /** Tiro de OUTRO jogador no MEU carro voador (02/11, Pedro: "fuzil tirando vida do navio/carro"). O dono valida e aplica. */
 export type CarHitIntent = { id: string; ownerId: string; damage: number; fromName: string; fromSide: PvpSide };
@@ -304,8 +347,25 @@ export const useNet = create<NetState>((set, get) => ({
     ch.on('broadcast', { event: 'ship-hit' }, ({ payload }) => {
       const hit = payload as ShipHitIntent;
       if (hit.ownerId !== selfId || hit.id === selfId || !Number.isFinite(hit.damage)) return;
-      if (hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return;
+      if (!hit.mob && hit.fromSide !== 'enemy' && get().selfSide !== 'enemy') return; // pirata (mob) vale sempre
       shipHitHandler?.(hit);
+    });
+    // ESQUADRA PIRATA (03/11): os navios do anfitrião (convidado desenha), o tiro do convidado nela, o loot de quem afundou
+    ch.on('broadcast', { event: 'fleet' }, ({ payload }) => {
+      const p = payload as { id: string; s: NetFleetShip[]; sh: NetFleetShot[] };
+      if (p.id === selfId || get().isHost || !Array.isArray(p.s)) return;
+      netFleet.ships = p.s.slice(0, 6); netFleet.at = performance.now();
+      if (Array.isArray(p.sh)) { netFleet.shots.push(...p.sh.slice(0, 30)); if (netFleet.shots.length > 40) netFleet.shots.splice(0, netFleet.shots.length - 40); }
+    });
+    ch.on('broadcast', { event: 'fleet-hit' }, ({ payload }) => {
+      const hit = payload as FleetHitIntent;
+      if (!get().isHost || hit.id === selfId || !hit.shipId || !Number.isFinite(hit.damage)) return;
+      fleetHitHandler?.(hit);
+    });
+    ch.on('broadcast', { event: 'fleet-reward' }, ({ payload }) => {
+      const r = payload as FleetRewardIntent;
+      if (r.targetId !== selfId || r.id === selfId) return;
+      fleetRewardHandler?.();
     });
     // CARRO (02/11): tiro de outro jogador no MEU carro — mesma regra (só com inimizade)
     ch.on('broadcast', { event: 'car-hit' }, ({ payload }) => {
@@ -465,8 +525,8 @@ export function broadcastBase(base: PlayerBaseState | null, tier = 0): void {
 export function broadcastWorld(creatures: CreatureState[]): void {
   if (!channel || !useNet.getState().connected || !useNet.getState().isHost) return;
   if (presentGuests.size === 0) return; // ninguém presente pra ver: não gasta tráfego (27/10)
-  // a esquadra pirata (`fleet_*`, 03/11) é de quem navega — v1 não vai pra rede (o convidado não tem os navios dela)
-  const pkt = worldEncoder.encode(creatures.filter((c) => !c.id.startsWith('fleet_')), Date.now()); // só o que mudou; foto completa a cada 30 s
+  // (03/11: o capitão e a tripulação da esquadra pirata VÃO junto — a sala os vê, mira e acerta pelo caminho dos bichos)
+  const pkt = worldEncoder.encode(creatures, Date.now()); // só o que mudou; foto completa a cada 30 s
   if (!pkt) return;
   const { selfId } = useNet.getState();
   void channel.send({ type: 'broadcast', event: 'world', payload: { id: selfId, ...pkt, epoch: worldEpoch(), wt: Date.now() } });

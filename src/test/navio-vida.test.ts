@@ -30,7 +30,8 @@ describe('navio de guerra — vida, afundar e construir outro', () => {
   it('rede: canhão no navio de outro → o DONO aplica, só com inimizade (aliado não afunda aliado)', () => {
     const net = fs.readFileSync('src/net/multiplayer.ts', 'utf8');
     expect(net).toMatch(/ch\.on\('broadcast', \{ event: 'ship-hit' \}/);
-    expect(net).toMatch(/if \(hit\.fromSide !== 'enemy' && get\(\)\.selfSide !== 'enemy'\) return;\n\s+shipHitHandler\?\.\(hit\);/);
+    // 03/11: a bala da ESQUADRA PIRATA (mob, do anfitrião) vale sempre; entre jogadores segue só com inimizade
+    expect(net).toMatch(/if \(!hit\.mob && hit\.fromSide !== 'enemy' && get\(\)\.selfSide !== 'enemy'\) return; \/\/ pirata \(mob\) vale sempre\n\s+shipHitHandler\?\.\(hit\);/);
     const view = fs.readFileSync('src/components/zona-sul/zs-warship-view.tsx', 'utf8');
     expect(view).toMatch(/broadcastShipHit\(d\.id, useGameStore\.getState\(\)\.cannonPower\(\)\)/);
   });
