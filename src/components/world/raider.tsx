@@ -22,6 +22,7 @@ import { isCampSpawn } from '@/game/systems/difficultySystem';
 import { isZsBandit } from '@/game/systems/zsSpawnSystem';
 import { campChaseScale, HORDE_RUN_FROM, hordeSpeedScale } from '@/game/systems/waveSystem';
 import { clearLeap, isRoaring, leapProgress } from '@/game/systems/leapSystem';
+import { isUnkillable } from '@/game/systems/indigenaSystem';
 
 /** Bosses de MONSTRO com rig PRÓPRIO + anim embutida (não-UAL) → renderer de
  *  criatura (toca o clip do modelo). Modelos skinned e leves (<15MB). */
@@ -99,7 +100,7 @@ const MUTANT_CUSTOM = { leap: '/models/mutant/leap.glb', roar: '/models/mutant/r
 type MixClips = { base?: Partial<Record<'idle' | 'walk' | 'run' | 'attack', string>>; custom?: Record<string, string>; cut?: Record<string, { from?: number; to?: number; speed?: number }>; attackSpeed?: number };
 /** Só o que a espécie define vira prop (sem `undefined` solto) — quem não tem `clips` (todos de antes): nada muda. */
 /** Correm SEMPRE que perseguem (03/11): os chefes do pack e a Feiticeira (que surge atrás e vem correndo). */
-const CHASE_RUNNERS = new Set(['raider_cannibal', 'raider_kraken', 'raider_sorceress']);
+const CHASE_RUNNERS = new Set(['raider_cannibal', 'raider_kraken', 'raider_sorceress', 'raider_indigena']);
 function mixClipProps(c: MixClips | undefined) {
   if (!c) return {};
   return { ...(c.base ? { baseClips: c.base } : {}), ...(c.custom ? { customClips: c.custom } : {}), ...(c.cut ? { customClipCut: c.cut } : {}), ...(c.attackSpeed ? { attackSpeed: c.attackSpeed } : {}) };
@@ -116,6 +117,10 @@ const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; height: nu
   // Feiticeira (03/11): gente (as animações do herói), golpe = gesto de magia, bote = "Run Jump Attack" (trecho do pulo)
   raider_sorceress: { url: '/models/raiders/sorceress.glb', standFixX: 0, height: 1.85, bindFix: true, autoGround: true,
     clips: { base: { attack: '/models/red/cast.glb' }, custom: { leap: '/models/mutant/run_jump_attack.glb' }, cut: { leap: { from: 0.136, to: 0.52, speed: 1.4 } } } },
+  // GUERREIRO INDÍGENA (03/11): o perseguidor que não morre (indigenaSystem). Gente (animações do herói), golpe = corte
+  // horizontal (Mixamo Pro Melee). Malha do Meshy simplificada pela metade (50 mil → 25 mil tri, visual conferido).
+  raider_indigena: { url: '/models/raiders/indigena.glb', standFixX: 0, height: 1.95, bindFix: true, autoGround: true,
+    clips: { base: { attack: '/models/melee/attack_horizontal.glb' } } },
   // 25/10 (Pedro): autoGround (nasciam enterrados até o peito). Tamanho de ACAMPAMENTO = CAMP_SCALE (só quem nasce lá).
   raider_scout: { url: '/models/raiders/pirate.glb', standFixX: Math.PI / 2, height: 1.8, bindFix: true, autoGround: true },       // pirata
   raider_brute: { url: '/models/raiders/scrap_brute.glb', standFixX: Math.PI / 2, height: 2.3, bindFix: true, autoGround: true, death: 'mutant' },  // brutamontes (maior)
@@ -280,6 +285,16 @@ export const RAIDER_SPECIES: Record<string, Species> = {
       ...base, speed: 5.6, aggroRange: 60, attackRange: 3.2, leashRange: 400,
       chaseTimeout: 45, provokeRange: 60, walkSpeedChase: 18, walkSpeedIdle: 8,
       hitVerb: 'amaldiçoou', landSwim: SWIM,
+    },
+  },
+  // Guerreiro Indígena (03/11): rápido, forte, caça de longe e não larga (até você abrir 140 m — indigenaSystem).
+  raider_indigena: {
+    scale: 1, bodyWidth: 0.55, bodyDepth: 0.32, weapon: 'axe',
+    hood: false, shoulders: true, charm: true,
+    tuning: {
+      ...base, speed: 5.4, aggroRange: 60, attackRange: 2.8, leashRange: 400,
+      chaseTimeout: 120, provokeRange: 60, walkSpeedChase: 18, walkSpeedIdle: 8,
+      hitVerb: 'golpeou', landSwim: SWIM,
     },
   },
 };
@@ -481,8 +496,9 @@ function RaiderImpl({
       // Horda Mixamo rápida (onda 8+): anda CORRENDO (Pedro 25/10).
       // chefes do pack (03/11): RUGIDO de chegada e SALTO em cima mandam na animação (leapSystem)
       const lp = mxBody?.clips ? leapProgress(creatureId) : -1;
+      const stalkerRuns = isUnkillable(creatureId); // indígena: corre caçando E recuando ferido
       bossAction.current = mxBody?.clips && isRoaring(creatureId) ? 'roar' : lp >= 0 ? 'leap'
-        : (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? (hordeRuns || ((campRuns || CHASE_RUNNERS.has(speciesId)) && anim.chasing) ? 'run' : 'walk') : 'idle';
+        : (anim.swing > 0 || spinActive.current > 0) ? 'attack' : anim.moving ? (hordeRuns || stalkerRuns || ((campRuns || CHASE_RUNNERS.has(speciesId)) && anim.chasing) ? 'run' : 'walk') : 'idle';
       bossMoving.current = anim.moving;
       const swing = anim.moving ? Math.sin(anim.walkCycle) * 0.6 : 0;
       if (leftLeg.current) leftLeg.current.rotation.x = swing;

@@ -72,7 +72,7 @@ function handOffsets(skinUrl: string) {
 }
 
 describe('arma na mão das skins novas (homem / mulher)', () => {
-  for (const id of ['homem', 'mulher'] as const) {
+  for (const id of ['homem', 'mulher', 'mercenario'] as const) {
     it(`${id}: a diferença da mão é FIXA (mesma em todas as poses) e a handFix da skin é ela`, () => {
       const offs = handOffsets(HERO_SKINS[id].url);
       // média (quaternions do mesmo hemisfério) e espalhamento
@@ -82,7 +82,7 @@ describe('arma na mão das skins novas (homem / mulher)', () => {
       const spread = Math.max(...offs.map((q) => deg(q.angleTo(avg))));
       expect(spread).toBeLessThan(2); // medido 03/11: 0,0° em 16 quadros (4 animações × 4 instantes)
       const saved = new THREE.Quaternion(...HERO_SKINS[id].handFix).normalize();
-      expect(deg(saved.angleTo(avg))).toBeLessThan(1); // a guardada na skin é a medida
+      expect(deg(saved.angleTo(avg)), `medida: [${avg.toArray().map((v) => v.toFixed(4)).join(', ')}]`).toBeLessThan(1); // a guardada na skin é a medida
     });
   }
 
@@ -96,6 +96,6 @@ describe('arma na mão das skins novas (homem / mulher)', () => {
     const body = fs.readFileSync('src/components/world/hero-skin-body.tsx', 'utf8');
     expect(body).toMatch(/handFix=\{skin\.handFix\} tone=\{skin\.tone\}/);
     expect(fs.readFileSync('src/components/world/remote-players.tsx', 'utf8').match(/handFix=\{skin\.handFix\} tone=\{skin\.tone\}/g)).toHaveLength(2);
-    for (const id of ['homem', 'mulher'] as const) { expect(HERO_SKINS[id].tone).toBeGreaterThan(1.2); expect(HERO_SKINS[id].tone).toBeLessThan(1.35); } // ~+12% na tela
+    for (const id of ['homem', 'mulher', 'mercenario'] as const) { expect(HERO_SKINS[id].tone).toBeGreaterThan(1.2); expect(HERO_SKINS[id].tone).toBeLessThan(1.35); } // ~+12% na tela
   });
 });

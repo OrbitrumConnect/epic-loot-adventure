@@ -55,8 +55,8 @@ export type RemotePose = {
   /** EQUIPAMENTO em uso (02/11, Pedro online: "não vejo o skate dele; na prancha em pé"): [tipo (1 prancha · 2 skate ·
    *  3 asa-delta), altura acima do pé, rumo, rolagem, inclinação]. Ausente = nada (ou cliente antigo). */
   g?: number[];
-  /** SKIN do herói (03/11): 'mulher' quando ela; ausente = homem (ou cliente antigo — mesma coisa). */
-  sk?: 'mulher';
+  /** SKIN do herói (03/11): a escolhida quando não é a padrão (homem); ausente = homem (cliente antigo também). */
+  sk?: 'mulher' | 'mercenario';
 };
 
 /** Veículo visto pela rede: `k` 's' = navio de guerra · 'c' = carro voador; `y` = altura (carro); `s` = velocidade;
@@ -389,8 +389,8 @@ export const useNet = create<NetState>((set, get) => ({
 }));
 
 /** Skin do herói LOCAL que vai na pose (03/11) — quem desenha o herói avisa (`LocalHeroBody`). */
-let poseSkin: string = 'homem';
-export function setPoseSkin(skin: string): void { poseSkin = skin; }
+let poseSkin: 'homem' | 'mulher' | 'mercenario' = 'homem';
+export function setPoseSkin(skin: 'homem' | 'mulher' | 'mercenario'): void { poseSkin = skin; }
 
 /** Envia a pose do jogador local (chamar do loop; throttla sozinho a ~11Hz). */
 let lastSent = 0;
@@ -414,7 +414,7 @@ export function broadcastPose(x: number, z: number, yaw: number, action: string,
       ...(troops ? { tr: troops } : {}),
       ...(vehicles && vehicles.length ? { v: vehicles.map((v) => ({ ...v })) } : {}), // cópia: quem chama reaproveita a lista
       ...(gear ? { g: gear.slice() } : {}),
-      ...(poseSkin === 'mulher' ? { sk: 'mulher' as const } : {}),
+      ...(poseSkin === 'mulher' || poseSkin === 'mercenario' ? { sk: poseSkin } : {}),
     } satisfies RemotePose,
   });
 }

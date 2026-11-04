@@ -306,6 +306,27 @@ export const CREATURES: Record<string, CreatureDefinition> = {
     icon: 'Sparkles',
     peaceful: false,
   },
+  // 03/11 (Pedro: "um indígena que aparece correndo atrás do jogador diversas vezes; não matar — o dano que mataria ele,
+  // ele sai correndo e volta; meio forte"): NÃO MORRE (indigenaSystem) — cada vez que você o põe pra correr, leva o loot.
+  raider_indigena: {
+    id: 'raider_indigena',
+    name: 'Guerreiro Indígena',
+    maxHp: 1500,
+    attackPower: 40,
+    armor: 14,
+    attackCooldown: 1.6,
+    attackRange: 2.8,
+    aggroRange: 60,
+    lootTable: [
+      { itemId: 'arrow', quantity: 60, chance: 0.6 },
+      { itemId: 'raider_token', quantity: 12, chance: 1 },
+      { itemId: 'cooked_meat', quantity: 6, chance: 0.8 },
+      { itemId: 'arcane_essence', quantity: 3, chance: 0.5 },
+      { itemId: 'health_potion', quantity: 1, chance: 0.25 },
+    ],
+    icon: 'Shield',
+    peaceful: false,
+  },
 
   // ---------------------------------------------------------------------------
   // Fauna selvagem do vale. `peaceful` foge do jogador; hostil ataca ao ver.

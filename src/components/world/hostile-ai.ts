@@ -20,6 +20,7 @@ import { mitigateDamage } from '@/game/systems/attributesSystem';
 import type { CreatureBehavior, CreatureState } from '@/game/types';
 import { markImpact, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutSafeZone } from './world-kit';
 import { isLeaping, isRoaring, LEAP, leapPos, takeLeapLanding, tryStartLeap, tryStartRoar } from '@/game/systems/leapSystem';
+import { isUnkillable } from '@/game/systems/indigenaSystem';
 import { WORLD } from '@/game/data/world-profile';
 import { blockedByWall, caveStep, glbSurfaceY, groundUnder } from './terrain-collision';
 import { isWalkable, walkStep } from './map-walk';
@@ -238,7 +239,8 @@ export function flushPositions() {
       const p = pending.get(cr.id);
       if (!p) return cr;
       // Morto/renascendo é estado da store: o laço de quadro não sobrescreve.
-      const locked = cr.behavior === 'dead' || cr.behavior === 'respawning';
+      // (03/11: + o RECUO do Guerreiro Indígena — o golpe fatal pôs 'flee' na store; o 'attack' pendente da IA não apaga)
+      const locked = cr.behavior === 'dead' || cr.behavior === 'respawning' || (cr.behavior === 'flee' && isUnkillable(cr.id));
       const behavior: CreatureBehavior = locked || p.behavior === null ? cr.behavior : p.behavior;
       if (behavior === cr.behavior && cr.position.x === p.x && cr.position.z === p.z) return cr;
       return { ...cr, position: { x: p.x, z: p.z }, behavior };
@@ -639,6 +641,9 @@ export function useHostileAI(opts: HostileOptions) {
       fleeing.current = distToPlayer < (fleeing.current ? stopAt : aggroRange);
       flee = fleeing.current;
     }
+    // GUERREIRO INDÍGENA (03/11, indigenaSystem): o golpe fatal o fez RECUAR (a store pôs 'flee') — corre pra longe, sem
+    // golpear, até sumir; volta depois. Os outros bichos: nada muda.
+    if (!mirror && creature.behavior === 'flee' && isUnkillable(creatureId)) flee = true;
     if (mirror) {
       // ESPELHO (convidado): segue a posição que o HOST mandou, suave. Nada de AI local
       // (antes cada tela via uma cena diferente: aqui o bicho andando, lá já morrendo).

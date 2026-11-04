@@ -54,9 +54,9 @@ export type PlayerState = {
   huntValue?: number;
   /** Quantas vezes cada espécie já foi abatida (diminishing returns do loot). Ausente = {}. */
   huntSeen?: Record<string, number>;
-  /** SKIN do herói (03/11): 'homem' | 'mulher' (`hero-skins.ts`). Ausente = ainda não escolheu (a tela de escolha
+  /** SKIN do herói (03/11): 'homem' | 'mulher' | 'mercenario' (`hero-skins.ts`). Ausente = ainda não escolheu (a tela de escolha
    *  aparece ao entrar); o corpo desenhado nesse meio tempo é o de homem. Vai no save da conta. */
-  skin?: 'homem' | 'mulher' | undefined;
+  skin?: 'homem' | 'mulher' | 'mercenario' | undefined;
   /** Instante (ms, `Date.now()`) do último dano SOFRIDO pelo jogador. Sinal de
    *  agressão que o piloto usa pra priorizar combate sobre farm. Ausente = nunca. */
   lastDamagedAt?: number;

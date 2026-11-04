@@ -118,7 +118,7 @@ const schema = z.object({
     attributes: z.object({ damage: number, dexterity: number, carry: number, moveSpeed: number }),
     skillPoints: integer, huntValue: number, huntSeen: z.record(integer),
     // 03/11: skin do herói (ausente = save antigo / ainda não escolheu)
-    skin: z.enum(['homem', 'mulher']).optional(),
+    skin: z.enum(['homem', 'mulher', 'mercenario']).optional(),
   }),
   towerLastShotAt: z.record(number),
   harvest: z.array(z.object({ id, quantity: integer, depleted: z.boolean(), respawnAt: number.nullable() })).max(2000),

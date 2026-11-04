@@ -10,6 +10,7 @@ const LIMIT: Record<string, number> = {
   'red/hero-preview.glb': 2048, // herói: visto de perto o tempo todo
   'heroes/carioca.glb': 2048, // 03/11: skins do herói (homem / mulher) — KTX2, como o herói de antes
   'heroes/soldier.glb': 2048,
+  'heroes/mercenario.glb': 2048, // 03/11: 3ª skin
   'map/rio-wasteland-iconic.glb': 2048, // chão do mapa inteiro
   'red/red.glb': 2048, // não carregado pelo jogo (referência antiga)
   'props/container.glb': 4096, // desligado (COUNT=0) — não carrega

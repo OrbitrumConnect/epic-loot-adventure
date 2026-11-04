@@ -80,7 +80,7 @@ export const HORDE_AMMO_GROWTH = 0.035;
 export const HORDE_SPEED_PER_WAVE = 0.03;
 export const HORDE_SPEED_MAX = 1.6;
 export const HORDE_RUN_FROM = 1.2;
-export const HORDE_RUNNERS = new Set(['raider_scout', 'raider_brute', 'raider_shaman', 'raider_warrior', 'raider_samurai', 'raider_mushroom', 'raider_cannibal', 'raider_kraken', 'raider_sorceress']); // 03/11: + chefes do pack e a Feiticeira (ela não entra em onda; a lista segue = raiders Mixamo)
+export const HORDE_RUNNERS = new Set(['raider_scout', 'raider_brute', 'raider_shaman', 'raider_warrior', 'raider_samurai', 'raider_mushroom', 'raider_cannibal', 'raider_kraken', 'raider_sorceress', 'raider_indigena']); // 03/11: + chefes do pack, a Feiticeira e o Indígena (os 2 não entram em onda; a lista segue = raiders Mixamo)
 /**
  * ACAMPAMENTO: quem PERSEGUE corre (Pedro 25/10: "perseguem andando; correr fica mais realista"). +25% só enquanto
  * persegue e anima corrida; parado no alcance ataca/atira; desistiu e volta pra casa = anda. Só raiders Mixamo.

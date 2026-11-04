@@ -28,8 +28,8 @@ describe('horda Mixamo acelera com a onda', () => {
     const block = /const MIXAMO_RAIDER[\s\S]*?\n\};/.exec(r)![0];
     const mixamo = [...block.matchAll(/^\s*(raider_\w+):/gm)].map((m) => m[1]).sort();
     expect([...HORDE_RUNNERS].sort()).toEqual(mixamo);
-    // 03/11: + os chefes do pack e a Feiticeira correm sempre que perseguem (CHASE_RUNNERS)
-    expect(r).toMatch(/anim\.moving \? \(hordeRuns \|\| \(\(campRuns \|\| CHASE_RUNNERS\.has\(speciesId\)\) && anim\.chasing\) \? 'run' : 'walk'\) : 'idle'/);
+    // 03/11: + os chefes do pack e a Feiticeira correm sempre que perseguem (CHASE_RUNNERS); o Indígena também ao recuar
+    expect(r).toMatch(/anim\.moving \? \(hordeRuns \|\| stalkerRuns \|\| \(\(campRuns \|\| CHASE_RUNNERS\.has\(speciesId\)\) && anim\.chasing\) \? 'run' : 'walk'\) : 'idle'/);
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
     expect(ai).toMatch(/\* hordeSpeedScale\(creatureId, creature\.speciesId\)/);
   });

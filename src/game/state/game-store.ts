@@ -66,6 +66,7 @@ import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem'
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { lineWalkable } from '@/components/world/map-walk';
 import { behindSpot, isSorceress, nextSorceressAt, SORC, SORC_PREFIX, sorcClock, sorceressMaySpawn } from '../systems/sorceressSystem';
+import { fleeInsteadOfDeath, IND, IND_PREFIX, indClock, indigenaMaySpawn, indigenaState, isUnkillable, nextIndigenaAt } from '../systems/indigenaSystem';
 import { baseFallLevelLoss, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
 import { damageMultiplier, playerCritStats, effectiveMaxWeight, effectiveSpecialCooldown, mitigateDamage, SKILL_STEP, SKILL_CAP_PER_ATTR } from '../systems/attributesSystem';
 import { effectiveMaxHp, equipmentStats } from '../systems/equipmentStatsSystem';
@@ -215,6 +216,8 @@ type GameActions = {
   /** FEITICEIRA DA MATA (03/11, Zona Sul): surge atrás de quem anda longe da base, some se perder o herói, o corpo sai
    *  depois de cair (sorceressSystem). `yaw` = pra onde o corpo do herói olha. */
   tickSorceress: (now: number, yaw: number) => void;
+  /** GUERREIRO INDÍGENA (03/11, Zona Sul): surge atrás, caça, não morre (recua ferido), some e volta (indigenaSystem). */
+  tickIndigena: (now: number, yaw: number) => void;
   /** Gasta 1 ponto de skill subindo um atributo (0–100%). */
   allocateSkill: (attr: keyof PlayerAttributes) => void;
   /** Devolve 1 ponto, baixando um atributo alocado. */
@@ -370,6 +373,8 @@ function towerSfx(tower: { x: number; z: number }, me: { x: number; z: number })
 }
 
 export function deadCreature(c: CreatureState, now: number, rng: () => number): CreatureState {
+  // 03/11: o Guerreiro Indígena NÃO MORRE — o golpe fatal o faz recuar ferido (indigenaSystem); volta depois
+  if (isUnkillable(c.id)) return fleeInsteadOfDeath(c);
   const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave') || isSorceress(c.id) // 03/11: Feiticeira não renasce
     ? null
     : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
@@ -1895,6 +1900,42 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       position: { x: clampX(at.x, 4), z: clampZ(at.z, 4) }, behavior: 'patrol', lootTable: [], respawnAt: null,
     };
     set((s) => ({ creatures: [...s.creatures, sorc], ui: { ...s.ui, message: '🌿 Algo corre na mata atrás de você…' } }));
+  },
+
+  tickIndigena: (now, yaw) => {
+    if (isClassicWorld() || !canSimulateSharedWorld()) return; // só na Zona Sul; online, o host decide
+    const st = get(), p = st.player.position;
+    const me = st.creatures.find((c) => isUnkillable(c.id));
+    if (me) {
+      const fleeing = me.behavior === 'flee';
+      if (fleeing && !indClock.fleeSeen.has(me.id)) {
+        indClock.fleeSeen.set(me.id, now);
+        set((s) => ({ ui: { ...s.ui, message: `🪶 ${me.name} recuou ferido… ele vai voltar.` } }));
+      }
+      const state = indigenaState({ now, fleeingSince: fleeing ? indClock.fleeSeen.get(me.id) ?? now : null, dist: getDistance(p, me.position) });
+      if (state === 'stay') return;
+      indClock.fleeSeen.delete(me.id);
+      indClock.nextAt = state === 'gone_fled' ? nextIndigenaAt(now) : now + IND.LOST_RETURN_MS;
+      set((s) => ({ creatures: s.creatures.filter((c) => c.id !== me.id) }));
+      return;
+    }
+    const core = st.playerBase?.pieces.find((pc) => pc.kind === 'core');
+    if (!indigenaMaySpawn({
+      now, level: st.player.level, dead: st.player.dead, inCave: layers.player !== 0, present: false,
+      baseDist: core ? getDistance(p, baseCellCenter(core.cell)) : Infinity, safeDist: getDistance(p, SAFE_ZONE), safeR: SAFE_ZONE.radius,
+    })) return;
+    const def = CREATURES['raider_indigena'];
+    const at = def ? behindSpot(p.x, p.z, yaw, (x, z) => (!WORLD.walkable || WORLD.walkable(x, z)) && lineWalkable(p.x, p.z, x, z)) : null;
+    if (!def || !at) return; // sem chão atrás agora: tenta no próximo
+    indClock.nextAt = now + IND.LOST_RETURN_MS; // (se algo der errado, não renasce em loop)
+    const hp = scaleEnemyHp(def.maxHp);
+    const ind: CreatureState = {
+      id: `${IND_PREFIX}${now}`, speciesId: def.id, name: def.name, hp, maxHp: hp,
+      attackPower: def.attackPower, armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0,
+      position: { x: clampX(at.x, 4), z: clampZ(at.z, 4) }, behavior: 'patrol', lootTable: [], respawnAt: null,
+    };
+    const again = indClock.returns++ > 0;
+    set((s) => ({ creatures: [...s.creatures, ind], ui: { ...s.ui, message: again ? `🪶 Um grito de guerra na mata… ${def.name} voltou!` : `🪶 ${def.name} está te caçando!` } }));
   },
 
   spawnBoss: () => {

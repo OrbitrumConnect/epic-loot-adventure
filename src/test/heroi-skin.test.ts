@@ -17,12 +17,13 @@ const HERO_JOINTS = ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head', 'LeftS
   'RightLeg', 'RightFoot', 'RightToeBase'].map((n) => 'mixamorig:' + n);
 
 describe('skins do herói (homem / mulher)', () => {
-  it('2 skins; qualquer valor desconhecido (save antigo, cliente velho) vira homem', () => {
-    expect(HERO_SKIN_IDS).toEqual(['homem', 'mulher']);
+  it('3 skins (03/11: + mercenário); qualquer valor desconhecido (save antigo, cliente velho) vira homem', () => {
+    expect(HERO_SKIN_IDS).toEqual(['homem', 'mulher', 'mercenario']);
     expect(DEFAULT_HERO_SKIN).toBe('homem');
     expect(heroSkinOf(undefined).id).toBe('homem');
     expect(heroSkinOf('xyz').id).toBe('homem');
     expect(heroSkinOf('mulher').id).toBe('mulher');
+    expect(heroSkinOf('mercenario').id).toBe('mercenario');
   });
 
   it('cada skin: o esqueleto do herói (os mesmos ossos das ~30 animações), sem animação embutida, textura KTX2, retrato', () => {
@@ -33,7 +34,7 @@ describe('skins do herói (homem / mulher)', () => {
       for (const n of HERO_JOINTS) expect(joints.has(n), `${id}: ${n}`).toBe(true);
       expect(j.animations ?? []).toHaveLength(0);
       expect((j.images ?? []).every((im) => im.mimeType === 'image/ktx2')).toBe(true);
-      expect(fs.statSync('public' + s.url).size).toBeLessThan(3_000_000); // ~11 MB brutos → ~2,4 MB
+      expect(fs.statSync('public' + s.url).size).toBeLessThan(3_500_000); // ~11–12 MB brutos → 2,3–3,2 MB (mercenário: 42 mil vértices, herói visto de perto — malha cheia)
       expect(fs.existsSync('public' + s.portrait)).toBe(true);
       expect(s.bindFix).toBe(true); // GLB do Meshy: esqueleto salvo noutra pose (mesmo caso dos raiders)
     }
@@ -63,7 +64,8 @@ describe('skins do herói (homem / mulher)', () => {
     expect(rp).toMatch(/const skin = heroSkinOf\(useNet\(\(s\) => s\.players\[id\]\?\.sk\)\);/);
     expect(rp.match(/<GlbHeroMixamo key=\{skin\.id\} charUrl=\{skin\.url\} bindFix=\{skin\.bindFix\}/g)).toHaveLength(2);
     const mp = read('src/net/multiplayer.ts');
-    expect(mp).toMatch(/\.\.\.\(poseSkin === 'mulher' \? \{ sk: 'mulher' as const \} : \{\}\),/);
+    // a pose leva a skin quando não é a padrão (ausente = homem — cliente antigo também)
+    expect(mp).toMatch(/\.\.\.\(poseSkin === 'mulher' \|\| poseSkin === 'mercenario' \? \{ sk: poseSkin \} : \{\}\),/);
     expect(read('src/components/world/glb-hero-mixamo.tsx')).toMatch(/preloadKTX2GLTF\(HERO_SKINS\.homem\.url\);/);
     const idx = read('src/routes/index.tsx');
     expect(idx).toMatch(/\{worldOn && <HeroSkinPicker waitAccount=\{AUTH_ENABLED && !!authUser\} \/>\}/);
