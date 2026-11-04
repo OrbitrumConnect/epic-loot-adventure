@@ -41,6 +41,8 @@ import { zsNavigable, zsSwimmable } from './zs-world-profile';
 type CreatureStateLite = import('@/game/types').CreatureState;
 /** Desenha os corpos (capitão + tripulação) com você a até isto (m) do navio. */
 export const CREW_DRAW_M = 160;
+/** Corpo do pirata morto fica no convés este tempo (cai de costas) e some — igual aos bichos em terra. */
+export const FLEET_CORPSE_MS = 3000;
 /** Ação de cada um da esquadra (o tiro vira 'attack' por um instante). */
 const unitAction = new Map<string, { a: HeroAction; until: number }>();
 
@@ -64,15 +66,22 @@ const deckY = (h: number) => (zsWarshipDeck.main > 0 ? zsWarshipDeck.main : h * 
 /** Um da esquadra no navio: o boneco (pirata) e a ação dele (parado / atirando / morto). */
 function FleetUnit({ id, gun }: { id: string; gun: boolean }) {
   const action = useRef<HeroAction>('idle');
+  const g = useRef<THREE.Group>(null), deadAt = useRef<number | null>(null);
   useFrame(() => {
     const cr = useGameStore.getState().creatures.find((c) => c.id === id), u = unitAction.get(id);
-    action.current = !cr || cr.behavior === 'dead' ? 'death' : u && u.until > performance.now() ? u.a : 'idle';
+    const dead = !cr || cr.behavior === 'dead';
+    action.current = dead ? 'death' : u && u.until > performance.now() ? u.a : 'idle';
+    // (04/11, Pedro: "no outro barco ficou deitado") morto cai de costas e o corpo SAI do convés depois de CORPSE_MS
+    if (dead) deadAt.current ??= performance.now(); else deadAt.current = null;
+    if (g.current) g.current.visible = deadAt.current === null || performance.now() - deadAt.current < FLEET_CORPSE_MS;
   });
   return (
-    <Suspense fallback={null}>
-      <GlbHeroMixamo charUrl="/models/raiders/pirate.glb" actionRef={action} autoHeight={1.8} standFixX={Math.PI / 2} bindFix deathClip="back"
-        forceGun={gun} weapon={gun ? <Suspense fallback={null}><RifleModel /></Suspense> : undefined} />
-    </Suspense>
+    <group ref={g}>
+      <Suspense fallback={null}>
+        <GlbHeroMixamo charUrl="/models/raiders/pirate.glb" actionRef={action} autoHeight={1.8} standFixX={Math.PI / 2} bindFix deathClip="back"
+          forceGun={gun} weapon={gun ? <Suspense fallback={null}><RifleModel /></Suspense> : undefined} />
+      </Suspense>
+    </group>
   );
 }
 

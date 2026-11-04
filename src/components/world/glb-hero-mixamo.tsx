@@ -141,6 +141,10 @@ export const PALM_K = 0.28;
 export const RIFLE_HOLD = { DOWN: 0.15, FWD: 0.12 } as const;
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
+/** A caixa da geometria "mente" (escala assada no esqueleto) — só quando a skinned sai MAIOR, bem fora de 1 (ver o uso). */
+export function fitFooled(bindH: number, skH: number): boolean {
+  return skH > 1e-4 && skH > bindH && Math.log(skH / bindH) > 0.5;
+}
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
   const box = new THREE.Box3();
   const tmp = new THREE.Box3();
@@ -362,7 +366,11 @@ export function GlbHeroMixamo({
       const bindH = bindBox.max.y - bindBox.min.y || 1;
       const skBox = measureSkinnedBox(c);
       const skH = skBox.max.y - skBox.min.y;
-      const fooled = skH > 1e-4 && Math.abs(Math.log(skH / bindH)) > 0.5;
+      // (04/11, Pedro: "os atiradores estão grandes") o engano é SEMPRE pra menos na bind (0,016 m × 1,6 m de verdade).
+      // Nos modelos com `bindFix` (pirata, pântano, spiked, brutamontes, alien) o esqueleto posto na ligação fica
+      // DEITADO e a caixa skinned media a espessura (0,4–0,6 m × 1,64 em pé) → "enganado" ao contrário → 3–6× maiores
+      // e pé fora do chão. Só conta como enganado quando a skinned é MAIOR que a bind.
+      const fooled = fitFooled(bindH, skH);
       const h = fooled ? skH : bindH;
       c.scale.setScalar(autoHeight / h);
       c.updateMatrixWorld(true);
