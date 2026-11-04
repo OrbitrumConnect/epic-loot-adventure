@@ -29,6 +29,48 @@ import {
   ATTACK_UPPER_WEIGHT, CROUCH_CLIPS, CROUCH_WALK_CLIP_SPEED, attackUpperFor, crouchClipFor, isCrouchAction, jumpClipFor, lowerPlusUpper, scaleHipsTo,
 } from './hero-moves';
 import { inflateBounds } from './skinned-bounds';
+import { nightFactor } from '@/game/systems/dayNightSystem';
+
+/**
+ * BRILHO DA NOITE (03/11, Pedro: "personagem e a índia meio escuros à noite; a heroína também — clareia levemente o que
+ * precisa, sem ficar tosco"; "a Couraça bem mais clara que o herói à noite"). Medido: TODOS os modelos antigos (Couraça,
+ * Pântano, pirata, arqueiro, brutamontes, Fúngico, o herói de antes) têm mapa de BRILHO PRÓPRIO a 100% — à noite ficam
+ * claros como de dia; TODOS os do Meshy (as 3 skins, Feiticeira, Indígena, Canibal, Kraken) não têm nenhum — à noite só
+ * a luz fraca. Nos que NÃO têm, a própria textura vira um brilho que SÓ aparece à noite (dia = 0: o visual de dia, já
+ * aprovado, não muda) e sobe com o escurecer. Ligado 1× ao carregar; depois só a intensidade muda (uniforme — sem
+ * recompilar shader, regra anti-lag de 30/10). Os antigos não mudam (já têm o deles).
+ */
+export const NIGHT_GLOW = { max: 0.3 }; // medido 03/11 (herói à noite, brilho médio): 23 → 38 (dia 59); 0,5 já esbranquiça o cabelo
+const nightGlowMats = new Map<THREE.MeshStandardMaterial, number>(); // material → quantas cópias usam
+let glowStamp = -1;
+/** 1× por quadro (o 1º boneco que desenhar): intensidade = máx × noite. */
+export function tickNightGlow(t: number): void {
+  if (t === glowStamp || nightGlowMats.size === 0) return;
+  glowStamp = t;
+  const k = NIGHT_GLOW.max * nightFactor();
+  for (const m of nightGlowMats.keys()) m.emissiveIntensity = k;
+}
+/** Liga o brilho da noite nos materiais com cor e SEM brilho próprio; devolve os que entraram (pra soltar ao sair). */
+export function addNightGlow(mats: THREE.Material[]): THREE.MeshStandardMaterial[] {
+  const out: THREE.MeshStandardMaterial[] = [];
+  for (const mat of mats) {
+    const sm = mat as THREE.MeshStandardMaterial;
+    if (!sm.isMeshStandardMaterial || !sm.map) continue;
+    if (!nightGlowMats.has(sm)) {
+      // modelo antigo: já tem o brilho dele (o nosso fica marcado — remontar o boneco não confunde)
+      if (sm.emissiveMap && !sm.userData['nightGlow']) continue;
+      if (!sm.userData['nightGlow']) { sm.emissiveMap = sm.map; sm.emissive.setRGB(1, 1, 1); sm.userData['nightGlow'] = true; sm.needsUpdate = true; }
+      sm.emissiveIntensity = NIGHT_GLOW.max * nightFactor();
+    }
+    nightGlowMats.set(sm, (nightGlowMats.get(sm) ?? 0) + 1);
+    out.push(sm);
+  }
+  return out;
+}
+export function dropNightGlow(mats: THREE.MeshStandardMaterial[]): void {
+  for (const m of mats) { const n = (nightGlowMats.get(m) ?? 1) - 1; if (n <= 0) nightGlowMats.delete(m); else nightGlowMats.set(m, n); }
+}
+if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __nightGlow?: unknown }).__nightGlow = NIGHT_GLOW; // testes de tela
 
 const EXTRA_KEYS = Object.keys(HERO_EXTRA_CLIPS) as HeroExtraClip[];
 const EXTRA_URLS = EXTRA_KEYS.map((k) => HERO_EXTRA_CLIPS[k]);
@@ -462,6 +504,7 @@ export function GlbHeroMixamo({
   // LAYOUT (antes do 1º quadro): a esfera de corte do boneco precisa estar pronta quando ele aparece (30/10, lag)
   useLayoutEffect(() => {
     const list: THREE.Mesh[] = [];
+    const mats: THREE.Material[] = [];
     cloned.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
@@ -470,9 +513,12 @@ export function GlbHeroMixamo({
         inflateBounds(m); // bolha inflada 1,8× — também a do corpo com esqueleto (03/11)
         // clarear (skin do herói, 03/11): valor ABSOLUTO na cor do material (o material é dividido entre as cópias — não acumula)
         if (tone) for (const mat of Array.isArray(m.material) ? m.material : [m.material]) (mat as THREE.MeshStandardMaterial).color?.setScalar(tone);
+        for (const mat of Array.isArray(m.material) ? m.material : [m.material]) mats.push(mat);
       }
     });
     meshes.current = list;
+    const glow = addNightGlow(mats); // só os sem brilho próprio (Meshy); os antigos ficam como estão
+    return () => dropNightGlow(glow);
   }, [cloned, tone]);
 
   // Garante que algo toca assim que os clips carregam (anti T-pose eterno).
@@ -514,7 +560,8 @@ export function GlbHeroMixamo({
   const clock = useRef(0);
   const groundAcc = useRef(-Math.floor(Math.random() * 30)); // espalha a 1ª medição (horda nascendo junta não trava)
 
-  useFrame((_, rawDt) => {
+  useFrame((st, rawDt) => {
+    tickNightGlow(st.clock.elapsedTime); // brilho da noite dos modelos sem brilho próprio (1× por quadro no total)
     // PERF: longe do player → tira a SOMBRA. A animação segue (pausar congelava a pose e o raider deslizava
     // "bugado" de longe — Pedro 25/10; no three o mixer pausado é avaliado igual, não economizava).
     const g = inner.current;
