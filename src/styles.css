@@ -1274,6 +1274,15 @@ progress::-webkit-progress-bar { background: var(--secondary); }
 .zs-mapmark--camp[data-cleared] { background: #6b6b6b; }
 .zs-key-base { background: var(--world-gold); border: 2px solid var(--world-dark); border-radius: 3px; transform: rotate(45deg); }
 .zs-key-camp { background: #c8412f; border: 2px solid var(--world-dark); border-radius: 2px; }
+/* carro e navio no mapa (03/11): o emoji num selo; perdido = apagado + tracejado (onde construir outro) */
+.zs-mapmark--car, .zs-mapmark--ship { width: 22px; height: 22px; display: grid; place-items: center; font-size: 13px; line-height: 1; border-radius: 50%; background: var(--world-light); border: 2px solid var(--world-dark); z-index: 3; }
+.zs-mapmark--car[data-gone], .zs-mapmark--ship[data-gone] { opacity: 0.6; border-style: dashed; filter: grayscale(1); }
+.zs-key-veh { width: auto; height: auto; background: none; font-style: normal; font-size: 12px; line-height: 1; }
+.tool-craft-veh { display: grid; place-items: center; color: var(--primary); }
+.tool-craft-veh svg { width: 26px; height: 26px; }
+.tool-craft-status { font-weight: 400; font-size: 10px; color: var(--muted-foreground); }
+.tool-craft-status[data-have] { color: var(--primary); }
+.tool-craft-done { font-style: normal; font-size: 10px; color: var(--primary); }
 
 /* ===== Janela de Atributos (abre no card de nível) + selinho de pontos ===== */
 .player-profile { position: relative; cursor: pointer; border-radius: 10px; transition: background .15s; }

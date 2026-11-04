@@ -23,3 +23,19 @@ export const zsCave = { inCave: false, dark: 0, near: false, deep: false,
   seaOff: false };
 /** Ataque da casa do jogo (`hitNearest`) — o clique esquerdo do mundo chama. */
 export const zsAttack: { fn: (() => void) | null } = { fn: null };
+
+/**
+ * CARRO e NAVIO no card da base e no mapa (03/11, Pedro: "fabricar o carro e o navio não estão disponíveis no card Minha
+ * base igual skate e prancha; ambos sumiram — queria poder construir; no mapa deveria aparecer pra mim pra eu saber").
+ * O mundo escreve (~2×/s, só quando MUDA: estado ou > 3 m); o card e o mapa (M) leem. `ok` = no mapa em (x, z);
+ * `gone` = explodiu/afundou — (x, z) = onde se constrói outro (garagem / âncora). null = não existe nesta sessão.
+ */
+export type ZsVehInfo = { state: 'ok' | 'gone'; x: number; z: number };
+export const useZsVehicles = create<{ car: ZsVehInfo | null; ship: ZsVehInfo | null }>(() => ({ car: null, ship: null }));
+/** Construir pelo card (o mundo registra; fora da Zona Sul = null). Devolve a mensagem pro jogador. */
+export const zsVehicleApi: { build: ((kind: 'car' | 'ship') => string) | null } = { build: null };
+/** Mesmo lugar (estado igual e < 3 m)? — pra não redesenhar o card/mapa à toa. */
+export function sameVeh(a: ZsVehInfo | null, b: ZsVehInfo | null): boolean {
+  if (!a || !b) return a === b;
+  return a.state === b.state && Math.hypot(a.x - b.x, a.z - b.z) < 3;
+}

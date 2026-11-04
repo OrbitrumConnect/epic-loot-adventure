@@ -1,3 +1,4 @@
+import { useZsVehicles } from '@/components/zona-sul/zs-context';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bird, Bot, Footprints, PawPrint, Rabbit, Skull,
@@ -96,6 +97,9 @@ export function ZsMap({ onClose }: ZsMapProps) {
   const playerBase = useGameStore((s) => s.playerBase);
   const camps = useGameStore((s) => s.camps);
   const baseAt = useMemo(() => { const core = playerBase?.pieces.find((q) => q.kind === 'core'); return core ? cellCenter(core.cell) : null; }, [playerBase]);
+  // CARRO e NAVIO (03/11, Pedro: "no mapa deveria aparecer pra mim pra eu saber"): onde estão — ou, perdidos, onde se
+  // constrói outro (garagem / âncora; ou pelo card da base)
+  const car = useZsVehicles((s) => s.car), ship = useZsVehicles((s) => s.ship);
 
   // Recomputa as zonas a cada 2 s (criaturas morrem/renascem) — só re-renderiza se a contagem
   // por zona mudou, pra não repintar à toa. Barato: 5 zonas.
@@ -179,6 +183,11 @@ export function ZsMap({ onClose }: ZsMapProps) {
             <div key={cp.id} className="zs-mapmark zs-mapmark--camp" data-cleared={cp.cleared || undefined} style={{ left: `${left}%`, top: `${top}%` }} title={`${def?.name ?? 'Acampamento'}${cp.cleared ? ' (limpo)' : ''}`} aria-label={def?.name ?? 'Acampamento'} />
           ); })}
           {baseAt && (() => { const { left, top } = zsWorldToPct(baseAt.x, baseAt.z); return <div className="zs-mapmark zs-mapmark--base" style={{ left: `${left}%`, top: `${top}%` }} title="Sua base" aria-label="Sua base" />; })()}
+          {([['car', car, 'Seu carro voador', 'Seu carro explodiu — construa outro aqui (E) ou no card da base'], ['ship', ship, 'Seu navio de guerra', 'Seu navio afundou — construa outro na âncora (E) ou no card da base']] as const).map(([k, v, okTxt, goneTxt]) => {
+            if (!v) return null;
+            const { left, top } = zsWorldToPct(v.x, v.z), txt = v.state === 'ok' ? okTxt : goneTxt;
+            return <div key={k} className={`zs-mapmark zs-mapmark--${k}`} data-gone={v.state === 'gone' || undefined} style={{ left: `${left}%`, top: `${top}%` }} title={txt} aria-label={txt}>{k === 'car' ? '🚗' : '⚓'}</div>;
+          })}
           <div ref={heroRef} className="zs-hero" aria-label="Você" title="Você" />
         </div>
         <div className="zs-map-legend">
@@ -186,6 +195,8 @@ export function ZsMap({ onClose }: ZsMapProps) {
           <span><i className="zs-key zs-key-zone" />Zona de fauna (clique)</span>
           {baseAt && <span><i className="zs-key zs-key-base" />Sua base</span>}
           <span><i className="zs-key zs-key-camp" />Acampamento</span>
+          {car && <span><i className="zs-key zs-key-veh">🚗</i>{car.state === 'ok' ? 'Seu carro' : 'Carro (construir outro)'}</span>}
+          {ship && <span><i className="zs-key zs-key-veh">⚓</i>{ship.state === 'ok' ? 'Seu navio' : 'Navio (construir outro na âncora)'}</span>}
         </div>
       </div>
 

@@ -74,8 +74,8 @@ import { createZsBandits, createZsNewAreaCreatures, createZsSharks, createZsSpre
 import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsForestFarm, createZsHarvestNodes, createZsNewAreaTrees, createZsSpreadHarvest } from '@/game/systems/zsHarvestSystem';
-import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWorldProfile } from './zs-world-profile';
-import { useZsTouch, zsAttack, zsCave, zsCrouch, zsCtx, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED } from './zs-context';
+import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWalkable, zsWorldProfile } from './zs-world-profile';
+import { sameVeh, useZsTouch, useZsVehicles, zsAttack, zsCave, zsCrouch, zsCtx, zsVehicleApi, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED, type ZsVehInfo } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
 import { CAVE_ABYSS, caveCamFit, caveDeep, caveField, caveMouthClear, caveInside, caveMouthDist, caveMove, caveRoomName, setCaveTerrain } from './zs-cave';
@@ -140,6 +140,18 @@ const netGear: number[] = [0, 0, 0, 0, 0];
 const warshipDock: { at: { x: number; z: number; yaw: number } | null } = { at: null };
 /** GARAGEM do carro voador (onde ele nasce e onde se CONSTRÓI outro depois de explodir — 01/11) */
 const carGarage: { at: { x: number; z: number; yaw: number } | null } = { at: null };
+/** Card da base e mapa (03/11): onde estão o carro e o navio (ou onde se constrói outro). Só escreve quando muda. */
+let vehPubAcc = 0;
+function publishVehicles(car: ZsCar | null, ship: ZsWarship | null, dt: number): void {
+  vehPubAcc += dt;
+  if (vehPubAcc < 0.5) return;
+  vehPubAcc = 0;
+  const gg = carGarage.at, dk = warshipDock.at;
+  const c: ZsVehInfo | null = !car ? null : carGone(car) ? (gg ? { state: 'gone', x: gg.x, z: gg.z } : null) : { state: 'ok', x: car.x, z: car.z };
+  const s: ZsVehInfo | null = !ship ? null : warshipGone(ship) ? (dk ? { state: 'gone', x: dk.x, z: dk.z } : null) : { state: 'ok', x: ship.x, z: ship.z };
+  const cur = useZsVehicles.getState();
+  if (!sameVeh(cur.car, c) || !sameVeh(cur.ship, s)) useZsVehicles.setState({ car: c, ship: s });
+}
 const ENTER_MS = 1100;
 
 /** Golpe/tiro: quanto dura a animação de ataque (s) — o herói PARA pra atacar (igual ao Vale). Giro do especial R. */
@@ -393,6 +405,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (vl.dx || vl.dy) { const sens = 0.005 * aimSensitivityScale(); input.yaw -= vl.dx * sens; if (!mobaOn()) input.pitch = Math.max(-0.5, Math.min(1.35, input.pitch + vl.dy * sens)); input.lookAt = now; noteManualLook(); }
     // posição no JOGO (inimigos, tiro, piloto, coleta) — ~7×/s, como no Vale
     posAcc.current += dt;
+    publishVehicles(car, ship, dt); // card da base + mapa (M): carro/navio onde estão (03/11)
     if (posAcc.current > 0.15) { posAcc.current = 0; const cur = gs.player.position; if (cur.x !== p.x || cur.z !== p.z) useGameStore.setState(s => ({ player: { ...s.player, position: { x: p.x, z: p.z } } })); }
     zsCtx.driving = drive.mode === 'driving';
     // CARRO COM VIDA (01/11): no volante, o dano que viria no herói vai no carro (vehicleShield); explodiu = você cai
@@ -1473,6 +1486,36 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   const boardRef = useRef<BoardPose>(newBoardPose());
   /** poses da ASA-DELTA e do SKATE (o herói escreve; as vistas leem) */
   const gliderPose = useRef<BoardPose>(newBoardPose()), skatePose = useRef<BoardPose>(newBoardPose());
+  // CONSTRUIR PELO CARD DA BASE (03/11, Pedro: "fabricar o carro e o navio no card Minha base igual skate e prancha"):
+  // as MESMAS regras do E na garagem/âncora (nível, recurso da bolsa, 1 de cada). O CARRO nasce do SEU lado (a garagem
+  // passa a ser aqui — antes era onde você entrou no mapa e mudava a cada sessão); o NAVIO, na âncora (mar fundo).
+  useEffect(() => {
+    zsVehicleApi.build = (kind) => {
+      const st = useGameStore.getState(), lvl = st.player.level;
+      if (!t) return 'O mapa ainda está carregando.';
+      if (kind === 'car') {
+        const car = carRef.current;
+        if (car && !carGone(car)) return '🚗 Você já tem o carro voador — ele está no mapa (M).';
+        if (!isUnlocked('flying_car', lvl)) return lockedMessage('O carro voador', 'flying_car');
+        const h = heroRef.current, ok = (x: number, z: number) => zsWalkable(t, x, z);
+        const at = ok(h.x + 3, h.z - 2) ? { x: h.x + 3, z: h.z - 2 } : ok(h.x - 3, h.z + 2) ? { x: h.x - 3, z: h.z + 2 } : { x: h.x, z: h.z };
+        const r = st.spendItems(VEHICLE_COST.flying_car);
+        if (!r.ok) return '🔨 Pra construir o carro falta: ' + costText(r.missing);
+        carGarage.at = { x: at.x, z: at.z, yaw: 0 };
+        carRef.current = newCar(at.x, at.z, 0, t);
+        return '🔨🚗 Carro voador construído do seu lado! (−' + costText(VEHICLE_COST.flying_car).replace(/ \+ /g, ', −') + ')';
+      }
+      const ship = shipRef.current, d = warshipDock.at;
+      if (!d) return 'Sem lugar de âncora nesta sessão.';
+      if (ship && !warshipGone(ship)) return '⚓ Você já tem o navio de guerra — ele está no mapa (M).';
+      if (!isUnlocked(WARSHIP.UNLOCK_ID, lvl)) return lockedMessage('O navio de guerra', WARSHIP.UNLOCK_ID);
+      const r = st.spendItems(WARSHIP.BUILD_COST);
+      if (!r.ok) return '🔨 Pra construir o navio falta: ' + costText(r.missing);
+      shipRef.current = newWarship(d.x, d.z, d.yaw);
+      return '🔨⚓ Navio de guerra construído na âncora (veja no mapa — M)! (−' + costText(WARSHIP.BUILD_COST).replace(/ \+ /g, ', −') + ')';
+    };
+    return () => { zsVehicleApi.build = null; useZsVehicles.setState({ car: null, ship: null }); };
+  }, [t]);
   const gearRef = useMemo(() => ({ get glider() { return gliderPose.current; }, get skate() { return skatePose.current; } }), []);
   const perfRef = useRef<HTMLDivElement>(null);
   // só em desenvolvimento: os testes de tela leem posição/estado (o jogo publicado não expõe nada)
