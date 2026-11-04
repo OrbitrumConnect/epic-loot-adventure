@@ -135,6 +135,10 @@ const tmpAimL = new THREE.Vector3(), tmpAimR = new THREE.Vector3(), tmpAimUp = n
 const tmpAimD = new THREE.Vector3(), tmpAimF = new THREE.Vector3(), tmpAimFwd = new THREE.Vector3(), tmpAimPos = new THREE.Vector3(), tmpAimInv = new THREE.Matrix4();
 /** Palma da mão a partir do pulso: + (pulso − cotovelo) × isto (o esqueleto não tem dedos) — ~6 cm num herói de 1,8 m. */
 export const PALM_K = 0.28;
+/** Ajuste fino do fuzil nas duas mãos (03/11, Pedro com foto: "a arma pode descer um pouco e ir pra frente levemente
+ *  alguns cm"): em fração da distância entre as palmas (~38 cm num herói de 1,8 m) — vale em qualquer escala (jogo/ficha).
+ *  DOWN ~6 cm pra baixo (o guarda-mão assenta NA palma da frente), FWD ~5 cm pra frente (o punho sai do pulso). */
+export const RIFLE_HOLD = { DOWN: 0.15, FWD: 0.12 } as const;
 
 /** Bounding box pela GEOMETRIA (estável; não depende de pose/timing). */
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
@@ -932,6 +936,7 @@ export function GlbHeroMixamo({
       };
       const R = palm(handBone, rightForeBone, tmpAimR), L = palm(leftHandBone, leftForeBone, tmpAimL);
       const fwd = tmpAimFwd.copy(L).sub(R);
+      const span = fwd.length(); // distância entre as palmas — a régua do ajuste fino
       if (fwd.lengthSq() > 1e-8) {
         fwd.normalize();
         const up = tmpAimUp.set(0, 1, 0).applyQuaternion(rootQ);
@@ -940,7 +945,9 @@ export function GlbHeroMixamo({
           side.normalize();
           up.crossVectors(fwd, side);
           target = tmpAimTgtQ.setFromRotationMatrix(tmpAimM.makeBasis(side, up, fwd)); // cano (+Z da arma) → palma esquerda
-          posLocal = tmpAimPos.copy(R).applyMatrix4(tmpAimInv.copy(holder.matrixWorld).invert()); // punho (origem da arma) → palma direita
+          // punho (origem da arma) → palma direita, um pouco mais BAIXO e À FRENTE (RIFLE_HOLD)
+          posLocal = tmpAimPos.copy(R).addScaledVector(up, -RIFLE_HOLD.DOWN * span).addScaledVector(fwd, RIFLE_HOLD.FWD * span)
+            .applyMatrix4(tmpAimInv.copy(holder.matrixWorld).invert());
         }
       }
     }

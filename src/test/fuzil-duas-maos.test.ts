@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { poseBonesToBind, retargetBind } from '@/components/world/mixamo-retarget';
-import { PALM_K } from '@/components/world/glb-hero-mixamo';
+import { PALM_K, RIFLE_HOLD } from '@/components/world/glb-hero-mixamo';
 import { HERO_EXTRA_CLIPS } from '@/components/world/hero-moves';
 import { HERO_SKINS } from '@/game/data/hero-skins';
 
@@ -98,5 +98,8 @@ describe('fuzil nas duas mãos (palma direita no punho, palma esquerda no guarda
     expect(HERO_EXTRA_CLIPS.rifleWalk).toBe('/models/red/rifle_walk.glb');
     expect(HERO_EXTRA_CLIPS.rifleRun).toBe('/models/red/rifle_run.glb');
     expect(PALM_K).toBeGreaterThan(0.2); expect(PALM_K).toBeLessThan(0.4);
+    // 03/11 (Pedro com foto: "a arma pode descer um pouco e ir pra frente levemente alguns cm"): ~6 cm abaixo, ~5 cm à frente
+    expect(RIFLE_HOLD.DOWN).toBe(0.15); expect(RIFLE_HOLD.FWD).toBe(0.12); // × distância entre as palmas (~38 cm)
+    expect(h).toMatch(/posLocal = tmpAimPos\.copy\(R\)\.addScaledVector\(up, -RIFLE_HOLD\.DOWN \* span\)\.addScaledVector\(fwd, RIFLE_HOLD\.FWD \* span\)/);
   });
 });

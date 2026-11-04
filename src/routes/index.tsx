@@ -66,8 +66,10 @@ const ZS_SKIP_KEYS = new Set(['KeyE', 'Backquote', 'KeyP', 'KeyL', 'KeyV', 'KeyK
 import { zsCtx } from '@/components/zona-sul/zs-context';
 import { toggleZsCam, useZsCam } from '@/components/zona-sul/zs-camera';
 import { HeroSkinPicker } from '@/components/hud/hero-skin-picker';
-/** Itens do menu que são do mapa velho (fila do piloto, mapa do vale) — somem na Zona Sul até ganharem a versão dela. */
-const ZS_HIDE_NAV = new Set(['objectives']);
+/** Itens do menu que são do mapa velho — somem na Zona Sul até ganharem a versão dela. 03/11 (Pedro: "o trigger
+ *  objetivos no side card, que vê o que o idle tá indo farmar, cancelar etc., não vejo mais"): a FILA do piloto já roda na
+ *  Zona Sul (farmar zona pelo mapa M, caçar com Shift+clique) — "Objetivos" volta pro menu. */
+const ZS_HIDE_NAV = new Set<string>();
 import { BossSpawner } from '@/components/world/boss-spawner';
 import { NightFlock } from '@/components/world/night-flock';
 import { SorceressStalker } from '@/components/world/sorceress-stalker';
@@ -1089,7 +1091,7 @@ function Index() {
                       <span>{targetId ? `Alvo: ${useGameStore.getState().creatures.find(cr => cr.id === targetId)?.name ?? targetId}` : 'Sem alvo'}</span>
                     </div>
                     <div className="panel-actions">
-                      <Button onClick={() => setPanel(null)}><Compass />Voltar ao vale</Button>
+                      <Button onClick={() => setPanel(null)}><Compass />{zs ? 'Voltar ao mapa' : 'Voltar ao vale'}</Button>
                     </div>
                   </>
                 )}
