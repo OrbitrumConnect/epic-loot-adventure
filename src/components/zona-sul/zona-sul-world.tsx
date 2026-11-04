@@ -85,7 +85,7 @@ import { ZsCave, ZsCaveMouthRocks } from './zs-cave-view';
 import { layers, resetLayers, sameLayerAsPlayer } from '@/game/systems/layerSystem';
 import { shipGround, zsShip, ZsShip } from './zs-ship';
 import { type AmbienceState, zsAmbience } from './zs-ambience';
-import { ZsDayNight, ZsLamps, zsSun } from './zs-daynight';
+import { ZS_SKY, ZsDayNight, ZsLamps, zsSun } from './zs-daynight';
 import { nightFactor, setWorldEpoch, worldEpoch } from '@/game/systems/dayNightSystem';
 import { type BoardPose, newBoardPose, ZsBoardView } from './zs-board-view';
 
@@ -1615,7 +1615,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       {t && (
         <Canvas shadows dpr={[1, 1.25]} camera={{ fov: 55, near: 0.3, far: 7000 }} gl={{ antialias: true }}>
           <color attach="background" args={[FOG]} />
-          <Sky ref={skyRef} sunPosition={sunPos} turbidity={5} rayleigh={1.4} mieCoefficient={0.006} distance={4500} />
+          <Sky ref={skyRef} sunPosition={sunPos} turbidity={ZS_SKY.turbidity} rayleigh={ZS_SKY.rayleigh} mieCoefficient={ZS_SKY.mieCoefficient} distance={4500} />
           <hemisphereLight ref={hemiRef} args={['#eef4f8', '#6b7a4a', 1.5]} />
           <ambientLight ref={ambRef} intensity={0.35} />
           {/* DIA/NOITE (relógio do jogo) + lua + postes nas pistas */}

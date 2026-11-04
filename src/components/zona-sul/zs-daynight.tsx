@@ -16,6 +16,7 @@ import { requestLight } from '@/components/world/light-pool';
 import { type ZsTerrain, zsHeightAt, zsSlopeDeg } from './zs-terrain-data';
 import { ZS_SURF } from './zona-sul-meta';
 import { zsCave } from './zs-context';
+import { OMEN, omenEase, omenWeight, STORM, zsOmen } from './zs-omen';
 
 /** Sol/luar compartilhado: o herói posiciona a luz direcional (e a sombra) com isto. */
 export const zsSun = { dir: new THREE.Vector3(-0.55, 0.62, -0.45).normalize(), intensity: 2.1, color: new THREE.Color('#fff4e0') };
@@ -31,7 +32,16 @@ const MOON_LIGHT = new THREE.Color('#c9d8ff'), NIGHT_FOG = new THREE.Color('#344
 /** intensidades da NOITE (lua cheia): luar, céu (hemisfério), ambiente. Pedro 30/10: "pode escurecer uns 10–15%"
  *  → 13% abaixo de antes (1,25 / 0,85 / 0,3); 01/11, de novo "mais uns 10–15%" → mais 12% (1,09 / 0,74 / 0,26). */
 export const NIGHT_LIGHT = { moon: 0.96, hemi: 0.65, amb: 0.23 } as const;
-const tmpC = new THREE.Color(), sunV = new THREE.Vector3();
+const tmpC = new THREE.Color(), sunV = new THREE.Vector3(), tmpFog = new THREE.Color();
+/** O CÉU (shader Sky) de sempre — a Zona Sul monta com isto e o céu do Kraken volta pra cá. */
+export const ZS_SKY = { turbidity: 5, rayleigh: 1.4, mieCoefficient: 0.006 } as const;
+/** CÉU DO KRAKEN (zs-omen.ts): cores e direções prontas (uma vez) */
+const OM = {
+  sun: new THREE.Color(OMEN.SUN_COLOR), hemi: new THREE.Color(OMEN.HEMI_COLOR), ground: new THREE.Color(OMEN.GROUND_COLOR),
+  amb: new THREE.Color(OMEN.AMB_COLOR), fog: new THREE.Color(OMEN.FOG),
+  /** luz principal baixa do oeste (~33°) — sombra comprida de fim de tarde, sem o sol rente que apaga o chão (nem o mar preto) */
+  light: new THREE.Vector3(-0.8, 0.55, -0.3).normalize(),
+};
 /** CAVERNA (30/10): lá no fundo o céu/ambiente quase somem e a névoa vira breu (o herói tem a lanterna). */
 const CAVE_FOG = new THREE.Color('#07090c'), CAVE_HEMI = 0.1, CAVE_AMB = 0.5;
 
@@ -40,6 +50,8 @@ export function sunDirAt(hour: number, out = new THREE.Vector3()): THREE.Vector3
   const a = ((hour - 6) / 12) * Math.PI;
   return out.set(Math.cos(a) * 0.8, Math.sin(a) * 0.9, -0.45).normalize();
 }
+/** sol do CÉU no fim de tarde do Kraken (rente ao horizonte, a oeste) */
+const OMEN_SKY_SUN = sunDirAt(OMEN.SKY_HOUR);
 
 export function ZsDayNight({ hemi, amb, sky }: {
   hemi: React.RefObject<THREE.HemisphereLight | null>;
@@ -51,7 +63,7 @@ export function ZsDayNight({ hemi, amb, sky }: {
   const acc = useRef(1);
   const moon = useRef<THREE.Group>(null);
   /** valores de FORA (o relógio, 4×/s); a caverna escurece em cima deles todo quadro */
-  const base = useRef({ hemi: 1.5, amb: 0.35, fog: new THREE.Color(DAY_FOG), dark: -1 });
+  const base = useRef({ hemi: 1.5, amb: 0.35, fog: new THREE.Color(DAY_FOG), dark: -1, flash: 0 });
   useFrame((_, dt) => {
     // a lua acompanha a câmera (longe, fixa no céu) — barato, todo quadro
     const m = moon.current;
@@ -60,14 +72,20 @@ export function ZsDayNight({ hemi, amb, sky }: {
       m.visible = nf > 0.12;
       if (m.visible) { m.position.copy(camera.position).addScaledVector(MOON_DIR, 2500); m.lookAt(camera.position); }
     }
+    // CÉU DO KRAKEN (04/11): o `k` anda todo quadro; enquanto ele muda, a luz atualiza todo quadro (suave), senão 4×/s
+    const o = zsOmen, k0 = o.k;
+    o.k = omenEase(o.k, o.target, dt);
     acc.current += dt;
     const b = base.current, dk = zsCave.dark;
-    if (acc.current < 0.25) {
-      if (dk !== b.dark) applyCave();
+    if (acc.current < 0.25 && o.k === k0) {
+      // o clarão do RAIO (zs-kraken-storm) soma na luz todo quadro enquanto pisca
+      if (dk !== b.dark || o.flash !== b.flash) applyCave();
       return;
     }
     acc.current = 0;
     const dn = dayNight(), h = gameHour();
+    /** quanto do fim de tarde do Kraken entra (0 = dia normal; de noite sempre 0) */
+    const w = omenWeight(o.k, nf);
     sunDirAt(h, sunV);
     // luz principal: o SOL de dia, o LUAR de noite (mesma luz direcional, cor e direção mudam)
     zsSun.dir.copy(sunV.y > 0.05 ? sunV : MOON_DIR).lerp(MOON_DIR, nf).normalize();
@@ -82,16 +100,31 @@ export function ZsDayNight({ hemi, amb, sky }: {
     if (amb.current) amb.current.color.set(dn.ambientColor);
     // névoa/fundo: a cor do dia da Zona Sul, puxando a do relógio no amanhecer/entardecer e de noite
     // dia: a cor da Zona Sul puxando a do relógio (amanhecer/entardecer); noite: azul-acinzentado de lua cheia
-    b.fog.copy(DAY_FOG).lerp(new THREE.Color(dn.fogColor), 0.3 * (1 - nf)).lerp(NIGHT_FOG, nf);
+    b.fog.copy(DAY_FOG).lerp(tmpFog.set(dn.fogColor), 0.3 * (1 - nf)).lerp(NIGHT_FOG, nf);
+    if (w > 0) {
+      // o fim de tarde do Kraken por cima do dia de verdade (as MESMAS luzes — só outro alvo)
+      zsSun.dir.lerp(OM.light, w).normalize();
+      zsSun.intensity = THREE.MathUtils.lerp(zsSun.intensity, OMEN.SUN, w);
+      zsSun.color.lerp(OM.sun, w);
+      b.hemi = THREE.MathUtils.lerp(b.hemi, OMEN.HEMI, w);
+      b.amb = THREE.MathUtils.lerp(b.amb, OMEN.AMB, w);
+      if (hemi.current) { hemi.current.color.lerp(OM.hemi, w); hemi.current.groundColor.lerp(OM.ground, w); }
+      if (amb.current) amb.current.color.lerp(OM.amb, w);
+      b.fog.lerp(OM.fog, w);
+      sunV.lerp(OMEN_SKY_SUN, w).normalize(); // o sol do céu desce pro horizonte (a faixa vermelha)
+    }
     applyCave();
     // céu: o sol do shader segue a hora (abaixo do horizonte = céu escuro de verdade)
     const u = ((sky.current as THREE.Mesh | null)?.material as THREE.ShaderMaterial | undefined)?.uniforms;
     if (u?.['sunPosition']) (u['sunPosition'].value as THREE.Vector3).copy(sunV).multiplyScalar(1000);
+    if (u?.['turbidity']) u['turbidity'].value = THREE.MathUtils.lerp(ZS_SKY.turbidity, OMEN.TURBIDITY, w);
+    if (u?.['rayleigh']) u['rayleigh'].value = THREE.MathUtils.lerp(ZS_SKY.rayleigh, OMEN.RAYLEIGH, w);
     /** luz/névoa = as de fora escurecidas pela caverna */
     function applyCave() {
-      b.dark = dk;
-      if (hemi.current) hemi.current.intensity = b.hemi * (1 + (CAVE_HEMI - 1) * dk);
-      if (amb.current) amb.current.intensity = b.amb * (1 + (CAVE_AMB - 1) * dk);
+      b.dark = dk; b.flash = o.flash;
+      const fl = o.flash * (1 - dk); // o raio não clareia a caverna
+      if (hemi.current) hemi.current.intensity = b.hemi * (1 + (CAVE_HEMI - 1) * dk) + fl * STORM.FLASH_HEMI;
+      if (amb.current) amb.current.intensity = b.amb * (1 + (CAVE_AMB - 1) * dk) + fl * STORM.FLASH_AMB;
       tmpC.copy(b.fog).lerp(CAVE_FOG, dk);
       if (scene.fog) (scene.fog as THREE.Fog).color.copy(tmpC);
       if (scene.background instanceof THREE.Color) scene.background.copy(tmpC);

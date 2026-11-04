@@ -34,6 +34,8 @@ import {
   zsKraken, type KrakenHero, type KrakenPhase, type KrakenShip,
 } from './zs-kraken-boss';
 import { type ZsTerrain, zsHeightAt, zsWaterYAt } from './zs-terrain-data';
+import { omenTarget, zsOmen } from './zs-omen';
+import { ZsKrakenStorm } from './zs-kraken-storm';
 import { zsNavigable, zsSwimmable } from './zs-world-profile';
 
 const SEG = 16;
@@ -71,6 +73,61 @@ function krakenCreature(id: string, name: string, hp: number, armor: number, at:
   return { id, speciesId: def.id, name, hp, maxHp: hp, attackPower: Math.round(def.attackPower * atkK), armor, attackCooldown: def.attackCooldown, lastAttackAt: 0, position: { x: Math.round(at.x * 10) / 10, z: Math.round(at.z * 10) / 10 }, behavior: 'patrol', lootTable: [], respawnAt: null };
 }
 /** textura da água TURVA (centro escuro, borda some) e do REDEMOINHO (braços em espiral) */
+/**
+ * OLHOS VERMELHOS + NEON NOS TENTÁCULOS (04/11, Pedro: "olho dele luz vermelha?! e/ou alguma neon luz leve no tentáculo").
+ * Olhos: 2 brasas vermelhas na frente do rosto (presas nos ossos da cabeça — acompanham a animação) + o halo de cada
+ * uma (plano de frente pra câmera, aditivo) — acendem mais quando ele ataca/chicoteia. Neon: uma fileira de ventosas
+ * brilhando em cada tentáculo, no ciano dos veios do corpo (textura de brilho no MESMO material — nada de luz nova).
+ */
+export const KRAKEN_LOOK = {
+  /** olhos: cor, raio da brasa e do halo (m), separação (fração da altura do corpo) */
+  EYE_COLOR: '#ff2a14',
+  EYE_R: 1.4,
+  EYE_GLOW: 11,
+  EYE_SIDE_K: 0.034,
+  /** onde fica o olho entre o osso da cabeça (0) e o da frente do rosto (1), e quanto acima (fração da altura) */
+  EYE_FWD: 0.8,
+  EYE_UP_K: 0.054,
+  /** o halo sai da brasa em direção à câmera (m) */
+  EYE_HALO_FWD: 4,
+  /** neon das ventosas: cor e brilho (pulsa devagar entre MIN e MAX) */
+  NEON_COLOR: '#3ff2ff',
+  NEON_MIN: 0.3,
+  NEON_MAX: 0.55,
+} as const;
+
+/** Brilho das ventosas (×) pelo tempo — pulso lento, leve. */
+export const neonPulse = (t: number) => KRAKEN_LOOK.NEON_MIN + (KRAKEN_LOOK.NEON_MAX - KRAKEN_LOOK.NEON_MIN) * (0.5 + 0.5 * Math.sin(t * 1.4));
+
+/** Mapa de brilho do tentáculo: o vinho escuro de sempre + PINTAS ciano (ventosas) espalhadas em volta, 2 fileiras
+ *  desencontradas por gomo (u = volta, v = comprimento). 1ª versão (faixa larga) virou listra de poste de barbeiro. */
+function makeNeonTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#1a0610'; g.fillRect(0, 0, 64, 128); // = o emissive antigo (sem neon fica igual)
+  const spot = (u: number, v: number) => {
+    for (const du of [-64, 0, 64]) { // repete na emenda da volta
+      const gr = g.createRadialGradient(u + du, v, 0, u + du, v, 6);
+      gr.addColorStop(0, KRAKEN_LOOK.NEON_COLOR); gr.addColorStop(0.5, 'rgba(63,242,255,0.45)'); gr.addColorStop(1, 'rgba(63,242,255,0)');
+      g.fillStyle = gr; g.fillRect(u + du - 6, v - 6, 12, 12);
+    }
+  };
+  for (const u of [5, 26, 47]) spot(u, 30);
+  for (const u of [16, 37, 58]) spot(u, 94);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** Halo redondo (branco → transparente), tingido pela cor do material. */
+function makeGlowTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d')!, gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 function makeTextures(): { murk: THREE.CanvasTexture; whirl: THREE.CanvasTexture } {
   const c1 = document.createElement('canvas'); c1.width = c1.height = 256;
   const g1 = c1.getContext('2d')!, gr = g1.createRadialGradient(128, 128, 0, 128, 128, 128);
@@ -104,7 +161,8 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
   const tent = useMemo(() => {
     const geo = new THREE.CylinderGeometry(0.82, 1, 1, 10, 1);
     geo.translate(0, 0.5, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: '#5a2236', roughness: 0.55, metalness: 0.05, emissive: '#1a0610', emissiveIntensity: 0.4 });
+    // NEON (04/11): o brilho vem do mapa (fundo = o vinho de antes; ventosas ciano) — emissive branco × mapa × pulso
+    const mat = new THREE.MeshStandardMaterial({ color: '#5a2236', roughness: 0.55, metalness: 0.05, emissive: '#ffffff', emissiveMap: makeNeonTexture(), emissiveIntensity: KRAKEN_LOOK.NEON_MIN });
     const mesh = new THREE.InstancedMesh(geo, mat, KRAKEN_BOSS.TENTACLES * SEG);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = false;
@@ -125,11 +183,23 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     for (const m of [water.murk, water.whirl]) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }
     water.tx.murk.dispose(); water.tx.whirl.dispose();
     warshipDrift.x = 0; warshipDrift.z = 0; krakenShapes.segs = []; krakenShapes.body = null;
-    audioManager.setBossMusic(false);
+    audioManager.setBossMusic(false); zsOmen.target = 0;
   }, [tent, water]);
+  const eyes = useMemo(() => {
+    const tex = makeGlowTexture();
+    const coreGeo = new THREE.SphereGeometry(KRAKEN_LOOK.EYE_R, 12, 8), glowGeo = new THREE.PlaneGeometry(1, 1);
+    const coreMat = new THREE.MeshBasicMaterial({ color: KRAKEN_LOOK.EYE_COLOR, toneMapped: false, transparent: true });
+    const glowMat = new THREE.MeshBasicMaterial({ map: tex, color: KRAKEN_LOOK.EYE_COLOR, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false });
+    const g = new THREE.Group(); g.visible = false;
+    const one = () => { const core = new THREE.Mesh(coreGeo, coreMat), glow = new THREE.Mesh(glowGeo, glowMat); glow.renderOrder = 5; g.add(core, glow); return { core, glow }; };
+    return { g, l: one(), r: one(), tex, coreGeo, glowGeo, coreMat, glowMat };
+  }, []);
+  /** ossos da cabeça (achados quando o modelo carrega): o centro da cabeça e a frente do rosto */
+  const eyeBones = useRef<{ h: THREE.Object3D; f: THREE.Object3D } | null>(null);
+  useEffect(() => () => { eyes.tex.dispose(); eyes.coreGeo.dispose(); eyes.glowGeo.dispose(); eyes.coreMat.dispose(); eyes.glowMat.dispose(); (tent.material as THREE.MeshStandardMaterial).emissiveMap?.dispose(); }, [eyes, tent]);
   const bodyBar = useMemo(() => makeShipHpBar(14, 1.0), []);
   const tentBars = useMemo(() => Array.from({ length: KRAKEN_BOSS.TENTACLES }, () => makeShipHpBar(5, 0.45)), []);
-  const tmp = useMemo(() => ({ m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), d: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), zero: new THREE.Matrix4().makeScale(0, 0, 0) }), []);
+  const tmp = useMemo(() => ({ m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), d: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), zero: new THREE.Matrix4().makeScale(0, 0, 0), eh: new THREE.Vector3(), ef: new THREE.Vector3(), es: new THREE.Vector3() }), []);
   const st = useRef({ netAcc: 0, posAcc: 0, removeAt: 0, msgAt: 0, rise: 0, sucked: false, deadAt: new Map<string, number>(), lastBite: new Map<string, number>() });
 
   /** tira os bichos do Kraken (tentáculos/corpo) e os tubarões dele; as crias ficam até morrer */
@@ -376,7 +446,10 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
       useGameStore.setState((s) => (s.player.dead ? {} : { player: { ...s.player, hp: 0, dead: true, respawnAt: Date.now() + 15_000 }, ui: { ...s.ui, message: '🌀 O redemoinho do Kraken te SUGOU pro fundo junto com o navio!', deathBy: { name: 'Kraken das Cagarras', pvp: false } } }));
     }
     // ═══ MÚSICA DO CHEFE (04/11 — a do Pedro): acordado e eu a até KRAKEN_MUSIC_M ═══
-    audioManager.setBossMusic(whirlpoolOn(K.phase) && Math.hypot(hero.x - K.x, hero.z - K.z) < KRAKEN_MUSIC_M);
+    const dHero = Math.hypot(hero.x - K.x, hero.z - K.z);
+    audioManager.setBossMusic(whirlpoolOn(K.phase) && dHero < KRAKEN_MUSIC_M);
+    // ═══ CÉU DO KRAKEN (04/11 — Pedro: "quando ele nasce o dia vira fim de tarde avermelhado escuro"): cada um pela sua distância ═══
+    zsOmen.target = omenTarget(whirlpoolOn(K.phase), dHero);
     // ═══ REDEMOINHO puxa o MEU navio (cada um aplica no seu — o mundo move junto quem está no convés) ═══
     if (my && whirlpoolOn(K.phase) && my.sinkT === null) { const v = whirlpoolPull(K, my, pullBoost(K)); warshipDrift.x = v.x; warshipDrift.z = v.z; }
     else { warshipDrift.x = 0; warshipDrift.z = 0; }
@@ -396,6 +469,33 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
       g.rotation.y = K.yaw;
       bodyAction.current = K.bodyAct === 'death' || K.phase === 'dead' ? 'death' : K.bodyAct === 'attack' ? 'attack' : K.moving ? 'walk' : 'idle';
     }
+    // ═══ OLHOS VERMELHOS: entre o osso da cabeça e o da frente do rosto, um pouco acima; acendem mais no ataque ═══
+    if (g && visible && !eyeBones.current) {
+      let h: THREE.Object3D | null = null, f: THREE.Object3D | null = null;
+      g.traverse((o) => { if (/headfront/i.test(o.name)) f = o; else if (/Head$/.test(o.name)) h = o; });
+      if (h && f) eyeBones.current = { h, f };
+    }
+    const eb = eyeBones.current, eyeK = K.phase === 'dead' ? Math.max(0, 1 - deadSink / (outH * 0.3)) : S.rise;
+    eyes.g.visible = !!eb && visible && eyeK > 0.02;
+    if (eb && eyes.g.visible) {
+      eb.h.getWorldPosition(tmp.eh); eb.f.getWorldPosition(tmp.ef);
+      tmp.d.subVectors(tmp.ef, tmp.eh); // cabeça → frente do rosto
+      tmp.es.set(tmp.d.z, 0, -tmp.d.x).normalize().multiplyScalar(KRAKEN_BOSS.BODY_H * KRAKEN_LOOK.EYE_SIDE_K); // pro lado
+      tmp.p.copy(tmp.eh).addScaledVector(tmp.d, KRAKEN_LOOK.EYE_FWD); tmp.p.y += KRAKEN_BOSS.BODY_H * KRAKEN_LOOK.EYE_UP_K;
+      const angry = K.bodyAct === 'attack' || K.tents.some((tn) => tn.slam && tn.slam.age < KRAKEN_BOSS.TENT_WIND_S) ? 1.35 : 1;
+      const pulse = (0.85 + 0.15 * Math.sin(t * 2.2)) * angry * eyeK;
+      for (const [e, sgn] of [[eyes.l, 1], [eyes.r, -1]] as const) {
+        e.core.position.copy(tmp.p).addScaledVector(tmp.es, sgn);
+        // o halo vem uns metros pra câmera: de frente não é cortado pelo rosto; por trás a cabeça (20 m+) ainda esconde
+        e.glow.position.copy(cam.position).sub(e.core.position).setLength(KRAKEN_LOOK.EYE_HALO_FWD).add(e.core.position);
+        e.glow.quaternion.copy(cam.quaternion);
+        e.glow.scale.setScalar(KRAKEN_LOOK.EYE_GLOW * pulse);
+      }
+      eyes.glowMat.opacity = Math.min(1, 0.9 * pulse);
+      eyes.coreMat.opacity = Math.min(1, eyeK * 1.5);
+    }
+    // NEON das ventosas: pulso lento (o material é um só pros 6)
+    (tent.material as THREE.MeshStandardMaterial).emissiveIntensity = neonPulse(t);
     // água turva + redemoinho (com ele acordado)
     water.g.visible = visible && K.phase !== 'dead';
     water.g.position.set(K.x, waterY + 0.25, K.z);
@@ -453,6 +553,9 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     <>
       <primitive object={tent} />
       <primitive object={water.g} />
+      {/* TEMPESTADE (04/11): nuvem em espiral + raios com ele acordado (some junto com o céu de fim de tarde) */}
+      <ZsKrakenStorm />
+      <primitive object={eyes.g} />
       <group ref={body} visible={false}>
         <Suspense fallback={null}>
           <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} autoHeight={KRAKEN_BOSS.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} {...mixClipProps(mx.clips)} />
