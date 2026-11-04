@@ -14,7 +14,7 @@ import { noteShotAt } from '../systems/shotFacing';
 import { breakGrab } from '../systems/grabSystem';
 import { isInvulnerable } from '../systems/dodgeSystem';
 import { creatureLayer, layers, sameLayerAsPlayer } from '../systems/layerSystem';
-import { BOOST_DURATION_MS, BOOST_ITEMS, BOOST_UNLOCK_LEVEL, boostCooldown, boostScale, BURST_GAP, burstSize, shotCooldown, startBurst } from '../systems/burstSystem';
+import { BOOST_DURATION_MS, BOOST_ITEMS, BOOST_UNLOCK_LEVEL, boostCooldown, boostScale, BURST_GAP, burstSize, cancelBurst, isManualShot, shotCooldown, startBurst } from '../systems/burstSystem';
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../types/player';
 import { CREATURES, ENEMY_RESPAWN_MULT, WILD_RESPAWN_MULT, scaleEnemyHp } from '../data/creatures';
 import { CAMPS, PLAYER_SPAWN, SAFE_ZONE, WORLD_HALF } from '../data/camps';
@@ -965,15 +965,19 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const burstN = burstSize(heldItemId, state.player.level);
     if (fromBurst && burstN <= 1) return false; // trocou de arma no meio da rajada
     const boostK = boostScale(heldItemId, Date.now(), state.boostFireUntil);
-    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst, boostK)) return true; // cadência: clique engolido
+    // tiro do JOGADOR (clique/toque — GATILHO SEGURADO, 03/11): 1 bala por toque, automático segurando; sem a rajada do piloto
+    const manual = !fromBurst && isManualShot();
+    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst, boostK, manual)) return true; // cadência: clique engolido
     const ammoItem = prof.projectile === 'bullet' ? 'ammo' : 'arrow';
     if (getItemCount(state.player.inventory, ammoItem) <= 0) {
       set(s => ({ ui: { ...s.ui, message: ammoItem === 'ammo' ? 'Sem munição!' : 'Sem flechas!' } }));
       return fromBurst ? false : true;
     }
     noteShotAt(toward.x, toward.z); // o herói vira pra onde o tiro foi
-    // Tiro no vazio com rifle também sai em rajada (mesmo ponto).
-    if (!fromBurst && burstN > 1) {
+    // Tiro no vazio com rifle também sai em rajada (mesmo ponto) — no PILOTO. O jogador: 1 bala (e corta a rajada que
+    // estava correndo, senão ela seguia no ponto velho).
+    if (!fromBurst && burstN > 1 && manual) cancelBurst();
+    else if (!fromBurst && burstN > 1) {
       startBurst(burstN, () => { const b = get().player.lastAttackAt; get().fireMiss(toward, towardY, true); return get().player.lastAttackAt !== b; }, Date.now(), BURST_GAP * boostK);
     }
     if (heldItemId === 'bow') audioManager.playShot(); else heroGunSound();
@@ -1036,7 +1040,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const burstN = burstSize(heldItemId, state.player.level);
     if (fromBurst && burstN <= 1) return; // trocou de arma no meio da rajada
     const boostK = boostScale(heldItemId, Date.now(), state.boostFireUntil);
-    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst, boostK)) return;
+    const manual = !fromBurst && isManualShot(); // tiro do JOGADOR (GATILHO SEGURADO, 03/11)
+    if (now - state.player.lastAttackAt < shotCooldown(prof.cooldown, heldItemId, state.player.level, fromBurst, boostK, manual)) return;
 
     const dist = getDistance(state.player.position, creature.position);
     const nearReach = weaponRangeFor(heldItemId, state.player.level);
@@ -1069,8 +1074,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     noteShotAt(creature.position.x, creature.position.z); // o herói vira pro bicho que LEVOU o golpe
     // Acertou o jacaré que te agarrou → SOLTA do giro da morte (grabSystem).
     if (breakGrab(targetId)) set(s => ({ ui: { ...s.ui, message: '💪 Você se soltou do jacaré!' } }));
-    // Daqui o tiro SAI: gatilho do rifle abre a rajada (os próximos tiros repetem este mesmo ataque).
-    if (!fromBurst && burstN > 1) {
+    // Daqui o tiro SAI: gatilho do rifle abre a rajada (os próximos tiros repetem este mesmo ataque) — no PILOTO. O
+    // jogador: 1 bala por toque, automático segurando (cada bala onde a mira está agora).
+    if (!fromBurst && burstN > 1 && manual) cancelBurst();
+    else if (!fromBurst && burstN > 1) {
       startBurst(burstN, () => { const b = get().player.lastAttackAt; get().attack(targetId, true, aimed); return get().player.lastAttackAt !== b; }, Date.now(), BURST_GAP * boostK);
     }
 

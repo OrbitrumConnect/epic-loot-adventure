@@ -22,7 +22,9 @@ import { markImpact, markPointerConsumed, pixelsPerUnit, terrainHeight, pushOutS
 import { isLeaping, isRoaring, LEAP, leapPos, takeLeapLanding, tryStartLeap, tryStartRoar } from '@/game/systems/leapSystem';
 import { isUnkillable } from '@/game/systems/indigenaSystem';
 import { WORLD } from '@/game/data/world-profile';
-import { blockedByWall, caveStep, glbSurfaceY, groundUnder } from './terrain-collision';
+import { blockedByWall, caveStep, glbSurfaceY, groundUnder, worldBlocksShot } from './terrain-collision';
+import { weaponFor } from '@/game/data/weapons';
+import { manualShot } from '@/game/systems/burstSystem';
 import { isWalkable, walkStep } from './map-walk';
 import { vehicleShield } from '@/game/systems/vehicleShield';
 import { houseFloorSurfaceY, pushOutHouseWalls, pushOutBasePieces, pushOutFactoryWalls } from './base-collision';
@@ -73,7 +75,17 @@ export function useEnemyClick(creatureId: string, name: string) {
     setTarget(creatureId);
     const store = useGameStore.getState();
     store.setMessage(`Alvo: ${name}.`);
-    if (!store.player.dead && !isBuildActive()) store.attack(creatureId);
+    if (store.player.dead || isBuildActive()) return;
+    // 03/11 (Pedro: "atiro no boneco lá longe, não pega — o tiro vai até lá"): clicar NO CORPO do bicho com arma DE LONGE
+    // = mirar nele com o cursor: se você o ENXERGA (sem morro/parede entre a câmera e o ponto clicado), vale o alcance real
+    // da arma (o dano cai depois do curto, igual ao pontinho). E é tiro do JOGADOR: 1 bala por clique (segurando = automático).
+    // Antes: o alcance curto (20–33 m) — a bala saía rumo a ele e parava no limite, sem dano. Corpo a corpo: igual.
+    const slot = store.player.inventory.hotbar.slots[store.ui.selectedHotbar];
+    const held = slot != null ? store.player.inventory.slots[slot]?.itemId ?? null : null;
+    if (!weaponFor(held).ranged) { store.attack(creatureId); return; }
+    const me = store.player.position, o = e.ray.origin;
+    const seen = !worldBlocksShot(o, e.point, Math.hypot(o.x - me.x, o.z - me.z) + 0.3);
+    manualShot(() => store.attack(creatureId, false, seen));
   }, [creatureId, name]);
 }
 

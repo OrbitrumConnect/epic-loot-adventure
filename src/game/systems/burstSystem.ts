@@ -21,11 +21,45 @@ export function burstPause(level: number): number {
   return BURST_PAUSE_START - (BURST_PAUSE_START - BURST_PAUSE_END) * t;
 }
 /** Cadência (s) que o tiro precisa respeitar: dentro da rajada o intervalo curto; gatilho novo espera a pausa.
- *  `k` = multiplicador do BOOST FIRE (0,5 ativo; 1 normal). */
-export function shotCooldown(baseCooldown: number, itemId: string | null, level: number, fromBurst: boolean, k = 1): number {
+ *  `k` = multiplicador do BOOST FIRE (0,5 ativo; 1 normal). `manual` = tiro do JOGADOR (clique/toque): o automático
+ *  segurando — a cadência da rajada, sem a pausa (ver GATILHO SEGURADO). */
+export function shotCooldown(baseCooldown: number, itemId: string | null, level: number, fromBurst: boolean, k = 1, manual = false): number {
   if (burstSize(itemId, level) <= 1) return baseCooldown * k;
+  if (manual) return autoGapS(k);
   return (fromBurst ? BURST_GAP * 0.8 : burstPause(level)) * k;
 }
+
+/**
+ * GATILHO SEGURADO (Pedro 03/11: "no manual eu clico 1 vez sai uma bala; eu pressiono o dedo deveria sair a rajada
+ * automática até soltar o dedo — igual CS, sem quebrar o idle"). Só o tiro do JOGADOR (clique, toque no ATACAR) entra
+ * aqui: TOQUE = 1 bala; SEGURANDO = automático na cadência da rajada (0,1 s = 600/min; ×½ no Boost Fire) até soltar —
+ * cada bala sai pra onde a mira está AGORA (antes a rajada de 6–9 repetia o ponto do 1º tiro mesmo virando a câmera).
+ * O piloto/idle não passa por aqui: segue com as rajadas de sempre (6–9 tiros + pausa). Só o fuzil segura; pistola e
+ * arco = 1 por clique. Cada tiro passa pelo MESMO caminho de sempre (dano, munição, som, rastro, rede).
+ */
+export const AUTO_GAP = BURST_GAP;
+/** Folga do relógio (o quadro de 60 Hz cai em 0,1 s certinho em vez de pular pro seguinte). */
+const AUTO_SLACK = 0.95;
+/** Intervalo (s) do automático; `k` = Boost Fire (0,5) ou 1. */
+export function autoGapS(k = 1): number { return AUTO_GAP * AUTO_SLACK * k; }
+const trig = { held: false, fire: null as (() => void) | null, depth: 0 };
+/** Roda `fn` como tiro do JOGADOR (toque = 1 bala, sem abrir a rajada do piloto). */
+export function manualShot<T>(fn: () => T): T {
+  trig.depth += 1;
+  try { return fn(); } finally { trig.depth -= 1; }
+}
+export function isManualShot(): boolean { return trig.depth > 0; }
+/** Apertou: 1º tiro na hora; enquanto segurar, o relógio (tickTrigger) dispara de novo. */
+export function pressTrigger(fire: () => void): void { trig.held = true; trig.fire = fire; manualShot(fire); }
+/** Soltou (ou pausou/trocou de tela/perdeu o foco). */
+export function releaseTrigger(): void { trig.held = false; trig.fire = null; }
+export function triggerHeld(): boolean { return trig.held; }
+/** Por quadro: segurando e `due()` (fuzil na mão e a cadência venceu) → mais um tiro do jogador. */
+export function tickTrigger(due: () => boolean): void {
+  if (trig.held && trig.fire && due()) manualShot(trig.fire);
+}
+/** O automático vale pra este item? (só o que faz rajada: o fuzil) */
+export function autoFireItem(itemId: string | null): boolean { return !!itemId && BURST_ITEMS.has(itemId); }
 
 /**
  * BOOST FIRE (Pedro 25/10: "pra tiro talvez um boost fire"): poder com recarga — por 4 s pistola e rifle atiram 2×

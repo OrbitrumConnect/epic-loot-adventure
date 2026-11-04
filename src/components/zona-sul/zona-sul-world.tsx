@@ -29,7 +29,7 @@ import { isUnlocked, lockedMessage, unlockLevel } from '@/game/systems/unlockSys
 import { useTouchScreen } from '@/hooks/use-mobile';
 // COMBATE (29/10, Pedro: "usar armas, tiro pro elite… ligar tudo 100%"): as MESMAS peças e regras do Vale
 import { HeldItem } from '@/components/world/held-weapon';
-import { palette, impactShake, type Palette } from '@/components/world/world-kit';
+import { palette, impactShake, wasPointerConsumed, type Palette } from '@/components/world/world-kit';
 import { aimFire, aimSensitivityScale, aimZoomStep, gunKick, setAimCamera, setAiming, useAim } from '@/components/world/aim';
 import { recentShotPoint } from '@/game/systems/shotFacing';
 import { weaponRangeFor } from '@/game/data/weapons';
@@ -63,6 +63,7 @@ import { CombatFeedback } from '@/components/world/combat-feedback';
 import { Projectiles } from '@/components/world/projectiles';
 import { HeroPowers } from '@/components/world/hero-powers';
 import { BurstRuntime } from '@/components/world/burst-runtime';
+import { autoFireItem, manualShot, pressTrigger, releaseTrigger, triggerHeld } from '@/game/systems/burstSystem';
 import { AutoPilot } from '@/components/world/auto-pilot';
 import { BackgroundSim } from '@/components/world/background-sim';
 import { AssetBoundary } from '@/components/world/asset-boundary';
@@ -243,7 +244,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const group = useRef<THREE.Group>(null);
   /** combate: tique do último ataque visto, tempo de animação restante, especial, giro do R, coice, mira (0..1) */
   const atkTick = useRef(-1), atkT = useRef(0), specTick = useRef(-1), spinT = useRef(0);
-  const recoil = useRef({ x: 0, y: 0 }), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0), ambAcc = useRef(0);
+  const recoil = useRef({ x: 0, y: 0 }), lastKick = useRef(-1), aimK = useRef(0), yawNow = useRef(0), posAcc = useRef(0), ambAcc = useRef(0);
   /** ASA-DELTA planando / SKATE VOADOR em cima (null = não) · Espaço do quadro anterior (pulinho só no toque) */
   const glide = useRef<GlideState | null>(null), skate = useRef<SkateState | null>(null), spaceWas = useRef(false);
   /** surf na prancha (null = sem prancha na água) · vaca de quem nada sem prancha (s restantes) · giro da vaca */
@@ -373,7 +374,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       atkTick.current = gs.attackTick;
       if (drive.mode === 'foot' && !ride.current && !dead) { atkT.current = ATTACK_S; if (!useAim.getState().active) facing.current = attackYaw(p.x, p.z, facing.current); }
       const kick = gunKick(selectedItemId(gs));
-      if (kick > 0) { recoil.current.x += kick; recoil.current.y += (Math.random() - 0.5) * kick * 0.5; }
+      // tiro SEGUIDO (automático/rajada, < 0,25 s do anterior): coice a 1/4 — o 1º dá o tranco, o resto não arrasta a mira
+      // pra cima sozinha (03/11: em regime ~0,9° em vez de ~3,4°; ainda dá pra sentir e corrigir, como CS)
+      if (kick > 0) { const t = performance.now() / 1000, kk = t - lastKick.current < 0.25 ? 0.25 : 1; lastKick.current = t; recoil.current.x += kick * kk; recoil.current.y += (Math.random() - 0.5) * kick * kk * 0.5; }
     }
     atkT.current = Math.max(0, atkT.current - dt);
     // ESPECIAIS (Q salto / R giro) — o dano sai no jogo; aqui é o corpo
@@ -1179,7 +1182,7 @@ function Controls() {
       input.keys.add(e.code); if (e.code === 'Space') e.preventDefault();
     };
     const ku = (e: KeyboardEvent) => { input.keys.delete(e.code); if (e.code === 'ControlLeft' || e.code === 'ControlRight') releaseLeaveGuard(); };
-    const blur = () => { input.keys.clear(); releaseLeaveGuard(); };
+    const blur = () => { input.keys.clear(); releaseLeaveGuard(); releaseTrigger(); };
     const look = new Map<number, { x: number; y: number }>(), stick = new Map<number, { x: number; y: number }>();
     /** PINÇA (03/11, celular): os DEDOS (não o mouse) que estão no mundo — com 2, abrir/fechar = zoom, sem girar */
     const touchLook = new Set<number>();
@@ -1190,11 +1193,18 @@ function Controls() {
       return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
     };
     /** clique ESQUERDO curto (sem arrastar) = atacar; arrastar = girar a câmera */
-    let press: { x: number; y: number; at: number } | null = null;
+    let press: { x: number; y: number; at: number; eaten: boolean } | null = null;
     const locked = () => document.pointerLockElement === el;
     const canFight = () => !zsPause.on && drive.mode === 'foot' && !input.overview;
     // NAVIO DE GUERRA (01/11): clique = salva de canhão pro lado pra onde a câmera olha (o quadro do herói resolve)
-    const fire = () => { if (drive.mode === 'sailing' && !zsPause.on) { input.cannonFire = 'aim'; return; } if (!canFight()) return; if (!(useAim.getState().active && aimFire())) zsAttack.fn?.(); };
+    // Câmera de OMBRO (03/11, Pedro: "atiro no boneco lá longe, não pega — o tiro vai até lá"): o clique atira no
+    // PONTINHO (o que está sob ele, no alcance real da arma), igual ao Vale e ao celular — antes, sem segurar o direito,
+    // ia no mais perto do alcance curto ou saía "livre" pra frente do herói. De cima (MOBA): o de sempre (cursor/perto);
+    // na caverna a câmera é de ombro mesmo com "de cima" escolhido (mobaOn) → pontinho.
+    const fire = () => { if (drive.mode === 'sailing' && !zsPause.on) { input.cannonFire = 'aim'; return; } if (!canFight()) return; if (!((useAim.getState().active || !mobaOn()) && aimFire())) zsAttack.fn?.(); };
+    /** GATILHO SEGURADO (03/11): segurando o esquerdo parado ~0,2 s (sem mirar) com o fuzil = automático até soltar */
+    let holdT = 0;
+    const heldAuto = () => { const st = useGameStore.getState(), sl = st.player.inventory.hotbar.slots[st.ui.selectedHotbar]; return autoFireItem(sl != null ? st.player.inventory.slots[sl]?.itemId ?? null : null); };
     // o MUNDO inteiro (canvas + plaquinhas de vida/nome em HTML por cima): clicar num bicho com plaquinha na frente
     // também ataca (29/10: o clique caía na plaquinha e o golpe não saía). Botões/campos da tela ficam de fora.
     const host = (el.parentElement ?? el) as HTMLElement;
@@ -1209,13 +1219,21 @@ function Controls() {
       if (e.button === 2 && drive.mode === 'sailing') { input.cannonAim = true; if (!zsPause.on) el.requestPointerLock?.(); return; }
       if (e.button === 2) { if (canFight()) { setAiming(true); el.requestPointerLock?.(); } return; } // MIRA: segura o direito
       if (e.button !== 0) return;
-      if (locked() || useAim.getState().active) { fire(); return; } // mirando: clicou, atirou
-      press = { x: e.clientX, y: e.clientY, at: performance.now() };
+      // mirando: apertou, atirou — e SEGURANDO o fuzil sai o automático até soltar (toque = 1 bala, como CS)
+      if (locked() || useAim.getState().active) { if (drive.mode === 'sailing') fire(); else pressTrigger(fire); return; } // navio: a salva de sempre
+      // clicou NO CORPO de um bicho: o clique dele já atirou (1 bala, mirado — useEnemyClick); segurando, segue o automático
+      press = { x: e.clientX, y: e.clientY, at: performance.now(), eaten: wasPointerConsumed(e) };
+      window.clearTimeout(holdT);
+      holdT = window.setTimeout(() => { if (press && canFight() && heldAuto()) pressTrigger(fire); }, 200);
     };
     const mup = (e: MouseEvent) => {
       if (e.button === 2) { input.cannonAim = false; setAiming(false); if (locked()) document.exitPointerLock(); }
-      if (e.button === 0 && press && performance.now() - press.at < 350) fire(); // clique curto (sem arrastar) = ataque
-      if (e.button === 0) press = null;
+      if (e.button === 0) {
+        window.clearTimeout(holdT);
+        if (triggerHeld()) releaseTrigger(); // soltou o automático (ou o tiro mirando)
+        else if (press && !press.eaten && performance.now() - press.at < 350) manualShot(fire); // clique curto (sem arrastar) = ataque/1 bala
+        press = null;
+      }
     };
     const down = (e: PointerEvent) => {
       if (ui(e)) return;
@@ -1240,7 +1258,8 @@ function Controls() {
         const r = el.getBoundingClientRect();
         input.mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1; input.mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1; input.mouse.at = performance.now();
       }
-      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 6) press = null;
+      // arrastou = gira a câmera (não é clique nem gatilho); já no automático, segue atirando enquanto gira
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 6) { press = null; if (!triggerHeld()) window.clearTimeout(holdT); }
       const l = look.get(e.pointerId);
       if (l) {
         input.lookAt = performance.now();
@@ -1290,6 +1309,7 @@ function Controls() {
     el.addEventListener('contextmenu', menu);
     return () => {
       el.removeEventListener('contextmenu', menu);
+      window.clearTimeout(holdT); releaseTrigger();
       setAiming(false); if (locked()) document.exitPointerLock();
       window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('blur', blur);
       host.removeEventListener('mousedown', mdown); window.removeEventListener('mouseup', mup);

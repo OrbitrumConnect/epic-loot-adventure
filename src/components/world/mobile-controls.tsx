@@ -15,6 +15,7 @@ import { create } from 'zustand';
 import { aimFire, setAiming, useAim } from './aim';
 import { addVirtualLook, clearVirtualMove, setTouchLayout, setVirtualMove } from './virtual-input';
 import { useGameStore } from '@/game/state/game-store';
+import { pressTrigger, releaseTrigger } from '@/game/systems/burstSystem';
 
 const RADIUS = 54; // px: distância máxima do knob ao centro (satura em magnitude 1).
 /** Empurrou até aqui (fração do raio) → corre; voltou abaixo de RUN_OFF → para de correr. */
@@ -137,8 +138,11 @@ export function MobileControls({ onAttack, canAim = false, aimButton = canAim, p
   // ATACAR = JOYSTICK DE CÂMERA (Pedro 26/10, padrão PUBG/Free Fire): encostar ATIRA na hora; segurar e arrastar
   // GIRA a câmera (lados/cima), sem atirar de novo. Os 2 polegares embaixo: esquerdo anda, direito mira e atira.
   const atkLook = useRef<{ id: number; x: number; y: number } | null>(null);
+  // GATILHO SEGURADO (03/11, Pedro: "pressiono o dedo, deveria sair a rajada automática até soltar"): encostar = 1 tiro;
+  // com o FUZIL, segurando o ATACAR sai o automático até soltar (arrastar segue girando a câmera — mira no spray).
   const attackDown = (e: React.PointerEvent) => {
-    attack(e);
+    e.preventDefault();
+    pressTrigger(shoot);
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     atkLook.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
   };
@@ -148,9 +152,9 @@ export function MobileControls({ onAttack, canAim = false, aimButton = canAim, p
     addVirtualLook(e.clientX - s.x, e.clientY - s.y);
     s.x = e.clientX; s.y = e.clientY;
   };
-  const attackUp = (e: React.PointerEvent) => { if (atkLook.current?.id === e.pointerId) atkLook.current = null; };
-  const attack = (e: React.PointerEvent) => {
-    e.preventDefault();
+  const attackUp = (e: React.PointerEvent) => { if (atkLook.current?.id === e.pointerId) { atkLook.current = null; releaseTrigger(); } };
+  useEffect(() => () => releaseTrigger(), []); // a tela de toque saiu com o dedo no botão: não fica atirando
+  const shoot = () => {
     // Mirando OU câmera de ombro (26/10, igual ao clique do PC): atira no CENTRO da mira — acerta o que está lá ou sai
     // no vazio (tiro livre). Espada sem ninguém no alcance → o ataque de sempre (o mais perto).
     if (!((useAim.getState().active || canAim) && aimFire())) onAttack();

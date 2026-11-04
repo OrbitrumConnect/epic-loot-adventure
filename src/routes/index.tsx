@@ -126,7 +126,9 @@ function AimCrosshair({ shoulder }: { shoulder: boolean }) {
   const zoom = useAim(s => s.zoom);
   // Item na mão sem puxar módulo 3D (a mira carrega antes do mundo).
   const held = useGameStore(s => { const slot = s.player.inventory.hotbar.slots[s.ui.selectedHotbar]; return slot != null ? s.player.inventory.slots[slot]?.itemId ?? null : null; });
-  if (!active && !shoulder) return null;
+  // 03/11 (Pedro: "personagem de longe fica um ponto branco em cima dele"): sem mirar, o pontinho só com arma DE LONGE
+  // (com espada/ferramenta/mão vazia o clique pega o mais perto — o ponto flutuando acima da cabeça não servia pra nada)
+  if (!active && !(shoulder && weaponFor(held).ranged)) return null;
   const scoped = active && held === 'rifle' && zoom >= SCOPE_ZOOM;
   return (
     <>
@@ -223,6 +225,18 @@ function Vitals({ core }: { core: { hp: number; max: number } | null }) {
 }
 
 /** Linha "Mundo · mensagem": assina SÓ a mensagem (muda a cada golpe em combate). */
+/** Munição no topo — assina SÓ o número (03/11: com o gatilho segurado são até 10 tiros/s; a página não redesenha por bala). */
+function AmmoCount() {
+  const ammo = useGameStore(s => getItemCount(s.player.inventory, 'ammo'));
+  return <div className="header-currency" title="Munição (pistola/rifle)" style={{ color: ammo > 0 ? undefined : '#ef4444' }}><CircleDot />{ammo}</div>;
+}
+/** Peso da mochila — assina só o texto mostrado (cada bala pesa 0,01 kg). */
+function BagWeight() {
+  const kg = useGameStore(s => getWeight(s.player.inventory).toFixed(1));
+  const max = useGameStore(s => s.player.inventory.maxWeight);
+  return <div className="bag-weight">{kg} kg <small>/ {max} kg</small></div>;
+}
+
 function WorldMessage() {
   const message = useGameStore(s => s.ui.message);
   return <div><time>08:42</time><strong>Mundo</strong> · {message}</div>;
@@ -356,7 +370,6 @@ function Index() {
   const wave = useGameStore(s => s.wave);
   const upgradeChoices = useGameStore(s => s.upgradeChoices);
   const baseLevel = useGameStore(s => s.baseLevel);
-  const ammo = useGameStore(s => getItemCount(s.player.inventory, 'ammo'));
   const autoPotion = useGameStore(s => s.autoPotion);
   const toggleAutoPotion = useGameStore(s => s.toggleAutoPotion);
   const autoHuntRadius = useGameStore(s => s.autoHuntRadius);
@@ -408,7 +421,6 @@ function Index() {
     return () => clearInterval(id);
   }, [player.dead, player.respawnAt]);
 
-  const weight = getWeight(player.inventory);
   const attrs = effectiveAttributes(player);
 
   const woodCount = useGameStore(s => s.getItemCount)('wood');
@@ -762,7 +774,7 @@ function Index() {
             </button>
           )}
           <div className="header-currency"><Coins />{player.gold}</div>
-          <div className="header-currency" title="Munição (pistola/rifle)" style={{ color: ammo > 0 ? undefined : '#ef4444' }}><CircleDot />{ammo}</div>
+          <AmmoCount />
           <MusicPlayer />
           <Button variant="ghost" size="icon" className="icon-control" aria-label="Preferências" title="Preferências" onClick={() => open('settings')}><Settings /></Button>
         </header>
@@ -1268,7 +1280,7 @@ function Index() {
           </div>
           <div className="bag-summary">
             <div className="footer-label"><Backpack />MOCHILA</div>
-            <div className="bag-weight">{weight.toFixed(1)} kg <small>/ {player.inventory.maxWeight} kg</small></div>
+            <BagWeight />
             <div className="weight-track" />
           </div>
         </footer>
