@@ -47,7 +47,7 @@ import {
   claimBase as claimPlayerBase, damagePiece as damagePlayerPiece, placePieces as placePlayerPieces,
   cellInSquare as cellInBaseSquare, worldToCell as worldToBaseCell, cellKey as baseCellKey,
   cellCenter as baseCellCenter,
-  upgradeTower as upgradePlayerTower,
+  upgradeTower as upgradePlayerTower, checkClaim as checkBaseClaim, moveBaseProblem, moveBaseTo,
 } from '../systems/playerBaseSystem';
 import {
   constructTrainingCamp as buildTrainingCamp, constructNextWall as buildNextWall,
@@ -74,7 +74,7 @@ import { createHarvestNodes, harvestFitsChecker, harvestNode as harvestWorldNode
 import { drinkBestPotion, findBestHealItem, shouldAutoDrink } from '../systems/potionSystem';
 import { createNightPigeons, createWildCreatures, DAY_FLOCK_FAR, DAY_FLOCK_PREFIX, DAY_PIGEONS, dayFlockAction, NIGHT_FLOCK_PREFIX, NIGHT_ZOMBIE_PREFIX, nightFlockAction } from '../systems/wildlifeSystem';
 import { INITIAL_WAVE, tickWaves, waveEnemyCount, waveHpScale, markSpawned, scaleHordeAmmo, applyHordeCall, hordeCallBonus, ZS_EXTRA_PEACE_MS, type WaveState } from '../systems/waveSystem';
-import { eliteLoot, eliteXp } from '../systems/difficultySystem';
+import { eliteLoot, eliteXp, zoneLevel } from '../systems/difficultySystem';
 import { UPGRADE_CARDS, rollUpgradeChoices, towerDamageMult, wallHpMult, coreHpMult, type UpgradeId } from '../data/base-upgrades';
 import { boomerangPositions, orbitCount, orbitDamage, ORBIT_HIT_RADIUS, ORBIT_TICK_MS, ORBIT_PUSH, ORBIT_BASE_WAVES, ORBIT_EXTEND_WAVES, tornadoPositions, tornadoCount, tornadoDamage, TORNADO_HIT_RADIUS, TORNADO_PUSH, TORNADO_BASE_WAVES, TORNADO_EXTEND_WAVES, dist2, type Vec2 } from '../systems/powerSystem';
 import { restoreWave, SAVE_KEY } from '../systems/persistenceSystem';
@@ -262,6 +262,8 @@ type GameActions = {
   depositToBase: () => void;
   /** Reivindica o quadrado de `CLAIM_SIZE` com canto em `origin`. `heightAt` = terrainHeight do mundo. */
   claimBase: (origin: GridCell, heightAt?: (x: number, z: number) => number) => void;
+  /** MOVE a base inteira pra `origin` (mesmo nível de tudo; mesmas regras do terreno — 03/11). */
+  moveBase: (origin: GridCell, heightAt?: (x: number, z: number) => number) => boolean;
   placeBasePieces: (preview: BuildPreview, tier?: 1 | 2 | 3) => void;
   /** Entrega recursos da bolsa pra erguer a base até o Lv1 padrão (construção por %). */
   deliverToBase: () => void;
@@ -1946,7 +1948,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const at = def ? behindSpot(p.x, p.z, yaw, (x, z) => (!WORLD.walkable || WORLD.walkable(x, z)) && lineWalkable(p.x, p.z, x, z)) : null;
     if (!def || !at) return; // sem chão atrás agora: tenta no próximo
     indClock.nextAt = now + IND.LOST_RETURN_MS; // (se algo der errado, não renasce em loop)
-    const lk = indigenaLevelK(st.player.level); // nível baixo: mais fraco (03/11, 2ª); nv 65+ = o de sempre
+    const lk = indigenaLevelK(zoneLevel(at)); // pela REGIÃO onde surge (regra de 07/10): perto do início mais fraco; zona 4–5 = o de sempre
     const hp = Math.round(scaleEnemyHp(def.maxHp) * lk);
     const ind: CreatureState = {
       id: `${IND_PREFIX}${now}`, speciesId: def.id, name: def.name, hp, maxHp: hp,
@@ -2256,6 +2258,23 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       resources: clearedResources,
       ui: { ...state.ui, message: removed > 0 ? `${result.message} Terreno limpo.` : result.message },
     });
+  },
+
+  moveBase: (origin, heightAt) => {
+    const state = get(), now = Date.now();
+    const base = state.playerBase;
+    const problem = moveBaseProblem(base, now, state.wave.phase === 'combat');
+    if (problem || !base) { set({ ui: { ...state.ui, message: problem ?? 'Você ainda não tem base.' } }); return false; }
+    if (origin.gx === base.origin.gx && origin.gz === base.origin.gz) { set({ ui: { ...state.ui, message: 'A base já está aqui.' } }); return false; }
+    // o lugar novo passa pelas MESMAS regras de reivindicar (mapa, chão firme, longe da zona segura/caverna/acampamento, relevo)
+    const chk = checkBaseClaim(origin, base.size, { bases: [], heightAt }, now);
+    if (!chk.ok) { set({ ui: { ...state.ui, message: `Não dá pra mover a base pra cá: ${chk.message}` } }); return false; }
+    const moved = moveBaseTo(base, origin, now);
+    // limpa o terreno novo (igual ao reivindicar): madeira/pedra/árvore dentro do quadrado
+    const harvestNodes = state.harvestNodes.filter((n) => !cellInBaseSquare(worldToBaseCell(n.position), moved.origin, moved.size));
+    const resources = state.resources.filter((r) => !cellInBaseSquare(worldToBaseCell(r.position), moved.origin, moved.size));
+    set({ playerBase: moved, harvestNodes, resources, ui: { ...state.ui, message: `🏠 Base movida pra cá — tudo no nível de antes (${moved.pieces.length} peças).` } });
+    return true;
   },
 
   constructTrainingCamp: () => {

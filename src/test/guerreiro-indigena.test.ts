@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { FLEE_ARMOR, fleeInsteadOfDeath, IND, indBornAt, indClock, indigenaLevelK, indigenaMaySpawn, indigenaState, isRetreating, isUnkillable, retreatToForest } from '@/game/systems/indigenaSystem';
 import { deadCreature } from '@/game/state/game-store';
+import { ZONE_LEVEL } from '@/game/systems/difficultySystem';
 import { CREATURES } from '@/game/data/creatures';
 import { calculateDamage } from '@/game/systems/combatSystem';
 import type { CreatureState } from '@/game/types';
@@ -95,13 +96,15 @@ describe('Guerreiro Indígena: não morre — recua ferido e volta', () => {
     expect(read('src/game/state/game-store.ts')).toMatch(/if \(!isRetreating\(me\) && now - indBornAt\(me\.id, now\) >= IND\.ENGAGE_MS\) \{/);
   });
 
-  it('força pelo nível do herói: nv 5 ≈ 40%, nv 30 ≈ 65%, nv 65+ = 100% (não cresce acima)', () => {
-    expect(indigenaLevelK(5)).toBeCloseTo(0.4, 5);
-    expect(indigenaLevelK(30)).toBeCloseTo(0.65, 5);
-    expect(indigenaLevelK(65)).toBe(1);
-    expect(indigenaLevelK(105)).toBe(1);
-    expect(indigenaLevelK(1)).toBe(0.4);
+  it('força pela REGIÃO onde surge (regra de 07/10 — não pelo nível do herói): zona 1 ≈ 40%, 2 ≈ 65%, 3 ≈ 95%, 4–5 = 100%', () => {
+    const [z1, z2, z3, z4, z5] = ZONE_LEVEL;
+    expect(indigenaLevelK(z1)).toBe(0.4);
+    expect(indigenaLevelK(z2)).toBeCloseTo(0.65, 5);
+    expect(indigenaLevelK(z3)).toBeCloseTo(0.95, 5);
+    expect(indigenaLevelK(z4)).toBe(1); expect(indigenaLevelK(z5)).toBe(1);
     const gs = read('src/game/state/game-store.ts');
+    expect(gs).toMatch(/const lk = indigenaLevelK\(zoneLevel\(at\)\);/);
+    expect(gs).not.toMatch(/indigenaLevelK\(st\.player\.level\)/);
     expect(gs).toMatch(/const hp = Math\.round\(scaleEnemyHp\(def\.maxHp\) \* lk\);/);
     expect(gs).toMatch(/attackPower: Math\.round\(def\.attackPower \* lk\)/);
   });

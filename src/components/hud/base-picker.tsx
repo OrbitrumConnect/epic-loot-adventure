@@ -1,4 +1,6 @@
+import { useSyncExternalStore } from 'react';
 import { useGameStore } from '@/game/state/game-store';
+import { getBuildMode, subscribeBuildMode } from '@/components/world/build-mode';
 import { ITEMS } from '@/game/data/items';
 import { BASE_PIECES, pieceCost } from '@/game/data/base-pieces';
 import { getItemCount } from '@/game/systems/inventorySystem';
@@ -28,6 +30,7 @@ export function PiecePicker() {
   const iron = useCount('iron_ore');
   const have: Record<string, number> = { wood, stone, iron_ore: iron };
   const key = BUILD_MODE_KEY_LABEL;
+  const moving = useSyncExternalStore(subscribeBuildMode, () => getBuildMode().moving, () => false);
 
   if (!sel.active) return null;
 
@@ -43,6 +46,16 @@ export function PiecePicker() {
       <div className="build-picker" role="toolbar" aria-label="Modo de construção">
         <span className="build-hint">Modo de construção: escolha no mundo o quadrado de terreno para reivindicar.</span>
         <BaseTypePicker />
+        {close}
+      </div>
+    );
+  }
+
+  // MOVENDO a base (03/11): o cartão explica o passo (o "entregar materiais" de sempre confundia aqui)
+  if (moving) {
+    return (
+      <div className="build-picker" role="toolbar" aria-label="Movendo a base">
+        <span className="build-hint">🏠 Movendo a base: ande até o lugar novo (quadrado verde) e clique ou Enter. Tudo vai junto, no nível de agora.</span>
         {close}
       </div>
     );

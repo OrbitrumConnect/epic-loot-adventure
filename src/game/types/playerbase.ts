@@ -82,6 +82,8 @@ export type PlayerBaseState = {
   claimedAt: number;
   /** Última vez que a base sofreu dano, para a UI mostrar "sob ataque". */
   lastDamagedAt: number | null;
+  /** Última vez que a base foi MOVIDA (03/11) — espera entre mudanças. Ausente = nunca. */
+  movedAt?: number | undefined;
 };
 
 /** O que o modo de construção devolve ao arrastar um muro, antes de confirmar. */

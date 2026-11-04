@@ -79,6 +79,7 @@ export function retreatToForest<T extends { armor: number; behavior: string }>(c
 /** Quando nasceu (o id leva a hora). */
 export function indBornAt(id: string, fallback: number): number { const t = Number(id.slice(IND_PREFIX.length)); return Number.isFinite(t) && t > 0 ? t : fallback; }
 
-/** Força pelo NÍVEL do herói (03/11, 2ª — Pedro: "quem for lvl baixo vai passar sufoco"): nv 5 ≈ 40% (vida e golpe),
- *  nv 30 ≈ 65%, nv 65+ = 100% (o de sempre; acima disso não cresce). */
+/** Força pelo NÍVEL DA REGIÃO onde ele surge (03/11, 2ª — Pedro: "quem for lvl baixo vai passar sufoco"; e a regra selada
+ *  de 07/10: "a dificuldade pertence à REGIÃO, não ao jogador" — 1ª versão era pelo nível do herói, trocada com o OK dele).
+ *  `level` = `zoneLevel` do lugar: zona 1 (perto do início) ≈ 40% (vida e golpe), zona 2 ≈ 65%, zona 3 ≈ 95%, 4–5 = 100%. */
 export function indigenaLevelK(level: number): number { return Math.min(1, Math.max(0.4, 0.35 + Math.max(0, level) * 0.01)); }

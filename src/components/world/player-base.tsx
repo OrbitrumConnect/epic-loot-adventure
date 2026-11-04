@@ -554,7 +554,8 @@ function BuildLayer({
       st.claimCheck = checkClaim(origin, CLAIM_SIZE, { bases: [], heightAt: terrainHeight }, Date.now());
       drapeOverlay(overlay, origin);
       patchBuildMode({ phase: 'claim', claimOk: st.claimCheck.ok, claimMessage: st.claimCheck.message });
-      st.labelText = st.claimCheck.ok ? 'Terreno livre: clique para reivindicar' : st.claimCheck.message;
+      const moving = getBuildMode().moving;
+      st.labelText = st.claimCheck.ok ? (moving ? 'Lugar livre: clique (ou Enter) pra MOVER a base aqui' : 'Terreno livre: clique para reivindicar') : st.claimCheck.message;
       st.labelColor = st.claimCheck.ok ? '#9cf0b2' : '#ff8a7a';
     }
     return st.claimCheck;
@@ -562,12 +563,13 @@ function BuildLayer({
 
   const doClaim = () => {
     const gs = useGameStore.getState();
-    if (gs.playerBase) { console.log('[BASE] clique ignorado: você JÁ tem uma base (só pode 1).'); return; }
+    const moving = getBuildMode().moving && !!gs.playerBase; // MOVER a base (03/11): o mesmo quadrado, o mesmo clique
+    if (gs.playerBase && !moving) { console.log('[BASE] clique ignorado: você JÁ tem uma base (só pode 1).'); return; }
     if (!isBuildActive()) { console.log('[BASE] clique ignorado: modo de construção DESLIGADO (abra "Minha base" → Entrar no modo de construção).'); return; }
     if (layers.inside) { gs.setMessage('Saia da caverna pra reivindicar a base (ela fica na superfície).'); return; } // Zona Sul (31/10)
     const chk = updateClaimCandidate();
     if (!chk) { console.log('[BASE] clique ignorado: sem candidato de terreno sob o cursor.'); return; }
-    if (!chk.ok) { console.log('[BASE] terreno INVÁLIDO:', chk.message, chk.origin); gs.setMessage(`Não dá para reivindicar: ${chk.message}`); return; }
+    if (!chk.ok) { console.log('[BASE] terreno INVÁLIDO:', chk.message, chk.origin); gs.setMessage(`${moving ? 'Não dá pra mover a base pra cá' : 'Não dá para reivindicar'}: ${chk.message}`); return; }
     // PvP (fatia 3): não colar numa base INIMIGA — distância mínima de 3 bases (centro a centro).
     if (MP_ENABLED && useNet.getState().connected) {
       const net = useNet.getState();
@@ -583,6 +585,12 @@ function BuildLayer({
           return;
         }
       }
+    }
+    if (moving) {
+      console.log('[BASE] ✅ movendo a base pra', chk.origin);
+      if (gs.moveBase(chk.origin, terrainHeight)) setBuildActive(false); // movida: sai do modo (o resto da construção segue igual)
+      s.current.originKey = ''; s.current.labelText = '';
+      return;
     }
     console.log('[BASE] ✅ reivindicando terreno em', chk.origin);
     gs.claimBase(chk.origin, terrainHeight);    s.current.originKey = '';
@@ -683,7 +691,7 @@ function BuildLayer({
       const st = s.current;
       if (e.button === 2) { st.dragging = false; recomputePreview(true); return; }
       if (e.button !== 0) return;
-      if (!useGameStore.getState().playerBase) { doClaim(); return; }
+      if (!useGameStore.getState().playerBase || getBuildMode().moving) { doClaim(); return; }
       // Build MANUAL desligado (decisão selada): com base já reivindicada, a base
       // sobe ENTREGANDO recurso (botão de construir / martelo), não arrastando muro.
       useGameStore.getState().setMessage('Para construir, farme recursos e entregue na base (botão de construir).');
@@ -728,7 +736,9 @@ function BuildLayer({
       if (bm.active) {
         if (document.pointerLockElement) document.exitPointerLock();
         gl.domElement.style.cursor = 'crosshair';
-        gs.setMessage(base
+        gs.setMessage(base && bm.moving
+          ? '🏠 Mover a base: ande até o novo lugar (quadrado verde) e clique ou Enter. N cancela.'
+          : base
           ? 'Construção: arraste no chão para esticar. X peça, Z material, N sai.'
           : 'Construção: ande até o terreno, N sai, clique para reivindicar.');
       } else {
@@ -740,7 +750,7 @@ function BuildLayer({
     }
 
     let mode: Mode = 'off';
-    if (bm.active && !base) {
+    if (bm.active && (!base || bm.moving)) {
       const chk = updateClaimCandidate();
       mode = chk && chk.ok ? 'claim-ok' : 'claim-bad';
     } else if (base) {

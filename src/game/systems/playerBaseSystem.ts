@@ -254,6 +254,37 @@ export function claimBase(
 /** Tamanho padrão do claim, para quem não quiser importar de `data/`. */
 export const DEFAULT_CLAIM_SIZE = CLAIM_SIZE;
 
+/**
+ * MOVER A BASE (03/11, Pedro: "preciso de um jeito de mover a base de local — uma opção dentro de Minha base; move no
+ * nível atual que está para outro local"). A base INTEIRA anda junto: cada peça mantém tipo, rotação, vida, material e
+ * nível — só a posição muda (o mesmo deslocamento pra todas). Os ids são refeitos pela posição nova (o save exige ids
+ * únicos e todas as peças dentro do quadrado). O lugar novo passa pelas MESMAS regras de reivindicar (`checkClaim`, quem
+ * chama). Espera entre mudanças e bloqueios: `moveBaseProblem`.
+ */
+export const BASE_MOVE_COOLDOWN_MS = 10 * 60_000;
+export const BASE_MOVE_AFTER_HIT_MS = 60_000;
+export function moveBaseProblem(base: PlayerBaseState | null, now: number, inCombat: boolean): string | null {
+  if (!base) return 'Você ainda não tem base.';
+  if (inCombat) return 'Não dá pra mover a base no meio da horda.';
+  if (base.lastDamagedAt !== null && now - base.lastDamagedAt < BASE_MOVE_AFTER_HIT_MS) return 'A base foi atacada agora — espere 1 min pra mover.';
+  if (base.movedAt !== undefined && now - base.movedAt < BASE_MOVE_COOLDOWN_MS) {
+    return `Você moveu a base há pouco — de novo em ${Math.ceil((BASE_MOVE_COOLDOWN_MS - (now - base.movedAt)) / 60_000)} min.`;
+  }
+  return null;
+}
+export function moveBaseTo(base: PlayerBaseState, origin: GridCell, now: number): PlayerBaseState {
+  const dx = origin.gx - base.origin.gx, dz = origin.gz - base.origin.gz;
+  const seen = new Set<string>();
+  const pieces = base.pieces.map((p) => {
+    const cell = { gx: p.cell.gx + dx, gz: p.cell.gz + dz };
+    let id = pieceId(base.id, p.kind, cell);
+    for (let k = 2; seen.has(id); k++) id = `${pieceId(base.id, p.kind, cell)}_${k}`;
+    seen.add(id);
+    return { ...p, id, cell };
+  });
+  return { ...base, origin, worldPosition: squareCenter(origin, base.size), pieces, movedAt: now };
+}
+
 function pieceId(baseId: string, kind: BasePieceKind, cell: GridCell): string {
   return `${baseId}_${kind}_${cell.gx}_${cell.gz}`;
 }

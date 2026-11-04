@@ -37,6 +37,8 @@ export type BuildSnapshot = Readonly<{
   /** A prévia atual cabe no bolso? (false também quando não há células válidas). */
   previewAffordable: boolean;
   previewCost: readonly { itemId: string; quantity: number }[];
+  /** MOVENDO a base (03/11): o quadrado de reivindicar segue o jogador e o clique MOVE a base inteira pra lá. */
+  moving: boolean;
 }>;
 
 const INITIAL: BuildSnapshot = {
@@ -50,6 +52,7 @@ const INITIAL: BuildSnapshot = {
   previewBlocked: 0,
   previewAffordable: false,
   previewCost: [],
+  moving: false,
 };
 
 let snap: BuildSnapshot = INITIAL;
@@ -101,7 +104,12 @@ export function useBuildMode(): BuildSnapshot {
 export function setBuildActive(active: boolean): void {
   patchBuildMode(active
     ? { active: true }
-    : { active: false, previewCells: 0, previewBlocked: 0, previewAffordable: false, previewCost: [] });
+    : { active: false, moving: false, previewCells: 0, previewBlocked: 0, previewAffordable: false, previewCost: [] });
+}
+
+/** Começa a MOVER a base (o modo de construção liga junto); sair do modo cancela. */
+export function startBaseMove(): void {
+  patchBuildMode({ active: true, moving: true });
 }
 
 export function toggleBuildMode(): void {

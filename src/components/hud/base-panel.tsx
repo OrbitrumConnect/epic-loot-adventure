@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bed, BrickWall, Castle, DoorOpen, Hammer, Landmark, Lock, LockOpen, ShieldAlert, ShieldCheck, Swords, Warehouse } from 'lucide-react';
+import { Bed, BrickWall, Castle, DoorOpen, Hammer, Landmark, Lock, LockOpen, Move, ShieldAlert, ShieldCheck, Swords, Warehouse } from 'lucide-react';
+import { startBaseMove } from '@/components/world/build-mode';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
 import { BASE_TYPES } from '@/game/data/base-types';
@@ -15,7 +16,7 @@ import { MAX_TOWER_LEVEL, resolveTowerLevel, towerUpgradeCost } from '@/game/sys
 import { BaseTypePicker } from './base-type-picker';
 import type { BaseStage, BasePieceKind, PlayerBaseState } from '@/game/types/playerbase';
 import {
-  canOpenCityView, claimLandQuality, stageProgress, STAGE_ORDER, type LandQuality,
+  canOpenCityView, claimLandQuality, moveBaseProblem, stageProgress, STAGE_ORDER, type LandQuality,
 } from '@/game/systems/playerBaseSystem';
 import {
   BUILD_MODE_KEY_LABEL, setBuildMode, useBuildSelection,
@@ -95,6 +96,7 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
   const baseMetal = useGameStore(s => s.baseMetal);
   const playerLevel = useGameStore(s => s.player.level);
   const wave = useGameStore(s => s.wave.wave);
+  const wavePhase = useGameStore(s => s.wave.phase);
   const woodHave = getItemCount(inventory, 'wood');
   const stoneHave = getItemCount(inventory, 'stone');
   const build = useBuildSelection();
@@ -335,6 +337,19 @@ export function BasePanel({ onClose }: { onClose: () => void }) {
           aria-label={build.active ? 'Sair do modo de construção' : 'Entrar no modo de construção'}>
           <Hammer />{build.active ? 'Sair da construção' : 'Construir'}
         </Button>
+        {/* MOVER A BASE (03/11, Pedro: "um jeito de mover a base de local — uma opção dentro de Minha base; no nível atual
+            que está, pra outro local"): o quadrado verde segue você e o clique leva TUDO junto (mesmas regras do terreno) */}
+        {(() => {
+          const moveProblem = moveBaseProblem(base, now, wavePhase === 'combat');
+          return (
+            <Button variant="outline" disabled={!!moveProblem}
+              title={moveProblem ?? 'Mover a base inteira (tudo no nível de agora) pra outro lugar'}
+              aria-label={moveProblem ? `Mover base indisponível: ${moveProblem}` : 'Mover a base'}
+              onClick={() => { startBaseMove(); if (inCity) setMode('world'); onClose(); }}>
+              <Move />Mover base
+            </Button>
+          );
+        })()}
         <Button disabled={!unlocked}
           title={unlocked ? 'Abrir a cidade' : (cityLockReason(base) ?? '')}
           aria-label={unlocked ? 'Abrir a cidade' : 'Cidade trancada'}
