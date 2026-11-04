@@ -7,6 +7,7 @@ import { RECIPES } from '@/game/data/recipes';
 import { ItemSprite } from './item-sprite';
 import { canCraft, getMaterialStatus } from '@/game/systems/craftSystem';
 import { getItemCount } from '@/game/systems/inventorySystem';
+import { storageCount } from '@/game/systems/baseStorageSystem';
 import { isUnlocked, unlockLevel } from '@/game/systems/unlockSystem';
 import { isMobilityItem } from '@/game/systems/zonaSulKit';
 import { VEHICLE_COST } from '@/game/data/vehicle-costs';
@@ -88,9 +89,12 @@ export function ToolCrafting() {
 function VehicleRows() {
   const car = useZsVehicles((s) => s.car), ship = useZsVehicles((s) => s.ship);
   const inventory = useGameStore((s) => s.player.inventory);
+  const resources = useGameStore((s) => s.base.resources);
   const level = useGameStore((s) => s.player.level);
   const [msg, setMsg] = useState<{ kind: string; text: string } | null>(null);
   if (!zsVehicleApi.build) return null;
+  // (04/11) conta bolsa + ARMAZÉM (madeira/pedra pagam do armazém primeiro — spendItems); ferro só da bolsa
+  const count = (id: string) => getItemCount(inventory, id) + storageCount(resources, id);
   const rows = [
     { kind: 'car' as const, name: 'Carro voador', unlockId: 'flying_car', cost: VEHICLE_COST.flying_car, info: car, Icon: Car,
       where: 'nasce do seu lado', lost: 'Explodiu — construa outro' },
@@ -102,10 +106,10 @@ function VehicleRows() {
       {rows.map(({ kind, name, unlockId, cost, info, Icon, where, lost }) => {
         const locked = !isUnlocked(unlockId, level);
         const have = info?.state === 'ok';
-        const missing = cost.filter((c) => getItemCount(inventory, c.id) < c.n);
+        const missing = cost.filter((c) => count(c.id) < c.n);
         const ok = !locked && !have && missing.length === 0 && !(kind === 'ship' && !info);
         const reason = locked ? `Libera no nível ${unlockLevel(unlockId)}` : have ? 'Você já tem — está no mapa (M)'
-          : missing.length > 0 ? `Falta: ${missing.map((m) => `${m.n - getItemCount(inventory, m.id)} ${ITEMS[m.id]?.name ?? m.id}`).join(', ')}`
+          : missing.length > 0 ? `Falta: ${missing.map((m) => `${m.n - count(m.id)} ${ITEMS[m.id]?.name ?? m.id}`).join(', ')}`
           : kind === 'ship' && !info ? 'Sem âncora nesta sessão' : '';
         const status = have ? 'No mapa (M)' : info?.state === 'gone' ? lost : where;
         return (
@@ -114,7 +118,7 @@ function VehicleRows() {
             <div className="tool-craft-body">
               <strong>{name} <small className="tool-craft-status" data-have={have || undefined}>· {status}</small></strong>
               <span className="tool-craft-mats">
-                {cost.map((c) => { const n = getItemCount(inventory, c.id); return (
+                {cost.map((c) => { const n = count(c.id); return (
                   <span key={c.id} data-missing={n < c.n} title={`${ITEMS[c.id]?.name ?? c.id}: ${n} de ${c.n}`}>
                     <ItemSprite itemId={c.id} size={16} />{ITEMS[c.id]?.name ?? c.id} {Math.min(n, c.n)}/{c.n}
                   </span>

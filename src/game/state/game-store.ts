@@ -195,7 +195,8 @@ type GameActions = {
   cannonHit: (at: Position, radius: number) => number;
   /** Força de UMA bala de canhão deste jogador agora (a mesma do cannonHit) — também contra NAVIO inimigo (01/11). */
   cannonPower: () => number;
-  /** Gasta da BOLSA uma lista de itens (construir veículo, 01/11). Faltou algum: não gasta nada e devolve o que falta. */
+  /** Gasta uma lista de itens (construir veículo, 01/11). Faltou algum: não gasta nada e devolve o que falta.
+   *  (04/11) Paga como a base: ARMAZÉM primeiro (madeira/pedra/comida/essência), a bolsa completa; ferro só da bolsa. */
   spendItems: (cost: readonly { id: string; n: number }[]) => { ok: boolean; missing: { id: string; n: number }[] };
   /** Chuva de Flechas: poder de longe, flechas caem do céu e dão dano em ÁREA (raio escala
    *  com o nível, 5 m → 18 m; cooldown 15 s → 5 s). Precisa de arma de longe equipada.
@@ -1348,12 +1349,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     return Math.round((playerBaseAttack(p.level) + equipmentStats(p).damage) * CANNON_POWER * damageMultiplier(p));
   },
   spendItems: (cost) => {
-    const inv0 = get().player.inventory;
-    const missing = cost.filter((c) => getItemCount(inv0, c.id) < c.n).map((c) => ({ id: c.id, n: c.n - getItemCount(inv0, c.id) }));
-    if (missing.length) return { ok: false, missing };
-    let inv = inv0;
-    for (const c of cost) inv = removeItem(inv, c.id, c.n);
-    set((s) => ({ player: { ...s.player, inventory: inv } }));
+    // (04/11, Pedro: "meu armazém diz que tenho material mas não consigo buildar o barco — usa só do loot?") paga como a
+    // BASE: o ARMAZÉM primeiro (madeira/pedra/comida/essência) e a bolsa completa; ferro e o resto só da bolsa
+    const s = get();
+    const pay = payWithBaseStorage(s, (inv) => {
+      const missing = cost.filter((c) => getItemCount(inv, c.id) < c.n).map((c) => ({ id: c.id, n: c.n - getItemCount(inv, c.id) }));
+      if (missing.length) return { inventory: inv, missing };
+      let out = inv;
+      for (const c of cost) out = removeItem(out, c.id, c.n);
+      return { inventory: out, missing: [] as { id: string; n: number }[] };
+    });
+    if (pay.result.missing.length) return { ok: false, missing: pay.result.missing };
+    set((st) => ({ player: { ...st.player, inventory: pay.inventory }, base: { ...pay.base, resources: pay.resources } }));
     return { ok: true, missing: [] };
   },
   cannonHit: (at, radius) => {

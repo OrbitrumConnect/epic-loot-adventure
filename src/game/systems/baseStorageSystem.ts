@@ -66,6 +66,12 @@ export function splitSpend(
   return { inventory: inv, resources: res };
 }
 
+/** Quanto do item `itemId` o ARMAZÉM tem (0 pra item que não entra no armazém — ferro, ouro, munição…). */
+export function storageCount(resources: BaseResources, itemId: string): number {
+  const key = STORAGE_OF.get(itemId);
+  return key ? Math.max(0, Math.floor(resources[key] ?? 0)) : 0;
+}
+
 /** Base caiu na horda: o armazém perde `HORDE_STORAGE_LOSS` de cada recurso (arredonda pra baixo o que fica). */
 export function hordeStorageLoss(resources: BaseResources): BaseResources {
   const out = { ...resources };

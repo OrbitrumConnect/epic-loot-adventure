@@ -508,7 +508,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
           useGameStore.getState().setMessage('⚓ No timão! W/S vela · A/D leme · segure o botão direito pra mirar · clique = canhões · E solta o timão');
         }
       } else if (ship && shipAct === 'construir' && warshipDock.at) {
-        // o MEU navio afundou: constrói outro na âncora com recurso da BOLSA (tabela dos veículos, 01/11)
+        // o MEU navio afundou: constrói outro na âncora (tabela dos veículos, 01/11; 04/11: armazém primeiro, a bolsa completa)
         const r = useGameStore.getState().spendItems(WARSHIP.BUILD_COST);
         if (!r.ok) useGameStore.getState().setMessage('🔨 Pra construir o navio falta: ' + costText(r.missing));
         else {
