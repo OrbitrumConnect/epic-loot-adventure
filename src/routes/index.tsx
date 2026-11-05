@@ -46,7 +46,8 @@ import { UPGRADE_CARDS } from '@/game/data/base-upgrades';
 import { MusicPlayer } from '@/components/MusicPlayer';
 import { audioManager } from '@/game/audio/audio-manager';
 import { setBuildActive } from '@/components/world/build-mode';
-import type { ObjectiveKind, ObjectiveStatus } from '@/game/types';
+import type { ObjectiveKind, ObjectiveStatus, ObjectiveUntil } from '@/game/types';
+import { clearRoutePick, setRoutePick, useRoutePick, type RoutePickKind } from '@/components/hud/route-pick';
 import { usePlayerForPage, useUiForPage } from '@/game/state/player-sans-position';
 import {
   clearObjectives, removeObjective, reorderObjective, setAutoMode, toggleAutoMode,
@@ -162,8 +163,17 @@ const OBJECTIVE_ICON: Record<ObjectiveKind, React.ComponentType<React.SVGProps<S
   hunt_creature: Swords,
   gather_node: Pickaxe,
   hunt_area: Crosshair,
+  farm_area: Leaf,
   travel: Compass,
 };
+
+/** Palette do builder de rotina: os 4 tipos de passo que o jogador pode montar. */
+const STEP_KINDS: { kind: RoutePickKind; label: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[] = [
+  { kind: 'farm_area', label: 'Farmar zona', icon: Leaf },
+  { kind: 'hunt_area', label: 'Caçar zona', icon: Crosshair },
+  { kind: 'travel', label: 'Ir até ponto', icon: Compass },
+  { kind: 'clear_camp', label: 'Limpar acampamento', icon: Tent },
+];
 
 const OBJECTIVE_STATUS: Record<ObjectiveStatus, string> = {
   queued: 'Na fila',
@@ -308,6 +318,13 @@ function Index() {
   const targetId = useTargetIdState();
   const idleMode = objectives.mode === 'idle';
 
+  // BUILDER de rotina (painel "Objetivos"): tipo do passo + critério de término em montagem.
+  const [stepKind, setStepKind] = useState<RoutePickKind>('farm_area');
+  const [untilMode, setUntilMode] = useState<ObjectiveUntil['mode']>('bag_full');
+  const [untilMinutes, setUntilMinutes] = useState(3);
+  const [untilCount, setUntilCount] = useState(10);
+  const routePick = useRoutePick();
+
   // O piloto escreve o estado fora do React (laço de quadro). Polling leve.
   const [pilot, setPilot] = useState<PilotStatus>(() => ({ ...readPilotStatus() }));
   useEffect(() => {
@@ -411,6 +428,21 @@ function Index() {
   const startRaid = useGameStore(s => s.startRaid);
   const exitToWorld = useGameStore(s => s.exitToWorld);
   const setPanelMessage = useGameStore(s => s.setPanelMessage);
+
+  // Builder de rotina: só farm_area/hunt_area têm critério de término.
+  const stepHasUntil = stepKind === 'farm_area' || stepKind === 'hunt_area';
+  const buildStepUntil = (): ObjectiveUntil | undefined => {
+    if (!stepHasUntil) return undefined;
+    if (untilMode === 'time') return { mode: 'time', durationMs: Math.max(1, untilMinutes) * 60000 };
+    if (untilMode === 'items') return { mode: 'items', count: Math.max(1, untilCount) };
+    return { mode: 'bag_full' };
+  };
+  const untilLabel = (u?: ObjectiveUntil): string => {
+    if (!u) return '';
+    if (u.mode === 'time') return `${Math.round((u.durationMs ?? 0) / 60000)} min`;
+    if (u.mode === 'items') return `${u.count ?? 0} itens`;
+    return 'até encher a bolsa';
+  };
 
   useEffect(() => {
     if (!player.dead) { setDeathCountdown(0); return; }
@@ -1055,6 +1087,71 @@ function Index() {
                       </Button>
                     </div>
 
+                    <div className="obj-builder">
+                      <strong className="obj-builder-title">Adicionar tarefa</strong>
+                      <div className="obj-builder-kinds" role="group" aria-label="Tipo da tarefa">
+                        {STEP_KINDS.map(({ kind, label, icon: KindIcon }) => (
+                          <Button key={kind} variant={stepKind === kind ? 'default' : 'outline'} size="sm"
+                            className="obj-builder-kind" aria-pressed={stepKind === kind}
+                            title={label} aria-label={label}
+                            onClick={() => setStepKind(kind)}>
+                            <KindIcon />{label}
+                          </Button>
+                        ))}
+                      </div>
+
+                      {stepHasUntil && (
+                        <div className="obj-builder-until">
+                          <span className="obj-builder-label">Terminar quando:</span>
+                          <div className="obj-builder-radios" role="radiogroup" aria-label="Critério de término">
+                            <label><input type="radio" name="obj-until" checked={untilMode === 'bag_full'}
+                              onChange={() => setUntilMode('bag_full')} />Bolsa cheia</label>
+                            <label><input type="radio" name="obj-until" checked={untilMode === 'time'}
+                              onChange={() => setUntilMode('time')} />Tempo</label>
+                            <label><input type="radio" name="obj-until" checked={untilMode === 'items'}
+                              onChange={() => setUntilMode('items')} />Nº de itens</label>
+                          </div>
+                          {untilMode === 'time' && (
+                            <label className="obj-builder-num">Minutos
+                              <input type="number" min={1} max={120} value={untilMinutes}
+                                aria-label="Minutos até terminar"
+                                onChange={e => setUntilMinutes(Math.max(1, Number(e.target.value) || 1))} />
+                            </label>
+                          )}
+                          {untilMode === 'items' && (
+                            <label className="obj-builder-num">Itens
+                              <input type="number" min={1} max={999} value={untilCount}
+                                aria-label="Número de itens até terminar"
+                                onChange={e => setUntilCount(Math.max(1, Number(e.target.value) || 1))} />
+                            </label>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="obj-builder-actions">
+                        {routePick ? (
+                          <>
+                            <span className="obj-builder-picking">
+                              {routePick.kind === 'clear_camp'
+                                ? 'Clique num acampamento no mapa…'
+                                : 'Clique um ponto no mapa…'}
+                            </span>
+                            <Button variant="outline" size="sm" title="Cancelar seleção" aria-label="Cancelar seleção"
+                              onClick={() => clearRoutePick()}><X />Cancelar</Button>
+                          </>
+                        ) : (
+                          <Button size="sm" className="obj-builder-pick"
+                            title="Escolher o local no mapa" aria-label="Escolher o local no mapa"
+                            onClick={() => { const u = buildStepUntil(); setRoutePick(u ? { kind: stepKind, until: u } : { kind: stepKind }); setPanel('map'); }}>
+                            <Map />Escolher no mapa
+                          </Button>
+                        )}
+                      </div>
+                      {routePick && (
+                        <small className="obj-builder-hint">O passo entra na fila ao clicar; a rotina só roda quando você ligar o piloto.</small>
+                      )}
+                    </div>
+
                     <div className="obj-list">
                       {objectives.items.length === 0 && (
                         <p className="obj-empty">
@@ -1070,7 +1167,7 @@ function Index() {
                             <Icon />
                             <div className="obj-text">
                               <strong>{obj.label}</strong>
-                              <small>{OBJECTIVE_STATUS[obj.status]}</small>
+                              <small>{OBJECTIVE_STATUS[obj.status]}{obj.until ? ` · ${untilLabel(obj.until)}` : ''}</small>
                             </div>
                             <div className="obj-actions">
                               <Button variant="ghost" size="icon" title="Subir na fila" aria-label="Subir na fila"

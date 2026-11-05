@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type {
   PlayerState, CreatureState, ResourceNode, DeathBag, UIState, BaseState, BaseResult, BuildingId,
-  CampState, ObjectiveQueueState, ObjectiveKind, AutoMode, AutoSnapshot, AutoIntent, Position,
+  CampState, ObjectiveQueueState, ObjectiveKind, ObjectiveUntil, AutoMode, AutoSnapshot, AutoIntent, Position,
   HarvestNodeState, FeedbackEvent, InventoryState,
 } from '../types';
 import { combineStorage, hordeStorageLoss, splitSpend } from '../systems/baseStorageSystem';
@@ -297,7 +297,18 @@ type GameActions = {
   pickUpgrade: (id: UpgradeId) => void;
   /** A vista de cidade só abre com o perímetro fechado (`clash`). */
   canOpenCityView: () => boolean;
-  addObjective: (kind: ObjectiveKind, targetId: string | null) => void;
+  /** `opts` (retrocompatível): ponto arbitrário (`position`), raio da zona e
+   *  critério de término (`until`). Callers antigos passam só kind+targetId. */
+  addObjective: (
+    kind: ObjectiveKind,
+    targetId: string | null,
+    opts?: { position?: Position; radius?: number; until?: ObjectiveUntil },
+  ) => void;
+  /** Farmar recursos dentro de uma zona circular. `until` = critério de término
+   *  (ausente = bolsa cheia). */
+  addFarmArea: (x: number, z: number, radius?: number, until?: ObjectiveUntil) => void;
+  /** Viajar até um ponto arbitrário do mapa. */
+  addTravelPoint: (x: number, z: number) => void;
   removeObjective: (objectiveId: string) => void;
   clearObjectives: () => void;
   reorderObjective: (objectiveId: string, direction: -1 | 1) => void;
@@ -311,8 +322,9 @@ type GameActions = {
   /** O executor do piloto (auto-pilot.tsx) realimenta a intenção do tique pra dar
    *  histerese à decisão do tique seguinte (banda morta, alvo pegajoso). */
   recordPilotIntent: (intent: AutoIntent | null) => void;
-  /** `radius` opcional (Zona Sul: raio grande da zona). Ausente = HUNT_AREA_RADIUS de sempre. */
-  addHuntArea: (x: number, z: number, radius?: number) => void;
+  /** `radius` opcional (Zona Sul: raio grande da zona). Ausente = HUNT_AREA_RADIUS de sempre.
+   *  `until` opcional = critério de término (ausente = legado eterno). */
+  addHuntArea: (x: number, z: number, radius?: number, until?: ObjectiveUntil) => void;
   drinkPotion: () => void;
   /** Zona Sul: entrega a prancha (1ª entrada) — mochila + espaço livre da hotbar. */
   grantSurfboard: () => void;
@@ -1760,6 +1772,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     set({
       player: { ...state.player, inventory: updatedInv },
       resources,
+      ...(harvested > 0 ? { objectives: bumpObjectiveProgress(state.objectives, harvested) } : {}),
       ui: { ...state.ui, message: `+${harvested} ${itemName} coletado.` },
     });
   },
@@ -2629,20 +2642,32 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   // Fila de objetivos e piloto automático
   // -------------------------------------------------------------------------
 
-  addObjective: (kind, targetId) => {
+  addObjective: (kind, targetId, opts) => {
     const state = get();
-    const resolved = resolveObjectiveTarget(state, kind, targetId);
+    let resolved = resolveObjectiveTarget(state, kind, targetId);
+    // Ponto arbitrário: `travel`/`farm_area` com posição explícita vencem o alvo derivado.
+    if (opts?.position && (kind === 'travel' || kind === 'farm_area')) {
+      const px = Math.round(opts.position.x);
+      const pz = Math.round(opts.position.z);
+      resolved = kind === 'travel'
+        ? { position: opts.position, label: 'Ir até o ponto' }
+        : { position: opts.position, label: `Farmar na região ${describeRegion(px, pz)} (${px}, ${pz})` };
+    }
     if (!resolved) {
       set(s => ({ ui: { ...s.ui, message: 'Alvo inválido para a fila.' } }));
       return;
     }
     if (hasPendingObjective(state.objectives, kind, targetId)) {
-      set(s => ({ ui: { ...s.ui, message: `${resolved.label} já está na fila.` } }));
+      set(s => ({ ui: { ...s.ui, message: `${resolved!.label} já está na fila.` } }));
       return;
     }
     const objectives = addQueueObjective(
       state.objectives,
-      { kind, targetId, position: resolved.position, label: resolved.label },
+      {
+        kind, targetId, position: resolved.position, label: resolved.label,
+        ...(opts?.radius != null ? { radius: opts.radius } : {}),
+        ...(opts?.until ? { until: opts.until } : {}),
+      },
       Date.now(),
     );
     set({ objectives, ui: { ...state.ui, message: `${resolved.label}: entrou na fila.` } });
@@ -2820,7 +2845,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (pruned !== state.feedback) set({ feedback: pruned });
   },
 
-  addHuntArea: (x, z, radius) => {
+  addHuntArea: (x, z, radius, until) => {
     const state = get();
     const cx = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, x)) : clampX(x));
     const cz = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, z)) : clampZ(z));
@@ -2834,10 +2859,47 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const areaRadius = radius != null && radius > 0 ? Math.round(radius) : HUNT_AREA_RADIUS;
     const objectives = addQueueObjective(
       state.objectives,
-      { kind: 'hunt_area', targetId, position: { x: cx, z: cz }, label, radius: areaRadius },
+      { kind: 'hunt_area', targetId, position: { x: cx, z: cz }, label, radius: areaRadius, ...(until ? { until } : {}) },
       Date.now(),
     );
     set({ objectives, ui: { ...state.ui, message: `${label}: entrou na fila.` } });
+  },
+
+  addFarmArea: (x, z, radius, until) => {
+    const state = get();
+    const cx = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, x)) : clampX(x));
+    const cz = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, z)) : clampZ(z));
+    const targetId = `area_${cx}_${cz}`;
+    const label = `Farmar na região ${describeRegion(cx, cz)} (${cx}, ${cz})`;
+    if (hasPendingObjective(state.objectives, 'farm_area', targetId)) {
+      set(s => ({ ui: { ...s.ui, message: 'Essa região de farm já está na fila.' } }));
+      return;
+    }
+    const areaRadius = radius != null && radius > 0 ? Math.round(radius) : HUNT_AREA_RADIUS;
+    const objectives = addQueueObjective(
+      state.objectives,
+      { kind: 'farm_area', targetId, position: { x: cx, z: cz }, label, radius: areaRadius, ...(until ? { until } : {}) },
+      Date.now(),
+    );
+    set({ objectives, ui: { ...state.ui, message: `${label}: entrou na fila.` } });
+  },
+
+  addTravelPoint: (x, z) => {
+    const state = get();
+    const px = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, x)) : clampX(x));
+    const pz = Math.round(isClassicWorld() ? Math.max(-WORLD_HALF, Math.min(WORLD_HALF, z)) : clampZ(z));
+    const targetId = `point_${px}_${pz}`;
+    const label = 'Ir até o ponto';
+    if (hasPendingObjective(state.objectives, 'travel', targetId)) {
+      set(s => ({ ui: { ...s.ui, message: 'Esse ponto já está na fila.' } }));
+      return;
+    }
+    const objectives = addQueueObjective(
+      state.objectives,
+      { kind: 'travel', targetId, position: { x: px, z: pz }, label },
+      Date.now(),
+    );
+    set({ objectives, ui: { ...state.ui, message: `${label} (${px}, ${pz}): entrou na fila.` } });
   },
 
   harvestAt: (nodeId) => {
@@ -2880,6 +2942,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       player: syncCarry(granted.player),
       feedback: pushEvents(state.feedback, drafts, stamp),
       harvestNodes,
+      ...(result.harvested > 0 ? { objectives: bumpObjectiveProgress(state.objectives, result.harvested) } : {}),
       ui: { ...state.ui, message: granted.message ?? `${result.message} +${result.xp} XP.` },
     });
   },
@@ -3008,6 +3071,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         creatures: ticked.creatures,
         camps: ticked.camps,
         resources: [...state.resources, ...(() => { const fits = harvestFitsChecker(player.inventory); return state.harvestNodes.map(n => ({ ...n, canCollect: fits(n) })); })()],
+        // Bolsa cheia? (peso no limite OU sem slot que caiba) — usado por `until: bag_full`.
+        gatherCapacity: getWeight(player.inventory) < player.inventory.maxWeight && player.inventory.slots.some(slot => {
+          if (slot.itemId === null) return true;
+          const item = ITEMS[slot.itemId];
+          return Boolean(item && slot.quantity < item.maxStack);
+        }),
       },
       now,
     );
@@ -3195,6 +3264,7 @@ function resolveObjectiveTarget(
   }
 
   if (kind === 'hunt_area') return null; // criada por `addHuntArea`
+  if (kind === 'farm_area') return null; // criada por `addFarmArea` (ou addObjective com `opts.position`)
 
   if (kind === 'hunt_creature') {
     const creature = state.creatures.find(c => c.id === targetId);
@@ -3229,6 +3299,19 @@ function resolveObjectiveTarget(
   }
   if (targetId != null) return null;
   return { position: { x: PLAYER_SPAWN.x, z: PLAYER_SPAWN.z }, label: 'Voltar para a base' };
+}
+
+/** Soma `amount` ao `progress` do objetivo ATIVO de zona (`farm_area`/`hunt_area`)
+ *  quando o critério de término é `items`. Noutro caso devolve a fila intacta. */
+function bumpObjectiveProgress(queue: ObjectiveQueueState, amount: number): ObjectiveQueueState {
+  if (amount <= 0) return queue;
+  const active = queue.items.find(i => i.status === 'active');
+  if (!active || (active.kind !== 'farm_area' && active.kind !== 'hunt_area')) return queue;
+  if (active.until?.mode !== 'items') return queue;
+  return {
+    ...queue,
+    items: queue.items.map(i => (i === active ? { ...i, progress: (i.progress ?? 0) + amount } : i)),
+  };
 }
 
 function applyBaseResult(

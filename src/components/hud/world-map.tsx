@@ -4,6 +4,7 @@ import { CREATURES } from '@/game/data/creatures';
 import { PLAYER_SPAWN } from '@/game/data/camps';
 import type { CampState, CreatureState, HarvestNodeState, ObjectiveKind } from '@/game/types';
 import { addObjective, setAutoMode } from '@/components/world/objective-bridge';
+import { clearRoutePick, getRoutePick, useRoutePick } from './route-pick';
 import { BASE_GRID } from '@/game/types/playerbase';
 import { fromView, makeFrame, toView, WORLD_HALF, type MapFrame } from './map-transform';
 
@@ -130,6 +131,7 @@ export function WorldMap({ size }: WorldMapProps) {
   const pingRef = useRef<{ x: number; z: number; t: number } | null>(null);
   const [hoverText, setHoverText] = useState('');
   const [confirm, setConfirm] = useState('');
+  const routePick = useRoutePick();
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const drawRef = useRef<() => void>(() => {});
 
@@ -465,6 +467,34 @@ export function WorldMap({ size }: WorldMapProps) {
   const onClick = (e: React.MouseEvent) => {
     const [x, y] = localPoint(e);
     const hit = hitTest(x, y);
+    // MODO BUILDER: o passo foi montado no painel "Objetivos"; este clique só ENFILEIRA
+    // (não liga o idle — o jogador liga a rotina depois). Pode cair no chão (ponto arbitrário)
+    // ou num acampamento (clear_camp).
+    const pick = getRoutePick();
+    if (pick) {
+      const store = useGameStore.getState();
+      if (pick.kind === 'clear_camp') {
+        if (hit?.type === 'camp') {
+          addObjective('clear_camp', hit.id);
+          clearRoutePick();
+          say(`Na fila: limpar ${head(hit.label)} · ligue o piloto quando quiser`);
+        } else {
+          say('Clique num acampamento (losango) para a limpeza.');
+        }
+        return;
+      }
+      const pt = fromView(frameRef.current, x, y);
+      if (!pt) { say('Clique dentro do mapa.'); return; }
+      if (pick.kind === 'farm_area') store.addFarmArea(pt.x, pt.z, undefined, pick.until);
+      else if (pick.kind === 'hunt_area') store.addHuntArea(pt.x, pt.z, undefined, pick.until);
+      else store.addTravelPoint(pt.x, pt.z);
+      clearRoutePick();
+      pingRef.current = { x: pt.x, z: pt.z, t: Date.now() };
+      const what = pick.kind === 'farm_area' ? 'Farmar' : pick.kind === 'hunt_area' ? 'Caçar' : 'Ir até';
+      say(`Na fila: ${what} (${Math.round(pt.x)}, ${Math.round(pt.z)}) · ligue o piloto quando quiser`);
+      drawRef.current();
+      return;
+    }
     if (!hit) return;
     const queue = (kind: ObjectiveKind, id: string, text: string) => {
       addObjective(kind, id);
@@ -495,8 +525,12 @@ export function WorldMap({ size }: WorldMapProps) {
         onClick={large ? onClick : undefined}
       />
       {large && (
-        <div className="world-map-status" aria-live="polite">
-          {confirm ? <strong>{confirm}</strong> : (hoverText || 'Passe o mouse sobre o mapa. Clique no chão para caçar na região.')}
+        <div className="world-map-status" aria-live="polite" data-picking={routePick ? true : undefined}>
+          {routePick
+            ? <strong>{routePick.kind === 'clear_camp'
+                ? 'Clique num acampamento para adicionar à rotina.'
+                : 'Clique no mapa para adicionar o passo à rotina.'}</strong>
+            : confirm ? <strong>{confirm}</strong> : (hoverText || 'Passe o mouse sobre o mapa. Clique no chão para caçar na região.')}
         </div>
       )}
     </div>

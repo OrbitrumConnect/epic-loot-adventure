@@ -6,6 +6,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
 import { setAutoMode } from '@/components/world/objective-bridge';
+import { clearRoutePick, getRoutePick, useRoutePick } from '@/components/hud/route-pick';
 import { CREATURES } from '@/game/data/creatures';
 import { ITEMS } from '@/game/data/items';
 import { creatureLevel, creatureXp } from '@/game/systems/progressionSystem';
@@ -150,10 +151,34 @@ export function ZsMap({ onClose }: ZsMapProps) {
     onClose();
   };
 
+  const routePick = useRoutePick();
+
+  // MODO BUILDER: clicar numa zona ENFILEIRA o passo montado no painel "Objetivos"
+  // (não liga o idle). Usa o centro da zona e o raio dela (com folga, como `farmZsZone`).
+  // Retorna true se consumiu o clique. clear_camp não cabe aqui (acampamentos não são
+  // zonas) — segue a seleção normal.
+  const pickZone = (zone: ZsZone): boolean => {
+    const pick = getRoutePick();
+    if (!pick || pick.kind === 'clear_camp') return false;
+    const store = useGameStore.getState();
+    const radius = Math.max(HUNT_AREA_RADIUS, Math.round(zone.radius) + 8);
+    if (pick.kind === 'farm_area') store.addFarmArea(zone.center.x, zone.center.z, radius, pick.until);
+    else if (pick.kind === 'hunt_area') store.addHuntArea(zone.center.x, zone.center.z, radius, pick.until);
+    else store.addTravelPoint(zone.center.x, zone.center.z);
+    clearRoutePick();
+    onClose();
+    return true;
+  };
+
   return (
     <div className="zs-map-wrap">
       {/* MAPA */}
       <div className="zs-map-col">
+        {routePick && routePick.kind !== 'clear_camp' && (
+          <p className="zs-map-hint" role="status" aria-live="polite">
+            Clique numa zona para adicionar o passo à rotina.
+          </p>
+        )}
         <div className="zs-map" role="application" aria-label="Mapa da Zona Sul do Rio. Escolha uma zona para ver os bichos.">
           <img className="zs-map-bg" src={ZS_TERRAIN.url} alt="Relevo da Zona Sul do Rio de Janeiro" draggable={false} />
           {zones.map(zone => {
@@ -171,7 +196,7 @@ export function ZsMap({ onClose }: ZsMapProps) {
                 title={`${zone.name} · nível ${zone.levelMin}–${zone.levelMax} · ${zone.creatureCount} bichos`}
                 aria-label={`${zone.name}, nível ${zone.levelMin} a ${zone.levelMax}, ${zone.creatureCount} criaturas.`}
                 aria-pressed={active}
-                onClick={() => setSelectedId(zone.id)}
+                onClick={() => { if (!pickZone(zone)) setSelectedId(zone.id); }}
               >
                 <span className="zs-zone-ring" aria-hidden="true" />
                 <span className="zs-zone-pin"><Icon strokeWidth={1.8} /></span>
