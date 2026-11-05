@@ -25,7 +25,7 @@ import { setBigCreatureRadius } from '@/game/systems/bigCreatureRadius';
 import { queueKnockback } from '@/game/systems/knockbackSystem';
 import { activeGrab, grabTicksDue, startHold } from '@/game/systems/grabSystem';
 import {
-  CANIBAL, CANIBAL_AT, CANIBAL_BODY_ID, canibalPhaseStep, canibalRootId, nearestInArena, newCanibal, pushAway, rootBase,
+  CANIBAL, CANIBAL_AT, CANIBAL_BODY_ID, CANIBAL_CRIA_PREFIX, canibalPhaseStep, canibalRootId, criaCount, nearestInArena, newCanibal, pushAway, rootBase,
   rootLean, rootStep, rootTarget, slamHits, zsCanibal, type CanibalPhase,
 } from './zs-canibal-boss';
 import { setBossBarFor, zsCave } from './zs-context';
@@ -137,7 +137,7 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
           useGameStore.setState((s) => ({ creatures: [...s.creatures.filter((c) => !c.id.startsWith('zs_canibal_')), ...fresh] }));
           if (heroDist < NEAR_M) store.setMessage(`👹 O CANIBAL GIGANTE saiu do buraco! (recomendado nível ${CANIBAL.REC_LEVEL}+ — só a BAZUCA fura a pele dele; em grupo, menos)`);
         }
-        if (C.phase === 'sleep') useGameStore.setState((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith('zs_canibal_')) }));
+        if (C.phase === 'sleep') useGameStore.setState((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith('zs_canibal_') && !c.id.startsWith(CANIBAL_CRIA_PREFIX)) }));
       }
       const crs = useGameStore.getState().creatures;
       const bodyCr = crs.find((c) => c.id === CANIBAL_BODY_ID);
@@ -154,7 +154,22 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
         // RAÍZES: cada viva escolhe o mais perto e chicoteia; cortada = cai
         for (const r of C.roots) {
           const cr = crs.find((c) => c.id === canibalRootId(r.i));
-          if (r.alive && cr && cr.behavior === 'dead') { r.alive = false; r.diedAt = now; r.slam = null; }
+          if (r.alive && cr && cr.behavior === 'dead') {
+            r.alive = false; r.diedAt = now; r.slam = null;
+            // CRIAS: a raiz cortada solta canibais do buraco — cada vez mais (2, 3, 4 … até 6; teto de 12 vivas)
+            const cut = C.roots.filter((q) => !q.alive).length;
+            const alive = crs.filter((c) => c.id.startsWith(CANIBAL_CRIA_PREFIX) && c.behavior !== 'dead').length;
+            const n = criaCount(cut, alive), def = CREATURES['raider_cannibal'];
+            if (n > 0 && def) {
+              const b = rootBase(r.i), fresh: CreatureState[] = [];
+              for (let k = 0; k < n; k++) {
+                const a = (k / n) * Math.PI * 2 + r.i, d = 5 + (k % 3) * 2.5, hp = Math.round(def.maxHp * CANIBAL.CRIA_HP_K);
+                fresh.push({ id: `${CANIBAL_CRIA_PREFIX}${r.i}_${k}_${now}`, speciesId: def.id, name: 'Cria do Canibal', hp, maxHp: hp, attackPower: Math.round(def.attackPower * CANIBAL.CRIA_ATK_K), armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0, position: { x: Math.round((b.x + Math.sin(a) * d) * 10) / 10, z: Math.round((b.z + Math.cos(a) * d) * 10) / 10 }, behavior: 'chase', lootTable: [], respawnAt: null });
+              }
+              useGameStore.setState((s) => ({ creatures: [...s.creatures, ...fresh] }));
+              if (heroDist < NEAR_M) useGameStore.getState().setMessage(`🔪 Raiz cortada! ${n} crias do Canibal sobem do buraco! (${cut}/${CANIBAL.ROOTS})`);
+            }
+          }
           if (!r.alive) continue;
           if (!r.slam && now / 1000 >= r.nextAt) {
             const tg = rootTarget(r.i, down);

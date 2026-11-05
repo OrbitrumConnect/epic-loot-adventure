@@ -36,6 +36,7 @@ import {
 import { type ZsTerrain, zsHeightAt, zsWaterYAt } from './zs-terrain-data';
 import { omenTarget, zsOmen } from './zs-omen';
 import { setBossBarFor, type ZsBossBar } from './zs-context';
+import { setBigCreatureRadius } from '@/game/systems/bigCreatureRadius';
 import { ZsKrakenStorm } from './zs-kraken-storm';
 import { zsNavigable, zsSwimmable } from './zs-world-profile';
 
@@ -530,6 +531,9 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     const bodyCr = K.bodyOut ? useGameStore.getState().creatures.find((c) => c.id === KRAKEN_BODY_ID) : undefined;
     const bodyAlive = !!bodyCr && bodyCr.behavior !== 'dead' && visible;
     creatureAnchors.set(KRAKEN_BODY_ID, { x: K.x, y: waterY, z: K.z, top: outH - sink, alive: bodyAlive, r: KRAKEN_BOSS.BODY_R });
+    // 05/11 (bazuca): a explosão desconta o corpo (míssil na "pele" do Kraken conta) — e os tentáculos (~15 m em volta da base)
+    setBigCreatureRadius(KRAKEN_BODY_ID, KRAKEN_BOSS.BODY_R);
+    for (let i = 0; i < KRAKEN_BOSS.TENTACLES; i++) setBigCreatureRadius(krakenTentId(i), 15);
     krakenShapes.body = visible && K.phase !== 'dead' ? { x: K.x, z: K.z, y0: waterY - 4, y1: waterY + outH - sink, r: KRAKEN_BOSS.BODY_R * 0.8, id: bodyAlive ? KRAKEN_BODY_ID : '' } : null;
     bodyBar.group.position.set(K.x, waterY + outH + 6 - sink, K.z);
     bodyBar.set(bodyCr ? bodyCr.hp / bodyCr.maxHp : 0, bodyAlive, cam);

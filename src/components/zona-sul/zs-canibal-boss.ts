@@ -57,7 +57,23 @@ export const CANIBAL = {
   BODY_PUSH_M: 14,
   RESPAWN_MS: 20 * 60_000,
   REC_LEVEL: 60,
+  /** CRIAS (05/11, Pedro: "deve vir hordas iguais às crias do Kraken — cada tentáculo vem, aumentando a horda cada vez mais
+   *  que mata"): cada raiz cortada solta canibais do buraco — 2 na 1ª, +1 a cada raiz (até 6); no máximo 12 vivas */
+  CRIA_FIRST: 2,
+  CRIA_MAX_EACH: 6,
+  CRIA_MAX_ALIVE: 12,
+  /** crias mais fracas que o Canibal comum (vida e golpe) */
+  CRIA_HP_K: 0.5,
+  CRIA_ATK_K: 0.6,
 } as const;
+
+/** prefixo das crias: `zs_cave_` = nascem no chão da caverna e a IA anda lá dentro; não renascem sozinhas */
+export const CANIBAL_CRIA_PREFIX = 'zs_cave_cria_';
+/** Quantas crias sobem quando a `cut`-ésima raiz cai (1ª = 2, 2ª = 3 …, até 6), sem passar do teto de vivas. */
+export function criaCount(cut: number, aliveNow: number): number {
+  const want = Math.min(CANIBAL.CRIA_MAX_EACH, CANIBAL.CRIA_FIRST + Math.max(0, cut - 1));
+  return Math.max(0, Math.min(want, CANIBAL.CRIA_MAX_ALIVE - aliveNow));
+}
 
 export const CANIBAL_PREFIX = 'zs_canibal_';
 export const CANIBAL_BODY_ID = 'zs_canibal_boss';

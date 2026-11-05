@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  CANIBAL, CANIBAL_AT, CANIBAL_BODY_ID, canibalPhaseStep, canibalRootId, nearestInArena, newCanibal, pushAway, rootBase,
+  CANIBAL, CANIBAL_AT, CANIBAL_BODY_ID, CANIBAL_CRIA_PREFIX, canibalPhaseStep, canibalRootId, criaCount, nearestInArena, newCanibal, pushAway, rootBase,
   rootLean, rootStep, rootTarget, ROOT_SLAM_TOTAL, slamHits,
 } from '@/components/zona-sul/zs-canibal-boss';
 import { CAVE_LAIR } from '@/components/zona-sul/zs-cave';
@@ -80,5 +80,24 @@ describe('Canibal gigante do covil', () => {
     expect(g).toContain("|| c.id.startsWith('zs_canibal_')");
     const o = fs.readFileSync('src/game/systems/objectiveSystem.ts', 'utf8');
     expect(o).toContain("if (creature.id?.startsWith('zs_canibal_')) return false;");
+  });
+});
+
+/* Pedro, 05/11: "deve vir hordas iguais às crias do Kraken — cada tentáculo vem, aumentando a horda cada vez mais que mata". */
+describe('crias do Canibal', () => {
+  it('cada raiz cortada solta mais (2, 3, 4, 5, 6, 6), sem passar de 12 vivas', () => {
+    expect([1, 2, 3, 4, 5, 6].map((k) => criaCount(k, 0))).toEqual([2, 3, 4, 5, 6, 6]);
+    expect(criaCount(6, 10)).toBe(2);
+    expect(criaCount(3, 12)).toBe(0);
+  });
+  it('nascem no chão da caverna (prefixo zs_cave_), andam com a IA de lá e não renascem; somem quando ele volta a dormir', () => {
+    expect(CANIBAL_CRIA_PREFIX).toBe('zs_cave_cria_');
+    const cave = fs.readFileSync('src/components/zona-sul/zs-cave.ts', 'utf8');
+    expect(cave).toContain("homeY: (id, x, z) => (id.startsWith('zs_cave_') || id.startsWith('wild_cave_') ? caveFloorAt(x, z) : null),");
+    const g = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
+    expect(g).toContain("|| c.id.startsWith('zs_cave_cria_')");
+    const v = fs.readFileSync('src/components/zona-sul/zs-canibal-boss-view.tsx', 'utf8');
+    expect(v).toContain("const n = criaCount(cut, alive), def = CREATURES['raider_cannibal'];");
+    expect(v).toContain("!c.id.startsWith('zs_canibal_') && !c.id.startsWith(CANIBAL_CRIA_PREFIX)");
   });
 });

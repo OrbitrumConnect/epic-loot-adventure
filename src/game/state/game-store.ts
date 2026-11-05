@@ -68,6 +68,7 @@ import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem'
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { lineWalkable } from '@/components/world/map-walk';
 import { bigCreatureRadius } from '../systems/bigCreatureRadius';
+import { runExplosionHooks } from '../systems/explosionHooks';
 import { behindSpot, isSorceress, nextSorceressAt, SORC, SORC_PREFIX, sorcClock, sorceressMaySpawn } from '../systems/sorceressSystem';
 import { fleeInsteadOfDeath, IND, IND_PREFIX, indBornAt, indClock, indigenaLevelK, indigenaMaySpawn, indigenaState, isRetreating, isUnkillable, nextIndigenaAt, retreatToForest } from '../systems/indigenaSystem';
 import { baseFallLevelLoss, boostKillXp, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
@@ -395,6 +396,7 @@ export function deadCreature(c: CreatureState, now: number, rng: () => number): 
   const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave') || isSorceress(c.id) || c.id.startsWith('fleet_') || c.id.startsWith('wild_shark_fl')
     || c.id.startsWith('zs_kraken_') // 04/11: o Kraken das Cagarras volta inteiro pelo relógio dele (zs-kraken-boss)
     || c.id.startsWith('zs_canibal_') // 04/11: o Canibal gigante do covil também (zs-canibal-boss)
+    || c.id.startsWith('zs_cave_cria_') // 05/11: as CRIAS que as raízes cortadas soltam (vêm com a luta e saem com ela)
     ? null
     : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
   return { ...c, hp: 0, behavior: 'dead', respawnAt };
@@ -1400,7 +1402,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const d = Math.hypot(toward.x - p.x, toward.z - p.z), k = d > reach ? reach / d : 1;
     const at = { x: p.x + (toward.x - p.x) * k, z: p.z + (toward.z - p.z) * k };
     noteShotAt(at.x, at.z);
-    heroGunSound();
+    audioManager.playWorld('cannon', 1); // 05/11 (Pedro): o som da bazuca é o do CANHÃO
     set({
       player: { ...s.player, lastAttackAt: now, inventory: removeItem(s.player.inventory, 'missile', 1) },
       attackTick: s.attackTick + 1,
@@ -1410,7 +1412,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // o dano cai junto com a bola de fogo (quando o míssil chega)
     const power = get().missilePower();
     // o míssil ATRAVESSA armadura (04/11 — o Canibal gigante: "a bazuca dá praticamente todo o dano, o resto é fraco")
-    setTimeout(() => { get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca', true); }, missileFlightMs(Math.min(d, reach)));
+    setTimeout(() => {
+      get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca', true);
+      runExplosionHooks(at, BAZOOKA.SPLASH_R, power); // 05/11: navio pirata / navio de outro jogador (casco)
+      const me = get().player.position;
+      audioManager.playWorld('cannon', Math.max(0.15, 1 - Math.hypot(at.x - me.x, at.z - me.z) / 120) * 0.8); // o estouro
+    }, missileFlightMs(Math.min(d, reach)));
     return true;
   },
   craftBazookaItem: (kind) => {

@@ -20,6 +20,7 @@ import { zsWaterYAt } from './zs-terrain-data';
 import { fleetShipAt, zsFleet } from './zs-enemy-fleet';
 import { krakenBallHit } from './zs-kraken-boss';
 import { enemyBallLanded, fleetShipHit } from './zs-enemy-fleet-hits';
+import { explosionHooks } from '@/game/systems/explosionHooks';
 
 const URL = '/zona-sul/warship.glb';
 /** quilha abaixo da superfície (m) — 01/11: navio 15% maior → calado junto (era 2,0) */
@@ -185,6 +186,20 @@ export function ZsWarshipView({ shipRef, heroRef }: { shipRef: React.MutableRefO
     warshipDims.height = h; warshipDims.gunY = h * GUNWALE_K; warshipDims.helmY = h * HELM_DECK_K;
     return { holder, scan: scanWarshipDeck(holder, h) };
   }, [scene]);
+  // BAZUCA (05/11, Pedro: "mirando a bazuca pro navio inimigo no PvP — acerta, destrói?"): o míssil que explode num navio
+  // da ESQUADRA PIRATA ou no navio de OUTRO jogador tira vida do casco — o mesmo caminho da bala do canhão, com a força do
+  // míssil (convidado → o anfitrião aplica; o navio do outro → o dono aplica, com inimizade)
+  useEffect(() => {
+    const hook = (at: { x: number; z: number }, _r: number, power: number) => {
+      const es = fleetShipAt(zsFleet.ships, at.x, at.z);
+      if (es) { if (isGuestInRoom()) broadcastFleetHit(es.id, power); else fleetShipHit(es, power); }
+      for (const d of remoteDecks.values()) {
+        if (shipGround(d.c, at.x, at.z, 1e6)) { broadcastShipHit(d.id, power); break; }
+      }
+    };
+    explosionHooks.add(hook);
+    return () => { explosionHooks.delete(hook); };
+  }, []);
   // o colisor do convés vale enquanto o navio está na cena (montar/desmontar do React não perde o escaneamento)
   useEffect(() => {
     zsWarshipDeck.c = model.scan.c; zsWarshipDeck.main = model.scan.main; zsWarshipDeck.scan = model.scan.c;

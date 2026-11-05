@@ -56,7 +56,8 @@ describe('bazuca', () => {
     expect(g).toContain("if (prof.projectile === 'missile') return fromBurst ? false : get().fireBazooka(toward, towardY, true);");
     expect(g).toContain("cannonHit: (at, radius) => get().explosiveHit(at, radius, get().cannonPower(), 'Canhão'),");
     // 04/11: o míssil atravessa armadura (o último true) — o Canibal gigante
-    expect(g).toContain("setTimeout(() => { get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca', true); }, missileFlightMs(Math.min(d, reach)));");
+    expect(g).toContain("get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca', true);");
+    expect(g).toContain('}, missileFlightMs(Math.min(d, reach)));');
   });
 
   it('desenho: modelo na mão (pose do fuzil), boca própria, míssil GLB com fumaça e bola de fogo; card abaixo do navio', () => {
@@ -89,5 +90,27 @@ describe('bazuca no online', () => {
     // o desenho do míssil dos outros não chama dano (só o spawn do projétil)
     const block = pr.slice(pr.indexOf('while (netMissileInbox.length) {'), pr.indexOf('while (netMissileInbox.length) {') + 400);
     expect(block).not.toMatch(/explosiveHit|cannonHit|attack\(/);
+  });
+});
+
+/* Pedro, 05/11: "mirando a bazuca pro navio inimigo no PvP já acerta, destrói? atirei e parece não dar dano em nada!" ·
+   "o som da bazuca está do tiro — deve ser o mesmo do canhão". */
+describe('bazuca: navios, Kraken e som', () => {
+  it('a explosão avisa quem desenha os navios (pirata e de outro jogador) — o mesmo caminho da bala do canhão', () => {
+    const g = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
+    expect(g).toContain('runExplosionHooks(at, BAZOOKA.SPLASH_R, power);');
+    const w = fs.readFileSync('src/components/zona-sul/zs-warship-view.tsx', 'utf8');
+    expect(w).toContain('if (es) { if (isGuestInRoom()) broadcastFleetHit(es.id, power); else fleetShipHit(es, power); }');
+    expect(w).toContain('if (shipGround(d.c, at.x, at.z, 1e6)) { broadcastShipHit(d.id, power); break; }');
+    expect(w).toContain('explosionHooks.add(hook);');
+  });
+  it('míssil na "pele" do Kraken conta (corpo 19 m, tentáculos ~15 m) — medido: 10 m ao lado do tentáculo 8000 → 3005', () => {
+    const k = fs.readFileSync('src/components/zona-sul/zs-kraken-boss-view.tsx', 'utf8');
+    expect(k).toContain('setBigCreatureRadius(KRAKEN_BODY_ID, KRAKEN_BOSS.BODY_R);');
+    expect(k).toContain('for (let i = 0; i < KRAKEN_BOSS.TENTACLES; i++) setBigCreatureRadius(krakenTentId(i), 15);');
+  });
+  it('som: o do CANHÃO no disparo e no estouro', () => {
+    const g = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
+    expect(g).toContain("audioManager.playWorld('cannon', 1); // 05/11 (Pedro): o som da bazuca é o do CANHÃO");
   });
 });
