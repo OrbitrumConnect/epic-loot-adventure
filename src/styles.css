@@ -1386,3 +1386,8 @@ progress::-webkit-progress-bar { background: var(--secondary); }
   .zs-respawn-pt > span { width: 30px; height: 30px; font-size: 16px; }
   .zs-respawn-pt > b { display: none; } /* mapa pequeno: os nomes ficam nos botões de baixo */
 }
+
+/* CAIU NO PRECIPÍCIO (05/11, zs-chasm.ts): escurece num instante e abre no checkpoint */
+.zs-chasm-fade { position: absolute; inset: 0; z-index: 60; pointer-events: none; background: #000; opacity: 0; animation: zs-chasm-fade 0.75s ease-out; }
+@keyframes zs-chasm-fade { 0% { opacity: 0.95; } 35% { opacity: 0.85; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .zs-chasm-fade { animation-duration: 0.3s; } }

@@ -39,9 +39,10 @@ describe('covil do Canibal (o poço fundo do chefe gigante)', () => {
     expect(covil.spiral!.yTop - covil.y).toBeGreaterThan(90);  // ~93 m de descida em espiral
     expect(caveFloorAt(covil.x, covil.z)).toBeCloseTo(covil.y, 1); // miolo = a arena
     expect(caveRoomName(covil.x, covil.z)).toBe('covil do Canibal');
-    // vai no FIM das listas: as sementes de ruído e os enfeites das peças de antes ficam iguais
-    expect(CAVE_ROOMS[CAVE_ROOMS.length - 1]!.id).toBe('covil');
-    expect(CAVE_TUNNELS[CAVE_TUNNELS.length - 1]!.id).toBe('garganta');
+    // vai no FIM das listas: as sementes de ruído e os enfeites das peças de antes ficam iguais (05/11: depois dele só a
+    // FENDA do caminho e o túnel dela — parkour-canibal.test.ts)
+    expect(CAVE_ROOMS[CAVE_ROOMS.length - 2]!.id).toBe('covil');
+    expect(CAVE_TUNNELS[CAVE_TUNNELS.length - 2]!.id).toBe('garganta');
   });
 
   it('teto bem debaixo do chão do mapa (≥ 3 m de rocha em todo ponto)', () => {
@@ -60,15 +61,29 @@ describe('covil do Canibal (o poço fundo do chefe gigante)', () => {
     expect(furos, `rocha mínima ${minCover}`).toBe(0);
   }, 60_000);
 
-  it('a pé: fundo do abismo → garganta → balcão (38 m) → rampa em espiral → arena (−55 m)', () => {
-    let r = walk({ x: abismo.x, z: abismo.z, y: caveFloorAt(abismo.x, abismo.z)! }, CAVE_TUNNELS.find((q) => q.id === 'garganta')!.pts.map((p) => ({ x: p.x, z: p.z })));
+  // 05/11 (Pedro: "o caminho vai ficar curto até ali?" · "o ideal: no túnel, no caminho"): a garganta vai do fundo do abismo
+  // até a FENDA (o precipício — só pulando, parkour-canibal.test.ts); do outro lado um túnel até o balcão NOVO do covil
+  // (a rampa girou pro nordeste) e a rampa inteira até a arena.
+  it('a pé: fundo do abismo → galeria → garganta → beira da fenda (para no precipício); do outro lado → balcão (38 m) → rampa → arena', () => {
+    const fenda = CAVE_ROOMS.find((q) => q.id === 'fenda')!;
+    // fundo do abismo → galeria grande → (sai dela) garganta → fenda
+    const gal = CAVE_TUNNELS.find((q) => q.id === 'galeria-alto')!.pts, g = CAVE_TUNNELS.find((q) => q.id === 'garganta')!.pts;
+    let r = walk({ x: abismo.x, z: abismo.z, y: caveFloorAt(abismo.x, abismo.z)! }, [gal[0]!, gal[1]!, ...g].map((p) => ({ x: p.x, z: p.z })));
     expect(r.stuck, `travou na garganta ${JSON.stringify(r)}`).toBe(false);
+    r = walk(r, [{ x: fenda.x - 22, z: fenda.z }]);
+    expect(r.stuck).toBe(false); expect(r.y).toBeCloseTo(fenda.y, 1); // na beira de cá
+    // um passo além da beira: o chão some (o precipício, 28 m) — sem pular cai (no jogo: pego no ar → checkpoint)
+    const edge = walk(r, [{ x: fenda.x - 19, z: fenda.z }]), m = caveMove(t, edge.x, edge.z, edge.y, 2.5, 0); // (o walk para a 0,6 m)
+    expect(m!.ground, 'sem pular: cai no precipício').toBeLessThan(fenda.y - 20);
+    // do outro lado da fenda
+    r = walk({ x: fenda.x + 22, z: fenda.z, y: fenda.y }, CAVE_TUNNELS.find((q) => q.id === 'fenda-covil')!.pts.map((p) => ({ x: p.x, z: p.z })));
+    expect(r.stuck, `travou no túnel ${JSON.stringify(r)}`).toBe(false);
     expect(r.y).toBeGreaterThan(36);                           // no balcão
     const a0 = (covil.spiral!.a0 * 180) / Math.PI, rampa: { x: number; z: number }[] = [];
     for (let d = a0 + 6; d <= a0 + 340; d += 8) rampa.push(at(0.92, d));
     r = walk(r, rampa);
     expect(r.stuck, `travou na rampa ${JSON.stringify(r)}`).toBe(false);
-    expect(r.y).toBeLessThan(-48);                             // desceu a rampa inteira
+    expect(r.y).toBeLessThan(-48);                             // desceu a rampa inteira (sem vão)
     r = walk(r, [{ x: covil.x + 10, z: covil.z }]);
     expect(r.stuck).toBe(false);
     expect(r.y).toBeCloseTo(covil.y, 1);                       // na arena

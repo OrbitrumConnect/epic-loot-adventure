@@ -21,6 +21,7 @@ import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
 import { ZsMap } from '@/components/hud/zs-map';
 import { ZsRespawnScreen } from '@/components/hud/zs-respawn-screen';
+import { ZsChasmFade } from '@/components/hud/zs-chasm-fade';
 import { ToolCrafting } from '@/components/hud/tool-crafting';
 import { ItemSprite, ICON_MAP } from '@/components/hud/item-sprite';
 import { BasePanel, cityLockReason } from '@/components/hud/base-panel';
@@ -812,6 +813,8 @@ function Index() {
           {worldOn && ui.mode === 'world' && zs && <SorceressStalker />}
           {/* 05/11: na Zona Sul a morte é 6 s de mensagem + 6 s de MAPA pra escolher onde nascer (zs-respawn-screen) */}
           {player.dead && !inCity && zs && <ZsRespawnScreen deathBy={ui.deathBy} />}
+          {/* caiu no precipício (parkour do Canibal, 05/11): a tela escurece e abre no checkpoint */}
+          {zs && <ZsChasmFade />}
           {player.dead && !inCity && !zs && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 50,

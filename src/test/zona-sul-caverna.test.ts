@@ -133,6 +133,19 @@ describe('caverna — dá pra andar dela inteira', () => {
     for (const room of CAVE_ROOMS) {
       const k = near(room.x + (room.id === 'grande' ? 0 : 0), room.z);
       expect(k, room.name).toBeGreaterThanOrEqual(0);
+      // 05/11: o covil do Canibal só com os PULOS do parkour — o caminho passa pela FENDA (o precipício; de propósito, Pedro:
+      // "o caminho vai ficar curto até ali?" · "o ideal: no túnel, no caminho"). A pé sem pular chega só na beira de cá.
+      if (room.id === 'covil' || room.id === 'fenda') {
+        expect(seen[k], `${room.name}: sem pular não chega`).toBe(0);
+        if (room.id === 'fenda') {
+          expect(seen[near(room.x - 22, room.z)], 'beira de cá da fenda').toBe(1);
+          expect(seen[near(room.x + 22, room.z)], 'beira de lá da fenda: sem pular não chega').toBe(0);
+        } else {
+          const sp = room.spiral!, th = sp.a0 + sp.dir * 10 * (Math.PI / 180);
+          expect(seen[near(room.x + 0.92 * room.rx * Math.cos(th), room.z + 0.92 * room.rz * Math.sin(th))], 'balcão do covil: sem pular não chega').toBe(0);
+        }
+        continue;
+      }
       expect(seen[k], room.name).toBe(1);
     }
     for (const id of ['leblon', 'laranjeiras', 'pico-tijuca']) {

@@ -43,7 +43,14 @@ export type CaveRoom = {
   /** RAMPA EM ESPIRAL colada na parede: o anel de fora (e > `inner`, em fração do raio) desce de `yTop` até o fundo
    *  (`y` do salão) ao longo de `sweep` rad a partir do ângulo `a0` (no sentido `dir`); o miolo é o fundo do poço. */
   spiral?: { yTop: number; inner: number; a0: number; sweep: number; dir: 1 | -1 };
+  /** FENDA (05/11): um PRECIPÍCIO de lado a lado do salão — ver `CaveChasm`. */
+  chasm?: CaveChasm;
 };
+/** FENDA (05/11, Pedro: "caminho até ele mais longe com parkour — pula; caiu no precipício volta pro checkpoint" · "o
+ *  ideal seria não ali na descida — a boa seria no túnel, no caminho"): o salão tem um PRECIPÍCIO de lado a lado — no
+ *  referencial do salão, de `u0` a `u1` (ao longo de `yaw`), `depth` m abaixo do chão das beiradas — e COLUNAS soltas pra
+ *  atravessar pulando (centro u/v, raio, degrau `dy` em relação à beirada). */
+export type CaveChasm = { u0: number; u1: number; depth: number; stones: { u: number; v: number; r: number; dy: number }[] };
 
 const P = (x: number, z: number, y: number, r: number, h: number): CaveTunnelPt => ({ x, z, y, r, h });
 
@@ -105,8 +112,13 @@ export const CAVE_TUNNELS: CaveTunnel[] = [
     P(-852, -125, 6.5, 7, 10), P(-820, -110, 2, 7, 10), P(-760, -80, -2, 6.5, 9.5), P(-700, -50, -6, 6.5, 9), P(-650, -25, -9, 6.2, 8.5), P(-610, -8, -11, 6, 8), P(-570, 5, -12, 5.6, 7.2)] },
   // GARGANTA (04/11, Pedro: "o boss dentro da cave profunda — da forma que fizemos a do Pico da Tijuca, que desce
   // arredondando; precisa mais baixo, lá pro fundo onde tá o boss"): do FUNDO do abismo (42 m, a mesma saída da galeria
-  // grande — vira uma bifurcação) desce ~50 m pela rocha até o BALCÃO do covil (38 m)
-  { id: 'garganta', name: 'garganta do covil', pts: [P(-1159.9, -271.6, 42, 6.5, 9), P(-1143, -290.5, 40, 6.5, 9), P(-1124.1, -311.6, 38, 6.5, 9)] },
+  // grande — vira uma bifurcação). 05/11 (Pedro: "o caminho vai ficar curto até ali?" · "o ideal: no túnel, no caminho"):
+  // não sai mais do fundo do abismo direto pro balcão do covil (53 m): agora SAI DA GALERIA GRANDE (~70 m depois do fundo do
+  // abismo — quem vem do Rebouças passa por ela também) e sobe ~7 m até a FENDA. Colada na borda do covil não dava: a
+  // "aura" de chão do covil (ANDARES) cobria o túnel.
+  { id: 'garganta', name: 'garganta do covil', pts: [P(-1092, -246, 33.04, 6, 9), P(-1080, -257, 36.5, 6, 9), P(-1067, -267, 40, 6, 9)] },
+  // …e do outro lado da fenda, um túnel (~68 m) que volta pro sudoeste até o BALCÃO NOVO do covil (o começo da rampa, 38 m)
+  { id: 'fenda-covil', name: 'garganta do covil', pts: [P(-1003, -267, 40, 6, 9), P(-1008, -286, 39.5, 6.2, 9), P(-1026, -301, 38.8, 6.4, 9), P(-1045.5, -308.8, 38, 6.5, 9)] },
 ];
 
 export const CAVE_ROOMS: CaveRoom[] = [
@@ -136,9 +148,26 @@ export const CAVE_ROOMS: CaveRoom[] = [
   // COVIL DO CANIBAL (04/11): o 2º poço, ao lado do abismo e bem mais fundo — ~130 m de largura, o chão a −55 m (abaixo
   // do mar), teto quase reto (shaft 16). A RAMPA EM ESPIRAL sai do balcão (38 m, onde chega a garganta) e desce 345°
   // colada na parede até o fundo (~25%); o miolo é a ARENA do chefe gigante (o corpo sai do meio do chão).
+  // 05/11 (a FENDA): o balcão — onde a rampa começa — virou pro NORDESTE (a0 2,271 → 0,848 rad), onde chega o túnel que
+  // vem da fenda; a rampa é a MESMA (345°, ~25%, sem vão nenhum), só girada. A garganta curta (fundo do abismo → balcão,
+  // 53 m, o "caminho curto e fácil") saiu: agora sai da galeria grande e passa pela fenda (~220 m e o precipício).
   { id: 'covil', name: 'covil do Canibal', x: -1087, z: -353, y: -55, rx: 66, rz: 62, h: 125, yaw: 0, lobe: 2.5, shaft: 16,
-    spiral: { yTop: 38, inner: 0.84, a0: 2.271, sweep: (345 * Math.PI) / 180, dir: 1 }, tint: [0.43, 0.33, 0.3] },
+    spiral: { yTop: 38, inner: 0.84, a0: 0.848, sweep: (345 * Math.PI) / 180, dir: 1 }, tint: [0.43, 0.33, 0.3] },
+  // FENDA DO COVIL (05/11, Pedro: "o ideal seria no túnel, no caminho"): no meio do caminho entre o fundo do abismo e o
+  // covil, uma rachadura alta (~68 m) e estreita na rocha, na faixa livre entre a galeria grande e a borda do covil — no
+  // LESTE, onde a faixa é larga (mais perto, a "aura" de chão do covil invadia o vão e fazia chão invisível) e a 5 m da
+  // divisa dos pedaços da malha (fica inteira nos pedaços do fundo: perto da boca do Pico a malha não cresce); ~40 m de
+  // morro em cima. No meio, o PRECIPÍCIO (36 m de vão, 28 m de fundo) — atravessa pulando de coluna em coluna (5
+  // colunas, 3–3,4 m entre elas: correndo SEM pular a queda não alcança; pulando sobra ~1,5 m). Caiu = volta pro
+  // checkpoint da beirada (zs-chasm.ts) com 25% de dano.
+  { id: 'fenda', name: 'fenda do covil', x: -1035, z: -267, y: 40, rx: 30, rz: 10, h: 34, yaw: 0, lobe: 1.5, shaft: 6,
+    chasm: { u0: -18, u1: 18, depth: 28, stones: [
+      { u: -13.2, v: 0, r: 1.8, dy: 0 }, { u: -6.6, v: 1.2, r: 1.8, dy: 0.5 }, { u: 0, v: -1, r: 1.8, dy: 0 },
+      { u: 6.6, v: 1, r: 1.8, dy: -0.4 }, { u: 13.2, v: -1.2, r: 1.8, dy: 0.3 }] },
+    tint: [0.41, 0.34, 0.31] },
 ];
+
+/** INIMIGOS DA CAVERNA];
 
 /** INIMIGOS DA CAVERNA (31/10, Pedro: "falta os inimigos dentro da cave"): Fauce de Sílex e Aberração (os bichos da mata
  *  alta) espalhados nos salões — [salão, espécie, u, v] (u/v = fração do raio do salão). Nascem como FAUNA
@@ -231,6 +260,8 @@ CAVE_TUNNELS.forEach((tn, ti) => {
 });
 const ROOMS: Room[] = CAVE_ROOMS.map((r, i) => ({ ...r, c: Math.cos(r.yaw), s: Math.sin(r.yaw), m: Math.min(r.rx, r.rz, r.h), seed: i * 31.7 }));
 const PILLARS: Pillar[] = CAVE_ROOMS.flatMap((r) => r.pillars ?? []);
+/** Salões com FENDA (05/11 — o precipício no caminho do Canibal). */
+const CH_ROOMS = ROOMS.filter((r) => r.chasm);
 
 /** As BOCAS: o 1º trecho de cada túnel com boca (o shader do chão abre o buraco nele). */
 export type CaveMouth = { id: string; name: string; ax: number; az: number; ay: number; bx: number; bz: number; by: number; ra: number; rb: number; ha: number; hb: number };
@@ -339,8 +370,34 @@ export function spiralY(r: Pick<CaveRoom, 'rx' | 'rz' | 'y' | 'spiral'>, u: numb
   const a = ((sp.dir * (Math.atan2(v / r.rz, u / r.rx) - sp.a0)) % TAU + TAU) % TAU; // 0..2π a partir do começo
   return a <= sp.sweep ? sp.yTop - (a / sp.sweep) * (sp.yTop - r.y) : null;
 }
+/** Borda irregular da FENDA (rocha quebrada, poucos cm — o pulo fica previsível) — só no plano: o que se vê é o que se pisa. */
+const edgeNoise = (u: number, v: number, s: number) => (caveNoise(u * 0.4 + s, 5.5, v * 0.4 + s) - 0.5) * 0.6;
+/** Distância (m, > 0 = beirada) até a borda do PRECIPÍCIO da fenda (o vão vai de u0 a u1). */
+function chasmLedgeD(ch: CaveChasm, u: number, v: number): number {
+  const raw = Math.max(ch.u0 - u, u - ch.u1), k = smooth01((1 - Math.abs(raw)) / 0.6); // ruído só perto da borda
+  return k > 0 ? raw + edgeNoise(u, v, 31) * 0.5 * k : raw;
+}
+/** Distância (m, > 0 = em cima) até a borda da COLUNA. */
+function chasmStoneD(s: CaveChasm['stones'][number], u: number, v: number): number {
+  const d = s.r - Math.hypot(u - s.u, v - s.v), k = smooth01((d + 1) / 0.6);
+  return k > 0 ? d + edgeNoise(u, v, 71) * 0.4 * k : d;
+}
+/** Chão da FENDA em (u, v): a beirada (o chão do salão), a coluna (o topo dela) ou o fundo do precipício. */
+function chasmFloor(r: Pick<CaveRoom, 'y'>, ch: CaveChasm, u: number, v: number): number {
+  let top = -Infinity;
+  for (const s of ch.stones) if (chasmStoneD(s, u, v) > 0) top = Math.max(top, r.y + s.dy);
+  if (top > -Infinity) return top;
+  return chasmLedgeD(ch, u, v) > 0 ? r.y : r.y - ch.depth;
+}
+/** Rocha da FENDA em (u, y, v) como DISTÂNCIA (m) — a mesma borda do `chasmFloor`: a malha corta a beirada e a coluna
+ *  exatamente onde o pé cai (sem a escada de 1,6 m do voxel). */
+function chasmRock(r: Room, ch: CaveChasm, u: number, v: number, y: number): number {
+  let rock = Math.max(r.y - ch.depth - y, Math.min(r.y - y, chasmLedgeD(ch, u, v)));
+  for (const s of ch.stones) rock = Math.max(rock, Math.min(r.y + s.dy - y, chasmStoneD(s, u, v)));
+  return rock;
+}
 function roomFloor(r: Room, u: number, v: number): number {
-  let y = r.y;
+  let y = r.chasm ? chasmFloor(r, r.chasm, u, v) : r.y;
   if (r.spiral) { const s = spiralY(r, u, v); if (s !== null) y = Math.max(y, s); }
   for (const p of r.pools ?? []) {
     const e = Math.hypot((u - p.u) / p.rx, (v - p.v) / p.rz);
@@ -439,6 +496,15 @@ function finish(c: GCell, f: number, fl: number, x: number, y: number, z: number
     const p = PILLARS[i]!;
     const d = Math.hypot(x - p.x, z - p.z) - p.r * (1 + 0.22 * (caveNoise(x * 0.3, y * 0.25, z * 0.3) - 0.5));
     f = Math.max(f, -d);
+  }
+  // FENDA (o precipício no caminho do Canibal): onde o chão é só dela, a beirada/coluna vem como distância (malha exata)
+  for (const r of CH_ROOMS) {
+    const R = Math.max(r.rx, r.rz) * 1.35;
+    if (Math.abs(x - r.x) > R || Math.abs(z - r.z) > R) continue;
+    const [u, v] = roomUV(r, x, z), ch = r.chasm!;
+    if (u < ch.u0 - 4 || u > ch.u1 + 4) continue; // longe do precipício: a conta de sempre
+    if (Math.abs(fl - roomFloor(r, u, v)) > 1e-6) continue; // outra peça emendando ali: a conta de sempre
+    return Math.max(f, chasmRock(r, ch, u, v, y));
   }
   return Math.max(f, fl - y);
 }
@@ -636,7 +702,9 @@ export function caveMove(t: ZsTerrain, x: number, z: number, feetY: number, dx: 
   if (!here && !caveInside(nx0, feetY, nz0)) return null;
   const at = (px: number, pz: number): CaveMove | null => {
     const fl = caveFloorAt(px, pz, feetY);
-    if (fl !== null && fl - feetY < STEP_UP && caveInside(px, Math.max(fl, feetY - 2), pz) && bodyFits(px, fl, pz)) {
+    // o corpo tem que caber onde ELE está: chão sumindo embaixo (beira do vão/poço — 05/11) = confere na altura do pé, não lá
+    // no fundo (no fundo de um vão estreito a parede fica perto). Chão até 1 m abaixo (o andar de sempre): igual a antes.
+    if (fl !== null && fl - feetY < STEP_UP && caveInside(px, Math.max(fl, feetY - 2), pz) && bodyFits(px, fl >= feetY - 1 ? fl : feetY, pz)) {
       const w = cavePoolY(px, pz);
       return { x: px, z: pz, ground: fl, inCave: true, wading: w !== null && fl < w - 0.15 };
     }
@@ -725,19 +793,22 @@ const EDGE: readonly (readonly [number, number, number, number, number, number])
  *  parte (`deep`): da superfície o covil nunca aparece (fica atrás da rocha, longe das bocas) e lá no fundo a superfície
  *  some — então nunca se desenha os dois juntos. Conferido em 5×5 pontos do bloco. */
 const LAIR_ROOM = CAVE_ROOMS.find((r) => r.id === 'covil')!;
-const LAIR_TUNNEL = CAVE_TUNNELS.findIndex((t) => t.id === 'garganta');
+// 05/11: a FENDA e os túneis do caminho (garganta, fenda → covil) contam como covil (só desenham lá no fundo)
+const LAIR_ROOMS = new Set([LAIR_ROOM.id, 'fenda']);
+const LAIR_TUNNELS = new Set(['garganta', 'fenda-covil'].map((id) => CAVE_TUNNELS.findIndex((t) => t.id === id)));
 function lairBlock(bx: number, bz: number, bs: number): boolean {
   const cx = bx + bs / 2, cz = bz + bs / 2;
-  if (Math.hypot((cx - LAIR_ROOM.x) / LAIR_ROOM.rx, (cz - LAIR_ROOM.z) / LAIR_ROOM.rz) > 1.6) return false;
+  const fd = ROOMS.find((q) => q.id === 'fenda')!;
+  if (Math.hypot((cx - LAIR_ROOM.x) / LAIR_ROOM.rx, (cz - LAIR_ROOM.z) / LAIR_ROOM.rz) > 1.6 && Math.hypot((cx - fd.x) / fd.rx, (cz - fd.z) / fd.rz) > 1.5) return false;
   for (let i = 0; i <= 4; i++) for (let k = 0; k <= 4; k++) {
     const x = bx + (bs * i) / 4, z = bz + (bs * k) / 4;
     for (const r of ROOMS) {
-      if (r.id === LAIR_ROOM.id) continue;
+      if (LAIR_ROOMS.has(r.id)) continue;
       const [u, v] = roomUV(r, x, z);
       if (Math.hypot(u / r.rx, v / r.rz) < 1.25 + r.lobe / Math.min(r.rx, r.rz)) return false;
     }
     for (const s of SEGS) {
-      if (s.tunnel === LAIR_TUNNEL) continue;
+      if (LAIR_TUNNELS.has(s.tunnel)) continue;
       let t = ((x - s.ax) * s.abx + (z - s.az) * s.abz) / s.l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
       if (Math.hypot(x - (s.ax + s.abx * t), z - (s.az + s.abz * t)) < Math.max(s.ra, s.rb) * 1.5 + 4) return false;
     }

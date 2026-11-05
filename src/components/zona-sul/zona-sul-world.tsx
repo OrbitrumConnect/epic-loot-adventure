@@ -80,6 +80,8 @@ import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsForestFarm, createZsHarvestNodes, createZsNewAreaTrees, createZsSpreadHarvest } from '@/game/systems/zsHarvestSystem';
 import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWalkable, zsWorldProfile } from './zs-world-profile';
 import { deathStage, resolveSpawn, samePoints, spawnPoints, useZsRespawn, zsRespawnMem } from './zs-respawn';
+import { CHASM, chasmReturn, checkpointAt, edgeDrop, fallDamage, fellIntoChasm, hurtPlayerByFall, resetChasm, useZsChasmFx, zsChasm } from './zs-chasm';
+import { ZsChasmMarks } from './zs-chasm-view';
 import { sameVeh, useZsTouch, useZsVehicles, zsAttack, zsCave, zsCrouch, zsCtx, zsVehicleApi, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED, type ZsVehInfo } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
@@ -283,6 +285,10 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
   const action = useRef<HeroAction>('idle');
   const speed = useRef(0);
   const vy = useRef(0);
+  /** precipício (05/11): altura do último chão (a queda conta dali) e o relógio do checkpoint */
+  const fallFrom = useRef(0), cpAcc = useRef(0);
+  /** dano de queda (05/11): o ponto mais alto desde que saiu do chão e quando foi o último quadro a pé */
+  const airTop = useRef(0), airSeen = useRef(0);
   /** velocidade NA ÁGUA (embalo do nado) */
   const swimVel = useRef(new THREE.Vector2());
   const bodysurf = useRef(false);
@@ -389,7 +395,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (ship) { const M = zsRespawnMem; if (M.shipHp >= 0 && ship.hp < M.shipHp) M.shipHitAt = Date.now(); M.shipHp = ship.hp; }
     if (gs.player.dead) {
       const wall = Date.now(), first = !useZsRespawn.getState().deathAt;
-      if (first) useZsRespawn.setState({ deathAt: wall, diedAt: { x: p.x, z: p.z }, choice: null, points: [] });
+      if (first) { useZsRespawn.setState({ deathAt: wall, diedAt: { x: p.x, z: p.z }, choice: null, points: [] }); resetChasm(); } // checkpoints valem a vida
       respAcc += dt;
       if (first || respAcc >= 0.5) {
         respAcc = 0;
@@ -991,7 +997,13 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (dg) { const sp = dodgeSpeed(dg.t); dx = dg.dirX * sp * dt; dz = dg.dirZ * sp * dt; }
       const shove = takeKnockback('player', dt); if (shove) { dx += shove.x; dz += shove.z; }
       // CAVERNA: dentro (ou entrando pela boca) o chão e as paredes são os dela; fora, o mapa como sempre
-      const cm = drive.mode === 'foot' && (caveNow || dx || dz) ? caveMove(t, p.x, p.z, p.y, dx, dz) : null;
+      let cm = drive.mode === 'foot' && (caveNow || dx || dz) ? caveMove(t, p.x, p.z, p.y, dx, dz) : null;
+      // BEIRA DO PRECIPÍCIO (05/11, zs-chasm.ts): o piloto/clique não se joga no poço nem no vão do parkour (cair = voltar
+      // pro checkpoint; ficaria em laço) — desliza pela beira; pular é com o jogador (teclado/joystick)
+      if (cm && autoRun && grounded.current && edgeDrop(p.y, cm.ground)) {
+        const sx = caveMove(t, p.x, p.z, p.y, dx, 0), sz = caveMove(t, p.x, p.z, p.y, 0, dz);
+        cm = sx && !edgeDrop(p.y, sx.ground) ? sx : sz && !edgeDrop(p.y, sz.ground) ? sz : caveMove(t, p.x, p.z, p.y, 0, 0);
+      }
       caveWade.current = !!cm?.wading;
       // RAMPA DE VOO LIVRE (02/11): em cima do deck anda livre (o barranco embaixo não é "parede"); o parapeito segura dos lados
       const onRampNow = !cm && zsRampFloor(p.x, p.z, p.y) > -Infinity;
@@ -1049,9 +1061,45 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       : rm === 'paddle' ? waterY + BOARD_DECK + 0.07                         // deitado EM CIMA do deck (acima da água)
       : rolling ? waterY - 0.6                                               // vaca: embaixo da espuma
       : waterY - (moving || dive.current > 0.3 ? ZS_SWIM_SINK_MOVE : ZS_SWIM_SINK) - dive.current; // boia NA onda
+    const wasAir = !grounded.current;
     if (!grounded.current) { vy.current -= 15 * dt; p.y += vy.current * dt; if (p.y <= floor) { p.y = floor; grounded.current = true; vy.current = 0; } }
     else if (rm === 'ride' && ride.current?.air) p.y = ride.current.y + BOARD_DECK; // AÉREO: a altura é a do voo
     else p.y += (floor - p.y) * Math.min(1, dt * (rm === 'ride' || rm === 'popup' ? 12 : st.swimming ? 3 : 30)); // em pé gruda na face; nadando sobe/desce macio
+    // DANO DE QUEDA (05/11, Pedro: "o parkour só vai dar bom se tiver dano de queda — correto por vida e altura"; zs-chasm
+    // FALL): a pé, do ponto mais alto do pulo/queda até onde pisou, em % da vida máxima; caiu na água, nada. Acabou de
+    // voltar a pé (carro, asa, skate, navio, prancha, morto): conta dali.
+    if (drive.mode === 'foot' && !dead && !rm) {
+      const nowMs = performance.now();
+      if (nowMs - airSeen.current > 150) airTop.current = p.y;
+      airSeen.current = nowMs;
+      if (!grounded.current) airTop.current = Math.max(airTop.current, p.y);
+      else {
+        if (wasAir && !st.swimming) { const h = airTop.current - p.y, dmg = fallDamage(h, gs.player.maxHp); if (dmg > 0) hurtPlayerByFall(dmg, h, { x: p.x, z: p.z }); }
+        airTop.current = p.y;
+      }
+    } else airSeen.current = 0;
+    // PRECIPÍCIO + CHECKPOINT (05/11, zs-chasm.ts): na FENDA do caminho e nos poços (abismo do Pico, covil do Canibal) queda
+    // livre de mais de FALL_M = volta pro último checkpoint (pego no ar) e perde PIT_PCT da vida — não dá mais pra pular do
+    // balcão direto no fundo
+    if (drive.mode === 'foot' && !dead) {
+      if (grounded.current || !zsCave.inCave) fallFrom.current = p.y;
+      else if (fellIntoChasm(zsCave.inCave, fallFrom.current, p.y, p.x, p.z)) {
+        const c = chasmReturn(zsChasm.last, p.x, fallFrom.current, p.z), h = fallFrom.current - p.y;
+        p.set(c.x, c.y, c.z); vy.current = 0; grounded.current = true; fallFrom.current = c.y; airTop.current = c.y;
+        facing.current = c.yaw; yawNow.current = c.yaw; input.yaw = c.yaw + Math.PI; movement.current.set(c.x, 0, c.z); // câmera atrás, olhando o caminho
+        useZsChasmFx.setState({ at: Date.now() });
+        hurtPlayerByFall(Math.max(1, Math.round(gs.player.maxHp * CHASM.PIT_PCT)), h, { x: c.x, z: c.z }, c.name);
+      }
+      cpAcc.current += dt;
+      if (cpAcc.current > 0.2 && grounded.current && zsCave.inCave) {
+        cpAcc.current = 0;
+        const c = checkpointAt(p.x, p.y, p.z);
+        if (c && zsChasm.last !== c.id) {
+          zsChasm.last = c.id; zsChasm.touched.add(c.id); zsChasm.v++;
+          useGameStore.getState().setMessage(`✔ Checkpoint: ${c.name} — caiu no precipício, volta aqui.`);
+        }
+      }
+    }
     if (drive.mode === 'foot') action.current = dead ? 'death' : rm === 'paddle' ? 'paddle' : rm === 'popup' ? 'popup' : rm === 'ride' ? 'surf' : rolling ? 'swim'
       : st.swimming ? (moving || dive.current > 0.3 ? 'swim' : 'tread') : dodging ? 'dodge'
       // PvP (02/11): atirando NO AR = pulo + tiro por cima; agachado parado/andando/atirando
@@ -1697,6 +1745,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           </ZsSurface>
           {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}
           <ZsCave t={t} heroRef={heroRef} />
+          {/* MARCOS DE CHECKPOINT do parkour até o Canibal (05/11): cristal apagado → aceso quando passa */}
+          <ZsChasmMarks heroRef={heroRef} />
           {/* CANIBAL GIGANTE do covil (04/11): sai do buraco no meio da arena; só desenha com o herói lá no fundo */}
           <AssetBoundary label="ZsCanibal" fallback={null}><Suspense fallback={null}><ZsCanibalBoss heroRef={heroRef} /></Suspense></AssetBoundary>
           <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} shipRef={shipRef} />
