@@ -150,6 +150,9 @@ export function broadcastCarHit(ownerId: string, damage: number): void {
 export type NetCannon = { id: string; b: number[][]; l: number[][]; gap: number };
 /** Salvas recebidas, esperando o desenho do navio pegar (ele esvazia a cada quadro). */
 export const netCannonInbox: NetCannon[] = [];
+/** MÍSSIL DA BAZUCA dos outros (04/11): de onde saiu e onde explode — só DESENHO (o dano é resolvido por quem atirou). */
+export type NetMissile = { id: string; f: [number, number]; t: [number, number]; y?: number };
+export const netMissileInbox: NetMissile[] = [];
 if (import.meta.env.DEV && typeof window !== 'undefined') (window as unknown as { __zsNetCannon?: unknown }).__zsNetCannon = netCannonInbox; // testes
 
 /** Tropa em campo vista pela rede (forma curta). */
@@ -297,6 +300,13 @@ export const useNet = create<NetState>((set, get) => ({
       if (p.id === selfId || !Array.isArray(p.b) || p.b.length > 6) return;
       netCannonInbox.push(p);
       if (netCannonInbox.length > 12) netCannonInbox.splice(0, netCannonInbox.length - 12);
+    });
+
+    ch.on('broadcast', { event: 'missile' }, ({ payload }) => {
+      const p = payload as NetMissile;
+      if (p.id === selfId || !Array.isArray(p.f) || !Array.isArray(p.t) || p.f.length !== 2 || p.t.length !== 2) return;
+      netMissileInbox.push(p);
+      if (netMissileInbox.length > 8) netMissileInbox.splice(0, netMissileInbox.length - 8);
     });
 
     ch.on('broadcast', { event: 'base' }, ({ payload }) => {
@@ -507,6 +517,16 @@ export function broadcastCannon(balls: number[][], lands: number[][], gapMs: num
   void channel.send({
     type: 'broadcast', event: 'cannon',
     payload: { id: useNet.getState().selfId, b: balls.map((a) => a.map(r)), l: lands.map((a) => a.map(r)), gap: gapMs } satisfies NetCannon,
+  });
+}
+
+/** Manda o míssil da bazuca pros outros (04/11): eles veem voar e explodir; o dano é daqui (`explosiveHit`). */
+export function broadcastMissile(from: { x: number; z: number }, to: { x: number; z: number }, toY?: number): void {
+  if (!channel || !useNet.getState().connected) return;
+  const r = (n: number) => Math.round(n * 10) / 10;
+  void channel.send({
+    type: 'broadcast', event: 'missile',
+    payload: { id: useNet.getState().selfId, f: [r(from.x), r(from.z)], t: [r(to.x), r(to.z)], ...(toY !== undefined && Number.isFinite(toY) ? { y: r(toY) } : {}) } satisfies NetMissile,
   });
 }
 

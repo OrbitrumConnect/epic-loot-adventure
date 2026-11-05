@@ -74,3 +74,19 @@ describe('bazuca', () => {
     expect(fs.statSync('public/models/weapons/missile.glb').size).toBeLessThan(400_000);
   });
 });
+
+/* Pedro, 04/11 ("ok seguir pro elite"): o amigo na sala vê o míssil voando e explodindo — só desenho (o dano é de quem atirou). */
+describe('bazuca no online', () => {
+  it('quem atira manda o míssil (origem → explosão); os outros desenham e não aplicam dano', () => {
+    const g = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
+    expect(g).toContain('broadcastMissile(p, at, k < 1 ? undefined : towardY);');
+    const m = fs.readFileSync('src/net/multiplayer.ts', 'utf8');
+    expect(m).toContain("ch.on('broadcast', { event: 'missile' }, ({ payload }) => {");
+    expect(m).toContain('if (netMissileInbox.length > 8) netMissileInbox.splice(0, netMissileInbox.length - 8);');
+    const pr = fs.readFileSync('src/components/world/projectiles.tsx', 'utf8');
+    expect(pr).toContain('while (netMissileInbox.length) {');
+    // o desenho do míssil dos outros não chama dano (só o spawn do projétil)
+    const block = pr.slice(pr.indexOf('while (netMissileInbox.length) {'), pr.indexOf('while (netMissileInbox.length) {') + 400);
+    expect(block).not.toMatch(/explosiveHit|cannonHit|attack\(/);
+  });
+});

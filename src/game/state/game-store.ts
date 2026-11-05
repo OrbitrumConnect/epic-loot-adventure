@@ -85,7 +85,7 @@ import {
   pushEvents, shotEvent, xpEvent, HERO_SHOT_DELAY_MS,
 } from '../systems/feedbackSystem';
 import type { FeedbackDraft } from '../systems/feedbackSystem';
-import { broadcastCreatureHit, broadcastPlayerHit, broadcastWaveSpawn, canSimulateSharedWorld, isMyWave, useNet } from '@/net/multiplayer';
+import { broadcastCreatureHit, broadcastMissile, broadcastPlayerHit, broadcastWaveSpawn, canSimulateSharedWorld, isMyWave, useNet } from '@/net/multiplayer';
 import {
   BOOMERANG_DMG_MULT, BOOMERANG_DURATION_MS, BOOMERANG_HIT_RADIUS, BOOMERANG_PUSH, HERO_POWER_LABEL,
   HERO_POWER_TICK_MS, HERO_POWER_UNLOCK, LIGHTNING_BOLT_MS, LIGHTNING_DMG_MULT, LIGHTNING_SPLASH,
@@ -1404,6 +1404,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       attackTick: s.attackTick + 1,
       feedback: pushEvent(s.feedback, shotEvent(p, at, 'missile', undefined, k < 1 ? undefined : towardY, true), Date.now()),
     });
+    broadcastMissile(p, at, k < 1 ? undefined : towardY); // online: os outros veem voar e explodir (só desenho)
     // o dano cai junto com a bola de fogo (quando o míssil chega)
     const power = get().missilePower();
     setTimeout(() => { get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca'); }, missileFlightMs(Math.min(d, reach)));

@@ -18,6 +18,7 @@ import { MISSILE_URL } from './weapon-models';
 import { extendKTX2, primeKTX2 } from './ktx2-gltf';
 import { requestLight } from './light-pool';
 import { BAZOOKA } from '@/game/data/bazooka';
+import { netMissileInbox } from '@/net/multiplayer';
 
 /** MÍSSIL da bazuca (04/11): o GLB do Pedro deitado no eixo do projétil (ogiva em −X no arquivo → +Y, como o cilindro), 0,9 m. */
 function MissileAssetLoader({ onReady }: { onReady: (a: { geometry: THREE.BufferGeometry; material: THREE.Material }) => void }) {
@@ -172,6 +173,11 @@ export function Projectiles() {
         const live = new Set(fb.map(e => e.id));
         for (const id of seen.current) if (!live.has(id)) seen.current.delete(id);
       }
+    }
+    // MÍSSEIS DOS OUTROS (online, 04/11): voam e explodem aqui também — só desenho (o dano é de quem atirou)
+    while (netMissileInbox.length) {
+      const nm = netMissileInbox.shift()!;
+      spawn({ kind: 'shot', id: -1, position: { x: nm.f[0], z: nm.f[1] }, to: { x: nm.t[0], z: nm.t[1] }, ...(nm.y !== undefined ? { toY: nm.y } : {}), projectile: 'missile', sourceHeight: 1.6 } as unknown as FeedbackEvent);
     }
     for (let i = 0; i < POOL; i++) {
       const s = shots.current[i]!;
