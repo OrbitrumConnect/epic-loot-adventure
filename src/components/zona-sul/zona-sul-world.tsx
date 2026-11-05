@@ -65,6 +65,7 @@ import { HeroPowers } from '@/components/world/hero-powers';
 import { BurstRuntime } from '@/components/world/burst-runtime';
 import { ZsEnemyFleetView } from './zs-enemy-fleet-view';
 import { ZsKrakenBoss } from './zs-kraken-boss-view';
+import { ZsBossBarHud } from './zs-boss-bar';
 import { autoFireItem, manualShot, pressTrigger, releaseTrigger, triggerHeld } from '@/game/systems/burstSystem';
 import { AutoPilot } from '@/components/world/auto-pilot';
 import { BackgroundSim } from '@/components/world/background-sim';
@@ -1708,6 +1709,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
       <ZsWarmOverlay />
       <div ref={perfRef} className="zs-perf" style={{ display: 'none' }} />
       {touch && t && !paused && <ZsTouchArc />}
+      <ZsBossBarHud />
       <div className="zs-credit">Relevo: AWS Terrain Tiles (SRTM) · Mapa: © OpenStreetMap contributors (ODbL)</div>
       {!t && !err && <div className="world-loading">Chegando na Zona Sul…</div>}
       {err && <div className="world-loading" style={{ color: '#ef4444' }}>Erro: {err}</div>}

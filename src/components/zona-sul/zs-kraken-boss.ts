@@ -24,7 +24,7 @@ import { WARSHIP, warshipLocal, warshipWorld } from './zs-warship';
 export const KRAKEN_BOSS = {
   // 04/11 (Pedro, com foto: "aqui!" — mar aberto, de frente pra praia): a OESTE da ponta da Ilha das Palmas, fundo de
   // 12 m, a terra mais perto a ~112 m (as ilhas de fundo, nenhum tentáculo em cima delas). Era (28, 878), colado nas ilhas.
-  LAIR: { x: -248, z: 932 },
+  LAIR: { x: -500, z: 1110 },
   /** parado (sem navio por perto) olha pra PRAIA (norte); com alvo, gira pra ele */
   FACE_BEACH_YAW: Math.PI,
   WAKE_R: 320, SLEEP_R: 600, SLEEP_MS: 30_000, RISE_S: 6,

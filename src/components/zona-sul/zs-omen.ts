@@ -19,22 +19,24 @@ export const OMEN = {
   /** escurece em ~5 s (ele leva 6 pra subir) e o dia volta em ~8 s quando ele afunda/morre */
   IN_S: 5,
   OUT_S: 8,
-  /** sol do CÉU (shader): direção pela hora do relógio — 17,95 h = rente ao horizonte, a faixa vermelha do pôr do sol */
-  SKY_HOUR: 17.95,
-  /** luz principal: baixa (~33°) vinda do oeste (o lado do pôr do sol), avermelhada e fraca */
-  SUN: 0.95,
-  SUN_COLOR: '#ff6a3d',
-  /** céu (hemisfério) e ambiente: bem abaixo do dia (1,5 / 0,35), acima da noite de lua (0,65 / 0,23) */
-  HEMI: 1.1,
-  HEMI_COLOR: '#b9a3c4',
-  GROUND_COLOR: '#3a3040',
-  AMB: 0.28,
-  AMB_COLOR: '#8a5a6a',
-  /** névoa/fundo: vermelho-escuro arroxeado (o horizonte longe some no "fim de tarde pra noite") */
-  FOG: '#5e3b47',
-  /** o céu mais "sujo" e vermelho (turbidez e espalhamento do shader do céu) */
-  TURBIDITY: 6,
-  RAYLEIGH: 1.8,
+  /** sol do CÉU (shader): direção pela hora do relógio. 04/11 (noite, Pedro: "ficou muito escuro — o dia uns 30% mais
+   *  claro; o sol mais aparente, menos pôr do sol"): 17,95 h (rente ao horizonte) → 17 h (o sol à vista, ~14° de altura) */
+  SKY_HOUR: 17,
+  /** luz principal: baixa (~33°) vinda do oeste, quente — 04/11 noite: ~30% mais forte e menos vermelha (0,95 → 1,25) */
+  SUN: 1.25,
+  SUN_COLOR: '#ff9a5a',
+  /** céu (hemisfério) e ambiente: abaixo do dia (1,5 / 0,35), acima da noite de lua (0,65 / 0,23) — 04/11 noite: +30%
+   *  (1,1 → 1,43; 0,28 → 0,34) */
+  HEMI: 1.43,
+  HEMI_COLOR: '#c4b0cc',
+  GROUND_COLOR: '#4a3e4c',
+  AMB: 0.34,
+  AMB_COLOR: '#9a7078',
+  /** névoa/fundo: rosado-arroxeado de fim de tarde (04/11 noite: ~30% mais claro que o vinho escuro de antes) */
+  FOG: '#8a6470',
+  /** o céu um pouco mais "sujo" que o de sempre (turbidez e espalhamento do shader do céu) */
+  TURBIDITY: 5.5,
+  RAYLEIGH: 1.6,
 } as const;
 
 /** Estado compartilhado: o Kraken escreve `target` todo quadro; o dia/noite anda `k` até ele (suave).

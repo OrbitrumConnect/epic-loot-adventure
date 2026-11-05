@@ -35,6 +35,7 @@ import {
 } from './zs-kraken-boss';
 import { type ZsTerrain, zsHeightAt, zsWaterYAt } from './zs-terrain-data';
 import { omenTarget, zsOmen } from './zs-omen';
+import { sameBossBar, useZsBossBar, type ZsBossBar } from './zs-context';
 import { ZsKrakenStorm } from './zs-kraken-storm';
 import { zsNavigable, zsSwimmable } from './zs-world-profile';
 
@@ -183,7 +184,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     for (const m of [water.murk, water.whirl]) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }
     water.tx.murk.dispose(); water.tx.whirl.dispose();
     warshipDrift.x = 0; warshipDrift.z = 0; krakenShapes.segs = []; krakenShapes.body = null;
-    audioManager.setBossMusic(false); zsOmen.target = 0;
+    audioManager.setBossMusic(false); zsOmen.target = 0; useZsBossBar.setState({ bar: null });
   }, [tent, water]);
   const eyes = useMemo(() => {
     const tex = makeGlowTexture();
@@ -450,6 +451,22 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     audioManager.setBossMusic(whirlpoolOn(K.phase) && dHero < KRAKEN_MUSIC_M);
     // ═══ CÉU DO KRAKEN (04/11 — Pedro: "quando ele nasce o dia vira fim de tarde avermelhado escuro"): cada um pela sua distância ═══
     zsOmen.target = omenTarget(whirlpoolOn(K.phase), dHero);
+    // ═══ BARRA DO CHEFE NA TELA (perto e acordado): tentáculos somados enquanto ele está protegido; depois, o corpo ═══
+    {
+      let bar: ZsBossBar | null = null;
+      if (whirlpoolOn(K.phase) && dHero < KRAKEN_MUSIC_M) {
+        const crs = useGameStore.getState().creatures;
+        if (K.bodyOut) {
+          const bc = crs.find((c) => c.id === KRAKEN_BODY_ID);
+          bar = { name: 'Kraken das Cagarras', frac: bc && bc.behavior !== 'dead' ? Math.max(0, bc.hp / bc.maxHp) : 0, sub: 'corpo exposto' };
+        } else {
+          let hp = 0, alive = 0;
+          for (const tn of K.tents) { const c = crs.find((q) => q.id === krakenTentId(tn.i)); if (tn.alive && c && c.behavior !== 'dead') { hp += c.hp; alive++; } }
+          bar = { name: 'Kraken das Cagarras', frac: hp / (KRAKEN_BOSS.TENTACLES * KRAKEN_BOSS.TENT_HP), sub: `tentáculos ${alive}/${KRAKEN_BOSS.TENTACLES}` };
+        }
+      }
+      if (!sameBossBar(bar, useZsBossBar.getState().bar)) useZsBossBar.setState({ bar });
+    }
     // ═══ REDEMOINHO puxa o MEU navio (cada um aplica no seu — o mundo move junto quem está no convés) ═══
     if (my && whirlpoolOn(K.phase) && my.sinkT === null) { const v = whirlpoolPull(K, my, pullBoost(K)); warshipDrift.x = v.x; warshipDrift.z = v.z; }
     else { warshipDrift.x = 0; warshipDrift.z = 0; }

@@ -17,11 +17,13 @@ const read = (p: string) => fs.readFileSync(p, 'utf8');
 const HB = WARSHIP.LENGTH * 0.12, L = KRAKEN_BOSS.LAIR;
 
 describe('Kraken das Cagarras — kaiju', () => {
-  it('mora no mar aberto a OESTE das Palmas (Pedro: "aqui!"), de frente pra praia; as ilhas de fundo, longe dos tentáculos', () => {
-    expect(L).toEqual({ x: -248, z: 932 });
+  it('mora no mar aberto a OESTE das Palmas (Pedro: "aqui!" e depois "mais pro lado, mais afastado das ilhas"), de frente pra praia', () => {
+    // 04/11 (noite, Pedro, na foto: "ele poderia estar bem mais pro lado, um pouco mais afastado das ilhas"): ~310 m pra
+    // oeste/mar aberto — mar fundo (−12 m), a terra mais perto a 310 m (o redemoinho de 210 m não pega ilha)
+    expect(L).toEqual({ x: -500, z: 1110 });
     const palmas = Math.hypot(L.x + 56, L.z - 955);
     expect(palmas).toBeGreaterThan(KRAKEN_BOSS.TENT_RING + 100); // nenhum tentáculo em cima da ilha
-    expect(palmas).toBeLessThan(260);                               // mas as Cagarras de fundo
+    expect(palmas).toBeLessThan(520);                               // as Cagarras ainda de fundo (04/11 noite: mais longe, ~470 m)
     expect(KRAKEN_BOSS.FACE_BEACH_YAW).toBeCloseTo(Math.PI, 5);     // olha pro norte (a praia: z menor)
     expect(read('src/components/zona-sul/zs-kraken-boss-view.tsx')).toContain('ns && ns.d < KRAKEN_BOSS.ROCK_RANGE ? Math.atan2(ns.ship.x - K.x, ns.ship.z - K.z) : KRAKEN_BOSS.FACE_BEACH_YAW');
   });

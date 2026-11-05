@@ -39,7 +39,9 @@ describe('céu do Kraken (fim de tarde)', () => {
   it('o fim de tarde fica entre o dia (1,5 / 0,35) e a noite de lua (0,65 / 0,23); céu com o sol rente ao horizonte', () => {
     expect(OMEN.HEMI).toBeLessThan(1.5); expect(OMEN.HEMI).toBeGreaterThan(0.65);
     expect(OMEN.AMB).toBeLessThan(0.35); expect(OMEN.AMB).toBeGreaterThan(0.23);
-    expect(OMEN.SKY_HOUR).toBeGreaterThan(17.5); expect(OMEN.SKY_HOUR).toBeLessThan(18.5);
+    // 04/11 (noite, Pedro: "o sol mais aparente, menos pôr do sol" + "~30% mais claro"): o sol à vista (~17 h), não rente
+    expect(OMEN.SKY_HOUR).toBeGreaterThan(16.5); expect(OMEN.SKY_HOUR).toBeLessThan(17.5);
+    expect(OMEN.HEMI).toBeGreaterThan(1.4); expect(OMEN.SUN).toBeGreaterThan(1.2);
   });
 
   it('é só VISUAL: não mexe no relógio nem na noite dos bichos/postes', () => {
@@ -57,7 +59,7 @@ describe('céu do Kraken (fim de tarde)', () => {
   it('o Kraken liga pela distância do MEU herói e desliga ao sair da Zona Sul', () => {
     const v = fs.readFileSync('src/components/zona-sul/zs-kraken-boss-view.tsx', 'utf8');
     expect(v).toMatch(/zsOmen\.target = omenTarget\(whirlpoolOn\(K\.phase\), dHero\);/);
-    expect(v).toMatch(/audioManager\.setBossMusic\(false\); zsOmen\.target = 0;/);
+    expect(v).toMatch(/audioManager\.setBossMusic\(false\); zsOmen\.target = 0; useZsBossBar\.setState\(\{ bar: null \}\);/);
   });
 });
 
@@ -120,5 +122,28 @@ describe('olhos vermelhos + neon leve nos tentáculos', () => {
     expect(v).toMatch(/NEON_MIN: 0\.3,\n  NEON_MAX: 0\.55,/);
     expect(v).toMatch(/g\.fillStyle = '#1a0610'; g\.fillRect\(0, 0, 64, 128\); \/\/ = o emissive antigo/);
     expect(v).not.toMatch(/new THREE\.PointLight/);
+  });
+});
+
+/* Pedro, 04/11 (noite): "o Kraken apareceu mas a música dele não — por quê?!" e "tem barra de vida? vi no tentáculo, mas
+   quando ele solta não vi". */
+describe('música e barra do chefe', () => {
+  it('o tema do chefe toca mesmo com a música do jogo parada (o volume geral manda)', () => {
+    const a = fs.readFileSync('src/game/audio/audio-manager.ts', 'utf8');
+    expect(a).toMatch(/if \(!this\.boss\) \{ this\.boss = new Audio\(BOSS_TRACK_URL\); this\.boss\.loop = true; this\.boss\.volume = 0; \}\r?\n\s+void this\.boss\.play\(\)\.catch\(\(\) => \{\}\);\r?\n\s+if \(!this\.raf\) this\.raf = requestAnimationFrame\(this\.loop\);/);
+    expect(a).toMatch(/if \(this\.boss && \(this\.bossOn \|\| !this\.boss\.paused\)\) \{\r?\n\s+this\.fadeBoss\(\);/);
+    expect(a).toMatch(/const target = on \? Math\.min\(1, this\.master \* 1\.1\) : 0;/);
+  });
+  it('barra na tela: tentáculos somados enquanto ele está protegido, depois o corpo; só perto e acordado', async () => {
+    const { sameBossBar } = await import('@/components/zona-sul/zs-context');
+    expect(sameBossBar(null, null)).toBe(true);
+    expect(sameBossBar({ name: 'K', frac: 0.5, sub: 'a' }, { name: 'K', frac: 0.501, sub: 'a' })).toBe(true);
+    expect(sameBossBar({ name: 'K', frac: 0.5, sub: 'a' }, { name: 'K', frac: 0.52, sub: 'a' })).toBe(false);
+    expect(sameBossBar({ name: 'K', frac: 0.5, sub: 'a' }, null)).toBe(false);
+    const v = fs.readFileSync('src/components/zona-sul/zs-kraken-boss-view.tsx', 'utf8');
+    expect(v).toMatch(/if \(whirlpoolOn\(K\.phase\) && dHero < KRAKEN_MUSIC_M\) \{/);
+    expect(v).toMatch(/sub: 'corpo exposto'/);
+    expect(v).toMatch(/frac: hp \/ \(KRAKEN_BOSS\.TENTACLES \* KRAKEN_BOSS\.TENT_HP\)/);
+    expect(fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8')).toContain('<ZsBossBarHud />');
   });
 });

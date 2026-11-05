@@ -152,14 +152,26 @@ class AudioManager {
     this.emit();
   }
 
-  /** Chefe acordado por perto (o Kraken das Cagarras chama todo quadro). Respeita o player: música parada = nada. */
+  /** Chefe acordado por perto (o Kraken das Cagarras chama todo quadro). 04/11 (noite, Pedro: "o Kraken apareceu mas a
+   *  música dele não — por quê?"): antes só tocava com a música do jogo LIGADA (▶/■); agora o tema do chefe é um EVENTO —
+   *  toca mesmo com a música parada (o volume geral manda: 0 = mudo). */
   setBossMusic(on: boolean) {
     if (on === this.bossOn) return;
     this.bossOn = on;
     if (on && typeof Audio !== 'undefined') {
       if (!this.boss) { this.boss = new Audio(BOSS_TRACK_URL); this.boss.loop = true; this.boss.volume = 0; }
-      if (this.playing) void this.boss.play().catch(() => {});
+      void this.boss.play().catch(() => {});
+      if (!this.raf) this.raf = requestAnimationFrame(this.loop);
     }
+  }
+  /** O tema do chefe sobe (ligado) ou desce até pausar (desligado) — fade igual ao de sempre. */
+  private fadeBoss() {
+    if (!this.boss) return;
+    const on = this.bossOn;
+    const target = on ? Math.min(1, this.master * 1.1) : 0;
+    this.boss.volume = Math.max(0, Math.min(1, this.boss.volume + (target - this.boss.volume) * 0.04));
+    if (on && this.boss.paused) void this.boss.play().catch(() => {});
+    if (!on && this.boss.volume < 0.01 && !this.boss.paused) this.boss.pause();
   }
   /** Sinaliza um ataque/combate: segura a trilha de combate por alguns segundos. */
   pulseCombat(now = Date.now()) { this.combatUntil = now + COMBAT_HOLD_MS; }
@@ -243,19 +255,21 @@ class AudioManager {
   }
 
   private loop = () => {
-    if (!this.playing || !this.ambient || !this.combat) { this.raf = 0; return; }
+    // música do jogo parada: só o tema do CHEFE (sobe/desce o volume e pausa quando zera; aí o laço para)
+    if (!this.playing || !this.ambient || !this.combat) {
+      if (this.boss && (this.bossOn || !this.boss.paused)) {
+        this.fadeBoss();
+        this.raf = requestAnimationFrame(this.loop);
+      } else this.raf = 0;
+      return;
+    }
     const inCombat = Date.now() < this.combatUntil;
     // Normal reduzida; no combate ela abaixa e a trilha tensa sobe (+~20% no topo).
     // CHEFE por perto (04/11): as duas descem e a do chefe sobe (fade igual); acabou = pausa quando zera.
     const boss = this.bossOn && !!this.boss;
     const ambTarget = boss ? 0 : this.master * (inCombat ? 0.35 : 0.55);
     const comTarget = boss ? 0 : inCombat ? Math.min(1, this.master * 1.2) : 0;
-    if (this.boss) {
-      const bossTarget = boss ? Math.min(1, this.master * 1.1) : 0;
-      this.boss.volume = Math.max(0, Math.min(1, this.boss.volume + (bossTarget - this.boss.volume) * 0.04));
-      if (boss && this.boss.paused) void this.boss.play().catch(() => {});
-      if (!boss && this.boss.volume < 0.01 && !this.boss.paused) this.boss.pause();
-    }
+    this.fadeBoss();
     this.ambient.volume += (ambTarget - this.ambient.volume) * 0.08; // fade suave
     this.combat.volume += (comTarget - this.combat.volume) * 0.08;
     this.raf = requestAnimationFrame(this.loop);

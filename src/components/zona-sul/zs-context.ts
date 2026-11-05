@@ -21,6 +21,15 @@ export const ZS_CROUCH_SPEED = 0.9, ZS_CROUCH_CAM_DROP = 0.55;
 export const zsCave = { inCave: false, dark: 0, near: false, deep: false,
   /** a mais de 20 m de uma boca: o MAR some na hora (o plano da água em y = 0 cortava o túnel abaixo do nível do mar) */
   seaOff: false };
+/** BARRA DO CHEFE NA TELA (04/11, Pedro: "o Kraken tem barra de vida? vi no tentáculo, mas quando ele solta não vi"): a barra
+ *  em cima do corpo fica a ~70 m de altura (fora do quadro do navio). O chefe escreve (só quando MUDA); a tela lê. */
+export type ZsBossBar = { name: string; frac: number; sub: string };
+export const useZsBossBar = create<{ bar: ZsBossBar | null }>(() => ({ bar: null }));
+/** Mesma barra (nome, sub e vida a cada 0,5%)? — pra não redesenhar à toa. */
+export function sameBossBar(a: ZsBossBar | null, b: ZsBossBar | null): boolean {
+  if (!a || !b) return a === b;
+  return a.name === b.name && a.sub === b.sub && Math.round(a.frac * 200) === Math.round(b.frac * 200);
+}
 /** Ataque da casa do jogo (`hitNearest`) — o clique esquerdo do mundo chama. */
 export const zsAttack: { fn: (() => void) | null } = { fn: null };
 
