@@ -145,6 +145,11 @@ export const RIFLE_HOLD = { DOWN: 0.15, FWD: 0.12 } as const;
 export function fitFooled(bindH: number, skH: number): boolean {
   return skH > 1e-4 && skH > bindH && Math.log(skH / bindH) > 0.5;
 }
+/** A régua de ANTES de 04/11 (enganada pros dois lados) — só pra quem o Pedro quer no tamanho de antes (`legacyFit`:
+ *  Couraça e Fúngica — "na horda eram 2× e 3× maiores, não pedi pra diminuir"). Idêntica à conta antiga. */
+export function fitFooledLegacy(bindH: number, skH: number): boolean {
+  return skH > 1e-4 && Math.abs(Math.log(skH / bindH)) > 0.5;
+}
 function measureGeoBox(root: THREE.Object3D): THREE.Box3 {
   const box = new THREE.Box3();
   const tmp = new THREE.Box3();
@@ -232,6 +237,7 @@ export function GlbHeroMixamo({
   scale = 1,
   yaw = 0,
   autoHeight = 1.8,
+  legacyFit = false,
   walkSync = 0.6,
   runSync = 0.26,
   standFixX = STAND_FIX_X,
@@ -304,6 +310,8 @@ export function GlbHeroMixamo({
   yaw?: number;
   /** Escala o modelo pra esta altura (m) e planta os pés em y=0. */
   autoHeight?: number;
+  /** 04/11: usa a régua de ANTES (`fitFooledLegacy`) — o tamanho que o Pedro via (Couraça/Fúngica). */
+  legacyFit?: boolean;
   walkSync?: number;
   /** Cadência da CORRIDA (separada do walk): clip de run tem passada maior. */
   runSync?: number;
@@ -346,7 +354,7 @@ export function GlbHeroMixamo({
   const cloned = useMemo(() => {
     const c = skeletonClone(scene);
     if (bindFix) poseToBind(c); // antes de medir/escalar: raiz ainda na origem
-    const fitKey = `${charUrl}|${autoHeight}|${bindFix}`;
+    const fitKey = `${charUrl}|${autoHeight}|${bindFix}|${legacyFit ? 'L' : ''}`;
     const fit = rangedAttack ? undefined : fitCache.get(fitKey);
     if (fit) { // mesmo modelo já medido: mesma escala/posição (sem medir a malha animada de novo)
       c.scale.setScalar(fit.s); c.position.set(fit.p[0], fit.p[1], fit.p[2]);
@@ -370,7 +378,7 @@ export function GlbHeroMixamo({
       // Nos modelos com `bindFix` (pirata, pântano, spiked, brutamontes, alien) o esqueleto posto na ligação fica
       // DEITADO e a caixa skinned media a espessura (0,4–0,6 m × 1,64 em pé) → "enganado" ao contrário → 3–6× maiores
       // e pé fora do chão. Só conta como enganado quando a skinned é MAIOR que a bind.
-      const fooled = fitFooled(bindH, skH);
+      const fooled = legacyFit ? fitFooledLegacy(bindH, skH) : fitFooled(bindH, skH);
       const h = fooled ? skH : bindH;
       c.scale.setScalar(autoHeight / h);
       c.updateMatrixWorld(true);
@@ -388,7 +396,7 @@ export function GlbHeroMixamo({
     c.userData['bodyLen'] = head && toe ? head.getWorldPosition(new THREE.Vector3()).distanceTo(toe.getWorldPosition(new THREE.Vector3())) : 0;
     if (!rangedAttack) fitCache.set(fitKey, { s: c.scale.x, p: [c.position.x, c.position.y, c.position.z], fooled: c.userData['fooled'] === true, bodyLen: c.userData['bodyLen'] as number });
     return c;
-  }, [scene, autoHeight, bindFix, charUrl, rangedAttack]);
+  }, [scene, autoHeight, bindFix, charUrl, rangedAttack, legacyFit]);
 
   // Nomes de osso que EXISTEM no Red (p/ filtrar tracks de dedos que as anims
   // Mixamo trazem mas o mesh não tem → evita warnings e trabalho à toa).

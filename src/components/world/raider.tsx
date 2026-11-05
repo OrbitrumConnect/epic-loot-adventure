@@ -66,7 +66,13 @@ export const CAMP_SCALE = 0.49;
 // a menos"): o ×0,49 de 25/10 foi pedido com os modelos `bindFix` 3–4× GIGANTES (bug da régua, corrigido hoje —
 // glb-hero-mixamo `fitFooled`). Com o tamanho certo ele os deixava MENORES que o herói (pirata 0,88 m) → os `bindFix` no
 // acampamento ficam no tamanho de projeto (×1): pirata 1,85 · Pântano 1,9 · Brutamontes 2,3 · Fúngico 2,87; Couraça 1,16.
-export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 1.16, raider_shaman: 0.75, raider_scout: 1, raider_warrior: 1, raider_brute: 1, raider_mushroom: 1 };
+// 04/11 (noite, Pedro: "na horda a Aberração Fúngica era 2× o tamanho que está e a Couraça umas 3× — não pedi pra diminuir"):
+// as duas voltam pra régua de ANTES (`LEGACY_FIT`) — o tamanho de antes em todo lugar (horda, fortim, acampamento, salão do
+// chefe); a Fúngica sai daqui (volta ao ×0,49 de antes no acampamento, que era com a régua velha).
+export const CAMP_SCALE_BY: Record<string, number> = { raider_samurai: 1.16, raider_shaman: 0.75, raider_scout: 1, raider_warrior: 1, raider_brute: 1 };
+/** Régua de ANTES de 04/11 (`fitFooledLegacy`): Couraça (spiked, ~3,9× o número) e Fúngica (alien, ~2,7×) no tamanho que o
+ *  Pedro via. Os outros `bindFix` (pirata, pântano, brutamontes) seguem a régua certa. */
+export const LEGACY_FIT = new Set(['raider_samurai', 'raider_mushroom']);
 /**
  * ATIRADORES de acampamento (Pedro 25/10: "quais inimigos podemos pôr arma pra atirar nos acampamentos"): o pirata
  * (guarda da frente) atira de FUZIL (o mesmo do herói, Pedro 26/10) de 12 m — mesmo dano/cadência dele, persegue correndo, para no alcance e atira.
@@ -483,9 +489,10 @@ function RaiderImpl({
   const sizeK = isCampSpawn(creatureId) ? (CAMP_SCALE_BY[speciesId] ?? CAMP_SCALE) : 1;
   const hordeRuns = hordeSpeedScale(creatureId, speciesId) >= HORDE_RUN_FROM;
   const campRuns = campChaseScale(isCampSpawn(creatureId), speciesId) > 1;
-  // Pirata de ACAMPAMENTO atira de fuzil (Pedro 25–26/10); na horda segue na faca. 01/11: os BANDIDOS armados soltos nos
-  // morros da Zona Sul (`wild_bandit_`) também.
-  const gunner = (isCampSpawn(creatureId) || isZsBandit(creatureId)) && CAMP_GUNNERS.has(speciesId);
+  // Pirata de ACAMPAMENTO atira de fuzil (Pedro 25–26/10). 01/11: os BANDIDOS armados soltos nos morros da Zona Sul
+  // (`wild_bandit_`) também. 04/11 (Pedro: "na horda pode pôr eles armados"): e o da HORDA (`wave…`) — atira no jogador de
+  // 12 m (rajada de 3, o mesmo golpe); o cerco da base não muda (anda até a peça encostada e bate).
+  const gunner = (isCampSpawn(creatureId) || isZsBandit(creatureId) || creatureId.startsWith('wave')) && CAMP_GUNNERS.has(speciesId);
   const archer = speciesId === 'raider_shaman', forestArcher = isZsArcher(creatureId);
   const tuning = useMemo(() => (gunner ? campGunnerTuning(spec.tuning, sizeK) : archer ? archerTuning(spec.tuning, sizeK, forestArcher) : spec.tuning), [gunner, archer, forestArcher, spec.tuning, sizeK]);
   const bodyRadius = mxBody ? mxBody.height * sizeK * 0.22 : Math.max(0.45, spec.bodyWidth * (spec.boss ? (spec.bossScale ?? BOSS_GLB_SCALE) : spec.scale) * 0.45);
@@ -598,6 +605,7 @@ function RaiderImpl({
               charUrl={mx.url}
               actionRef={bossAction}
               autoHeight={mx.height * sizeK}
+              legacyFit={LEGACY_FIT.has(speciesId)}
               standFixX={mx.standFixX}
               forceBow={mx.forceBow ?? false}
               forceGun={gunner}

@@ -88,7 +88,11 @@ describe('assenta ao NASCER, em qualquer distância', () => {
     // Couraça ~2,9 m no acampamento — 03/11: a da horda ficou 2,49 m (−25%), a do fortim segue ~2,9 (2,49 × 1,16)
     // 03/11 (Pedro: "o saqueador xamã está pequeno"): + o xamã (arqueiro) 0,75 no acampamento
     // 04/11: os `bindFix` no acampamento no tamanho de projeto (o ×0,49 compensava o bug dos gigantes — tamanho-bindfix)
-    expect(r).toMatch(/export const CAMP_SCALE_BY: Record<string, number> = \{ raider_samurai: 1\.16, raider_shaman: 0\.75, raider_scout: 1, raider_warrior: 1, raider_brute: 1, raider_mushroom: 1 \};/);
+    // 04/11 (noite, Pedro: "na horda a Fúngica era 2× e a Couraça 3× — não pedi pra diminuir"): as duas voltam pra régua de
+    // ANTES (LEGACY_FIT) em todo lugar; a Fúngica sai do ×1 e volta ao ×0,49 do acampamento (o que era com a régua velha)
+    expect(r).toMatch(/export const CAMP_SCALE_BY: Record<string, number> = \{ raider_samurai: 1\.16, raider_shaman: 0\.75, raider_scout: 1, raider_warrior: 1, raider_brute: 1 \};/);
+    expect(r).toMatch(/export const LEGACY_FIT = new Set\(\['raider_samurai', 'raider_mushroom'\]\);/);
+    expect(r).toMatch(/legacyFit=\{LEGACY_FIT\.has\(speciesId\)\}/);
     expect(r).toMatch(/raider_samurai: \{ url: '\/models\/raiders\/spiked\.glb', standFixX: Math\.PI \/ 2, height: 2\.49,/);
     expect(r).toMatch(/autoHeight=\{mx\.height \* sizeK\}/);
   });

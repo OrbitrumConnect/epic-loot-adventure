@@ -34,7 +34,7 @@ describe('bandidos armados nos morros + fauna +10%', () => {
     const anchors = Array.from({ length: ZS_BANDIT_GROUPS }, (_, i) => b[i * ZS_BANDITS_PER_GROUP]!.position);
     for (let i = 0; i < anchors.length; i++) for (let j = i + 1; j < anchors.length; j++) expect(Math.hypot(anchors[i]!.x - anchors[j]!.x, anchors[i]!.z - anchors[j]!.z)).toBeGreaterThan(130);
     // atiram de fuzil (como o pirata de acampamento) e não somem ao retomar uma sala salva
-    expect(fs.readFileSync('src/components/world/raider.tsx', 'utf8')).toMatch(/const gunner = \(isCampSpawn\(creatureId\) \|\| isZsBandit\(creatureId\)\) && CAMP_GUNNERS\.has\(speciesId\);/);
+    expect(fs.readFileSync('src/components/world/raider.tsx', 'utf8')).toMatch(/const gunner = \(isCampSpawn\(creatureId\) \|\| isZsBandit\(creatureId\) \|\| creatureId\.startsWith\('wave'\)\) && CAMP_GUNNERS\.has\(speciesId\);/);
     expect(mergeResumedWorld(b, []).length).toBe(b.length);
     // fauna +10% (149 → 164)
     expect(ZS_FAUNA.reduce((s, r) => s + r.count, 0)).toBe(164);
