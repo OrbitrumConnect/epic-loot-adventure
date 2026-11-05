@@ -48,6 +48,8 @@ export const CANIBAL_LOOK = { EYE_COLOR: '#ff2a14', EYE_GLOW: 4, NEON: '#3dff7a'
  *  Andar 2,5 m/s → clip 0,5× · correr 4,5 m/s → clip ~0,54× (com 40 m). O passo é proporcional à altura: menor = passo mais
  *  curto = o clip roda mais rápido pra mesma velocidade (05/11: passo × altura fixo — 0,2 × 40 m — sem "patinar"). */
 export const CANIBAL_STEP = { WALK: 8 / CANIBAL.BODY_H, RUN: 4.8 / CANIBAL.BODY_H } as const;
+/** machado 30% menor que o "de homem" na escala dele (05/11) */
+export const CANIBAL_AXE_K = 0.7;
 const canibalPulse = (t: number) => CANIBAL_LOOK.GLOW_MIN + (CANIBAL_LOOK.GLOW_MAX - CANIBAL_LOOK.GLOW_MIN) * (0.5 + 0.5 * Math.sin(t * 1.6));
 /** pintas verdes nas raízes (o mesmo jeito do neon do Kraken: mapa de brilho, sem luz nova) */
 function makeRootNeon(): THREE.CanvasTexture {
@@ -99,7 +101,9 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
   const mx = MIXAMO_RAIDER['raider_cannibal']!;
   // 05/11 (Pedro: "dá pra pôr machado na mão dele? tem animação de pulando com machado"): o MACHADO GLB na mão (cresce
   // junto com o corpo) — o pulo (Mutant Jump Attack) vira o salto com machadada; o golpe, machadada
-  const axe = useMemo(() => <HeldItem c={palette()} itemId="axe" />, []);
+  // 05/11 (Pedro: "o machado tá correto, mas a parte que corta precisa virar pra ele — está virada pro outro lado; pode ter
+  // menos tamanho, uns 30%"): girado meia volta em volta do CABO (o cabo é o eixo Z da pega) e 30% menor (CANIBAL_AXE_K)
+  const axe = useMemo(() => <group rotation={[0, 0, Math.PI]}><HeldItem c={palette()} itemId="axe" /></group>, []);
   const roots = useMemo(() => {
     const geo = new THREE.CylinderGeometry(0.75, 1, 1, 9, 1);
     geo.translate(0, 0.5, 0);
@@ -143,7 +147,19 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
     eyes.tex.dispose(); eyes.coreGeo.dispose(); eyes.glowGeo.dispose(); eyes.coreMat.dispose(); eyes.glowMat.dispose();
   }, [roots, pit, eyes]);
 
-  /** dano de uma chicotada/pancada em todos no raio — o MEU herói direto (empurrão, agarrão), os outros pela rede */
+  /** CRIAS do Canibal (Canibal comum mais fraco) em volta de `at` (a `d0` m, em leque) — na raiz cortada e ao nascer. */
+function makeCrias(n: number, at: { x: number; z: number }, d0: number, tag: string, now: number): CreatureState[] {
+  const def = CREATURES['raider_cannibal'];
+  if (!def || n <= 0) return [];
+  const out: CreatureState[] = [], hp = Math.round(def.maxHp * CANIBAL.CRIA_HP_K);
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2 + tag.length, d = d0 + (k % 3) * 2.5;
+    out.push({ id: `${CANIBAL_CRIA_PREFIX}${tag}_${k}_${now}`, speciesId: def.id, name: 'Cria do Canibal', hp, maxHp: hp, attackPower: Math.round(def.attackPower * CANIBAL.CRIA_ATK_K), armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0, position: { x: Math.round((at.x + Math.sin(a) * d) * 10) / 10, z: Math.round((at.z + Math.cos(a) * d) * 10) / 10 }, behavior: 'chase', lootTable: [], respawnAt: null });
+  }
+  return out;
+}
+
+/** dano de uma chicotada/pancada em todos no raio — o MEU herói direto (empurrão, agarrão), os outros pela rede */
   const strike = (x: number, z: number, r: number, dmg: number, push: number, who: string, grabBy: string | null) => {
     const hero = heroRef.current, net = useNet.getState();
     if (Math.hypot(hero.x - x, hero.z - z) <= r && hero.y < CANIBAL.WAKE_BELOW + 20) {
@@ -198,9 +214,10 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
       const store = useGameStore.getState();
       if (prev !== C.phase) {
         if (C.phase === 'rise') {
-          // nasce o corpo e as raízes na store (vida cheia)
+          // nasce o corpo e as raízes na store (vida cheia) — e já com CRIA_ON_RISE crias em volta do buraco (05/11)
           const fresh: CreatureState[] = [bossCreature(CANIBAL_BODY_ID, CANIBAL.NAME, CANIBAL.BODY_HP, CANIBAL_AT)];
           for (let i = 0; i < CANIBAL.ROOTS; i++) fresh.push(bossCreature(canibalRootId(i), 'Raiz do Canibal', CANIBAL.ROOT_HP, rootBase(i)));
+          fresh.push(...makeCrias(CANIBAL.CRIA_ON_RISE, CANIBAL_AT, CANIBAL.PIT_R + 4, 'rise', now));
           useGameStore.setState((s) => ({ creatures: [...s.creatures.filter((c) => !c.id.startsWith('zs_canibal_')), ...fresh] }));
           C.act = 'roar'; S.actUntil = now + CANIBAL.RISE_S * 1000;
           if (heroDist < NEAR_M) store.setMessage(`👹 O CANIBAL GIGANTE saiu do buraco! (recomendado nível ${CANIBAL.REC_LEVEL}+ — a BAZUCA dói mais; em grupo, menos)`);
@@ -229,11 +246,7 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
             const alive = crs.filter((c) => c.id.startsWith(CANIBAL_CRIA_PREFIX) && c.behavior !== 'dead').length;
             const n = criaCount(cut, alive), def = CREATURES['raider_cannibal'];
             if (n > 0 && def) {
-              const b = rootBase(r.i), fresh: CreatureState[] = [];
-              for (let k = 0; k < n; k++) {
-                const a = (k / n) * Math.PI * 2 + r.i, d = 5 + (k % 3) * 2.5, hp = Math.round(def.maxHp * CANIBAL.CRIA_HP_K);
-                fresh.push({ id: `${CANIBAL_CRIA_PREFIX}${r.i}_${k}_${now}`, speciesId: def.id, name: 'Cria do Canibal', hp, maxHp: hp, attackPower: Math.round(def.attackPower * CANIBAL.CRIA_ATK_K), armor: def.armor, attackCooldown: def.attackCooldown, lastAttackAt: 0, position: { x: Math.round((b.x + Math.sin(a) * d) * 10) / 10, z: Math.round((b.z + Math.cos(a) * d) * 10) / 10 }, behavior: 'chase', lootTable: [], respawnAt: null });
-              }
+              const fresh = makeCrias(n, rootBase(r.i), 5, String(r.i), now);
               useGameStore.setState((s) => ({ creatures: [...s.creatures, ...fresh] }));
               if (heroDist < NEAR_M) useGameStore.getState().setMessage(`🔪 Raiz cortada! ${n} crias do Canibal sobem do buraco! (${cut}/${CANIBAL.ROOTS})`);
             }
@@ -420,7 +433,7 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
       <primitive object={eyes.g} />
       <group ref={body} visible={false}>
         <Suspense fallback={null}>
-          <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} speedRef={bodySpeed} walkSync={CANIBAL_STEP.WALK} runSync={CANIBAL_STEP.RUN} autoHeight={CANIBAL.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} weapon={axe} gripScale={CANIBAL.BODY_H / 1.8} {...mixClipProps(mx.clips)} />
+          <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} speedRef={bodySpeed} walkSync={CANIBAL_STEP.WALK} runSync={CANIBAL_STEP.RUN} autoHeight={CANIBAL.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} weapon={axe} gripScale={(CANIBAL.BODY_H / 1.8) * CANIBAL_AXE_K} {...mixClipProps(mx.clips)} />
         </Suspense>
       </group>
     </>

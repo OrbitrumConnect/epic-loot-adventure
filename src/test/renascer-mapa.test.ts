@@ -71,18 +71,6 @@ describe('renascer escolhendo no mapa', () => {
     expect(samePoints(a, spawnPoints({ ...base, ship: { ...base.ship!, gone: true } }))).toBe(false);
     expect(samePoints(a, spawnPoints({ ...base, car: null }))).toBe(false);
   });
-  it('morreu no caminho do Canibal (Pedro: "joga lá pra porta da cave, início de tudo"): a ENTRADA DA CAVERNA aparece, sem espera', () => {
-    expect(kinds(base)).not.toContain('cave');                                       // sem morrer na caverna: nem aparece
-    const p = spawnPoints({ ...base, cave: { x: -1110, z: -201 } });
-    expect(p.map((q) => q.kind)).toEqual(['base', 'ship', 'car', 'cave', 'beach']);
-    expect(p.find((q) => q.kind === 'cave')).toMatchObject({ x: -1110, z: -201, ok: true, why: null });
-    expect(resolveSpawn(p, 'cave').kind).toBe('cave');
-    expect(defaultSpawn(p)).toBe('base');                                            // o padrão segue a base
-    const w = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
-    expect(w).toContain('zsRespawnMem.cave = zsChasm.last ? caveEntrySpot() : null; resetChasm(); }');
-    expect(w).toContain('usedAt: zsRespawnMem.usedAt, cave: zsRespawnMem.cave,');
-    expect(w).toContain("} else if (sp.kind === 'cave') {");
-  });
   it('pontos quase no mesmo lugar (carro estacionado do lado da praia): o 2º vai de lado', () => {
     const p = spawnPoints({ ...base, car: { ...base.car!, x: 93, z: 388 }, beach: { x: 90, z: 390 } });
     expect(p.map((q) => q.kind)).toEqual(['base', 'ship', 'car', 'beach']);

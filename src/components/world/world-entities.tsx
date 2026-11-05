@@ -7,7 +7,7 @@
  * só mudança de elenco (spawn/respawn/limpeza) remonta a lista. Tudo que é por
  * quadro continua lendo `getState()` dentro do laço.
  */
-import { bossPower } from '@/game/systems/bossResist';
+import { bossCapHit, bossPower } from '@/game/systems/bossResist';
 import { bigCreatureRadius } from '@/game/systems/bigCreatureRadius';
 import { useFrame } from '@react-three/fiber';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
@@ -290,7 +290,7 @@ export function MultiplayerWorldSync() {
       const lim = 24 + bigCreatureRadius(creature.id);
       if (dx * dx + dz * dz > lim * lim) return;
       // míssil da bazuca atravessa; o Canibal leva só a fração do resto (bossResist, 05/11)
-      const damage = Math.max(1, bossPower(creature.id, Math.round(hit.damage), hit.pierce) - (hit.pierce ? 0 : creature.armor));
+      const damage = bossCapHit(creature.id, !!hit.pierce, creature.maxHp, Math.max(1, bossPower(creature.id, Math.round(hit.damage), hit.pierce) - (hit.pierce ? 0 : creature.armor))); // raiz: ≤ 1/3 por míssil
       const hp = Math.max(0, creature.hp - damage);
       useGameStore.setState((current) => ({
         // Morte pelo golpe do CONVIDADO: mesma regra do resto (horda não renasce; antes renascia em 20 s).

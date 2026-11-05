@@ -78,7 +78,7 @@ export function ZsRespawnScreen({ deathBy }: { deathBy: { name: string; pvp: boo
               <button key={pt.kind} type="button" className="zs-respawn-opt" data-on={on || undefined} disabled={!pt.ok} aria-pressed={on} onClick={() => pick(pt.kind)}>
                 <span aria-hidden="true">{SPAWN_ICON[pt.kind]}</span>
                 <strong>{SPAWN_LABEL[pt.kind]}</strong>
-                <small>{pt.ok ? (pt.kind === def && !choice ? 'padrão' : pt.kind === 'ship' || pt.kind === 'car' ? `espera ${RESPAWN.VEH_CD_MS / 60_000} min depois` : pt.kind === 'cave' ? 'começo do caminho' : 'disponível') : pt.why}</small>
+                <small>{pt.ok ? (pt.kind === def && !choice ? 'padrão' : pt.kind === 'ship' || pt.kind === 'car' ? `espera ${RESPAWN.VEH_CD_MS / 60_000} min depois` : 'disponível') : pt.why}</small>
               </button>
             );
           })}

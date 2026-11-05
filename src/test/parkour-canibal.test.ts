@@ -2,15 +2,17 @@ import fs from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { decodeTerrain, type ZsTerrain, zsHeightAt } from '@/components/zona-sul/zs-terrain-data';
 import { ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
-import { CAVE_ROOMS, CAVE_TUNNELS, caveField, caveFloorAt, caveMove, caveStandAt, setCaveTerrain, spiralY } from '@/components/zona-sul/zs-cave';
-import { CHASM, FALL, caveCheckpoints, caveEntrySpot, chasmReturn, chasmZone, checkpointAt, edgeDrop, fallDamage, fallDamagePct, fellIntoChasm } from '@/components/zona-sul/zs-chasm';
+import { CAVE_ROOMS, CAVE_TUNNELS, caveField, caveFloorAt, caveMove, caveStandAt, RAMP_PIT_D, setCaveTerrain, spiralY } from '@/components/zona-sul/zs-cave';
+import { CHASM, FALL, caveCheckpoints, chasmReturn, chasmZone, checkpointAt, edgeDrop, fallDamage, fallDamagePct, fellIntoChasm } from '@/components/zona-sul/zs-chasm';
 import { ZS_RUN, ZS_WALK } from '@/components/zona-sul/zs-move';
 
 /* Pedro, 05/11: "caminho até ele mais longe com parkour (pula; caiu no precipício volta pro checkpoint)" · "o caminho para o
    boss mais curto vai continuar curto daquele jeito fácil?" · "o ideal seria não ali na descida — a boa seria no TÚNEL, no
    caminho" · "o parkour só vai dar bom se tiver dano de queda — correto por vida e altura". Antes: a garganta (fundo do
    abismo → balcão do covil) tinha 53 m e sem dano de queda se pulava do balcão direto na arena (93 m). Agora: a garganta
-   passa pela FENDA (o precipício com colunas), a rampa do covil é inteira (girada pro balcão novo) e cair dói. */
+   passa pela FENDA (o precipício com colunas), a rampa do covil é inteira (girada pro balcão novo) e cair dói.
+   05/11 noite: "parkour na rampa do boss, alguns" · "passar no canto [da fenda]" · "o check é só antes do parkour do boss e 1
+   nos 2 lados do outro túnel" · "o checkpoint da queda é só no abismo preto do parkour — local que anda, não". */
 let t: ZsTerrain;
 beforeAll(async () => {
   const sharp = (await import('sharp')).default;
@@ -57,6 +59,30 @@ function run(start: { x: number; z: number }, way: { x: number; z: number }[], s
   return { ok: i >= way.length, fell: false, h, cps, jumped, at: i };
 }
 const stones = ch.stones.map((s) => F(s.u, s.v));
+// rampa do covil
+const D = Math.PI / 180, csp = covil.spiral!;
+const rampAt = (deg: number, e: number) => { const th = csp.a0 + csp.dir * deg * D; return { x: covil.x + e * covil.rx * Math.cos(th), z: covil.z + e * covil.rz * Math.sin(th) }; };
+const rampH = (deg: number) => csp.yTop - ((deg * D) / csp.sweep) * (csp.yTop - covil.y);
+const degOf = (x: number, z: number) => ((((Math.atan2((z - covil.z) / covil.rz, (x - covil.x) / covil.rx) - csp.a0) * csp.dir) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) / D;
+/** Desce a rampa de `from`° até `to`° (no meio do anel); `jumps` = pula quando o chão some logo à frente. */
+function runRamp(from: number, to: number, speed: number, jumps: boolean) {
+  const s0 = rampAt(from, 0.93);
+  const h: Hero = { ...s0, y: caveFloorAt(s0.x, s0.z, rampH(from) + 1)!, vy: 0, grounded: true, fallFrom: 0 };
+  h.fallFrom = h.y;
+  const dt = 1 / 60, cps: string[] = [];
+  let jumped = 0;
+  for (let k = 0; k < 60 * 400; k++) {
+    const deg = degOf(h.x, h.z);
+    if (deg >= to) return { ok: true, fell: false, deg, h, cps, jumped };
+    const tg = rampAt(deg + 2.5, 0.93), l = Math.hypot(tg.x - h.x, tg.z - h.z), ux = (tg.x - h.x) / l, uz = (tg.z - h.z) / l;
+    const ahead = caveFloorAt(h.x + ux * 1.0, h.z + uz * 1.0, h.y);
+    const jump = jumps && h.grounded && (ahead === null || ahead < h.y - 2);
+    if (jump) jumped++;
+    if (step(h, ux * speed * dt, uz * speed * dt, jump, dt) === 'fell') return { ok: false, fell: true, deg, h, cps, jumped };
+    if (h.grounded) { const c = checkpointAt(h.x, h.y, h.z); if (c && cps[cps.length - 1] !== c.id) cps.push(c.id); }
+  }
+  return { ok: false, fell: false, deg: degOf(h.x, h.z), h, cps, jumped };
+}
 const westLedge = F(-24, 0), eastLedge = F(24, 0);
 
 describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => {
@@ -89,6 +115,7 @@ describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => 
     let n = 0;
     for (let u = ch.u0 + 0.5; u < ch.u1; u += 0.5) for (let v = -fenda.rz; v <= fenda.rz; v += 0.5) {
       if (ch.stones.some((s) => Math.hypot(u - s.u, v - s.v) < s.r + 0.4)) continue;
+      if (v * ch.ledge!.side > fenda.rz * Math.sqrt(Math.max(0, 1 - (u / fenda.rx) ** 2)) - ch.ledge!.w - 0.6) continue; // a beirada do canto
       const p = F(u, v), fl = caveFloorAt(p.x, p.z, Y + 1);
       if (fl === null || caveField(p.x, Y - 0.5, p.z) > 0) continue; // parede/fora
       n++;
@@ -132,6 +159,17 @@ describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => 
     expect(run(F(-21, 0), [stones[0]!], ZS_WALK, true).fell).toBe(true);
   }, 60_000);
 
+  it('BEIRADA no canto (Pedro: "passar no canto"): colada na parede, quebrada em 2 vãos — pulando atravessa, sem pular cai', () => {
+    const L = ch.ledge!, vOf = (u: number) => (fenda.rz * Math.sqrt(1 - (u / fenda.rx) ** 2) - L.w / 2) * L.side;
+    const path = [-14, -10, -2, 3, 11, 16, 22].map((u) => F(u, vOf(u)));
+    for (const u of [-14, 0, 14]) { const q = F(u, vOf(u)); expect(caveStandAt(q.x, q.z, Y + 1), `beirada em u ${u}`).toBeCloseTo(Y, 1); }
+    for (const g of L.gaps) { const q = F(g.u, vOf(g.u)); expect(caveFloorAt(q.x, q.z, Y + 1)!, `vão da beirada em u ${g.u}`).toBeLessThan(Y - 20); }
+    const r = run(F(-21, vOf(-21)), path, ZS_RUN, true);
+    expect(r.fell, `caiu indo pro ponto ${r.at}`).toBe(false); expect(r.ok).toBe(true);
+    expect(r.jumped).toBeGreaterThanOrEqual(2);
+    expect(run(F(-21, vOf(-21)), path, ZS_RUN, false).fell).toBe(true);
+  }, 60_000);
+
   it('caiu na fenda: pego no ar (antes do fundo), volta pra beira de cá — e custa 25% da vida', () => {
     const h: Hero = { ...F(-16, 0), y: Y, vy: 0, grounded: false, fallFrom: Y };
     let fell = false;
@@ -143,19 +181,54 @@ describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => 
     expect(CHASM.PIT_PCT).toBe(0.25);
   });
 
-  it('a rampa do covil é INTEIRA de novo (sem vão): o atalho de pular do balcão na arena = volta pro checkpoint', () => {
-    // a conta da rampa é a de sempre: qualquer ponto do anel tem a altura da volta
-    const sp = covil.spiral!;
-    for (const deg of [20, 90, 161, 200, 280, 300]) {
-      const th = sp.a0 + (deg * Math.PI) / 180, u = 0.92 * covil.rx * Math.cos(th), v = 0.92 * covil.rz * Math.sin(th);
-      expect(spiralY(covil, u, v)).toBeCloseTo(sp.yTop - ((deg * Math.PI) / 180 / sp.sweep) * (sp.yTop - covil.y), 6);
+  it('RAMPA DO COVIL com parkour (Pedro: "alguns"): 4 vãos + desabamento com 3 colunas; longe deles a rampa é a de sempre', () => {
+    const sp = covil.spiral!, pk = sp.parkour!;
+    expect(pk.gaps.map((g) => g.w)).toEqual([3.2, 3.5, 27, 3.8, 4]);
+    for (const g of pk.gaps) {
+      const q = rampAt(g.at + (pk.stones.some((st) => Math.abs(st.at - g.at) < 1) ? 3.8 : 0), 0.92);
+      // o vão é um POÇO de RAMP_PIT_D m (o "abismo preto"): quem cai é pego aos 9 m, antes do fundo
+      const deg = g.at + (pk.stones.some((st) => Math.abs(st.at - g.at) < 1) ? 3.8 : 0);
+      expect(caveFloorAt(q.x, q.z, rampH(g.at) + 1), `vão ${g.at}°`).toBeCloseTo(rampH(deg) - RAMP_PIT_D, 1);
+      expect(RAMP_PIT_D).toBeGreaterThan(CHASM.FALL_M);
     }
-    const top = caveCheckpoints().find((c) => c.id === 'covil_topo')!;
-    expect(fellIntoChasm(true, top.y, top.y - CHASM.FALL_M - 0.1, covil.x, covil.z)).toBe(true);
-    expect(fellIntoChasm(true, 99, 99 - CHASM.FALL_M - 0.1, abismo.x, abismo.z)).toBe(true);
-    expect(fellIntoChasm(true, 99, 99 - CHASM.FALL_M + 0.5, abismo.x, abismo.z)).toBe(false); // pulinho/degrau não conta
-    expect(fellIntoChasm(false, 99, 50, abismo.x, abismo.z)).toBe(false);                      // fora da caverna, não
-    expect(fellIntoChasm(true, 99, 50, -452, -165)).toBe(false);                               // longe dos precipícios, não
+    for (const st of pk.stones) { const q = rampAt(st.at, st.e); expect(caveStandAt(q.x, q.z, rampH(st.at) + 1), `coluna ${st.at}°`).toBeCloseTo(rampH(st.at), 1); }
+    // longe das peças: a conta de sempre (o lado oeste — perto da superfície na malha — não muda)
+    for (const deg of [5, 15, 90, 110, 130, 300, 330]) {
+      const th = sp.a0 + deg * D, u = 0.92 * covil.rx * Math.cos(th), v = 0.92 * covil.rz * Math.sin(th);
+      expect(spiralY(covil, u, v), `${deg}°`).toBeCloseTo(rampH(deg), 6);
+    }
+  });
+
+  it('RAMPA: do balcão (o checkpoint) até o pé correndo e pulando, sem cair; CADA salto pede pulo', () => {
+    const r = runRamp(12, 330, ZS_RUN, true);
+    expect(r.fell, `caiu em ${r.deg.toFixed(1)}°`).toBe(false); expect(r.ok).toBe(true);
+    expect(r.jumped).toBeGreaterThanOrEqual(8);                      // 4 vãos + 4 saltos no desabamento
+    expect(r.cps).toEqual(['covil_topo']);                           // o único checkpoint: ANTES do parkour
+    const pk = covil.spiral!.parkour!, big = pk.gaps.find((g) => g.w > 10)!;
+    const hops: [string, number, number][] = [
+      ...pk.gaps.filter((g) => g !== big).map((g): [string, number, number] => [`vão ${g.at}°`, g.at - (g.w / 2 + 5) / 58.9 / D, g.at + (g.w / 2 + 2) / 58.9 / D]),
+      ['beira → 1ª coluna', big.at - (big.w / 2 + 4) / 58.9 / D, pk.stones[0]!.at + 1],
+      ...pk.stones.map((st, i): [string, number, number] => [`coluna ${i + 1}`, st.at, (pk.stones[i + 1]?.at ?? big.at + big.w / 2 / 58.9 / D + 2) + 1]),
+    ];
+    for (const [nome, from, to] of hops) {
+      expect(runRamp(from, to, ZS_RUN, false).fell, `${nome}: sem pular passou`).toBe(true);
+      expect(runRamp(from, to, ZS_RUN, true).fell, `${nome}: pulando caiu`).toBe(false);
+    }
+  }, 120_000);
+
+  it('TELEPORTE SÓ NO VÃO do parkour: vão da rampa e vão da fenda sim; cair da rampa pro chão da arena, o abismo da entrada, a beirada e a coluna, não', () => {
+    const pk = covil.spiral!.parkour!, g = pk.gaps[0]!, q = rampAt(g.at, 0.92);
+    expect(chasmZone(q.x, q.z)).toBe('covil');                       // no vão da rampa
+    expect(chasmZone(F(-16, 0).x, F(-16, 0).z)).toBe('fenda');       // no vão da fenda
+    expect(chasmZone(covil.x + 10, covil.z)).toBeNull();             // o chão da arena (lá se anda)
+    const inner = rampAt(g.at + 20, 0.8); expect(chasmZone(inner.x, inner.z)).toBeNull(); // da beira pra arena
+    expect(chasmZone(abismo.x, abismo.z)).toBeNull();                // o abismo do Pico: chão normal (dano de queda)
+    expect(chasmZone(stones[0]!.x, stones[0]!.z)).toBeNull();        // em cima da coluna
+    const ledge = F(0, (fenda.rz - ch.ledge!.w / 2) * ch.ledge!.side); expect(chasmZone(ledge.x, ledge.z)).toBeNull(); // na beirada
+    expect(fellIntoChasm(true, 99, 99 - CHASM.FALL_M - 0.1, abismo.x, abismo.z)).toBe(false);
+    expect(fellIntoChasm(true, 20, 20 - CHASM.FALL_M - 0.1, q.x, q.z)).toBe(true);
+    expect(fellIntoChasm(true, 20, 20 - CHASM.FALL_M + 0.5, q.x, q.z)).toBe(false); // pulinho não conta
+    expect(fellIntoChasm(false, 99, 50, q.x, q.z)).toBe(false);                      // fora da caverna, não
   });
 
   it('DANO DE QUEDA por altura e pela vida: até 6 m nada; 15 m = metade; 24 m mata — a mesma % pro nível 1 e pro 80', () => {
@@ -168,26 +241,19 @@ describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => 
     expect(fallDamage(5, 999999)).toBe(0);
   });
 
-  it('checkpoints: 7 no caminho (abismo 2, fenda 2, covil 3), no chão, cada um pega só perto; o marco fica do lado', () => {
+  it('checkpoints: SÓ 3 (Pedro: "antes do parkour do boss e 1 nos 2 lados do outro túnel"), no chão, cada um pega só perto', () => {
     const all = caveCheckpoints();
-    expect(all.map((c) => c.id)).toEqual(['abismo_topo', 'abismo_fundo', 'fenda_inicio', 'fenda_fim', 'covil_topo', 'covil_meio', 'covil_pe']);
+    expect(all.map((c) => c.id)).toEqual(['fenda_inicio', 'fenda_fim', 'covil_topo']);
     for (const c of all) {
       expect(caveStandAt(c.x, c.z, c.y + 1), c.name).toBeCloseTo(c.y, 1);
       expect(checkpointAt(c.x + 2, c.y, c.z)?.id).toBe(c.id);
       expect(checkpointAt(c.x, c.y + 8, c.z)).toBeNull();
       expect(Math.hypot(c.mark.x - c.x, c.mark.z - c.z), c.name).toBeGreaterThan(2); expect(Math.abs(c.mark.y - c.y), c.name).toBeLessThan(1.5);
     }
-    // o pé da rampa fica abaixo da queda que conta: dali pra arena se desce pulando (com um pouco de dano)
-    expect(all.find((c) => c.id === 'covil_pe')!.y - covil.y).toBeLessThan(CHASM.FALL_M);
-  });
-
-  it('renascer na ENTRADA DA CAVERNA: do lado de fora da boca do Pico, no chão do mapa (não no buraco), olhando pra dentro', () => {
-    const e = caveEntrySpot(), g = zsHeightAt(t, e.x, e.z);
-    expect(Math.abs(g - 108.6)).toBeLessThan(6);                      // na encosta, perto da boca (108,6 m)
-    expect(caveField(e.x, g + 0.5, e.z)).toBeGreaterThan(0);          // fora da caverna (não cai no buraco)
-    const m = CAVE_TUNNELS.find((q) => q.id === 'pico-tijuca')!.pts;
-    expect(Math.hypot(e.x - m[0]!.x, e.z - m[0]!.z)).toBeCloseTo(6, 1);
-    expect(Math.cos(e.yaw - Math.atan2(m[1]!.x - m[0]!.x, m[1]!.z - m[0]!.z))).toBeGreaterThan(0.99); // virado pra boca
+    // o do covil fica ANTES do 1º vão da rampa
+    const top = all.find((c) => c.id === 'covil_topo')!, sp = covil.spiral!;
+    const a = (((Math.atan2((top.z - covil.z) / covil.rz, (top.x - covil.x) / covil.rx) - sp.a0) * sp.dir) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) / D;
+    expect(a).toBeLessThan(sp.parkour!.gaps[0]!.at - 5);
   });
 
   it('o piloto/clique não se joga na beira; ligado no mundo: dano de queda, precipício com dano, checkpoint, tela escura', () => {
@@ -198,8 +264,8 @@ describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => 
     expect(w).toContain('if (nowMs - airSeen.current > 150) airTop.current = p.y;'); // voltou a pé (carro/asa/skate): conta dali
     expect(w).toContain('else if (fellIntoChasm(zsCave.inCave, fallFrom.current, p.y, p.x, p.z)) {');
     expect(w).toContain('hurtPlayerByFall(Math.max(1, Math.round(gs.player.maxHp * CHASM.PIT_PCT)), h, { x: c.x, z: c.z }, c.name);');
-    expect(w).toContain('zsRespawnMem.cave = zsChasm.last ? caveEntrySpot() : null; resetChasm(); }'); // checkpoints valem a vida
-    expect(w).toContain('<ZsChasmMarks heroRef={heroRef} />');
+    expect(w).toContain('resetChasm(); } // checkpoints valem a vida');
+    expect(w).not.toContain('<ZsChasmMarks'); // sem marco desenhado (Pedro: "meio feio")
     expect(fs.readFileSync('src/routes/index.tsx', 'utf8')).toContain('{zs && <ZsChasmFade />}');
   });
 });

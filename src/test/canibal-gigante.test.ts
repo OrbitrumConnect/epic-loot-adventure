@@ -4,7 +4,7 @@ import {
   CANIBAL, CANIBAL_AT, CANIBAL_BODY_ID, CANIBAL_CRIA_PREFIX, canibalMove, canibalPhaseStep, canibalRootId, clampArena, criaCount, leapPos, nearestInArena,
   newCanibal, pushAway, rootBase, rootLean, rootStep, rootTarget, ROOT_SLAM_TOTAL, slamHits,
 } from '@/components/zona-sul/zs-canibal-boss';
-import { bossDamageK, bossPower, CANIBAL_GUN_K, CANIBAL_GUN_MAX } from '@/game/systems/bossResist';
+import { bossCapHit, bossDamageK, bossPower, CANIBAL_GUN_K, CANIBAL_GUN_MAX } from '@/game/systems/bossResist';
 import { CAVE_LAIR } from '@/components/zona-sul/zs-cave';
 import { activeGrab, grabTicksDue, isGrabbed, resetGrabs, startHold, tryStartGrab } from '@/game/systems/grabSystem';
 import { calculateDamage } from '@/game/systems/combatSystem';
@@ -15,9 +15,9 @@ import { calculateDamage } from '@/game/systems/combatSystem';
 describe('Canibal gigante do covil', () => {
   it('no meio da arena do covil; 05/11 (Pedro: "uns 40% menor, em pé" → 66 m; 2ª: "diminuir uns 40% ainda, tá grande") → 40 m; 3ª: "uns 30% menor" → 28 m, inteiro fora do buraco; 6 raízes', () => {
     expect(CANIBAL_AT).toEqual({ x: CAVE_LAIR.x, z: CAVE_LAIR.z, floor: CAVE_LAIR.floor });
-    expect(CANIBAL.BODY_H).toBe(28);
-    expect(CANIBAL.BODY_R).toBeCloseTo(7 * 0.6 * 0.7, 1);
-    expect(CANIBAL.ROOT_LEN).toBeCloseTo(46 * 0.7, 5); expect(CANIBAL.ROOT_REACH).toBe(28); // raízes −30% junto
+    expect(CANIBAL.BODY_H).toBe(19.6);                                        // 05/11 noite: 28 → 19,6 ("uns 30% ainda")
+    expect(CANIBAL.BODY_R).toBeCloseTo(7 * 0.6 * 0.7 * 0.7, 0);
+    expect(CANIBAL.ROOT_LEN).toBeCloseTo(46 * 0.7 * 0.7, 0); expect(CANIBAL.ROOT_REACH).toBe(19.6); // raízes junto
     expect(CANIBAL.SUBMERGED_K).toBe(0);
     expect(CANIBAL.ROOTS).toBe(6);
     for (let i = 0; i < 6; i++) { const b = rootBase(i); expect(Math.hypot(b.x - CANIBAL_AT.x, b.z - CANIBAL_AT.z)).toBeCloseTo(CANIBAL.ROOT_RING, 5); }
@@ -81,14 +81,14 @@ describe('Canibal gigante do covil', () => {
     expect(calculateDamage(CANIBAL_GUN_MAX, 0, () => 0.5)).toBe(5);             // o sorteio do combate em cima: ~4–6
     expect(calculateDamage(3000, 0, () => 0.5)).toBe(3000);
     const g = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
-    expect(g).toContain('const result = resolveAttack(bossPower(c.id, power, pierce), c.hp, c.maxHp, pierce ? 0 : c.armor, c.name, critStats);');
+    expect(g).toContain('const res0 = resolveAttack(bossPower(c.id, power, pierce), c.hp, c.maxHp, pierce ? 0 : c.armor, c.name, critStats);');
     expect(g).toContain('const result = resolveAttack(bossPower(targetId, finalPower), creature.hp, creature.maxHp, creature.armor, creature.name, playerCritStats(state.player));');
     expect(g.split('resolveAttack(bossPower(').length - 1).toBe(5); // alvo, cleave, especial, explosão, poderes
     expect(g).toContain("get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca', true);");
     expect(g).toContain('if (getDistance(at, c.position) - bigCreatureRadius(c.id) > radius) return c;');
     // o convidado: o anfitrião aplica a mesma fração (o míssil passa inteiro) e conta o raio do corpo no limite
     const we = fs.readFileSync('src/components/world/world-entities.tsx', 'utf8');
-    expect(we).toContain('const damage = Math.max(1, bossPower(creature.id, Math.round(hit.damage), hit.pierce) - (hit.pierce ? 0 : creature.armor));');
+    expect(we).toContain('const damage = bossCapHit(creature.id, !!hit.pierce, creature.maxHp, Math.max(1, bossPower(creature.id, Math.round(hit.damage), hit.pierce) - (hit.pierce ? 0 : creature.armor)));');
     expect(we).toContain('const lim = 24 + bigCreatureRadius(creature.id);');
   });
   it('ligado: montado ao lado da caverna, camada da caverna, barra/tema com dono, online (canibal), não renasce sozinho', () => {
@@ -138,7 +138,7 @@ describe('Canibal v2: em pé, anda, corre, pula', () => {
     expect(c.act).toBe('walk'); expect(c.x - CAVE_LAIR.x).toBeCloseTo(CANIBAL.WALK_SPEED, 5);
     const d = newCanibal(); canibalMove(d, CAVE_LAIR.x + 45, CAVE_LAIR.z, 1);
     expect(d.act).toBe('run'); expect(d.x - CAVE_LAIR.x).toBeCloseTo(CANIBAL.RUN_SPEED, 5);
-    const e = newCanibal(); expect(canibalMove(e, CAVE_LAIR.x + 4, CAVE_LAIR.z, 1)).toBe(4); expect(e.act).toBe('idle'); // dentro do alcance (28 m: 5,6)
+    const e = newCanibal(); expect(canibalMove(e, CAVE_LAIR.x + 3, CAVE_LAIR.z, 1)).toBe(3); expect(e.act).toBe('idle'); // dentro do alcance (19,6 m: 3,9)
     expect(e.yaw).toBeCloseTo(Math.PI / 2, 5); // vira pro alvo
     const f = newCanibal(); f.x = CAVE_LAIR.x + CANIBAL.ARENA_R - 1;
     for (let k = 0; k < 20; k++) canibalMove(f, CAVE_LAIR.x + 300, CAVE_LAIR.z, 1);
@@ -157,8 +157,11 @@ describe('Canibal v2: em pé, anda, corre, pula', () => {
   it('desenho: animação pelo que ele faz, machado na mão (escala de gigante), olhos na cabeça, verde só um toque', () => {
     const v = fs.readFileSync('src/components/zona-sul/zs-canibal-boss-view.tsx', 'utf8');
     expect(v).toContain("bodyAction.current = C.phase === 'dead' || C.act === 'death' ? 'death' : C.phase === 'rise' ? 'roar' : (C.act as HeroAction);");
-    expect(v).toContain('const axe = useMemo(() => <HeldItem c={palette()} itemId="axe" />, []);');
-    expect(v).toContain('weapon={axe} gripScale={CANIBAL.BODY_H / 1.8}');
+    expect(v).toContain('<HeldItem c={palette()} itemId="axe" />'); // o machado do jogo (05/11 noite: virado e 30% menor — abaixo)
+    // 05/11 noite (Pedro: "a parte que corta precisa virar pra ele; uns 30% menor"): meia volta no cabo + 30% menor
+    expect(v).toContain('weapon={axe} gripScale={(CANIBAL.BODY_H / 1.8) * CANIBAL_AXE_K}');
+    expect(v).toContain('const axe = useMemo(() => <group rotation={[0, 0, Math.PI]}><HeldItem c={palette()} itemId="axe" /></group>, []);');
+    expect(v).toContain('export const CANIBAL_AXE_K = 0.7;');
     expect(v).toContain('BODY_TINT: 0.25, AXE_GLOW: 0.3 } as const;');
     // o machado fica na cor dele (sem o verde)
     expect(v).toContain("mat.emissive = src.map ? new THREE.Color('#ffffff') : src.color.clone(); mat.emissiveMap = src.map; mat.emissiveIntensity = CANIBAL_LOOK.AXE_GLOW;");
@@ -175,7 +178,7 @@ describe('Canibal v2: em pé, anda, corre, pula', () => {
 describe('Canibal 28 m: mais lento, passo pesado', () => {
   it('andar 2,5 m/s e correr 4,5 m/s (era 5 e 9); alcance da pancada e do pulo junto com o corpo (−40% e −30%)', () => {
     expect(CANIBAL.WALK_SPEED).toBe(2.5); expect(CANIBAL.RUN_SPEED).toBe(4.5);
-    expect(CANIBAL.ATK_REACH).toBe(5.6); expect(CANIBAL.ATK_R).toBe(3.9); expect(CANIBAL.LEAP_R).toBe(5.6);
+    expect(CANIBAL.ATK_REACH).toBe(3.9); expect(CANIBAL.ATK_R).toBe(2.7); expect(CANIBAL.LEAP_R).toBe(3.9);
     expect(CANIBAL.LEAP_FROM).toBeGreaterThan(CANIBAL.RUN_FROM);
   });
   it('o clip de andar/correr roda pela velocidade dele (antes 1× = ritmo de homem, ele "pedalava")', () => {
@@ -183,7 +186,7 @@ describe('Canibal 28 m: mais lento, passo pesado', () => {
     // o passo é proporcional à altura: passo × altura fixo (o de 40 m: 0,2 × 40) — menor, o clip roda mais rápido (sem patinar)
     expect(v).toContain('export const CANIBAL_STEP = { WALK: 8 / CANIBAL.BODY_H, RUN: 4.8 / CANIBAL.BODY_H } as const;');
     const STEP = { WALK: 8 / CANIBAL.BODY_H, RUN: 4.8 / CANIBAL.BODY_H };
-    expect(CANIBAL.WALK_SPEED * STEP.WALK).toBeCloseTo(0.714, 2);
+    expect(CANIBAL.WALK_SPEED * STEP.WALK).toBeCloseTo(2.5 * 8 / 19.6, 5);
     expect(CANIBAL.RUN_SPEED * STEP.RUN).toBeGreaterThanOrEqual(0.4); // o piso do clamp (não trava)
     expect(v).toContain('actionRef={bodyAction} speedRef={bodySpeed} walkSync={CANIBAL_STEP.WALK} runSync={CANIBAL_STEP.RUN}');
     expect(v).toContain("bodySpeed.current = C.act === 'run' ? CANIBAL.RUN_SPEED : C.act === 'walk' ? CANIBAL.WALK_SPEED : 0;");
@@ -198,5 +201,36 @@ describe('de carona atira', () => {
     const w = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
     expect(w).toContain("const canFight = () => !zsPause.on && (drive.mode === 'foot' || drive.mode === 'riding') && !input.overview;");
     expect(w).toContain("if (e.button === 2) { if (canFight() && drive.mode === 'foot') { setAiming(true); el.requestPointerLock?.(); } return; }");
+  });
+});
+
+/* Pedro, 05/11 noite: "o boss só aparece quando chega no chão lá embaixo mesmo" · "quando o boss nasce já nasce com 5 crias,
+   fora as que vêm de tentáculo" · "cada tentáculo destrói com 3 bazukadas — de 1 já foi". */
+describe('Canibal: acorda no chão, 5 crias ao nascer, raiz = 3 bazucadas', () => {
+  it('acorda SÓ com alguém no CHÃO da arena (na rampa, mesmo lá embaixo, não)', () => {
+    expect(CANIBAL.WAKE_BELOW).toBe(-51); expect(CANIBAL.WAKE_R).toBe(50);
+    const A = CANIBAL_AT;
+    expect(nearestInArena([{ x: A.x + 10, y: A.floor, z: A.z }])).toBeCloseTo(10, 5);           // no chão: acorda
+    expect(nearestInArena([{ x: A.x + 56, y: A.floor + 6, z: A.z }])).toBe(Infinity);          // no pé da rampa: não
+    expect(nearestInArena([{ x: A.x + 10, y: A.floor + 30, z: A.z }])).toBe(Infinity);         // lá em cima: não
+    const c = newCanibal(); canibalPhaseStep(c, 1000, 0.1, 55); expect(c.phase).toBe('sleep'); // fora da arena (55 m): dorme
+    canibalPhaseStep(c, 1000, 0.1, 40); expect(c.phase).toBe('rise');
+  });
+  it('nasce com 5 crias (além das da raiz cortada)', () => {
+    expect(CANIBAL.CRIA_ON_RISE).toBe(5);
+    const v = fs.readFileSync('src/components/zona-sul/zs-canibal-boss-view.tsx', 'utf8');
+    expect(v).toContain("fresh.push(...makeCrias(CANIBAL.CRIA_ON_RISE, CANIBAL_AT, CANIBAL.PIT_R + 4, 'rise', now));");
+    expect(v).toContain('const fresh = makeCrias(n, rootBase(r.i), 5, String(r.i), now);');
+  });
+  it('raiz: no máximo 1/3 da vida por míssil (3 bazucadas, qualquer nível); corpo e outros bichos iguais', () => {
+    const hp = CANIBAL.ROOT_HP;
+    expect(bossCapHit(canibalRootId(0), true, hp, 9999)).toBe(Math.ceil(hp / 3));
+    let left = hp, n = 0; while (left > 0) { left -= bossCapHit(canibalRootId(1), true, hp, 9999); n++; }
+    expect(n).toBe(3);
+    expect(bossCapHit(canibalRootId(0), true, hp, 1500)).toBe(1500);          // míssil fraco: mais bazucadas
+    expect(bossCapHit(canibalRootId(0), false, hp, 9999)).toBe(9999);         // não-míssil: a regra de sempre (bossPower)
+    expect(bossCapHit(CANIBAL_BODY_ID, true, CANIBAL.BODY_HP, 9999)).toBe(9999); // o corpo: inteiro
+    expect(bossCapHit('wild_cave_x', true, 500, 9999)).toBe(9999);
+    expect(fs.readFileSync('src/components/world/world-entities.tsx', 'utf8')).toContain('const damage = bossCapHit(creature.id, !!hit.pierce, creature.maxHp,'); // o tiro do convidado também
   });
 });

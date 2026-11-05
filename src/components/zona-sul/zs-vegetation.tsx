@@ -18,7 +18,6 @@ import { withSeeThrough } from './zs-see-through';
 import { useGameStore } from '@/game/state/game-store';
 import { useNet } from '@/net/multiplayer';
 import { BASE_GRID, type PlayerBaseState } from '@/game/types/playerbase';
-import { ruinAt, ruinsVersion } from './zs-ruins';
 
 /** Quadrados das BASES (minha + as dos outros, online) com 3 m de folga: a mata não nasce dentro (31/10, base na Zona Sul). */
 export function baseBoxes(pb: PlayerBaseState | null, others: Record<string, PlayerBaseState | null | undefined>): number[][] {
@@ -358,7 +357,7 @@ export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.Muta
     return { ...m, sh };
   }, []);
   const lastCell = useRef('');
-  const seenVersion = useRef(vegVersion), seenRuins = useRef(-1);
+  const seenVersion = useRef(vegVersion);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const bases = useRef<{ pb: unknown; nb: unknown; boxes: number[][] }>({ pb: undefined, nb: undefined, boxes: [] });
   useEffect(() => { requestVegRoadMask(); }, []);
@@ -369,8 +368,6 @@ export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.Muta
     const pb = useGameStore.getState().playerBase, nb = useNet.getState().bases;
     if (pb !== bases.current.pb || nb !== bases.current.nb) { bases.current = { pb, nb, boxes: baseBoxes(pb, nb) }; lastCell.current = ''; }
     const boxes = bases.current.boxes;
-    // RUÍNAS (05/11): chegaram/mudaram → refaz a mata sem árvore dentro delas
-    if (seenRuins.current !== ruinsVersion()) { seenRuins.current = ruinsVersion(); lastCell.current = ''; }
     const key = `${Math.floor(hx / ZS_VEG_CELL)}_${Math.floor(hz / ZS_VEG_CELL)}`;
     if (key === lastCell.current) return;
     lastCell.current = key;
@@ -378,7 +375,6 @@ export function ZsVegetation({ t, heroRef }: { t: ZsTerrain; heroRef: React.Muta
     const shCounts = { canopy: 0, emergent: 0, farm: 0 } as Record<ShadowKind, number>;
     for (const it of zsVegetationAround(t, hx, hz)) {
       if (boxes.length && boxes.some((b) => it.x > b[0]! && it.x < b[2]! && it.z > b[1]! && it.z < b[3]!)) continue;
-      if (ruinAt(it.x, it.z, 1)) continue; // dentro de ruína (05/11)
       const toShadow = zsVegCastsShadow(it, hx, hz) && shCounts[it.kind as ShadowKind] < SHADOW_CAP[it.kind as ShadowKind];
       if (!toShadow && counts[it.kind] >= CAP[it.kind]) continue;
       const w = it.h * WIDTH[it.kind];

@@ -18,10 +18,11 @@ export const CANIBAL = {
    *  correndo, pulando e atacando, o herói cai no chão"): 110 → 66 m, em pé no chão da arena (sai do buraco e vem).
    *  05/11 (2ª, Pedro: "pode diminuir uns 40% — ainda tá grande … e precisa ser mais lento a movimentação"): 66 → 40 m.
    *  05/11 (3ª, Pedro: "o boss pode diminuir mais uns 20%" e logo depois "o Canibal ainda dá pra deixar uns 30% menor"):
-   *  40 → 28 m (−30% do que estava no jogo; raio, alcances e raízes juntos — a velocidade fica) */
-  BODY_H: 28,
+   *  40 → 28 m (−30% do que estava no jogo; raio, alcances e raízes juntos — a velocidade fica).
+   *  05/11 noite (Pedro, vendo a foto: "ainda tá grande, dá pra diminuir uns 30% ainda"): 28 → 19,6 m (tudo × 0,7 de novo) */
+  BODY_H: 19.6,
   SUBMERGED_K: 0,
-  BODY_R: 2.9,
+  BODY_R: 2,
   /** v2 (05/11): anda/corre atrás de quem está na arena (sem sair dela), pancada que DERRUBA, PULO em quem foge.
    *  05/11 (2ª, "mais lento"): andar 5 → 2,5 m/s, correr 9 → 4,5 m/s (o passo do clip acompanha: CANIBAL_STEP na view) */
   WALK_SPEED: 2.5,
@@ -31,23 +32,25 @@ export const CANIBAL = {
   ARENA_R: 48,
   /** pancada: alcance (m), raio do impacto, intervalo (s), dano, empurrão (m). 05/11 (2ª): alcance/raio −40% junto com o corpo;
    *  (3ª) −30% de novo */
-  ATK_REACH: 5.6,
-  ATK_R: 3.9,
+  ATK_REACH: 3.9,
+  ATK_R: 2.7,
   ATK_EVERY_S: 3.5,
   ATK_DMG: 220,
   ATK_PUSH_M: 12,
   /** PULO: em quem está além de LEAP_FROM m; dura LEAP_S; impacto LEAP_R m (dano/empurrão); de LEAP_EVERY_S em LEAP_EVERY_S */
   LEAP_FROM: 28,
   LEAP_S: 1.3,
-  LEAP_R: 5.6,
+  LEAP_R: 3.9,
   LEAP_DMG: 280,
   LEAP_PUSH_M: 14,
   LEAP_EVERY_S: 9,
   /** o buraco no meio da arena (raio, m) */
   PIT_R: 18,
-  /** acorda: alguém até WAKE_R do centro e já lá embaixo (pé abaixo de WAKE_BELOW); dorme sem ninguém em SLEEP_R por SLEEP_MS */
-  WAKE_R: 62,
-  WAKE_BELOW: -25,
+  /** acorda: alguém até WAKE_R do centro e já lá embaixo (pé abaixo de WAKE_BELOW); dorme sem ninguém em SLEEP_R por SLEEP_MS.
+   *  05/11 (Pedro: "o boss só aparece quando chega no chão lá embaixo mesmo"): era −25 m / 62 m (acordava com você ainda na
+   *  rampa) → só com o pé no CHÃO da arena (−55: abaixo de −51) e dentro dela (≤ 50 m do centro — a rampa fica a ~55 m) */
+  WAKE_R: 50,
+  WAKE_BELOW: -51,
   SLEEP_R: 110,
   SLEEP_MS: 30_000,
   RISE_S: 5,
@@ -55,9 +58,9 @@ export const CANIBAL = {
    *  junto com o corpo (46 m de raiz num Canibal de 28 m ficava bem maior que ele); o anel (onde saem, na arena) fica */
   ROOTS: 6,
   ROOT_RING: 30,
-  ROOT_LEN: 32.2,
-  ROOT_R: 2.1,
-  ROOT_REACH: 28,
+  ROOT_LEN: 22.5,
+  ROOT_R: 1.5,
+  ROOT_REACH: 19.6,
   ROOT_HP: 6000,
   /** armadura (corta metade disto de cada golpe — o míssil da bazuca atravessa). 05/11 (Pedro: "o fuzil pode dar dano nele
    *  também"): 800 → 0 — a armadura saiu; quem segura o fuzil é a PROTEÇÃO de bossResist.ts (10%, no máximo 5 por golpe) */
@@ -87,6 +90,8 @@ export const CANIBAL = {
   /** CRIAS (05/11, Pedro: "deve vir hordas iguais às crias do Kraken — cada tentáculo vem, aumentando a horda cada vez mais
    *  que mata"): cada raiz cortada solta canibais do buraco — 2 na 1ª, +1 a cada raiz (até 6); no máximo 12 vivas */
   CRIA_FIRST: 2,
+  /** 05/11 (Pedro: "quando o boss nasce já nasce com 5 crias, fora as que vêm de tentáculo") */
+  CRIA_ON_RISE: 5,
   CRIA_MAX_EACH: 6,
   CRIA_MAX_ALIVE: 12,
   /** crias mais fracas que o Canibal comum (vida e golpe) */

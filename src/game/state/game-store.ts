@@ -68,7 +68,7 @@ import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem'
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { lineWalkable } from '@/components/world/map-walk';
 import { bigCreatureRadius } from '../systems/bigCreatureRadius';
-import { bossPower } from '../systems/bossResist';
+import { bossCapHit, bossPower } from '../systems/bossResist';
 import { runExplosionHooks } from '../systems/explosionHooks';
 import { behindSpot, isSorceress, nextSorceressAt, SORC, SORC_PREFIX, sorcClock, sorceressMaySpawn } from '../systems/sorceressSystem';
 import { fleeInsteadOfDeath, IND, IND_PREFIX, indBornAt, indClock, indigenaLevelK, indigenaMaySpawn, indigenaState, isRetreating, isUnkillable, nextIndigenaAt, retreatToForest } from '../systems/indigenaSystem';
@@ -1466,7 +1466,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
       if (getDistance(at, c.position) - bigCreatureRadius(c.id) > radius) return c; // chefe gigante: desconta o corpo
       hits += 1;
-      const result = resolveAttack(bossPower(c.id, power, pierce), c.hp, c.maxHp, pierce ? 0 : c.armor, c.name, critStats);
+      const res0 = resolveAttack(bossPower(c.id, power, pierce), c.hp, c.maxHp, pierce ? 0 : c.armor, c.name, critStats);
+      // raiz do Canibal: no máximo 1/3 da vida por míssil (3 bazucadas — bossResist)
+      const capped = bossCapHit(c.id, pierce, c.maxHp, res0.damage);
+      const result = capped === res0.damage ? res0 : { ...res0, damage: capped, targetHp: Math.max(0, c.hp - capped), targetDied: c.hp - capped <= 0 };
       drafts.push(damageEvent(c.id, result.damage, c.position, { critical: !!result.critical }));
       if (result.targetDied) {
         const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);

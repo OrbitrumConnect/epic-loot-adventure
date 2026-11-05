@@ -14,12 +14,17 @@
  *  - DANO DE QUEDA em todo lugar (a pé): por ALTURA e pela VIDA — até FALL.SAFE_M nada; daí sobe em linha reta até
  *    FALL.LETHAL_M = a vida inteira (em % da vida máxima: vale igual pro nível 1 e pro 80). Caiu na ÁGUA: nada.
  * Checkpoint = um marco (cristal) do lado do caminho: passou perto, fica guardado (a mensagem avisa).
- * Regras PURAS aqui (testáveis); o corpo (cair, voltar, perder vida) em zona-sul-world, o marco em zs-chasm-view.
+ * 05/11 (noite, Pedro: "tomei queda lá na entrada e fui teleportado pra cima — o check é APENAS antes do parkour do boss e 1
+ * nos 2 lados do outro túnel, só isso" · "o checkpoint da queda é só quando cai no abismo PRETO do parkour; quando cai em
+ * local que anda do mapa normal não precisa"): 3 checkpoints (beira e fim da fenda, balcão do covil — antes do parkour da
+ * rampa) e precipício só na FENDA e no COVIL. O abismo do Pico voltou a ser chão normal: lá é dano de queda (por altura).
+ * Regras PURAS aqui (testáveis); o corpo (cair, voltar, perder vida) em zona-sul-world. SEM marco desenhado (05/11 noite,
+ * Pedro: o cristal e depois a fogueira ficaram "meio feio") — passou perto, a mensagem avisa; `mark` guarda onde ficaria.
  */
 import { create } from 'zustand';
 import { useGameStore } from '@/game/state/game-store';
 import { reportDamageToStore } from '@/components/world/hostile-ai';
-import { CAVE_ROOMS, caveFloorAt, ZS_CAVE_MOUTHS } from './zs-cave';
+import { CAVE_ROOMS, caveChasmAt, caveFloorAt } from './zs-cave';
 
 export const CHASM = {
   /** queda livre (m) que conta como "caiu no precipício" — os pulos do parkour descem ~1 m */
@@ -30,8 +35,6 @@ export const CHASM = {
   CP_R: 6, CP_DY: 4,
   /** piloto/clique NÃO desce degrau maior que isto (não se joga no poço/precipício sozinho) */
   EDGE_M: 2.5,
-  /** zona dos precipícios: até ZONE_E do contorno do salão */
-  ZONE_E: 1.05,
 } as const;
 
 /** DANO DE QUEDA (como os jogos de sobrevivência/Minecraft: ~2 andares nada, ~8 andares mata): em fração da vida MÁXIMA. */
@@ -46,23 +49,19 @@ export function fallDamage(h: number, maxHp: number): number {
   return k <= 0 ? 0 : k >= 1 ? maxHp : Math.max(1, Math.round(maxHp * k));
 }
 
-/** Os precipícios: a FENDA do caminho e os 2 poços (abismo do Pico, covil do Canibal). */
-export const CHASM_ROOMS = ['fenda', 'abismo', 'covil'] as const;
+/** Os precipícios (o "abismo preto do parkour"): a FENDA do caminho e o COVIL (a rampa com vãos). */
+export const CHASM_ROOMS = ['fenda', 'covil'] as const;
 export type ChasmRoom = (typeof CHASM_ROOMS)[number];
 /** x/y/z = onde o herói volta (no meio do caminho); mark = o marco (cristal), do lado — encostado na parede. */
 export type Checkpoint = { id: string; name: string; room: ChasmRoom; x: number; y: number; z: number; yaw: number; mark: { x: number; y: number; z: number } };
 
 /** [id, nome, salão, grau ao longo da rampa (null = ponto fixo), fração do raio | x, z, rumo (rad) do ponto fixo] */
 const CP_SPEC: readonly (readonly [string, string, ChasmRoom, number | null, number, number?, number?])[] = [
-  ['abismo_topo', 'balcão do abismo', 'abismo', 7, 0.86],
-  // o fundo do abismo: a saída do lado leste (onde a galeria grande e a garganta começam — o caminho do Rebouças chega aqui)
-  ['abismo_fundo', 'fundo do abismo', 'abismo', null, -1164, -273, 1.25],
   // a FENDA: a beirada de cá (olhando o precipício) e a de lá
   ['fenda_inicio', 'beira da fenda', 'fenda', null, -1059, -267, Math.PI / 2],
   ['fenda_fim', 'fim da fenda', 'fenda', null, -1011, -267, Math.PI / 2],
+  // o balcão do covil: ANTES do parkour da rampa (o único lá)
   ['covil_topo', 'balcão do covil', 'covil', 10, 0.92],
-  ['covil_meio', 'meio da rampa', 'covil', 170, 0.92],
-  ['covil_pe', 'pé da rampa', 'covil', 325, 0.92],
 ];
 let cps: Checkpoint[] | null = null;
 /** Os checkpoints (no chão, virados pro sentido do caminho). */
@@ -89,14 +88,8 @@ export function caveCheckpoints(): Checkpoint[] {
   return cps;
 }
 
-/** Em cima de um precipício (a fenda, o abismo ou o covil)? */
-export function chasmZone(x: number, z: number): ChasmRoom | null {
-  for (const id of CHASM_ROOMS) {
-    const r = CAVE_ROOMS.find((q) => q.id === id)!, dx = x - r.x, dz = z - r.z, c = Math.cos(r.yaw), s = Math.sin(r.yaw);
-    if (Math.hypot((dx * c + dz * s) / r.rx, (-dx * s + dz * c) / r.rz) < CHASM.ZONE_E) return id;
-  }
-  return null;
-}
+/** Em cima do "abismo do parkour" (o vão da fenda ou um vão da rampa do covil)? — só ali a queda volta pro checkpoint. */
+export function chasmZone(x: number, z: number): ChasmRoom | null { return caveChasmAt(x, z) as ChasmRoom | null; }
 /** Caiu no precipício? (na caverna, num precipício, mais de FALL_M de queda desde o último chão) */
 export function fellIntoChasm(inCave: boolean, fromY: number, y: number, x: number, z: number): boolean {
   return inCave && fromY - y > CHASM.FALL_M && chasmZone(x, z) !== null;
@@ -113,12 +106,6 @@ export function chasmReturn(lastId: string | null, fromX: number, fromY: number,
   let best = all[0]!, bd = Infinity;
   for (const c of all) { const d = Math.hypot(c.x - fromX, (c.y - fromY) * 2, c.z - fromZ); if (d < bd) { bd = d; best = c; } }
   return best;
-}
-/** ENTRADA DA CAVERNA pra renascer (05/11 — morreu no caminho do Canibal): do lado de FORA da boca do Pico da Tijuca, 6 m
- *  encosta abaixo do plano da boca (no chão do mapa, não no buraco), olhando pra dentro. */
-export function caveEntrySpot(): { x: number; z: number; yaw: number } {
-  const m = ZS_CAVE_MOUTHS.find((q) => q.id === 'pico-tijuca')!, l = Math.hypot(m.bx - m.ax, m.bz - m.az), ox = (m.ax - m.bx) / l, oz = (m.az - m.bz) / l;
-  return { x: m.ax + ox * 6, z: m.az + oz * 6, yaw: Math.atan2(-ox, -oz) };
 }
 /** Piloto/clique: o passo desce um degrau grande (beira do poço/precipício)? — então não dá (o piloto não se joga). */
 export function edgeDrop(groundNow: number, groundNext: number): boolean { return groundNext < groundNow - CHASM.EDGE_M; }

@@ -12,9 +12,6 @@
  * Frente do carro = (sin yaw, cos yaw), igual ao herói.
  */
 import { type ZsTerrain, zsBounds, zsHeightAt, ZS_WATER_Y, zsWaterPushAt, zsWaterYAt } from './zs-terrain-data';
-import { ruinBlocks } from './zs-ruins';
-/** raio do carro contra as ruínas (m) */
-const CAR_RUIN_R = 1.6;
 
 export const CAR = {
   HOVER: 0.5, HOVER_WATER: 0.25,
@@ -136,7 +133,6 @@ export function carStep(t: ZsTerrain, c: ZsCar, inp: ZsCarInput, dt: number, now
   if (nz !== rawZ) c.vz = 0;
   const ok = (px: number, pz: number) => {
     const run = Math.hypot(px - c.x, pz - c.z); if (run < 1e-6) return true;
-    if (ruinBlocks(px, pz, CAR_RUIN_R, c.y)) return false; // RUÍNA (05/11): parede — voando acima do topo passa
     if (zsHeightAt(t, px, pz) < ZS_WATER_Y) return true; // ÁGUA nunca é parede (a face da onda é rampa: o carro sobe nela)
     return carSurface(t, px, pz).y <= c.y + run * CAR.CLIMB_WALL + 0.35;
   };

@@ -79,14 +79,13 @@ describe('covil do Canibal (o poço fundo do chefe gigante)', () => {
     r = walk({ x: fenda.x + 22, z: fenda.z, y: fenda.y }, CAVE_TUNNELS.find((q) => q.id === 'fenda-covil')!.pts.map((p) => ({ x: p.x, z: p.z })));
     expect(r.stuck, `travou no túnel ${JSON.stringify(r)}`).toBe(false);
     expect(r.y).toBeGreaterThan(36);                           // no balcão
+    // 05/11 noite: a rampa tem VÃOS (parkour — Pedro: "alguns"); a pé sem pular desce até o 1º e cai nele. A descida inteira,
+    // correndo e pulando, está em parkour-canibal.test.ts
     const a0 = (covil.spiral!.a0 * 180) / Math.PI, rampa: { x: number; z: number }[] = [];
-    for (let d = a0 + 6; d <= a0 + 340; d += 8) rampa.push(at(0.92, d));
+    for (let d = a0 + 6; d <= a0 + 26; d += 4) rampa.push(at(0.92, d));
     r = walk(r, rampa);
     expect(r.stuck, `travou na rampa ${JSON.stringify(r)}`).toBe(false);
-    expect(r.y).toBeLessThan(-48);                             // desceu a rampa inteira (sem vão)
-    r = walk(r, [{ x: covil.x + 10, z: covil.z }]);
-    expect(r.stuck).toBe(false);
-    expect(r.y).toBeCloseTo(covil.y, 1);                       // na arena
+    expect(r.y).toBeGreaterThan(30);                           // descendo o começo da rampa (antes do 1º vão)
   }, 60_000);
 
   it('a malha desce 1 bloco inteiro (a caverna de antes sai igual) e o covil tem luz quente e névoa longa', () => {

@@ -80,10 +80,7 @@ import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsForestFarm, createZsHarvestNodes, createZsNewAreaTrees, createZsSpreadHarvest } from '@/game/systems/zsHarvestSystem';
 import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWalkable, zsWorldProfile } from './zs-world-profile';
 import { deathStage, resolveSpawn, samePoints, spawnPoints, useZsRespawn, zsRespawnMem } from './zs-respawn';
-import { CHASM, caveEntrySpot, chasmReturn, checkpointAt, edgeDrop, fallDamage, fellIntoChasm, hurtPlayerByFall, resetChasm, useZsChasmFx, zsChasm } from './zs-chasm';
-import { ZsChasmMarks } from './zs-chasm-view';
-import { ZsRuins } from './zs-ruins-view';
-import { pushOutRuins } from './zs-ruins';
+import { CHASM, chasmReturn, checkpointAt, edgeDrop, fallDamage, fellIntoChasm, hurtPlayerByFall, resetChasm, useZsChasmFx, zsChasm } from './zs-chasm';
 import { sameVeh, useZsTouch, useZsVehicles, zsAttack, zsCave, zsCrouch, zsCtx, zsVehicleApi, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED, type ZsVehInfo } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
@@ -397,8 +394,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (ship) { const M = zsRespawnMem; if (M.shipHp >= 0 && ship.hp < M.shipHp) M.shipHitAt = Date.now(); M.shipHp = ship.hp; }
     if (gs.player.dead) {
       const wall = Date.now(), first = !useZsRespawn.getState().deathAt;
-      // checkpoints valem a vida; morreu no caminho do Canibal (pegou checkpoint) → a entrada da caverna aparece no mapa
-      if (first) { useZsRespawn.setState({ deathAt: wall, diedAt: { x: p.x, z: p.z }, choice: null, points: [] }); zsRespawnMem.cave = zsChasm.last ? caveEntrySpot() : null; resetChasm(); }
+      if (first) { useZsRespawn.setState({ deathAt: wall, diedAt: { x: p.x, z: p.z }, choice: null, points: [] }); resetChasm(); } // checkpoints valem a vida
       respAcc += dt;
       if (first || respAcc >= 0.5) {
         respAcc = 0;
@@ -407,7 +403,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
           now: wall, base: core ? cellCenter(core.cell) : null, beach: { x: SAFE_ZONE.x, z: SAFE_ZONE.z },
           ship: ship ? { x: ship.x, z: ship.z, gone: warshipGone(ship), unlocked: isUnlocked(WARSHIP.UNLOCK_ID, lvl), hitAt: zsRespawnMem.shipHitAt } : null,
           car: car ? { x: car.x, z: car.z, gone: carGone(car), unlocked: isUnlocked('flying_car', lvl), underground: car.y < zsHeightAt(t, car.x, car.z) - 3 } : null,
-          usedAt: zsRespawnMem.usedAt, cave: zsRespawnMem.cave,
+          usedAt: zsRespawnMem.usedAt,
         });
         if (!samePoints(pts, useZsRespawn.getState().points)) useZsRespawn.setState({ points: pts });
       }
@@ -425,13 +421,9 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
           // do lado do motorista, no chão (o carro vazio desce sozinho)
           const side = (dimsRef.current?.width ?? 2.2) / 2 + 1.5, x = car.x - Math.cos(car.yaw) * side, z = car.z + Math.sin(car.yaw) * side;
           p.set(x, zsHeightAt(t, x, z), z); facing.current = car.yaw; zsRespawnMem.usedAt.car = wall;
-        } else if (sp.kind === 'cave') {
-          // do lado de fora da boca do Pico, olhando pra dentro (o caminho até o Canibal começa aqui)
-          const ce = caveEntrySpot(); p.set(ce.x, zsHeightAt(t, ce.x, ce.z), ce.z); facing.current = ce.yaw; input.yaw = ce.yaw + Math.PI;
         } else p.set(sp.x, zsHeightAt(t, sp.x, sp.z), sp.z);
-        zsRespawnMem.cave = null;
         movement.current.set(p.x, 0, p.z);
-        const msg = sp.kind === 'ship' ? '⚓ Você renasceu no seu navio.' : sp.kind === 'car' ? '🚗 Você renasceu do lado do seu carro.' : sp.kind === 'cave' ? '🕳️ Você renasceu na entrada da caverna (Pico da Tijuca) — o caminho até o Canibal começa aqui.' : sp.kind === 'base' ? 'Você reviveu na sua base.' : 'Você reviveu na zona segura (praia do Arpoador).';
+        const msg = sp.kind === 'ship' ? '⚓ Você renasceu no seu navio.' : sp.kind === 'car' ? '🚗 Você renasceu do lado do seu carro.' : sp.kind === 'base' ? 'Você reviveu na sua base.' : 'Você reviveu na zona segura (praia do Arpoador).';
         useGameStore.setState(s => ({ player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: p.x, z: p.z } }, ui: { ...s.ui, message: msg, deathBy: null } }));
         useZsRespawn.setState({ deathAt: 0, diedAt: null, choice: null, points: [] });
         if (group.current) group.current.visible = true;
@@ -1026,7 +1018,6 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (drive.mode === 'foot' && !st.swimming && !zsCave.inCave && (st.x !== p.x || st.z !== p.z)) {
       let [bx, bz] = pushOutHouseWalls(st.x, st.z, HERO_RADIUS, p.y);
       [bx, bz] = pushOutBasePieces(bx, bz, HERO_RADIUS);
-      [bx, bz] = pushOutRuins(bx, bz, HERO_RADIUS, p.y); // RUÍNAS por bairro (05/11): parede de verdade
       if (bx !== st.x || bz !== st.z) st = { ...st, x: bx, z: bz, ground: zsHeightAt(t, bx, bz) };
     }
     zsCtx.inWater = st.swimming;
@@ -1748,15 +1739,11 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             <ZsGrass t={t} heroRef={focusRef} />
             {/* RAMPA DE VOO LIVRE da Pedra Bonita (02/11): deck pisável; saindo pela ponta com a asa-delta ela abre */}
             <ZsRampView t={t} />
-            {/* RUÍNAS POR BAIRRO (05/11): 2–8% dos prédios reais do OSM, no lugar de verdade, com fachada — favela no morro */}
-            <ZsRuins t={t} />
             {/* PEDRAS EM VOLTA DA BOCA do Pico da Tijuca (02/11 noite) */}
             <ZsCaveMouthRocks t={t} />
           </ZsSurface>
           {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}
           <ZsCave t={t} heroRef={heroRef} />
-          {/* MARCOS DE CHECKPOINT do parkour até o Canibal (05/11): cristal apagado → aceso quando passa */}
-          <ZsChasmMarks heroRef={heroRef} />
           {/* CANIBAL GIGANTE do covil (04/11): sai do buraco no meio da arena; só desenha com o herói lá no fundo */}
           <AssetBoundary label="ZsCanibal" fallback={null}><Suspense fallback={null}><ZsCanibalBoss heroRef={heroRef} /></Suspense></AssetBoundary>
           <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} shipRef={shipRef} />

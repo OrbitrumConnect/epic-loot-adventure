@@ -19,6 +19,14 @@ export function bossDamageK(id: string, pierce = false): number {
   if (pierce || !id.startsWith(CANIBAL_ID_PREFIX)) return 1;
   return CANIBAL_GUN_K;
 }
+/** RAIZ do Canibal × míssil (05/11, Pedro: "cada tentáculo destrói com 3 bazukadas — de 1 já foi"): o míssil escala com
+ *  nível e equipamento (ataque × 10) e matava a raiz de uma vez. Agora cada míssil tira no MÁXIMO 1/3 da vida dela (depois do
+ *  sorteio/crítico) → 3 bazucadas (com míssil fraco, mais). Corpo e outros bichos: igual. */
+export const CANIBAL_ROOT_PREFIX = 'zs_canibal_r';
+export const CANIBAL_ROOT_MISSILES = 3;
+export function bossCapHit(id: string, pierce: boolean, maxHp: number, damage: number): number {
+  return pierce && id.startsWith(CANIBAL_ROOT_PREFIX) ? Math.min(damage, Math.ceil(maxHp / CANIBAL_ROOT_MISSILES)) : damage;
+}
 /** `power` já com a resistência do chefe (sem ir a 0: o golpe sempre conta 1; no máximo CANIBAL_GUN_MAX). */
 export function bossPower(id: string, power: number, pierce = false): number {
   const k = bossDamageK(id, pierce);

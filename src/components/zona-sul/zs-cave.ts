@@ -42,7 +42,7 @@ export type CaveRoom = {
   shaft?: number;
   /** RAMPA EM ESPIRAL colada na parede: o anel de fora (e > `inner`, em fração do raio) desce de `yTop` até o fundo
    *  (`y` do salão) ao longo de `sweep` rad a partir do ângulo `a0` (no sentido `dir`); o miolo é o fundo do poço. */
-  spiral?: { yTop: number; inner: number; a0: number; sweep: number; dir: 1 | -1 };
+  spiral?: { yTop: number; inner: number; a0: number; sweep: number; dir: 1 | -1; parkour?: CaveRampParkour };
   /** FENDA (05/11): um PRECIPÍCIO de lado a lado do salão — ver `CaveChasm`. */
   chasm?: CaveChasm;
 };
@@ -50,7 +50,14 @@ export type CaveRoom = {
  *  ideal seria não ali na descida — a boa seria no túnel, no caminho"): o salão tem um PRECIPÍCIO de lado a lado — no
  *  referencial do salão, de `u0` a `u1` (ao longo de `yaw`), `depth` m abaixo do chão das beiradas — e COLUNAS soltas pra
  *  atravessar pulando (centro u/v, raio, degrau `dy` em relação à beirada). */
-export type CaveChasm = { u0: number; u1: number; depth: number; stones: { u: number; v: number; r: number; dy: number }[] };
+export type CaveChasm = { u0: number; u1: number; depth: number; stones: { u: number; v: number; r: number; dy: number }[];
+  /** BEIRADA no canto (05/11 noite, Pedro: "passar no canto seria legal também"): faixa de `w` m colada na parede do lado
+   *  `side` (v > 0 ou < 0), de ponta a ponta do vão — com vãos (`gaps`: centro u e largura) pra pular. */
+  ledge?: { side: 1 | -1; w: number; gaps: { u: number; w: number }[] } };
+/** PARKOUR NA RAMPA EM ESPIRAL (05/11 noite, Pedro: "no boss, parkour na rampa ali, alguns, legal também"): trechos que
+ *  DESABARAM (`gaps`: grau ao longo da volta a partir do balcão e largura no meio da rampa, m) e COLUNAS soltas num
+ *  desabamento grande (`stones`: grau, fração do raio, raio). Caiu num vão = o "abismo do parkour" (volta pro checkpoint). */
+export type CaveRampParkour = { gaps: { at: number; w: number }[]; stones: { at: number; e: number; r: number }[] };
 
 const P = (x: number, z: number, y: number, r: number, h: number): CaveTunnelPt => ({ x, z, y, r, h });
 
@@ -152,7 +159,13 @@ export const CAVE_ROOMS: CaveRoom[] = [
   // vem da fenda; a rampa é a MESMA (345°, ~25%, sem vão nenhum), só girada. A garganta curta (fundo do abismo → balcão,
   // 53 m, o "caminho curto e fácil") saiu: agora sai da galeria grande e passa pela fenda (~220 m e o precipício).
   { id: 'covil', name: 'covil do Canibal', x: -1087, z: -353, y: -55, rx: 66, rz: 62, h: 125, yaw: 0, lobe: 2.5, shaft: 16,
-    spiral: { yTop: 38, inner: 0.84, a0: 0.848, sweep: (345 * Math.PI) / 180, dir: 1 }, tint: [0.43, 0.33, 0.3] },
+    // 05/11 noite (Pedro: "parkour na rampa ali, alguns"): 4 vãos (3,2 → 4 m — correndo SEM pular a queda não alcança o outro
+    // lado, pulando sobra ~1 m) e um desabamento de 27 m com 3 colunas. Longe do pedaço da malha que desenha com a superfície
+    // (≈ 70–150° da volta, o lado oeste) — perto da boca do Pico a malha não muda.
+    spiral: { yTop: 38, inner: 0.84, a0: 0.848, sweep: (345 * Math.PI) / 180, dir: 1, parkour: {
+      gaps: [{ at: 30, w: 3.2 }, { at: 52, w: 3.5 }, { at: 180, w: 27 }, { at: 230, w: 3.8 }, { at: 262, w: 4 }],
+      stones: [{ at: 172.4, e: 0.92, r: 2 }, { at: 180, e: 0.92, r: 2 }, { at: 187.6, e: 0.92, r: 2 }],
+    } }, tint: [0.43, 0.33, 0.3] },
   // FENDA DO COVIL (05/11, Pedro: "o ideal seria no túnel, no caminho"): no meio do caminho entre o fundo do abismo e o
   // covil, uma rachadura alta (~68 m) e estreita na rocha, na faixa livre entre a galeria grande e a borda do covil — no
   // LESTE, onde a faixa é larga (mais perto, a "aura" de chão do covil invadia o vão e fazia chão invisível) e a 5 m da
@@ -160,8 +173,9 @@ export const CAVE_ROOMS: CaveRoom[] = [
   // morro em cima. No meio, o PRECIPÍCIO (36 m de vão, 28 m de fundo) — atravessa pulando de coluna em coluna (5
   // colunas, 3–3,4 m entre elas: correndo SEM pular a queda não alcança; pulando sobra ~1,5 m). Caiu = volta pro
   // checkpoint da beirada (zs-chasm.ts) com 25% de dano.
-  { id: 'fenda', name: 'fenda do covil', x: -1035, z: -267, y: 40, rx: 30, rz: 10, h: 34, yaw: 0, lobe: 1.5, shaft: 6,
-    chasm: { u0: -18, u1: 18, depth: 28, stones: [
+  { id: 'fenda', name: 'fenda do covil', x: -1035, z: -267, y: 40, rx: 30, rz: 10, h: 34, yaw: 0, lobe: 0.8, shaft: 6,
+    // 05/11 noite: + a BEIRADA no canto (lado +v, 2,4 m da parede) com 2 vãos de 2,8 m — o outro jeito de atravessar
+    chasm: { u0: -18, u1: 18, depth: 28, ledge: { side: 1, w: 2.4, gaps: [{ u: -6, w: 2.8 }, { u: 7, w: 2.8 }] }, stones: [
       { u: -13.2, v: 0, r: 1.8, dy: 0 }, { u: -6.6, v: 1.2, r: 1.8, dy: 0.5 }, { u: 0, v: -1, r: 1.8, dy: 0 },
       { u: 6.6, v: 1, r: 1.8, dy: -0.4 }, { u: 13.2, v: -1.2, r: 1.8, dy: 0.3 }] },
     tint: [0.41, 0.34, 0.31] },
@@ -262,6 +276,8 @@ const ROOMS: Room[] = CAVE_ROOMS.map((r, i) => ({ ...r, c: Math.cos(r.yaw), s: M
 const PILLARS: Pillar[] = CAVE_ROOMS.flatMap((r) => r.pillars ?? []);
 /** Salões com FENDA (05/11 — o precipício no caminho do Canibal). */
 const CH_ROOMS = ROOMS.filter((r) => r.chasm);
+/** Salões com rampa de PARKOUR (05/11 noite — o covil). */
+const PK_ROOMS = ROOMS.filter((r) => r.spiral?.parkour);
 
 /** As BOCAS: o 1º trecho de cada túnel com boca (o shader do chão abre o buraco nele). */
 export type CaveMouth = { id: string; name: string; ax: number; az: number; ay: number; bx: number; bz: number; by: number; ra: number; rb: number; ha: number; hb: number };
@@ -363,12 +379,80 @@ function roomVal(r: Room, x: number, y: number, z: number): number {
   return (Math.sqrt(q) - 1) * r.m - lobe;
 }
 const TAU = Math.PI * 2;
-/** Altura da RAMPA EM ESPIRAL no ponto (u, v) do salão; null = miolo (fundo do poço) ou fora da volta. */
-export function spiralY(r: Pick<CaveRoom, 'rx' | 'rz' | 'y' | 'spiral'>, u: number, v: number): number | null {
+const DEG = Math.PI / 180;
+type RampGeo = Pick<CaveRoom, 'rx' | 'rz' | 'y' | 'spiral'>;
+type Spiral = NonNullable<CaveRoom['spiral']>;
+/** Ângulo ao longo da volta (0..2π a partir do balcão, no sentido da descida). */
+function rampA(sp: Spiral, r: RampGeo, u: number, v: number): number { return ((sp.dir * (Math.atan2(v / r.rz, u / r.rx) - sp.a0)) % TAU + TAU) % TAU; }
+/** Parkour da rampa pré-calculado: as 2 bordas de cada vão (direção no plano), o centro/topo de cada coluna e as faixas de
+ *  graus perto de cada peça (só ali a conta muda — no resto a rampa é a de sempre, bit por bit). */
+type RampPre = { gaps: { n1u: number; n1v: number; n2u: number; n2v: number; mu: number; mv: number }[]; stones: { u: number; v: number; r: number; top: number }[]; spans: [number, number][] };
+const RP = new WeakMap<object, RampPre>();
+function rampPre(r: RampGeo): RampPre | null {
+  const sp = r.spiral, pk = sp?.parkour;
+  if (!sp || !pk) return null;
+  const hit = RP.get(sp); if (hit) return hit;
+  const rm = ((sp.inner + 1) / 2) * ((r.rx + r.rz) / 2); // raio do meio da rampa (m): largura do vão → graus
+  const dirAt = (a: number): [number, number] => { const th = sp.a0 + sp.dir * a, x = r.rx * Math.cos(th), z = r.rz * Math.sin(th), l = Math.hypot(x, z); return [x / l, z / l]; };
+  const spans: [number, number][] = [];
+  const pre: RampPre = {
+    gaps: pk.gaps.map((g) => { const ha = g.w / 2 / rm, ac = g.at * DEG; spans.push([ac - ha - 8 * DEG, ac + ha + 8 * DEG]); const [n1u, n1v] = dirAt(ac - ha), [n2u, n2v] = dirAt(ac + ha), [mu, mv] = dirAt(ac); return { n1u, n1v, n2u, n2v, mu, mv }; }),
+    stones: pk.stones.map((s) => { const a = s.at * DEG, th = sp.a0 + sp.dir * a; return { u: s.e * r.rx * Math.cos(th), v: s.e * r.rz * Math.sin(th), r: s.r, top: sp.yTop - (a / sp.sweep) * (sp.yTop - r.y) }; }),
+    spans,
+  };
+  RP.set(sp, pre);
+  return pre;
+}
+const rampNear = (pre: RampPre, a: number) => pre.spans.some(([lo, hi]) => a >= lo && a <= hi);
+/** O vão da rampa é um POÇO de RAMP_PIT_D m (o "abismo preto do parkour"): quem cai é pego aos 9 m (3 m antes do fundo) e volta pro checkpoint —
+ *  nunca chega no fundo dele. Não abre até o chão da arena (85 m de parede a menos na malha). */
+export const RAMP_PIT_D = 12;
+/** Distância (m, > 0 = dentro) do anel da rampa (fora do miolo). */
+function ringD(sp: Spiral, r: RampGeo, u: number, v: number): number { const th = Math.atan2(v / r.rz, u / r.rx); return (Math.hypot(u / r.rx, v / r.rz) - sp.inner) * Math.hypot(r.rx * Math.cos(th), r.rz * Math.sin(th)); }
+/** Distância (m, > 0 = em cima) até a borda da COLUNA da rampa. */
+function rampStoneD(s: RampPre['stones'][number], u: number, v: number): number { const d = s.r - Math.hypot(u - s.u, v - s.v), k = smooth01((d + 1) / 0.6); return k > 0 ? d + edgeNoise(u, v, 71) * 0.4 * k : d; }
+/** Distância (m, > 0 = rampa) até a borda do que dá pra pisar: a borda de dentro e os vãos. */
+function rampLedgeD(sp: Spiral, pre: RampPre, r: RampGeo, u: number, v: number): number {
+  const th = Math.atan2(v / r.rz, u / r.rx);
+  let d = (Math.hypot(u / r.rx, v / r.rz) - sp.inner) * Math.hypot(r.rx * Math.cos(th), r.rz * Math.sin(th));
+  for (const g of pre.gaps) {
+    if (g.mu * u + g.mv * v <= 0) continue; // o vão é só deste lado do centro
+    const raw = Math.min(sp.dir * (g.n1u * v - g.n1v * u), -sp.dir * (g.n2u * v - g.n2v * u)), k = smooth01((raw + 1) / 0.6);
+    d = Math.min(d, -(raw + (k > 0 ? edgeNoise(u, v, 31) * 0.5 * k : 0)));
+  }
+  return d;
+}
+/** Altura da RAMPA EM ESPIRAL no ponto (u, v) do salão; null = miolo (fundo do poço), fora da volta ou — com parkour — o
+ *  vão (cai). Coluna do parkour: o topo dela. */
+export function spiralY(r: RampGeo, u: number, v: number): number | null {
   const sp = r.spiral;
   if (!sp || Math.hypot(u / r.rx, v / r.rz) <= sp.inner) return null;
-  const a = ((sp.dir * (Math.atan2(v / r.rz, u / r.rx) - sp.a0)) % TAU + TAU) % TAU; // 0..2π a partir do começo
-  return a <= sp.sweep ? sp.yTop - (a / sp.sweep) * (sp.yTop - r.y) : null;
+  const a = rampA(sp, r, u, v); // 0..2π a partir do começo
+  if (a > sp.sweep) return null;
+  const pre = rampPre(r);
+  if (pre && rampNear(pre, a)) {
+    let top = -Infinity;
+    for (const s of pre.stones) if (rampStoneD(s, u, v) > 0) top = Math.max(top, s.top);
+    if (top > -Infinity) return top;
+    if (rampLedgeD(sp, pre, r, u, v) <= 0) return sp.yTop - (a / sp.sweep) * (sp.yTop - r.y) - RAMP_PIT_D; // o fundo do poço do vão
+  }
+  return sp.yTop - (a / sp.sweep) * (sp.yTop - r.y);
+}
+/** No vão da rampa (o poço do parkour)? (no anel, fora da coluna, entre as bordas) */
+function rampGapAt(r: RampGeo, u: number, v: number): boolean {
+  const sp = r.spiral, pre = rampPre(r);
+  if (!sp || !pre || Math.hypot(u / r.rx, v / r.rz) <= sp.inner) return false;
+  const a = rampA(sp, r, u, v);
+  if (a > sp.sweep || !rampNear(pre, a)) return false;
+  if (pre.stones.some((s) => rampStoneD(s, u, v) > 0)) return false;
+  return rampLedgeD(sp, pre, r, u, v) <= 0;
+}
+/** Rocha da RAMPA COM PARKOUR em (u, y, v) — a MESMA borda do `spiralY`, como distância (a malha corta o vão exato). */
+function rampRock(r: Room, u: number, v: number, y: number, a: number): number {
+  const sp = r.spiral!, pre = rampPre(r)!, h = sp.yTop - (a / sp.sweep) * (sp.yTop - r.y);
+  let rock = Math.max(r.y - y, Math.min(h - y, rampLedgeD(sp, pre, r, u, v)), Math.min(h - RAMP_PIT_D - y, ringD(sp, r, u, v)));
+  for (const s of pre.stones) rock = Math.max(rock, Math.min(s.top - y, rampStoneD(s, u, v)));
+  return rock;
 }
 /** Borda irregular da FENDA (rocha quebrada, poucos cm — o pulo fica previsível) — só no plano: o que se vê é o que se pisa. */
 const edgeNoise = (u: number, v: number, s: number) => (caveNoise(u * 0.4 + s, 5.5, v * 0.4 + s) - 0.5) * 0.6;
@@ -382,17 +466,25 @@ function chasmStoneD(s: CaveChasm['stones'][number], u: number, v: number): numb
   const d = s.r - Math.hypot(u - s.u, v - s.v), k = smooth01((d + 1) / 0.6);
   return k > 0 ? d + edgeNoise(u, v, 71) * 0.4 * k : d;
 }
-/** Chão da FENDA em (u, v): a beirada (o chão do salão), a coluna (o topo dela) ou o fundo do precipício. */
-function chasmFloor(r: Pick<CaveRoom, 'y'>, ch: CaveChasm, u: number, v: number): number {
+/** Distância (m, > 0 = em cima) até a borda da BEIRADA do canto (colada na parede, com os vãos dela). */
+function sideLedgeD(r: Pick<CaveRoom, 'rx' | 'rz'>, ch: CaveChasm, u: number, v: number): number {
+  const L = ch.ledge; if (!L) return -Infinity;
+  const edge = r.rz * Math.sqrt(Math.max(0, 1 - (u / r.rx) ** 2));
+  let d = v * L.side - (edge - L.w);
+  for (const g of L.gaps) d = Math.min(d, Math.abs(u - g.u) - g.w / 2);
+  return d;
+}
+/** Chão da FENDA em (u, v): a beirada (o chão do salão), a coluna (o topo dela), a beirada do canto ou o fundo do precipício. */
+function chasmFloor(r: Pick<CaveRoom, 'y' | 'rx' | 'rz'>, ch: CaveChasm, u: number, v: number): number {
   let top = -Infinity;
   for (const s of ch.stones) if (chasmStoneD(s, u, v) > 0) top = Math.max(top, r.y + s.dy);
   if (top > -Infinity) return top;
-  return chasmLedgeD(ch, u, v) > 0 ? r.y : r.y - ch.depth;
+  return chasmLedgeD(ch, u, v) > 0 || sideLedgeD(r, ch, u, v) > 0 ? r.y : r.y - ch.depth;
 }
 /** Rocha da FENDA em (u, y, v) como DISTÂNCIA (m) — a mesma borda do `chasmFloor`: a malha corta a beirada e a coluna
  *  exatamente onde o pé cai (sem a escada de 1,6 m do voxel). */
 function chasmRock(r: Room, ch: CaveChasm, u: number, v: number, y: number): number {
-  let rock = Math.max(r.y - ch.depth - y, Math.min(r.y - y, chasmLedgeD(ch, u, v)));
+  let rock = Math.max(r.y - ch.depth - y, Math.min(r.y - y, Math.max(chasmLedgeD(ch, u, v), sideLedgeD(r, ch, u, v))));
   for (const s of ch.stones) rock = Math.max(rock, Math.min(r.y + s.dy - y, chasmStoneD(s, u, v)));
   return rock;
 }
@@ -497,6 +589,17 @@ function finish(c: GCell, f: number, fl: number, x: number, y: number, z: number
     const d = Math.hypot(x - p.x, z - p.z) - p.r * (1 + 0.22 * (caveNoise(x * 0.3, y * 0.25, z * 0.3) - 0.5));
     f = Math.max(f, -d);
   }
+  // RAMPA COM PARKOUR (o covil): só no anel da rampa e PERTO dos vãos/colunas (o resto: a conta de sempre)
+  for (const r of PK_ROOMS) {
+    if (Math.abs(x - r.x) > r.rx * 1.1 || Math.abs(z - r.z) > r.rz * 1.1) continue;
+    const [u, v] = roomUV(r, x, z), sp = r.spiral!, pre = rampPre(r)!;
+    const e = Math.hypot(u / r.rx, v / r.rz);
+    if (e < sp.inner - 0.04 || e > 1.15) continue;
+    const a = rampA(sp, r, u, v);
+    if (a > sp.sweep || !rampNear(pre, a)) continue;
+    if (Math.abs(fl - roomFloor(r, u, v)) > 1e-6) continue; // outra peça emendando ali
+    return Math.max(f, rampRock(r, u, v, y, a));
+  }
   // FENDA (o precipício no caminho do Canibal): onde o chão é só dela, a beirada/coluna vem como distância (malha exata)
   for (const r of CH_ROOMS) {
     const R = Math.max(r.rx, r.rz) * 1.35;
@@ -542,6 +645,21 @@ export function caveField(x: number, y: number, z: number): number {
   return best;
 }
 
+/** O "ABISMO DO PARKOUR" em (x, z)? (05/11 noite, Pedro: "o checkpoint da queda é só quando cai no abismo preto do
+ *  parkour; quando cai em local que anda do mapa normal não precisa") — o vão da FENDA (fora das colunas e da beirada) ou um
+ *  VÃO da rampa do covil (no anel, entre as bordas). Cair da beira da rampa pro chão da arena NÃO é (lá se anda). */
+export function caveChasmAt(x: number, z: number): string | null {
+  for (const r of CH_ROOMS) {
+    const [u, v] = roomUV(r, x, z), ch = r.chasm!;
+    if (u <= ch.u0 || u >= ch.u1 || Math.hypot(u / r.rx, v / r.rz) > 1.05) continue;
+    if (chasmFloor(r, ch, u, v) < r.y - 1) return r.id;
+  }
+  for (const r of PK_ROOMS) {
+    const [u, v] = roomUV(r, x, z);
+    if (rampGapAt(r, u, v)) return r.id;
+  }
+  return null;
+}
 /** Ar da caverna em (x, y, z)? */
 export function caveAir(x: number, y: number, z: number): boolean { return caveField(x, y, z) < 0; }
 /** Quem tem os pés em `feetY` está DENTRO da caverna? (conta meio metro acima do pé) */
