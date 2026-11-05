@@ -1,12 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { electHost, roomStatus } from '../net/multiplayer';
+import fs from 'node:fs';
+import { electHost, MAX_ROOMS, roomRefusal, roomStatus } from '../net/multiplayer';
 
-describe('sala persiste até 3 dias (multiplayer B)', () => {
+// 04/11 (Pedro: "máximo de 10 salas … não podem ficar abertas muito tempo"): pausada até 12 h (era 3 dias)
+describe('sala persiste até 12 h (multiplayer B; 04/11 — era 3 dias)', () => {
   const now = Date.parse('2026-10-21T20:00:00Z');
   const ago = (ms: number) => new Date(now - ms).toISOString();
   it('heartbeat recente = ao vivo', () => expect(roomStatus(ago(30_000), now)).toBe('live'));
-  it('sem ninguém há 1 dia = pausada (retomável)', () => expect(roomStatus(ago(24 * 3600_000), now)).toBe('paused'));
-  it('sem ninguém há +3 dias = expirada', () => expect(roomStatus(ago(73 * 3600_000), now)).toBe('expired'));
+  it('sem ninguém há 6 h = pausada (retomável)', () => expect(roomStatus(ago(6 * 3600_000), now)).toBe('paused'));
+  it('sem ninguém há +12 h = expirada', () => expect(roomStatus(ago(13 * 3600_000), now)).toBe('expired'));
+});
+
+describe('salas: máximo 10 + admin fecha (04/11)', () => {
+  it('o aviso do banco vira texto pro jogador (e o app sai da sala)', () => {
+    expect(roomRefusal('room_closed')).toBe('Sala fechada pelo administrador.');
+    expect(roomRefusal('room_limit')).toBe(`Limite de ${MAX_ROOMS} salas abertas — entre numa da lista.`);
+    expect(roomRefusal('outro erro')).toBeNull();
+    expect(roomRefusal(null)).toBeNull();
+    expect(MAX_ROOMS).toBe(10);
+  });
+  it('migração: 10 salas, 12 h, sala fechada recusa o heartbeat, admin = is_admin() e a conta do Pedro', () => {
+    const sql = fs.readFileSync('supabase/migrations/202611040001_rooms_limit_admin_close.sql', 'utf8');
+    expect(sql).toContain("delete from public.game_rooms where last_active_at < now() - interval '12 hours';");
+    expect(sql).toContain("if found and room.status = 'closed' then raise exception 'room_closed'; end if;");
+    expect(sql).toContain("if n >= 10 then raise exception 'room_limit'; end if;");
+    expect(sql).toContain("if auth.uid() is null or not public.is_admin() then raise exception 'forbidden'; end if;");
+    expect(sql).toContain("where lower(email) = 'phpg69@gmail.com'");
+    expect(sql).toContain('revoke all on function public.admin_close_room(text) from public, anon;');
+    const panel = fs.readFileSync('src/components/hud/rooms-panel.tsx', 'utf8');
+    expect(panel).toContain('{admin && (');
+    expect(panel).toContain('await adminCloseRoom(r.code)');
+  });
 });
 
 describe('migração de host (multiplayer A): outro segura a sala', () => {

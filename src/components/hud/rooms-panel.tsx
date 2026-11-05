@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from 'react';
 import { RefreshCw, Users } from 'lucide-react';
-import { listRooms, useNet, MP_ENABLED, type RoomInfo } from '@/net/multiplayer';
+import { adminCloseRoom, isRoomAdmin, listRooms, useNet, MAX_ROOMS, MP_ENABLED, type RoomInfo } from '@/net/multiplayer';
 import { MultiplayerPanel } from './multiplayer-panel';
 
 export function RoomsPanel() {
@@ -13,6 +13,10 @@ export function RoomsPanel() {
   const [loading, setLoading] = useState(false);
   const room = useNet((s) => s.room);
   const join = useNet((s) => s.join);
+  const notice = useNet((s) => s.notice);
+  // ADMIN (04/11, Pedro: "eu na conta phpg69@gmail.com sou adm, posso fechar as salas"): botão Fechar em cada sala
+  const [admin, setAdmin] = useState(false);
+  const [adminMsg, setAdminMsg] = useState<string | null>(null);
 
   const refresh = async () => {
     if (!MP_ENABLED) return;
@@ -22,6 +26,7 @@ export function RoomsPanel() {
 
   useEffect(() => {
     if (!MP_ENABLED) return;
+    void isRoomAdmin().then(setAdmin);
     void refresh();
     const t = setInterval(() => { void refresh(); }, 5000); // atualiza sozinho
     return () => clearInterval(t);
@@ -41,6 +46,8 @@ export function RoomsPanel() {
         </button>
       </div>
 
+      {notice && <p role="status" style={{ margin: 0, fontSize: 13, color: '#ffb48f' }}>{notice}</p>}
+      {admin && <p style={{ margin: 0, fontSize: 12, opacity: 0.75 }}>Administrador · {rooms.length}/{MAX_ROOMS} salas{adminMsg ? ` · ${adminMsg}` : ''}</p>}
       {rooms.length === 0 ? (
         <p style={{ opacity: 0.7, fontSize: 13, margin: '4px 0' }}>
           Nenhuma sala aberta no momento. Crie uma abaixo e compartilhe — ela aparece aqui pros outros.
@@ -66,6 +73,13 @@ export function RoomsPanel() {
                   fontWeight: 700, fontSize: 13, opacity: mine || full ? 0.5 : 1,
                   background: mine ? 'rgba(255,255,255,0.1)' : '#f2c879', color: mine ? '#e8eef6' : '#1a1206',
                 }}>{mine ? 'Você está aqui' : r.live ? 'Entrar' : 'Retomar'}</button>
+                {admin && (
+                  <button title={`Fechar a sala ${r.code} (quem estiver nela sai)`} aria-label={`Fechar a sala ${r.code}`}
+                    onClick={async () => { const err = await adminCloseRoom(r.code); setAdminMsg(err ? `não fechou: ${err}` : `${r.code} fechada`); void refresh(); }}
+                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #ff8f8f', background: 'transparent', color: '#ff8f8f', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    Fechar
+                  </button>
+                )}
               </div>
             );
           })}

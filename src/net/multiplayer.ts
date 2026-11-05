@@ -196,6 +196,8 @@ type NetState = {
   world: CreatureState[] | null;
   join: (code?: string) => void;
   leave: () => void;
+  /** Aviso do lobby (04/11): "Sala fechada pelo administrador." / "Limite de 10 salas…" — some ao entrar noutra. */
+  notice: string | null;
   setName: (n: string) => void;
 };
 
@@ -252,6 +254,7 @@ let playerHitHandler: ((intent: PlayerHitIntent) => void) | null = null;
 
 export const useNet = create<NetState>((set, get) => ({
   room: null,
+  notice: null,
   connected: false,
   full: false,
   isHost: false,
@@ -452,7 +455,7 @@ export const useNet = create<NetState>((set, get) => ({
     channel = ch;
     // Host entra como aliado (não escolhe); convidado (entrou por código/link) declara a
     // postura no card → `sideChosen=false` faz o card aparecer. (fatia 1 do PvP)
-    set({ room, connected: false, isHost, players: {}, bases: {}, baseTiers: {}, troops: {}, world: null, selfSide: 'ally', sideChosen: isHost });
+    set({ room, notice: null, connected: false, isHost, players: {}, bases: {}, baseTiers: {}, troops: {}, world: null, selfSide: 'ally', sideChosen: isHost });
     setRoomActive(true);
     if (isHost) void registerRoom(room); // publica a sala no lobby (aba de salas)
   },
@@ -707,13 +710,24 @@ export function roomFromUrl(): string | null {
  *  - Quem SEGURA a sala (host) bate a cada 15 s; a cada 30 s leva a FOTO do mundo
  *    (inimigos) — só grava quem tem a autoridade (lease 60 s no banco).
  *  - Passou a vez / saiu → solta a autoridade na hora (release) com a última foto.
- *  - Ninguém na sala → a linha FICA (pausada) até 3 dias; quem abrir o link nesse prazo
- *    RETOMA da foto. +3 dias sem ninguém → o próprio heartbeat limpa.
+ *  - Ninguém na sala → a linha FICA (pausada) até 12 h (04/11; antes 3 dias); quem abrir o link nesse prazo
+ *    RETOMA da foto. +12 h sem ninguém → o próprio heartbeat limpa.
+ *  - 04/11 (Pedro: "máximo de 10 salas; eu sou adm, posso fechar"): o banco recusa a 11ª sala ('room_limit') e a sala
+ *    fechada pelo admin ('room_closed') — o app sai dela com o aviso (`notice`).
  * ------------------------------------------------------------------ */
 export type RoomInfo = { code: string; players: number; max: number; updatedAt: string; live: boolean };
 
 const ROOM_LIVE_MS = 60_000;                 // heartbeat recente = sala AO VIVO
-const ROOM_KEEP_MS = 3 * 24 * 60 * 60_000;   // pausada até 3 dias (depois o banco limpa)
+const ROOM_KEEP_MS = 12 * 60 * 60_000;       // pausada até 12 h (04/11; antes 3 dias) — depois o banco limpa
+/** Máximo de salas abertas/pausadas ao mesmo tempo (o banco recusa a 11ª). */
+export const MAX_ROOMS = 10;
+/** Aviso do banco → o que o jogador lê (e sai da sala). Puro (testável). */
+export function roomRefusal(message: string | undefined | null): string | null {
+  if (!message) return null;
+  if (message.includes('room_closed')) return 'Sala fechada pelo administrador.';
+  if (message.includes('room_limit')) return `Limite de ${MAX_ROOMS} salas abertas — entre numa da lista.`;
+  return null;
+}
 let roomHeartbeat: ReturnType<typeof setInterval> | null = null;
 let heartbeatRoom: string | null = null;
 let snapshotProvider: (() => CreatureState[]) | null = null;
@@ -731,7 +745,25 @@ function heartbeat(code: string, withSnapshot: boolean, release = false): void {
     p_code: code, p_players: players,
     p_snapshot: creatures ? { creatures, savedAt: Date.now() } : null,
     p_release: release,
-  }).then(({ error }) => { if (error) console.warn('[sala] heartbeat falhou:', error.message); });
+  }).then(({ error }) => {
+    if (!error) return;
+    const why = roomRefusal(error.message);
+    if (why && !release && useNet.getState().room === code) { useNet.getState().leave(); useNet.setState({ notice: why }); return; }
+    console.warn('[sala] heartbeat falhou:', error.message);
+  });
+}
+
+/** ADMIN (04/11): a conta é administradora? (`is_admin()` no banco; sem login/sem banco = não) */
+export async function isRoomAdmin(): Promise<boolean> {
+  if (!supabase) return false;
+  const { data, error } = await supabase.rpc('is_admin');
+  return !error && data === true;
+}
+/** ADMIN fecha a sala (quem está nela sai no próximo heartbeat). Devolve o erro (texto) ou null. */
+export async function adminCloseRoom(code: string): Promise<string | null> {
+  if (!supabase) return 'sem banco';
+  const { error } = await supabase.rpc('admin_close_room', { p_code: code });
+  return error ? error.message : null;
 }
 
 async function registerRoom(code: string): Promise<void> {
