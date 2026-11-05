@@ -20,6 +20,7 @@ import { startAccountPersistence } from '@/game/state/account-persistence';
 import { DEV_INFINITE_POTIONS } from '@/game/config/dev-flags';
 import { WorldMap, WorldMapLegend } from '@/components/hud/world-map';
 import { ZsMap } from '@/components/hud/zs-map';
+import { ZsRespawnScreen } from '@/components/hud/zs-respawn-screen';
 import { ToolCrafting } from '@/components/hud/tool-crafting';
 import { ItemSprite, ICON_MAP } from '@/components/hud/item-sprite';
 import { BasePanel, cityLockReason } from '@/components/hud/base-panel';
@@ -809,7 +810,9 @@ function Index() {
           {worldOn && ui.mode === 'world' && <NightFlock />}
           {/* 03/11: a Feiticeira da Mata surge atrás de quem anda longe da base (só na Zona Sul) */}
           {worldOn && ui.mode === 'world' && zs && <SorceressStalker />}
-          {player.dead && !inCity && (
+          {/* 05/11: na Zona Sul a morte é 6 s de mensagem + 6 s de MAPA pra escolher onde nascer (zs-respawn-screen) */}
+          {player.dead && !inCity && zs && <ZsRespawnScreen deathBy={ui.deathBy} />}
+          {player.dead && !inCity && !zs && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 50,
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',

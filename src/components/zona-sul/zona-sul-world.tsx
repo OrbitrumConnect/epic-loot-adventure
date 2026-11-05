@@ -79,6 +79,7 @@ import { findSurfFrame } from './surf/surf-frame';
 import { findSorrisoFrame, SORRISO } from './surf/sorriso';
 import { createZsForestFarm, createZsHarvestNodes, createZsNewAreaTrees, createZsSpreadHarvest } from '@/game/systems/zsHarvestSystem';
 import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimmable, zsWalkable, zsWorldProfile } from './zs-world-profile';
+import { deathStage, resolveSpawn, samePoints, spawnPoints, useZsRespawn, zsRespawnMem } from './zs-respawn';
 import { sameVeh, useZsTouch, useZsVehicles, zsAttack, zsCave, zsCrouch, zsCtx, zsVehicleApi, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED, type ZsVehInfo } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
@@ -146,6 +147,8 @@ const warshipDock: { at: { x: number; z: number; yaw: number } | null } = { at: 
 const carGarage: { at: { x: number; z: number; yaw: number } | null } = { at: null };
 /** Card da base e mapa (03/11): onde estão o carro e o navio (ou onde se constrói outro). Só escreve quando muda. */
 let vehPubAcc = 0;
+/** renascer pelo mapa (05/11): recalcula os pontos ~2×/s enquanto morto */
+let respAcc = 0;
 function publishVehicles(car: ZsCar | null, ship: ZsWarship | null, dt: number): void {
   vehPubAcc += dt;
   if (vehPubAcc < 0.5) return;
@@ -380,16 +383,47 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
       if (src) { netGear[0] = src === gp ? ZS_GEAR.glider : src === sp ? ZS_GEAR.skate : ZS_GEAR.board; netGear[1] = r2(src.y - (p.y + bodyLift.current)); netGear[2] = r3(src.yaw); netGear[3] = r3(src.roll); netGear[4] = r3(src.pitch ?? 0); } }
     const gearOn = gearRef.glider.visible || gearRef.skate.visible || boardRef.current.visible;
     broadcastPose(p.x, p.z, yawNow.current, action.current, gs.player.level, gs.player.hp, gs.player.maxHp, p.y + bodyLift.current, selectedItemId(gs), netVehicles, gearOn ? netGear : null);
-    // RENASCER na zona segura (praia do Arpoador) quando o tempo da morte acaba — igual ao Vale
-    if (gs.player.dead && gs.player.respawnAt > 0 && Date.now() >= gs.player.respawnAt) {
-      // renasce na CAMA da base, se já tiver uma; senão na zona segura (igual ao Vale)
-      const core = gs.playerBase?.pieces.find((pc) => pc.kind === 'core');
-      const sp = core ? cellCenter(core.cell) : { x: SAFE_ZONE.x, z: SAFE_ZONE.z };
-      useGameStore.setState(s => ({ player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: sp.x, z: sp.z } }, ui: { ...s.ui, message: core ? 'Você reviveu na sua base.' : 'Você reviveu na zona segura.', deathBy: null } }));
-      drive.mode = 'foot'; ride.current = null; swimVel.current.set(0, 0); vy.current = 0; grounded.current = true; dive.current = 0;
-      p.set(sp.x, zsHeightAt(t, sp.x, sp.z), sp.z); movement.current.set(p.x, 0, p.z);
-      if (group.current) group.current.visible = true;
-    }
+    // RENASCER ESCOLHENDO NO MAPA (05/11, Pedro: "morreu: a mensagem dura 6 s, depois aparece o mapa e tem os 6 s restantes
+    // vendo aonde quer nascer; passou os 12, nasce onde escolheu" — zs-respawn.ts). Antes: 15 s e nascia na base/praia.
+    // O MEU navio levou tiro? (navio em combate não serve de ponto por 30 s)
+    if (ship) { const M = zsRespawnMem; if (M.shipHp >= 0 && ship.hp < M.shipHp) M.shipHitAt = Date.now(); M.shipHp = ship.hp; }
+    if (gs.player.dead) {
+      const wall = Date.now(), first = !useZsRespawn.getState().deathAt;
+      if (first) useZsRespawn.setState({ deathAt: wall, diedAt: { x: p.x, z: p.z }, choice: null, points: [] });
+      respAcc += dt;
+      if (first || respAcc >= 0.5) {
+        respAcc = 0;
+        const core = gs.playerBase?.pieces.find((pc) => pc.kind === 'core'), lvl = gs.player.level;
+        const pts = spawnPoints({
+          now: wall, base: core ? cellCenter(core.cell) : null, beach: { x: SAFE_ZONE.x, z: SAFE_ZONE.z },
+          ship: ship ? { x: ship.x, z: ship.z, gone: warshipGone(ship), unlocked: isUnlocked(WARSHIP.UNLOCK_ID, lvl), hitAt: zsRespawnMem.shipHitAt } : null,
+          car: car ? { x: car.x, z: car.z, gone: carGone(car), unlocked: isUnlocked('flying_car', lvl), underground: car.y < zsHeightAt(t, car.x, car.z) - 3 } : null,
+          usedAt: zsRespawnMem.usedAt,
+        });
+        if (!samePoints(pts, useZsRespawn.getState().points)) useZsRespawn.setState({ points: pts });
+      }
+      const R = useZsRespawn.getState();
+      if (deathStage(R.deathAt, wall) === 'go' && R.points.length) {
+        const sp = resolveSpawn(R.points, R.choice);
+        drive.mode = 'foot'; ride.current = null; swimVel.current.set(0, 0); vy.current = 0; grounded.current = true; dive.current = 0;
+        onDeck.current = false; onRemoteDeck.current = null;
+        if (sp.kind === 'ship' && ship) {
+          // no convés, ao lado do timão (o mesmo lugar de quando solta o timão)
+          syncWarshipDeck(ship, clockT);
+          const h = warshipWorld(ship, 0, HELM_U * WARSHIP.LENGTH), at = warshipBoardSpot(ship, h.x, h.z) ?? { ...h, y: zsHeightAt(t, h.x, h.z) };
+          p.set(at.x, at.y, at.z); facing.current = ship.yaw; onDeck.current = true; zsRespawnMem.usedAt.ship = wall;
+        } else if (sp.kind === 'car' && car) {
+          // do lado do motorista, no chão (o carro vazio desce sozinho)
+          const side = (dimsRef.current?.width ?? 2.2) / 2 + 1.5, x = car.x - Math.cos(car.yaw) * side, z = car.z + Math.sin(car.yaw) * side;
+          p.set(x, zsHeightAt(t, x, z), z); facing.current = car.yaw; zsRespawnMem.usedAt.car = wall;
+        } else p.set(sp.x, zsHeightAt(t, sp.x, sp.z), sp.z);
+        movement.current.set(p.x, 0, p.z);
+        const msg = sp.kind === 'ship' ? '⚓ Você renasceu no seu navio.' : sp.kind === 'car' ? '🚗 Você renasceu do lado do seu carro.' : sp.kind === 'base' ? 'Você reviveu na sua base.' : 'Você reviveu na zona segura (praia do Arpoador).';
+        useGameStore.setState(s => ({ player: { ...s.player, hp: s.player.maxHp, dead: false, respawnAt: 0, position: { x: p.x, z: p.z } }, ui: { ...s.ui, message: msg, deathBy: null } }));
+        useZsRespawn.setState({ deathAt: 0, diedAt: null, choice: null, points: [] });
+        if (group.current) group.current.visible = true;
+      }
+    } else if (useZsRespawn.getState().deathAt) useZsRespawn.setState({ deathAt: 0, diedAt: null, choice: null, points: [] });
     const dead = useGameStore.getState().player.dead;
     if (dead && drive.mode !== 'foot') { drive.mode = 'foot'; if (group.current) group.current.visible = true; } // morreu no carro: cai do lado
     // GOLPE/TIRO (attackTick do jogo): ~0,45 s de ataque, vira pro alvo; arma de fogo dá coice na câmera
@@ -1564,6 +1598,7 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
   useEffect(() => {
     // entrou no mapa: a pé, câmera no herói; 1ª vez = ganha a prancha
     drive.mode = 'foot'; input.overview = false; input.keys.clear(); hudNow = null;
+    useZsRespawn.setState({ deathAt: 0, diedAt: null, choice: null, points: [] }); // 05/11: entrou sem morte pendente (se já chegou morto, conta do 1º quadro)
     zsAmbience.arm(); // som do mar/carro/vento (liga no 1º clique/tecla)
     // PRANCHA: quem garante é a casa do jogo (routes/index.tsx) — item fixo, volta sempre que faltar
     let alive = true;
