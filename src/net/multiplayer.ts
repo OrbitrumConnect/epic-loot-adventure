@@ -118,7 +118,8 @@ export function broadcastKraken(k: NetKraken): void {
 }
 /** CANIBAL GIGANTE do covil (04/11): o anfitrião simula e manda ~4×/s — fase, subida, pancada do corpo, raízes vivas e
  *  chicotadas [x, z, idade]; quem é convidado espelha (o dano em todos é aplicado pelo anfitrião). */
-export type NetCanibal = { ph: 0 | 1 | 2 | 3; rt: number; a: 0 | 1 | 2; r: (0 | 1)[]; s: ([number, number, number] | null)[] };
+/** v2 (05/11): + onde ele está (x, z), rumo (y), o que faz (k: 0 parado 1 anda 2 corre 3 golpe 4 pulo 5 ruge 6 morre) e a altura do pulo (lh) */
+export type NetCanibal = { ph: 0 | 1 | 2 | 3; rt: number; a: 0 | 1 | 2; r: (0 | 1)[]; s: ([number, number, number] | null)[]; x?: number; z?: number; y?: number; k?: number; lh?: number };
 export const netCanibal: { c: NetCanibal | null; at: number } = { c: null, at: 0 };
 export function broadcastCanibal(c: NetCanibal): void {
   if (!channel || !useNet.getState().connected) return;

@@ -15,6 +15,8 @@ import { GlbHeroMixamo } from '@/components/world/glb-hero-mixamo';
 import type { HeroAction } from '@/components/world/glb-hero';
 import { creatureAnchors, hurtPlayerBy } from '@/components/world/hostile-ai';
 import { MIXAMO_RAIDER, mixClipProps } from '@/components/world/raider';
+import { HeldItem } from '@/components/world/held-weapon';
+import { palette } from '@/components/world/world-kit';
 import { useGameStore } from '@/game/state/game-store';
 import { CREATURES } from '@/game/data/creatures';
 import type { CreatureState } from '@/game/types';
@@ -25,8 +27,8 @@ import { setBigCreatureRadius } from '@/game/systems/bigCreatureRadius';
 import { queueKnockback } from '@/game/systems/knockbackSystem';
 import { activeGrab, grabTicksDue, startHold } from '@/game/systems/grabSystem';
 import {
-  CANIBAL, CANIBAL_AT, CANIBAL_BODY_ID, CANIBAL_CRIA_PREFIX, canibalPhaseStep, canibalRootId, criaCount, nearestInArena, newCanibal, pushAway, rootBase,
-  rootLean, rootStep, rootTarget, slamHits, zsCanibal, type CanibalPhase,
+  CANIBAL, CANIBAL_AT, CANIBAL_BODY_ID, CANIBAL_CRIA_PREFIX, canibalMove, canibalPhaseStep, canibalRootId, clampArena, criaCount, leapPos, nearestInArena,
+  newCanibal, pushAway, rootBase, rootLean, rootStep, rootTarget, slamHits, zsCanibal, type CanibalAct, type CanibalPhase,
 } from './zs-canibal-boss';
 import { setBossBarFor, zsCave } from './zs-context';
 
@@ -35,6 +37,38 @@ const SEG = 10, SEG_LEN = CANIBAL.ROOT_LEN / SEG;
  *  cópia SÓ dele do material, com a própria textura brilhando de leve (os canibais pequenos do mapa não mudam) */
 export const CANIBAL_SELF_GLOW = 0.4;
 const PHASES: CanibalPhase[] = ['sleep', 'rise', 'fight', 'dead'];
+const ACTS: CanibalAct[] = ['idle', 'walk', 'run', 'attack', 'leap', 'roar', 'death'];
+/** OLHOS VERMELHOS + NEON VERDE (05/11, Pedro: "olhos vermelhos, aquele aspecto verde-neon similar ao Kraken — pode deixar mais
+ *  pra esse boss"): brasas vermelhas na cabeça (osso Head, acompanham a animação) e o corpo/raízes brilhando verde, pulsando */
+/** BODY_TINT (05/11, Pedro: "o boss ficou meio verde demais"): o corpo brilha na cor da PRÓPRIA textura com só 25% de verde;
+ *  o verde-neon forte fica nas manchas das raízes; o machado (AXE_GLOW) na cor dele, sem verde */
+export const CANIBAL_LOOK = { EYE_COLOR: '#ff2a14', EYE_GLOW: 4, NEON: '#3dff7a', GLOW_MIN: 0.3, GLOW_MAX: 0.55, BODY_TINT: 0.25, AXE_GLOW: 0.3 } as const;
+const canibalPulse = (t: number) => CANIBAL_LOOK.GLOW_MIN + (CANIBAL_LOOK.GLOW_MAX - CANIBAL_LOOK.GLOW_MIN) * (0.5 + 0.5 * Math.sin(t * 1.6));
+/** pintas verdes nas raízes (o mesmo jeito do neon do Kraken: mapa de brilho, sem luz nova) */
+function makeRootNeon(): THREE.CanvasTexture {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#140802'; g.fillRect(0, 0, 64, 128);
+  const spot = (u: number, v: number) => {
+    for (const du of [-64, 0, 64]) {
+      const gr = g.createRadialGradient(u + du, v, 0, u + du, v, 7);
+      gr.addColorStop(0, CANIBAL_LOOK.NEON); gr.addColorStop(0.5, 'rgba(61,255,122,0.45)'); gr.addColorStop(1, 'rgba(61,255,122,0)');
+      g.fillStyle = gr; g.fillRect(u + du - 7, v - 7, 14, 14);
+    }
+  };
+  for (const u of [8, 30, 52]) spot(u, 30);
+  for (const u of [19, 41, 63]) spot(u, 94);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+function makeEyeGlow(): THREE.CanvasTexture {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d')!, gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 /** perto o bastante pra barra/tema/desenho (m do centro) */
 const NEAR_M = 140;
 const meId = () => useNet.getState().selfId || 'eu';
@@ -57,10 +91,14 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
   const body = useRef<THREE.Group>(null);
   const bodyAction = useRef<HeroAction>('idle');
   const mx = MIXAMO_RAIDER['raider_cannibal']!;
+  // 05/11 (Pedro: "dá pra pôr machado na mão dele? tem animação de pulando com machado"): o MACHADO GLB na mão (cresce
+  // junto com o corpo) — o pulo (Mutant Jump Attack) vira o salto com machadada; o golpe, machadada
+  const axe = useMemo(() => <HeldItem c={palette()} itemId="axe" />, []);
   const roots = useMemo(() => {
     const geo = new THREE.CylinderGeometry(0.75, 1, 1, 9, 1);
     geo.translate(0, 0.5, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: '#3b2619', roughness: 0.92, metalness: 0, emissive: '#3a0a02', emissiveIntensity: 0.35 });
+    // 05/11: pintas verde-neon (mapa de brilho no MESMO material — sem luz nova), pulsando
+    const mat = new THREE.MeshStandardMaterial({ color: '#3b2619', roughness: 0.92, metalness: 0, emissive: '#ffffff', emissiveMap: makeRootNeon(), emissiveIntensity: CANIBAL_LOOK.GLOW_MIN });
     const mesh = new THREE.InstancedMesh(geo, mat, CANIBAL.ROOTS * SEG);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = false; mesh.castShadow = true; mesh.visible = false;
@@ -73,15 +111,31 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
     return { m, tx };
   }, []);
   const tmp = useMemo(() => ({ m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), d: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), zero: new THREE.Matrix4().makeScale(0, 0, 0) }), []);
-  const st = useRef({ rise: 0, netAcc: 0, layerAcc: 1, removeAt: 0, lastPhase: 'sleep' as CanibalPhase, holdBy: '' });
-  const litMats = useRef<THREE.Material[]>([]);
+  const st = useRef({ rise: 0, netAcc: 0, layerAcc: 1, removeAt: 0, lastPhase: 'sleep' as CanibalPhase, holdBy: '', posAcc: 0, actUntil: 0, leapH: 0 });
+  const litMats = useRef<THREE.MeshStandardMaterial[]>([]);
+  const axeMats = useRef<THREE.MeshStandardMaterial[]>([]);
+  // OLHOS: 2 brasas + halo (de frente pra câmera, aditivo)
+  const eyes = useMemo(() => {
+    const tex = makeEyeGlow();
+    const coreGeo = new THREE.SphereGeometry(0.7, 10, 8), glowGeo = new THREE.PlaneGeometry(1, 1);
+    const coreMat = new THREE.MeshBasicMaterial({ color: CANIBAL_LOOK.EYE_COLOR, toneMapped: false });
+    const glowMat = new THREE.MeshBasicMaterial({ map: tex, color: CANIBAL_LOOK.EYE_COLOR, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, fog: false });
+    const g = new THREE.Group(); g.visible = false;
+    const one = () => { const core = new THREE.Mesh(coreGeo, coreMat), glow = new THREE.Mesh(glowGeo, glowMat); glow.renderOrder = 5; g.add(core, glow); return { core, glow }; };
+    return { g, l: one(), r: one(), tex, coreGeo, glowGeo, coreMat, glowMat };
+  }, []);
+  const headBone = useRef<THREE.Object3D | null>(null);
+  const headTop = useRef<THREE.Object3D | null>(null);
   useEffect(() => () => {
     roots.geometry.dispose(); (roots.material as THREE.Material).dispose();
     pit.m.geometry.dispose(); (pit.m.material as THREE.Material).dispose(); pit.tx.dispose();
     audioManager.setBossMusic(false, 'canibal'); setBossBarFor(CANIBAL.NAME, null);
     setBigCreatureRadius(CANIBAL_BODY_ID, null);
     for (const m of litMats.current) m.dispose();
-  }, [roots, pit]);
+    for (const m of axeMats.current) m.dispose();
+    (roots.material as THREE.MeshStandardMaterial).emissiveMap?.dispose();
+    eyes.tex.dispose(); eyes.coreGeo.dispose(); eyes.glowGeo.dispose(); eyes.coreMat.dispose(); eyes.glowMat.dispose();
+  }, [roots, pit, eyes]);
 
   /** dano de uma chicotada/pancada em todos no raio — o MEU herói direto (empurrão, agarrão), os outros pela rede */
   const strike = (x: number, z: number, r: number, dmg: number, push: number, who: string, grabBy: string | null) => {
@@ -111,6 +165,13 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
       else {
         C.phase = PHASES[nc.ph] ?? 'sleep'; C.riseT = nc.rt * CANIBAL.RISE_S;
         C.bodyAct = nc.a === 1 ? 'attack' : nc.a === 2 ? 'death' : 'idle';
+        if (nc.x !== undefined && nc.z !== undefined) {
+          const kk = Math.min(1, dt * 5), jump = Math.hypot(nc.x - C.x, nc.z - C.z) > 40;
+          C.x = jump ? nc.x : C.x + (nc.x - C.x) * kk; C.z = jump ? nc.z : C.z + (nc.z - C.z) * kk;
+        }
+        if (nc.y !== undefined) { let dy = nc.y - C.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2; C.yaw += dy * Math.min(1, dt * 5); }
+        C.act = ACTS[nc.k ?? 0] ?? 'idle';
+        S.leapH += ((nc.lh ?? 0) - S.leapH) * Math.min(1, dt * 8);
         C.roots.forEach((r, i) => {
           const alive = nc.r[i] === 1;
           if (r.alive && !alive) r.diedAt = now;
@@ -135,7 +196,8 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
           const fresh: CreatureState[] = [bossCreature(CANIBAL_BODY_ID, CANIBAL.NAME, CANIBAL.BODY_HP, CANIBAL_AT)];
           for (let i = 0; i < CANIBAL.ROOTS; i++) fresh.push(bossCreature(canibalRootId(i), 'Raiz do Canibal', CANIBAL.ROOT_HP, rootBase(i)));
           useGameStore.setState((s) => ({ creatures: [...s.creatures.filter((c) => !c.id.startsWith('zs_canibal_')), ...fresh] }));
-          if (heroDist < NEAR_M) store.setMessage(`👹 O CANIBAL GIGANTE saiu do buraco! (recomendado nível ${CANIBAL.REC_LEVEL}+ — só a BAZUCA fura a pele dele; em grupo, menos)`);
+          C.act = 'roar'; S.actUntil = now + CANIBAL.RISE_S * 1000;
+          if (heroDist < NEAR_M) store.setMessage(`👹 O CANIBAL GIGANTE saiu do buraco! (recomendado nível ${CANIBAL.REC_LEVEL}+ — a BAZUCA dói mais; em grupo, menos)`);
         }
         if (C.phase === 'sleep') useGameStore.setState((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith('zs_canibal_') && !c.id.startsWith(CANIBAL_CRIA_PREFIX)) }));
       }
@@ -144,7 +206,7 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
       if (C.phase === 'fight' || C.phase === 'rise') {
         // MORREU: o corpo zerou → fim (as raízes caem junto)
         if (bodyCr && bodyCr.behavior === 'dead') {
-          C.phase = 'dead'; C.nextAt = now + CANIBAL.RESPAWN_MS; C.bodyAct = 'death'; S.removeAt = now + 9000;
+          C.phase = 'dead'; C.nextAt = now + CANIBAL.RESPAWN_MS; C.bodyAct = 'death'; C.act = 'death'; C.leap = null; S.removeAt = now + 9000;
           C.roots.forEach((r) => { if (r.alive) { r.alive = false; r.diedAt = now; } r.slam = null; });
           useGameStore.setState((s) => ({ creatures: s.creatures.map((c) => (c.id.startsWith('zs_canibal_r') && c.behavior !== 'dead' ? { ...c, hp: 0, behavior: 'dead' as const } : c)) }));
           if (heroDist < NEAR_M) store.setMessage('🏆 CANIBAL GIGANTE DERROTADO! O covil fica em silêncio… (volta em 20 min)');
@@ -177,15 +239,37 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
           }
           if (rootStep(r, dt) && r.slam) strike(r.slam.tx, r.slam.tz, CANIBAL.SLAM_R, CANIBAL.SLAM_DMG, CANIBAL.PUSH_M, 'Raiz do Canibal', canibalRootId(r.i));
         }
-        // CORPO: pancada em quem chega perto (empurra longe)
-        const close = down.some((h) => Math.hypot(h.x - CANIBAL_AT.x, h.z - CANIBAL_AT.z) <= CANIBAL.BODY_REACH);
-        if (close && now >= C.bodyNextAt) {
-          C.bodyNextAt = now + CANIBAL.BODY_SLAM_S * 1000; C.bodyAct = 'attack';
-          window.setTimeout(() => {
-            if (zsCanibal.s.phase !== 'fight') return;
-            strike(CANIBAL_AT.x, CANIBAL_AT.z, CANIBAL.BODY_REACH, CANIBAL.BODY_DMG, CANIBAL.BODY_PUSH_M, CANIBAL.NAME, null);
-          }, 700);
-          window.setTimeout(() => { if (zsCanibal.s.bodyAct === 'attack') zsCanibal.s.bodyAct = 'idle'; }, 1400);
+        // ═══ CORPO v2 (05/11): EM PÉ — anda/corre atrás de quem está na arena, PANCADA que derruba, PULO em quem foge ═══
+        let tgt: (typeof down)[number] | null = null, td = Infinity;
+        for (const h of down) { const d = Math.hypot(h.x - C.x, h.z - C.z); if (d < td) { td = d; tgt = h; } }
+        if (C.leap) {
+          C.leap.t += dt; C.act = 'leap';
+          const lp = leapPos(C.leap); C.x = lp.x; C.z = lp.z; S.leapH = lp.h;
+          if (!C.leap.hit && C.leap.t >= CANIBAL.LEAP_S) {
+            C.leap.hit = true; S.leapH = 0;
+            strike(C.x, C.z, CANIBAL.LEAP_R, CANIBAL.LEAP_DMG, CANIBAL.LEAP_PUSH_M, CANIBAL.NAME, null); // o chão treme onde ele cai
+          }
+          if (C.leap.t >= CANIBAL.LEAP_S + 0.5) { C.leap = null; C.act = 'idle'; }
+        } else if (now < S.actUntil) {
+          // terminando o golpe / o rugido (parado)
+        } else if (tgt) {
+          const d = canibalMove(C, tgt.x, tgt.z, dt);
+          if (d > CANIBAL.LEAP_FROM && now >= C.leapAt) {
+            const to = clampArena(tgt.x, tgt.z);
+            C.leap = { fx: C.x, fz: C.z, tx: to.x, tz: to.z, t: 0, hit: false }; C.leapAt = now + CANIBAL.LEAP_EVERY_S * 1000; C.act = 'leap';
+          } else if (d <= CANIBAL.ATK_REACH && now >= C.atkAt) {
+            C.atkAt = now + CANIBAL.ATK_EVERY_S * 1000; C.act = 'attack'; C.bodyAct = 'attack'; S.actUntil = now + 1200;
+            const fx = C.x + Math.sin(C.yaw) * CANIBAL.ATK_REACH * 0.7, fz = C.z + Math.cos(C.yaw) * CANIBAL.ATK_REACH * 0.7;
+            window.setTimeout(() => { if (zsCanibal.s.phase === 'fight') strike(fx, fz, CANIBAL.ATK_R, CANIBAL.ATK_DMG, CANIBAL.ATK_PUSH_M, CANIBAL.NAME, null); }, 650);
+            window.setTimeout(() => { if (zsCanibal.s.bodyAct === 'attack') zsCanibal.s.bodyAct = 'idle'; }, 1200);
+          }
+        } else C.act = 'idle';
+        // o corpo na store acompanha (mira, explosão, rede) ~3×/s
+        S.posAcc += dt;
+        if (S.posAcc > 0.33) {
+          S.posAcc = 0;
+          const px = Math.round(C.x * 10) / 10, pz = Math.round(C.z * 10) / 10;
+          useGameStore.setState((s2) => ({ creatures: s2.creatures.map((c) => (c.id === CANIBAL_BODY_ID && (c.position.x !== px || c.position.z !== pz) ? { ...c, position: { x: px, z: pz } } : c)) }));
         }
       }
       if (C.phase === 'dead' && S.removeAt && now > S.removeAt) { S.removeAt = 0; useGameStore.setState((s) => ({ creatures: s.creatures.filter((c) => !c.id.startsWith('zs_canibal_')) })); }
@@ -198,6 +282,7 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
           ph: PHASES.indexOf(C.phase) as NetCanibal['ph'], rt: Math.round(Math.min(1, C.riseT / CANIBAL.RISE_S) * 100) / 100,
           a: C.bodyAct === 'attack' ? 1 : C.bodyAct === 'death' ? 2 : 0,
           r: C.roots.map((r) => (r.alive ? 1 : 0)), s: C.roots.map((r) => (r.slam ? [r1(r.slam.tx), r1(r.slam.tz), r1(r.slam.age)] as [number, number, number] : null)),
+          x: r1(C.x), z: r1(C.z), y: Math.round(C.yaw * 100) / 100, k: ACTS.indexOf(C.act), lh: r1(S.leapH),
         });
       }
     }
@@ -245,24 +330,52 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
         const src = mesh.material as THREE.MeshStandardMaterial;
         if (!src || Array.isArray(src) || !src.isMeshStandardMaterial) return;
         const mat = src.clone();
-        mat.emissive = new THREE.Color('#ffffff'); mat.emissiveMap = src.map; mat.emissiveIntensity = CANIBAL_SELF_GLOW;
+        if (!(mesh as THREE.SkinnedMesh).isSkinnedMesh) {
+          // o MACHADO na mão (Pedro: "com o verde ficou meio troll, tirou a tonalidade normal dele"): a cor DELE, só com um
+          // brilho neutro fixo pra não virar silhueta preta no escuro do covil (a luz fica dentro do corpo)
+          mat.emissive = src.map ? new THREE.Color('#ffffff') : src.color.clone(); mat.emissiveMap = src.map; mat.emissiveIntensity = CANIBAL_LOOK.AXE_GLOW;
+          mesh.material = mat; axeMats.current.push(mat);
+          return;
+        }
+        // 05/11: o brilho da própria textura com um TOQUE de verde-neon (BODY_TINT), pulsando
+        mat.emissive = new THREE.Color('#ffffff').lerp(new THREE.Color(CANIBAL_LOOK.NEON), CANIBAL_LOOK.BODY_TINT); mat.emissiveMap = src.map; mat.emissiveIntensity = CANIBAL_SELF_GLOW;
         mesh.material = mat; litMats.current.push(mat);
       });
     }
     if (g) {
       g.visible = visible;
-      g.position.set(CANIBAL_AT.x, CANIBAL_AT.floor - CANIBAL.BODY_H * CANIBAL.SUBMERGED_K - (1 - S.rise) * outH * 1.1 + Math.sin(t * 0.6) * 0.4, CANIBAL_AT.z);
-      // olha pro herói mais perto lá embaixo (sem girar de vez)
-      const want = Math.atan2(hero.x - CANIBAL_AT.x, hero.z - CANIBAL_AT.z);
-      let dy = want - C.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
-      if (heroDown && heroDist < NEAR_M && C.phase === 'fight') C.yaw += dy * Math.min(1, dt * 0.8);
+      // 05/11: EM PÉ onde ele está (sai do buraco subindo; no pulo, o arco)
+      g.position.set(C.x, CANIBAL_AT.floor - (1 - S.rise) * outH * 1.05 + S.leapH, C.z);
       g.rotation.y = C.yaw;
-      bodyAction.current = C.bodyAct === 'death' || C.phase === 'dead' ? 'death' : C.bodyAct === 'attack' ? 'attack' : 'idle';
+      bodyAction.current = C.phase === 'dead' || C.act === 'death' ? 'death' : C.phase === 'rise' ? 'roar' : (C.act as HeroAction);
+      const pulse = canibalPulse(t);
+      for (const m of litMats.current) m.emissiveIntensity = pulse;
+      (roots.material as THREE.MeshStandardMaterial).emissiveIntensity = pulse;
+      // OLHOS: o osso da cabeça (achado quando o modelo carrega) + um pouco pra frente
+      if (!headBone.current) g.traverse((o) => { if (!headBone.current && /head$/i.test(o.name)) headBone.current = o; if (!headTop.current && /headtop/i.test(o.name)) headTop.current = o; });
+      const hb = headBone.current;
+      eyes.g.visible = !!hb && visible && C.phase !== 'dead';
+      if (hb && eyes.g.visible) {
+        // medido 05/11: o osso Head fica na BASE do crânio (~10 m até o HeadTop) — os olhos a ~42% da altura da cabeça e
+        // meia cabeça pra frente (antes ficavam dentro do crânio, invisíveis)
+        hb.getWorldPosition(tmp.p);
+        if (headTop.current) headTop.current.getWorldPosition(tmp.d); else tmp.d.set(tmp.p.x, tmp.p.y + CANIBAL.BODY_H * 0.15, tmp.p.z);
+        const L = Math.max(1, tmp.d.distanceTo(tmp.p));
+        const fx = Math.sin(C.yaw), fz = Math.cos(C.yaw), sx = fz, sz = -fx;
+        const ex = tmp.p.x + (tmp.d.x - tmp.p.x) * 0.42 + fx * L * 0.5, ey = tmp.p.y + (tmp.d.y - tmp.p.y) * 0.42, ez = tmp.p.z + (tmp.d.z - tmp.p.z) * 0.42 + fz * L * 0.5;
+        const glow = (0.85 + 0.15 * Math.sin(t * 2.4)) * (C.act === 'attack' || C.act === 'leap' ? 1.35 : 1);
+        for (const [e, sg] of [[eyes.l, 1], [eyes.r, -1]] as const) {
+          e.core.position.set(ex + sx * L * 0.17 * sg, ey, ez + sz * L * 0.17 * sg);
+          e.glow.position.copy(state.camera.position).sub(e.core.position).setLength(L * 0.15).add(e.core.position);
+          e.glow.quaternion.copy(state.camera.quaternion);
+          e.glow.scale.setScalar(CANIBAL_LOOK.EYE_GLOW * glow);
+        }
+      }
     }
     pit.m.visible = draw;
     const crsNow = useGameStore.getState().creatures;
     const bodyCr = crsNow.find((c) => c.id === CANIBAL_BODY_ID);
-    creatureAnchors.set(CANIBAL_BODY_ID, { x: CANIBAL_AT.x, y: CANIBAL_AT.floor, z: CANIBAL_AT.z, top: outH * S.rise, alive: !!bodyCr && bodyCr.behavior !== 'dead' && visible, r: CANIBAL.BODY_R });
+    creatureAnchors.set(CANIBAL_BODY_ID, { x: C.x, y: CANIBAL_AT.floor + S.leapH, z: C.z, top: outH * S.rise, alive: !!bodyCr && bodyCr.behavior !== 'dead' && visible, r: CANIBAL.BODY_R });
     // raízes (gomos): em pé balançando; na chicotada deitam no alvo; cortada afunda
     roots.visible = visible;
     for (const r of C.roots) {
@@ -297,9 +410,10 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
     <>
       <primitive object={pit.m} />
       <primitive object={roots} />
+      <primitive object={eyes.g} />
       <group ref={body} visible={false}>
         <Suspense fallback={null}>
-          <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} autoHeight={CANIBAL.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} {...mixClipProps(mx.clips)} />
+          <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} autoHeight={CANIBAL.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} weapon={axe} gripScale={CANIBAL.BODY_H / 1.8} {...mixClipProps(mx.clips)} />
         </Suspense>
       </group>
     </>

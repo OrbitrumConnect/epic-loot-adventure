@@ -68,6 +68,7 @@ import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem'
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { lineWalkable } from '@/components/world/map-walk';
 import { bigCreatureRadius } from '../systems/bigCreatureRadius';
+import { bossPower } from '../systems/bossResist';
 import { runExplosionHooks } from '../systems/explosionHooks';
 import { behindSpot, isSorceress, nextSorceressAt, SORC, SORC_PREFIX, sorcClock, sorceressMaySpawn } from '../systems/sorceressSystem';
 import { fleeInsteadOfDeath, IND, IND_PREFIX, indBornAt, indClock, indigenaLevelK, indigenaMaySpawn, indigenaState, isRetreating, isUnkillable, nextIndigenaAt, retreatToForest } from '../systems/indigenaSystem';
@@ -1151,7 +1152,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
 
-    const result = resolveAttack(finalPower, creature.hp, creature.maxHp, creature.armor, creature.name, playerCritStats(state.player));
+    // 05/11: o Canibal leva só a fração do dano que não é míssil (bossResist) — qualquer outro bicho ×1
+    const result = resolveAttack(bossPower(targetId, finalPower), creature.hp, creature.maxHp, creature.armor, creature.name, playerCritStats(state.player));
 
     let updatedCreatures = state.creatures.map(c => {
       if (c.id !== targetId) return c;
@@ -1274,7 +1276,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         if (extra >= CLEAVE_MAX || c.id === targetId || c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
         if (getDistance(state.player.position, c.position) > CLEAVE_RADIUS) return c;
         extra += 1;
-        const r = resolveAttack(finalPower, c.hp, c.maxHp, c.armor, c.name, playerCritStats(state.player));
+        const r = resolveAttack(bossPower(c.id, finalPower), c.hp, c.maxHp, c.armor, c.name, playerCritStats(state.player));
         drafts.push(damageEvent(c.id, r.damage, c.position, { critical: !!r.critical, fire: usingTorch }));
         if (r.targetDied) {
           const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);
@@ -1339,7 +1341,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
       if (getDistance(pos, c.position) > radius) return c;
       hits += 1;
-      const result = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
+      const result = resolveAttack(bossPower(c.id, power), c.hp, c.maxHp, c.armor, c.name, critStats);
       drafts.push(damageEvent(c.id, result.damage, c.position, {
         critical: !!result.critical, fire: usingTorch,
       }));
@@ -1464,7 +1466,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
       if (getDistance(at, c.position) - bigCreatureRadius(c.id) > radius) return c; // chefe gigante: desconta o corpo
       hits += 1;
-      const result = resolveAttack(power, c.hp, c.maxHp, pierce ? 0 : c.armor, c.name, critStats);
+      const result = resolveAttack(bossPower(c.id, power, pierce), c.hp, c.maxHp, pierce ? 0 : c.armor, c.name, critStats);
       drafts.push(damageEvent(c.id, result.damage, c.position, { critical: !!result.critical }));
       if (result.targetDied) {
         const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);
@@ -1593,7 +1595,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
         if (getDistance(center, c.position) > radius) return c;
         hits += 1;
-        const r = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
+        const r = resolveAttack(bossPower(c.id, power), c.hp, c.maxHp, c.armor, c.name, critStats);
         drafts.push(damageEvent(c.id, r.damage, c.position, { critical: !!r.critical }));
         if (r.targetDied) {
           const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);

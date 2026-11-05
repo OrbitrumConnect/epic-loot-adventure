@@ -1222,7 +1222,9 @@ function Controls() {
     /** clique ESQUERDO curto (sem arrastar) = atacar; arrastar = girar a câmera */
     let press: { x: number; y: number; at: number; eaten: boolean } | null = null;
     const locked = () => document.pointerLockElement === el;
-    const canFight = () => !zsPause.on && drive.mode === 'foot' && !input.overview;
+    // 05/11 (Pedro: "tô no carro do meu aliado e não consigo atirar com o fuzil"): DE CARONA também atira (o carona é o
+    // atirador) — o clique sai no bicho mais perto/na mira; a mira de ombro (direito) segue só a pé (a câmera da carona é a do carro)
+    const canFight = () => !zsPause.on && (drive.mode === 'foot' || drive.mode === 'riding') && !input.overview;
     // NAVIO DE GUERRA (01/11): clique = salva de canhão pro lado pra onde a câmera olha (o quadro do herói resolve)
     // Câmera de OMBRO (03/11, Pedro: "atiro no boneco lá longe, não pega — o tiro vai até lá"): o clique atira no
     // PONTINHO (o que está sob ele, no alcance real da arma), igual ao Vale e ao celular — antes, sem segurar o direito,
@@ -1244,7 +1246,7 @@ function Controls() {
       // navio: segura o direito = mira dos canhões — com o mouse PRESO como na mira a pé (Pedro 01/11: "a seta do mouse
       // aparecendo fica ruim pra jogar"): some a seta e o movimento gira a mira/elevação
       if (e.button === 2 && drive.mode === 'sailing') { input.cannonAim = true; if (!zsPause.on) el.requestPointerLock?.(); return; }
-      if (e.button === 2) { if (canFight()) { setAiming(true); el.requestPointerLock?.(); } return; } // MIRA: segura o direito
+      if (e.button === 2) { if (canFight() && drive.mode === 'foot') { setAiming(true); el.requestPointerLock?.(); } return; } // MIRA: segura o direito (a pé)
       if (e.button !== 0) return;
       // mirando: apertou, atirou — e SEGURANDO o fuzil sai o automático até soltar (toque = 1 bala, como CS)
       if (locked() || useAim.getState().active) { if (drive.mode === 'sailing') fire(); else pressTrigger(fire); return; } // navio: a salva de sempre

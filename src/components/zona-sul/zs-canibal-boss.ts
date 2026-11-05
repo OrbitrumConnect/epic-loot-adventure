@@ -14,10 +14,30 @@ import { CAVE_LAIR } from './zs-cave';
 
 export const CANIBAL = {
   NAME: 'Canibal Gigante',
-  /** corpo: altura do modelo inteiro (m) e a fração que fica no BURACO (da cintura pra cima pra fora) */
-  BODY_H: 110,
-  SUBMERGED_K: 0.5,
-  BODY_R: 12,
+  /** corpo: altura do modelo inteiro (m) e a fração enterrada. 05/11 (Pedro: "muito grande — uns 40% menor; ele EM PÉ andando,
+   *  correndo, pulando e atacando, o herói cai no chão"): 110 → 66 m, em pé no chão da arena (sai do buraco e vem) */
+  BODY_H: 66,
+  SUBMERGED_K: 0,
+  BODY_R: 7,
+  /** v2 (05/11): anda/corre atrás de quem está na arena (sem sair dela), pancada que DERRUBA, PULO em quem foge */
+  WALK_SPEED: 5,
+  RUN_SPEED: 9,
+  /** corre quando o alvo está além disto (m); não passa deste raio do centro (a rampa fica na parede) */
+  RUN_FROM: 25,
+  ARENA_R: 48,
+  /** pancada: alcance (m), raio do impacto, intervalo (s), dano, empurrão (m) */
+  ATK_REACH: 13,
+  ATK_R: 9,
+  ATK_EVERY_S: 3.5,
+  ATK_DMG: 220,
+  ATK_PUSH_M: 12,
+  /** PULO: em quem está além de LEAP_FROM m; dura LEAP_S; impacto LEAP_R m (dano/empurrão); de LEAP_EVERY_S em LEAP_EVERY_S */
+  LEAP_FROM: 28,
+  LEAP_S: 1.3,
+  LEAP_R: 12,
+  LEAP_DMG: 280,
+  LEAP_PUSH_M: 14,
+  LEAP_EVERY_S: 9,
   /** o buraco no meio da arena (raio, m) */
   PIT_R: 18,
   /** acorda: alguém até WAKE_R do centro e já lá embaixo (pé abaixo de WAKE_BELOW); dorme sem ninguém em SLEEP_R por SLEEP_MS */
@@ -32,9 +52,10 @@ export const CANIBAL = {
   ROOT_LEN: 46,
   ROOT_R: 3,
   ROOT_REACH: 40,
-  ROOT_HP: 9000,
-  /** armadura (corta metade disto de cada golpe — o míssil da bazuca atravessa) */
-  ARMOR: 800,
+  ROOT_HP: 6000,
+  /** armadura (corta metade disto de cada golpe — o míssil da bazuca atravessa). 05/11 (Pedro: "o fuzil pode dar dano nele
+   *  também"): 800 → 0 — a armadura saiu; quem segura o fuzil é a FRAÇÃO de bossResist.ts (10% do dano não-míssil) */
+  ARMOR: 0,
   /** chicotada: intervalo de cada raiz, levantar / bater / ficar no chão (s) */
   SLAM_EVERY_S: 4.5,
   WIND_S: 1.2,
@@ -49,8 +70,8 @@ export const CANIBAL = {
   GRAB_MS: 2200,
   GRAB_TICKS: 3,
   GRAB_DMG: 300,
-  /** corpo: vida, alcance da pancada, intervalo, dano, empurrão */
-  BODY_HP: 70_000,
+  /** corpo: vida (05/11: 70 → 50 mil, ele ficou menor e o fuzil entra), alcance da pancada, intervalo, dano, empurrão */
+  BODY_HP: 50_000,
   BODY_REACH: 26,
   BODY_SLAM_S: 6,
   BODY_DMG: 240,
@@ -85,16 +106,47 @@ export const CANIBAL_AT = { x: CAVE_LAIR.x, z: CAVE_LAIR.z, floor: CAVE_LAIR.flo
 export type CanibalPhase = 'sleep' | 'rise' | 'fight' | 'dead';
 export type RootSlam = { tx: number; tz: number; age: number; hit: boolean };
 export type CanibalRoot = { i: number; alive: boolean; diedAt: number; slam: RootSlam | null; nextAt: number };
+/** o que o corpo está fazendo (vira a animação: idle/walk/run/attack/leap/roar/death) */
+export type CanibalAct = 'idle' | 'walk' | 'run' | 'attack' | 'leap' | 'roar' | 'death';
+/** PULO em curso: de onde, pra onde e quanto já foi (s) */
+export type CanibalLeap = { fx: number; fz: number; tx: number; tz: number; t: number; hit: boolean };
 export type CanibalState = {
   phase: CanibalPhase; riseT: number; lastNearAt: number; nextAt: number; yaw: number;
   bodyAct: 'idle' | 'attack' | 'death'; bodyNextAt: number; roots: CanibalRoot[];
+  /** v2 (05/11): onde ele está, o que faz, próximo golpe/pulo, pulo em curso */
+  x: number; z: number; act: CanibalAct; atkAt: number; leapAt: number; leap: CanibalLeap | null;
 };
 
 export function newCanibal(): CanibalState {
   return {
     phase: 'sleep', riseT: 0, lastNearAt: 0, nextAt: 0, yaw: 0, bodyAct: 'idle', bodyNextAt: 0,
     roots: Array.from({ length: CANIBAL.ROOTS }, (_, i) => ({ i, alive: true, diedAt: 0, slam: null, nextAt: i * 0.7 })),
+    x: CAVE_LAIR.x, z: CAVE_LAIR.z, act: 'idle', atkAt: 0, leapAt: 0, leap: null,
   };
+}
+
+/** Prende (x, z) dentro da arena (até ARENA_R do centro). */
+export function clampArena(x: number, z: number): { x: number; z: number } {
+  const dx = x - CAVE_LAIR.x, dz = z - CAVE_LAIR.z, d = Math.hypot(dx, dz);
+  if (d <= CANIBAL.ARENA_R) return { x, z };
+  const k = CANIBAL.ARENA_R / d;
+  return { x: CAVE_LAIR.x + dx * k, z: CAVE_LAIR.z + dz * k };
+}
+/** ANDA/CORRE até o alvo (sem sair da arena; para no alcance da pancada). Devolve a distância que sobrou. */
+export function canibalMove(c: CanibalState, tx: number, tz: number, dt: number): number {
+  const d = Math.hypot(tx - c.x, tz - c.z);
+  c.yaw = Math.atan2(tx - c.x, tz - c.z);
+  if (d <= CANIBAL.ATK_REACH * 0.85) { c.act = 'idle'; return d; }
+  const run = d > CANIBAL.RUN_FROM, sp = (run ? CANIBAL.RUN_SPEED : CANIBAL.WALK_SPEED) * dt;
+  const step = Math.min(sp, d - CANIBAL.ATK_REACH * 0.8);
+  const p = clampArena(c.x + ((tx - c.x) / d) * step, c.z + ((tz - c.z) / d) * step);
+  c.x = p.x; c.z = p.z; c.act = run ? 'run' : 'walk';
+  return Math.hypot(tx - c.x, tz - c.z);
+}
+/** Onde ele está no PULO (x, z, altura) — arco de LEAP_S s, ~0,35× o próprio tamanho de altura no meio. */
+export function leapPos(l: CanibalLeap): { x: number; z: number; h: number } {
+  const k = Math.min(1, l.t / CANIBAL.LEAP_S);
+  return { x: l.fx + (l.tx - l.fx) * k, z: l.fz + (l.tz - l.fz) * k, h: Math.sin(k * Math.PI) * CANIBAL.BODY_H * 0.35 };
 }
 /** estado do mundo (um Canibal só) */
 export const zsCanibal = { s: newCanibal() };

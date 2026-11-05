@@ -7,6 +7,8 @@
  * só mudança de elenco (spawn/respawn/limpeza) remonta a lista. Tudo que é por
  * quadro continua lendo `getState()` dentro do laço.
  */
+import { bossPower } from '@/game/systems/bossResist';
+import { bigCreatureRadius } from '@/game/systems/bigCreatureRadius';
 import { useFrame } from '@react-three/fiber';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -283,9 +285,12 @@ export function MultiplayerWorldSync() {
       if (!creature || creature.behavior === 'dead') return;
       const dx = creature.position.x - hit.source.x;
       const dz = creature.position.z - hit.source.z;
-      // Limite largo cobre armas à distância, sem aceitar dano do outro lado do mapa.
-      if (dx * dx + dz * dz > 24 * 24) return;
-      const damage = Math.max(1, Math.round(hit.damage) - (hit.pierce ? 0 : creature.armor)); // míssil da bazuca atravessa
+      // Limite largo cobre armas à distância, sem aceitar dano do outro lado do mapa. 05/11: + o raio do corpo dos gigantes
+      // (o Canibal tem 7 m de raio — o tiro do convidado na "pele" dele contava só até 17 m dela)
+      const lim = 24 + bigCreatureRadius(creature.id);
+      if (dx * dx + dz * dz > lim * lim) return;
+      // míssil da bazuca atravessa; o Canibal leva só a fração do resto (bossResist, 05/11)
+      const damage = Math.max(1, bossPower(creature.id, Math.round(hit.damage), hit.pierce) - (hit.pierce ? 0 : creature.armor));
       const hp = Math.max(0, creature.hp - damage);
       useGameStore.setState((current) => ({
         // Morte pelo golpe do CONVIDADO: mesma regra do resto (horda não renasce; antes renascia em 20 s).
