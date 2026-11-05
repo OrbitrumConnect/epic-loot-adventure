@@ -307,6 +307,8 @@ function isCreatureAlive(creature: { id?: string; behavior: string; hp: number }
   if (creature.id?.startsWith('fleet_')) return false;
   // (04/11) o KRAKEN DAS CAGARRAS mora no mar: luta de navio — o piloto automático não nada até lá
   if (creature.id?.startsWith('zs_kraken_')) return false;
+  // (04/11) o CANIBAL GIGANTE do covil: luta de bazuca, na mão — o piloto automático não vai
+  if (creature.id?.startsWith('zs_canibal_')) return false;
   return creature.behavior !== 'dead' && creature.behavior !== 'respawning' && creature.hp > 0;
 }
 

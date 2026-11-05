@@ -116,6 +116,14 @@ export function broadcastKraken(k: NetKraken): void {
   if (!channel || !useNet.getState().connected) return;
   void channel.send({ type: 'broadcast', event: 'kraken', payload: { id: useNet.getState().selfId, k } });
 }
+/** CANIBAL GIGANTE do covil (04/11): o anfitrião simula e manda ~4×/s — fase, subida, pancada do corpo, raízes vivas e
+ *  chicotadas [x, z, idade]; quem é convidado espelha (o dano em todos é aplicado pelo anfitrião). */
+export type NetCanibal = { ph: 0 | 1 | 2 | 3; rt: number; a: 0 | 1 | 2; r: (0 | 1)[]; s: ([number, number, number] | null)[] };
+export const netCanibal: { c: NetCanibal | null; at: number } = { c: null, at: 0 };
+export function broadcastCanibal(c: NetCanibal): void {
+  if (!channel || !useNet.getState().connected) return;
+  void channel.send({ type: 'broadcast', event: 'canibal', payload: { id: useNet.getState().selfId, c } });
+}
 export function broadcastFleetHit(shipId: string, damage: number): void {
   if (!channel || !useNet.getState().connected || useNet.getState().isHost || !Number.isFinite(damage) || damage <= 0) return;
   void channel.send({ type: 'broadcast', event: 'fleet-hit', payload: { id: useNet.getState().selfId, shipId, damage: Math.round(damage) } satisfies FleetHitIntent });
@@ -163,6 +171,8 @@ export type CreatureHitIntent = {
   targetId: string;
   source: { x: number; z: number };
   damage: number;
+  /** 04/11: o míssil da bazuca atravessa armadura */
+  pierce?: boolean;
 };
 
 /** Golpe PvP de um jogador em OUTRO (fatia 2). `id` = atacante, `targetId` = alvo. */
@@ -387,6 +397,11 @@ export const useNet = create<NetState>((set, get) => ({
       const p = payload as { id: string; k: NetKraken };
       if (p.id === selfId || get().isHost || !p.k || !Array.isArray(p.k.t)) return;
       netKraken.k = p.k; netKraken.at = performance.now();
+    });
+    ch.on('broadcast', { event: 'canibal' }, ({ payload }) => {
+      const p = payload as { id: string; c: NetCanibal };
+      if (p.id === selfId || get().isHost || !p.c || !Array.isArray(p.c.r)) return;
+      netCanibal.c = p.c; netCanibal.at = performance.now();
     });
     ch.on('broadcast', { event: 'fleet-hit' }, ({ payload }) => {
       const hit = payload as FleetHitIntent;

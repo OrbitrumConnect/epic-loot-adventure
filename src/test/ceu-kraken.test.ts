@@ -59,7 +59,8 @@ describe('céu do Kraken (fim de tarde)', () => {
   it('o Kraken liga pela distância do MEU herói e desliga ao sair da Zona Sul', () => {
     const v = fs.readFileSync('src/components/zona-sul/zs-kraken-boss-view.tsx', 'utf8');
     expect(v).toMatch(/zsOmen\.target = omenTarget\(whirlpoolOn\(K\.phase\), dHero\);/);
-    expect(v).toMatch(/audioManager\.setBossMusic\(false\); zsOmen\.target = 0; useZsBossBar\.setState\(\{ bar: null \}\);/);
+    // 04/11: a barra de cada chefe só apaga a dela (Kraken × Canibal)
+    expect(v).toMatch(/audioManager\.setBossMusic\(false\); zsOmen\.target = 0; setBossBarFor\('Kraken das Cagarras', null\);/);
   });
 });
 

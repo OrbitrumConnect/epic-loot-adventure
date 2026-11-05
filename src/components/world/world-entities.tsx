@@ -159,7 +159,7 @@ export function Enemies({ c, playerRef, cameraMode }: { c: Palette; playerRef: R
   const list = useMemo(() => {
     // o CAPITÃO da esquadra pirata (`fleet_pilot_*`, 03/11) é desenhado no timão do navio dele (zs-enemy-fleet-view), não aqui;
     // o KRAKEN DAS CAGARRAS (`zs_kraken_*`, 04/11: corpo e tentáculos) no zs-kraken-boss-view
-    const r = nextEnemyList(cache.current, useGameStore.getState().creatures.filter((cr) => !cr.id.startsWith('fleet_') && !cr.id.startsWith('zs_kraken_')));
+    const r = nextEnemyList(cache.current, useGameStore.getState().creatures.filter((cr) => !cr.id.startsWith('fleet_') && !cr.id.startsWith('zs_kraken_') && !cr.id.startsWith('zs_canibal_')));
     cache.current = r.cache;
     return r.list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -285,7 +285,7 @@ export function MultiplayerWorldSync() {
       const dz = creature.position.z - hit.source.z;
       // Limite largo cobre armas à distância, sem aceitar dano do outro lado do mapa.
       if (dx * dx + dz * dz > 24 * 24) return;
-      const damage = Math.max(1, Math.round(hit.damage) - creature.armor);
+      const damage = Math.max(1, Math.round(hit.damage) - (hit.pierce ? 0 : creature.armor)); // míssil da bazuca atravessa
       const hp = Math.max(0, creature.hp - damage);
       useGameStore.setState((current) => ({
         // Morte pelo golpe do CONVIDADO: mesma regra do resto (horda não renasce; antes renascia em 20 s).

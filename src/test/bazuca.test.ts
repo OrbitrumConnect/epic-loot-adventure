@@ -55,7 +55,8 @@ describe('bazuca', () => {
     expect(g).toContain("if (prof.projectile === 'missile') { if (!fromBurst) get().fireBazooka(creature.position, undefined, aimed); return; }");
     expect(g).toContain("if (prof.projectile === 'missile') return fromBurst ? false : get().fireBazooka(toward, towardY, true);");
     expect(g).toContain("cannonHit: (at, radius) => get().explosiveHit(at, radius, get().cannonPower(), 'Canhão'),");
-    expect(g).toContain("setTimeout(() => { get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca'); }, missileFlightMs(Math.min(d, reach)));");
+    // 04/11: o míssil atravessa armadura (o último true) — o Canibal gigante
+    expect(g).toContain("setTimeout(() => { get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca', true); }, missileFlightMs(Math.min(d, reach)));");
   });
 
   it('desenho: modelo na mão (pose do fuzil), boca própria, míssil GLB com fumaça e bola de fogo; card abaixo do navio', () => {

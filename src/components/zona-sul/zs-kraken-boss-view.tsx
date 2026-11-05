@@ -35,7 +35,7 @@ import {
 } from './zs-kraken-boss';
 import { type ZsTerrain, zsHeightAt, zsWaterYAt } from './zs-terrain-data';
 import { omenTarget, zsOmen } from './zs-omen';
-import { sameBossBar, useZsBossBar, type ZsBossBar } from './zs-context';
+import { setBossBarFor, type ZsBossBar } from './zs-context';
 import { ZsKrakenStorm } from './zs-kraken-storm';
 import { zsNavigable, zsSwimmable } from './zs-world-profile';
 
@@ -184,7 +184,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     for (const m of [water.murk, water.whirl]) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }
     water.tx.murk.dispose(); water.tx.whirl.dispose();
     warshipDrift.x = 0; warshipDrift.z = 0; krakenShapes.segs = []; krakenShapes.body = null;
-    audioManager.setBossMusic(false); zsOmen.target = 0; useZsBossBar.setState({ bar: null });
+    audioManager.setBossMusic(false); zsOmen.target = 0; setBossBarFor('Kraken das Cagarras', null);
   }, [tent, water]);
   const eyes = useMemo(() => {
     const tex = makeGlowTexture();
@@ -471,7 +471,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
           bar = { name: 'Kraken das Cagarras', frac: hp / (KRAKEN_BOSS.TENTACLES * KRAKEN_BOSS.TENT_HP), sub: `tentáculos ${alive}/${KRAKEN_BOSS.TENTACLES}` };
         }
       }
-      if (!sameBossBar(bar, useZsBossBar.getState().bar)) useZsBossBar.setState({ bar });
+      setBossBarFor('Kraken das Cagarras', bar);
     }
     // ═══ REDEMOINHO puxa o MEU navio (cada um aplica no seu — o mundo move junto quem está no convés) ═══
     if (my && whirlpoolOn(K.phase) && my.sinkT === null) { const v = whirlpoolPull(K, my, pullBoost(K)); warshipDrift.x = v.x; warshipDrift.z = v.z; }

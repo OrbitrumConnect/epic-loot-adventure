@@ -67,6 +67,7 @@ import { grantKitItem, grantMobilityKit, isMobilityItem, SURFBOARD_ID } from '..
 import { isUnlocked, lockedMessage, unlockLevel } from '../systems/unlockSystem';
 import { clampX, clampZ, isClassicWorld, WORLD, type MapId } from '../data/world-profile';
 import { lineWalkable } from '@/components/world/map-walk';
+import { bigCreatureRadius } from '../systems/bigCreatureRadius';
 import { behindSpot, isSorceress, nextSorceressAt, SORC, SORC_PREFIX, sorcClock, sorceressMaySpawn } from '../systems/sorceressSystem';
 import { fleeInsteadOfDeath, IND, IND_PREFIX, indBornAt, indClock, indigenaLevelK, indigenaMaySpawn, indigenaState, isRetreating, isUnkillable, nextIndigenaAt, retreatToForest } from '../systems/indigenaSystem';
 import { baseFallLevelLoss, boostKillXp, creatureLevel, creatureXp, grantXp, playerBaseAttack, xpForLevel } from '../systems/progressionSystem';
@@ -197,7 +198,7 @@ type GameActions = {
   cannonHit: (at: Position, radius: number) => number;
   /** EXPLOSÃO em `at` (04/11): o dano em área do canhão com força e nome próprios (canhão = `cannonPower`, bazuca =
    *  `missilePower`). Devolve quantos acertou. */
-  explosiveHit: (at: Position, radius: number, power: number, label: string) => number;
+  explosiveHit: (at: Position, radius: number, power: number, label: string, pierce?: boolean) => number;
   /** Força de UM míssil da bazuca agora (~10 balas de fuzil). */
   missilePower: () => number;
   /** BAZUCA (04/11): dispara 1 míssil em `toward` (até o alcance); ele voa e explode lá (`explosiveHit`). */
@@ -393,6 +394,7 @@ export function deadCreature(c: CreatureState, now: number, rng: () => number): 
   // (`wild_shark_fl`) também não — vêm com a esquadra e saem com ela
   const respawnAt = c.speciesId === 'raider_warlord' || c.id.startsWith('wave') || isSorceress(c.id) || c.id.startsWith('fleet_') || c.id.startsWith('wild_shark_fl')
     || c.id.startsWith('zs_kraken_') // 04/11: o Kraken das Cagarras volta inteiro pelo relógio dele (zs-kraken-boss)
+    || c.id.startsWith('zs_canibal_') // 04/11: o Canibal gigante do covil também (zs-canibal-boss)
     ? null
     : now + Math.round((180_000 + rng() * 120_000) * (c.id.startsWith('wild_') ? WILD_RESPAWN_MULT : ENEMY_RESPAWN_MULT));
   return { ...c, hp: 0, behavior: 'dead', respawnAt };
@@ -1407,7 +1409,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     broadcastMissile(p, at, k < 1 ? undefined : towardY); // online: os outros veem voar e explodir (só desenho)
     // o dano cai junto com a bola de fogo (quando o míssil chega)
     const power = get().missilePower();
-    setTimeout(() => { get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca'); }, missileFlightMs(Math.min(d, reach)));
+    // o míssil ATRAVESSA armadura (04/11 — o Canibal gigante: "a bazuca dá praticamente todo o dano, o resto é fraco")
+    setTimeout(() => { get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca', true); }, missileFlightMs(Math.min(d, reach)));
     return true;
   },
   craftBazookaItem: (kind) => {
@@ -1423,7 +1426,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     set((st) => ({ player: { ...st.player, inventory: addItem(st.player.inventory, kind, 1) }, ui: { ...st.ui, message: kind === 'bazooka' ? '🚀 Bazuca fabricada! Está na mochila.' : `+1 ${name}` } }));
     return kind === 'bazooka' ? 'Bazuca fabricada!' : `+1 ${name}`;
   },
-  explosiveHit: (at, radius, power, label) => {
+  explosiveHit: (at, radius, power, label, pierce = false) => {
     const state = get();
     if (state.player.dead) return 0;
     // ONLINE (Pedro 01/11: "jogador na praia, horda, qualquer coisa toma dano"): jogador no raio leva o golpe pelo
@@ -1439,8 +1442,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (!canSimulateSharedWorld()) {
       let n = hitPlayers;
       for (const c of state.creatures) {
-        if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id) || getDistance(at, c.position) > radius) continue;
-        broadcastCreatureHit({ targetId: c.id, source: at, damage: power }); n++;
+        if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id) || getDistance(at, c.position) - bigCreatureRadius(c.id) > radius) continue;
+        broadcastCreatureHit({ targetId: c.id, source: at, damage: power, ...(pierce ? { pierce: true } : {}) }); n++;
       }
       if (n > 0) set(s => ({ ui: { ...s.ui, message: `💥 ${label}! ${n} atingido(s).` } }));
       return n;
@@ -1452,9 +1455,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     let hits = 0;
     const creatures = state.creatures.map(c => {
       if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id)) return c;
-      if (getDistance(at, c.position) > radius) return c;
+      if (getDistance(at, c.position) - bigCreatureRadius(c.id) > radius) return c; // chefe gigante: desconta o corpo
       hits += 1;
-      const result = resolveAttack(power, c.hp, c.maxHp, c.armor, c.name, critStats);
+      const result = resolveAttack(power, c.hp, c.maxHp, pierce ? 0 : c.armor, c.name, critStats);
       drafts.push(damageEvent(c.id, result.damage, c.position, { critical: !!result.critical }));
       if (result.targetDied) {
         const reward = rewardCreatureDeath(c, updatedPlayer, updatedBags, drafts, Math.random);

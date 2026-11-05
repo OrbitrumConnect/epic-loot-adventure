@@ -30,6 +30,12 @@ export function sameBossBar(a: ZsBossBar | null, b: ZsBossBar | null): boolean {
   if (!a || !b) return a === b;
   return a.name === b.name && a.sub === b.sub && Math.round(a.frac * 200) === Math.round(b.frac * 200);
 }
+/** Escreve a barra do chefe `name`: mostra a dele, e só APAGA se a que está na tela é a dele (04/11: Kraken × Canibal). */
+export function setBossBarFor(name: string, bar: ZsBossBar | null): void {
+  const cur = useZsBossBar.getState().bar;
+  if (bar === null && cur && cur.name !== name) return;
+  if (!sameBossBar(bar, cur)) useZsBossBar.setState({ bar });
+}
 /** Ataque da casa do jogo (`hitNearest`) — o clique esquerdo do mundo chama. */
 export const zsAttack: { fn: (() => void) | null } = { fn: null };
 

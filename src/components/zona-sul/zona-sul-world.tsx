@@ -66,6 +66,7 @@ import { BurstRuntime } from '@/components/world/burst-runtime';
 import { ZsEnemyFleetView } from './zs-enemy-fleet-view';
 import { ZsKrakenBoss } from './zs-kraken-boss-view';
 import { ZsBossBarHud } from './zs-boss-bar';
+import { ZsCanibalBoss } from './zs-canibal-boss-view';
 import { autoFireItem, manualShot, pressTrigger, releaseTrigger, triggerHeld } from '@/game/systems/burstSystem';
 import { AutoPilot } from '@/components/world/auto-pilot';
 import { BackgroundSim } from '@/components/world/background-sim';
@@ -1659,6 +1660,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
           </ZsSurface>
           {/* CAVERNA (30/10): Rebouças → galerias → águas → grande caverna → salão do chefe; ramal até o Leblon */}
           <ZsCave t={t} heroRef={heroRef} />
+          {/* CANIBAL GIGANTE do covil (04/11): sai do buraco no meio da arena; só desenha com o herói lá no fundo */}
+          <AssetBoundary label="ZsCanibal" fallback={null}><Suspense fallback={null}><ZsCanibalBoss heroRef={heroRef} /></Suspense></AssetBoundary>
           <Hero t={t} heroRef={heroRef} focusRef={focusRef} onHud={pushHud} carRef={carRef} dimsRef={dimsRef} boardRef={boardRef} playerRef={playerRef} movement={movement} c={c} gearRef={gearRef} shipRef={shipRef} />
           {/* COMBATE — as mesmas peças do Vale, no chão da Zona Sul (perfil do mapa) */}
           {/* cada peça com a sua rede de carregamento (29/10: um bicho novo carregando o modelo ESCONDIA o mundo inteiro

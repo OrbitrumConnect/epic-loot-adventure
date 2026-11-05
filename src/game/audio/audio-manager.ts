@@ -65,6 +65,8 @@ class AudioManager {
   private combatUntil = 0;
   private boss: HTMLAudioElement | null = null;
   private bossOn = false;
+  /** quem pediu o tema do chefe (04/11: Kraken e Canibal — um não desliga o do outro) */
+  private bossKeys = new Set<string>();
   private raf = 0;
   private listeners = new Set<Listener>();
   /** O usuário parou a música de propósito → o autoplay não a liga de novo. */
@@ -155,7 +157,9 @@ class AudioManager {
   /** Chefe acordado por perto (o Kraken das Cagarras chama todo quadro). 04/11 (noite, Pedro: "o Kraken apareceu mas a
    *  música dele não — por quê?"): antes só tocava com a música do jogo LIGADA (▶/■); agora o tema do chefe é um EVENTO —
    *  toca mesmo com a música parada (o volume geral manda: 0 = mudo). */
-  setBossMusic(on: boolean) {
+  setBossMusic(on: boolean, key = 'kraken') {
+    if (on) this.bossKeys.add(key); else this.bossKeys.delete(key);
+    on = this.bossKeys.size > 0;
     if (on === this.bossOn) return;
     this.bossOn = on;
     if (on && typeof Audio !== 'undefined') {

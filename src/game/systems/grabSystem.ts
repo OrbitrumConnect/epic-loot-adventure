@@ -13,7 +13,8 @@ export const GRAB_COOLDOWN_MS = 8000;
 /** Voltas que o jacaré dá no giro. */
 export const GRAB_TURNS = 2;
 
-export type Grab = { creatureId: string; startAt: number; until: number; ticksDone: number; perTick: number };
+/** `ms`/`ticks` (04/11): agarrão de OUTRO bicho (as raízes do Canibal) com duração/pancadas próprias — sem eles, o do jacaré. */
+export type Grab = { creatureId: string; startAt: number; until: number; ticksDone: number; perTick: number; ms?: number; ticks?: number };
 let grab: Grab | null = null;
 const lastGrabAt = new Map<string, number>();
 
@@ -30,7 +31,7 @@ export function tryStartGrab(creatureId: string, speciesId: string, bite: number
 /** Agarrão em curso (null = livre; expira sozinho). */
 export function activeGrab(now = Date.now()): Grab | null {
   // Expira SEMPRE (+0,3 s de folga pras pancadas): se o jacaré morrer/sumir no meio, o herói nunca fica preso.
-  if (grab && now >= grab.until && (grab.ticksDone >= GRAB_TICKS || now >= grab.until + 300)) grab = null;
+  if (grab && now >= grab.until && (grab.ticksDone >= (grab.ticks ?? GRAB_TICKS) || now >= grab.until + 300)) grab = null;
   return grab;
 }
 export function isGrabbed(now = Date.now()): boolean { const g = activeGrab(now); return !!g && now < g.until; }
@@ -39,10 +40,19 @@ export function isGrabbed(now = Date.now()): boolean { const g = activeGrab(now)
 export function grabTicksDue(creatureId: string, now = Date.now()): number {
   const g = grab;
   if (!g || g.creatureId !== creatureId) return 0;
-  const due = Math.min(GRAB_TICKS, Math.floor(((now - g.startAt) / GRAB_MS) * GRAB_TICKS + 1e-9));
+  const T = g.ticks ?? GRAB_TICKS, M = g.ms ?? GRAB_MS;
+  const due = Math.min(T, Math.floor(((now - g.startAt) / M) * T + 1e-9));
   const n = Math.max(0, due - g.ticksDone);
   g.ticksDone += n;
   return n;
+}
+
+/** SEGURA o herói (04/11 — a RAIZ do Canibal agarra): `ms` preso, `ticks` pancadas de `perTick`. Só se ninguém segura.
+ *  Acertar quem segura solta (o mesmo `breakGrab` do jacaré). */
+export function startHold(creatureId: string, ms: number, ticks: number, perTick: number, now = Date.now()): boolean {
+  if (activeGrab(now)) return false;
+  grab = { creatureId, startAt: now, until: now + ms, ticksDone: 0, perTick: Math.max(1, Math.round(perTick)), ms, ticks };
+  return true;
 }
 
 /** Solta (o herói acertou o jacaré, morreu, ou o jacaré morreu). Devolve true se soltou. */

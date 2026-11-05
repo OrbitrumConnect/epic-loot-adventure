@@ -85,7 +85,7 @@ describe('navio de guerra — canhões', () => {
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
     // 04/11: o corpo virou a explosão genérica (a bazuca usa a mesma conta) — o canhão chama com a força e o nome dele
     expect(store).toMatch(/cannonHit: \(at, radius\) => get\(\)\.explosiveHit\(at, radius, get\(\)\.cannonPower\(\), 'Canhão'\),/);
-    expect(store).toMatch(/explosiveHit: \(at, radius, power, label\) => \{/);
+    expect(store).toMatch(/explosiveHit: \(at, radius, power, label, pierce = false\) => \{/); // pierce: só o míssil da bazuca
     expect(store).toMatch(/rewardCreatureDeath\(c, updatedPlayer, updatedBags, drafts, Math\.random\)/);
     // tubarão não morde quem está no convés (só quem está na altura da água)
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
@@ -99,7 +99,7 @@ describe('navio de guerra — canhões', () => {
     expect(zs).toMatch(/for \(let i = 0; i < salvo\.length; i\+\+\) window\.setTimeout\(\(\) => audioManager\.playWorld\('cannon', 1\), i \* WARSHIP\.SALVO_GAP_MS\)/);
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
     expect(store).toMatch(/broadcastPlayerHit\(r\.id, power, `\$\{label\} de \$\{net\.selfName\}`\)/); // label = 'Canhão' no canhão
-    expect(store).toMatch(/broadcastCreatureHit\(\{ targetId: c\.id, source: at, damage: power \}\)/);
+    expect(store).toMatch(/broadcastCreatureHit\(\{ targetId: c\.id, source: at, damage: power, \.\.\.\(pierce \? \{ pierce: true \} : \{\}\) \}\)/);
   });
   it('rastro na água: navio (da popa) e prancha em pé (da rabeta)', () => {
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
