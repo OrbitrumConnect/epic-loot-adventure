@@ -45,8 +45,9 @@ const ACTS: CanibalAct[] = ['idle', 'walk', 'run', 'attack', 'leap', 'roar', 'de
 export const CANIBAL_LOOK = { EYE_COLOR: '#ff2a14', EYE_GLOW: 4, NEON: '#3dff7a', GLOW_MIN: 0.3, GLOW_MAX: 0.55, BODY_TINT: 0.25, AXE_GLOW: 0.3 } as const;
 /** PASSO PESADO (05/11, 2ª, Pedro: "precisa ser mais lento a movimentação"): o clip de andar/correr roda pela velocidade
  *  dele (timeScale = velocidade × isto) — antes rodava no ritmo de um homem (1×) e o gigante "pedalava" no lugar.
- *  Andar 2,5 m/s → clip 0,5× · correr 4,5 m/s → clip ~0,54×. */
-export const CANIBAL_STEP = { WALK: 0.2, RUN: 0.12 } as const;
+ *  Andar 2,5 m/s → clip 0,5× · correr 4,5 m/s → clip ~0,54× (com 40 m). O passo é proporcional à altura: menor = passo mais
+ *  curto = o clip roda mais rápido pra mesma velocidade (05/11: passo × altura fixo — 0,2 × 40 m — sem "patinar"). */
+export const CANIBAL_STEP = { WALK: 8 / CANIBAL.BODY_H, RUN: 4.8 / CANIBAL.BODY_H } as const;
 const canibalPulse = (t: number) => CANIBAL_LOOK.GLOW_MIN + (CANIBAL_LOOK.GLOW_MAX - CANIBAL_LOOK.GLOW_MIN) * (0.5 + 0.5 * Math.sin(t * 1.6));
 /** pintas verdes nas raízes (o mesmo jeito do neon do Kraken: mapa de brilho, sem luz nova) */
 function makeRootNeon(): THREE.CanvasTexture {

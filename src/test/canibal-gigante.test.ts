@@ -13,10 +13,11 @@ import { calculateDamage } from '@/game/systems/combatSystem';
    empurrão, ver se pega o herói, bate no chão … o canibal gigante meio que do tamanho do Kraken dentro da terra" · "o boss
    também é da cintura pra cima, sai do buraco fundo" · "só mata com bazuca — dá praticamente todo o dano, o resto é fraco". */
 describe('Canibal gigante do covil', () => {
-  it('no meio da arena do covil; 05/11 (Pedro: "uns 40% menor, em pé" → 66 m; 2ª: "diminuir uns 40% ainda, tá grande") → 40 m, inteiro fora do buraco; 6 raízes', () => {
+  it('no meio da arena do covil; 05/11 (Pedro: "uns 40% menor, em pé" → 66 m; 2ª: "diminuir uns 40% ainda, tá grande") → 40 m; 3ª: "uns 30% menor" → 28 m, inteiro fora do buraco; 6 raízes', () => {
     expect(CANIBAL_AT).toEqual({ x: CAVE_LAIR.x, z: CAVE_LAIR.z, floor: CAVE_LAIR.floor });
-    expect(CANIBAL.BODY_H).toBe(40);
-    expect(CANIBAL.BODY_R).toBeCloseTo(7 * 0.6, 5);
+    expect(CANIBAL.BODY_H).toBe(28);
+    expect(CANIBAL.BODY_R).toBeCloseTo(7 * 0.6 * 0.7, 1);
+    expect(CANIBAL.ROOT_LEN).toBeCloseTo(46 * 0.7, 5); expect(CANIBAL.ROOT_REACH).toBe(28); // raízes −30% junto
     expect(CANIBAL.SUBMERGED_K).toBe(0);
     expect(CANIBAL.ROOTS).toBe(6);
     for (let i = 0; i < 6; i++) { const b = rootBase(i); expect(Math.hypot(b.x - CANIBAL_AT.x, b.z - CANIBAL_AT.z)).toBeCloseTo(CANIBAL.ROOT_RING, 5); }
@@ -137,7 +138,7 @@ describe('Canibal v2: em pé, anda, corre, pula', () => {
     expect(c.act).toBe('walk'); expect(c.x - CAVE_LAIR.x).toBeCloseTo(CANIBAL.WALK_SPEED, 5);
     const d = newCanibal(); canibalMove(d, CAVE_LAIR.x + 45, CAVE_LAIR.z, 1);
     expect(d.act).toBe('run'); expect(d.x - CAVE_LAIR.x).toBeCloseTo(CANIBAL.RUN_SPEED, 5);
-    const e = newCanibal(); expect(canibalMove(e, CAVE_LAIR.x + 5, CAVE_LAIR.z, 1)).toBe(5); expect(e.act).toBe('idle');
+    const e = newCanibal(); expect(canibalMove(e, CAVE_LAIR.x + 4, CAVE_LAIR.z, 1)).toBe(4); expect(e.act).toBe('idle'); // dentro do alcance (28 m: 5,6)
     expect(e.yaw).toBeCloseTo(Math.PI / 2, 5); // vira pro alvo
     const f = newCanibal(); f.x = CAVE_LAIR.x + CANIBAL.ARENA_R - 1;
     for (let k = 0; k < 20; k++) canibalMove(f, CAVE_LAIR.x + 300, CAVE_LAIR.z, 1);
@@ -171,18 +172,18 @@ describe('Canibal v2: em pé, anda, corre, pula', () => {
 });
 
 /* Pedro, 05/11 (2ª): "ainda tá grande … e precisa ser mais lento a movimentação". */
-describe('Canibal 40 m: mais lento, passo pesado', () => {
-  it('andar 2,5 m/s e correr 4,5 m/s (era 5 e 9); alcance da pancada e do pulo −40% junto com o corpo', () => {
+describe('Canibal 28 m: mais lento, passo pesado', () => {
+  it('andar 2,5 m/s e correr 4,5 m/s (era 5 e 9); alcance da pancada e do pulo junto com o corpo (−40% e −30%)', () => {
     expect(CANIBAL.WALK_SPEED).toBe(2.5); expect(CANIBAL.RUN_SPEED).toBe(4.5);
-    expect(CANIBAL.ATK_REACH).toBe(8); expect(CANIBAL.ATK_R).toBe(5.5); expect(CANIBAL.LEAP_R).toBe(8);
+    expect(CANIBAL.ATK_REACH).toBe(5.6); expect(CANIBAL.ATK_R).toBe(3.9); expect(CANIBAL.LEAP_R).toBe(5.6);
     expect(CANIBAL.LEAP_FROM).toBeGreaterThan(CANIBAL.RUN_FROM);
   });
   it('o clip de andar/correr roda pela velocidade dele (antes 1× = ritmo de homem, ele "pedalava")', () => {
     const v = fs.readFileSync('src/components/zona-sul/zs-canibal-boss-view.tsx', 'utf8');
-    const m = v.match(/export const CANIBAL_STEP = \{ WALK: ([\d.]+), RUN: ([\d.]+) \} as const;/);
-    expect(m).not.toBeNull();
-    const STEP = { WALK: Number(m![1]), RUN: Number(m![2]) };
-    expect(CANIBAL.WALK_SPEED * STEP.WALK).toBeCloseTo(0.5, 5);
+    // o passo é proporcional à altura: passo × altura fixo (o de 40 m: 0,2 × 40) — menor, o clip roda mais rápido (sem patinar)
+    expect(v).toContain('export const CANIBAL_STEP = { WALK: 8 / CANIBAL.BODY_H, RUN: 4.8 / CANIBAL.BODY_H } as const;');
+    const STEP = { WALK: 8 / CANIBAL.BODY_H, RUN: 4.8 / CANIBAL.BODY_H };
+    expect(CANIBAL.WALK_SPEED * STEP.WALK).toBeCloseTo(0.714, 2);
     expect(CANIBAL.RUN_SPEED * STEP.RUN).toBeGreaterThanOrEqual(0.4); // o piso do clamp (não trava)
     expect(v).toContain('actionRef={bodyAction} speedRef={bodySpeed} walkSync={CANIBAL_STEP.WALK} runSync={CANIBAL_STEP.RUN}');
     expect(v).toContain("bodySpeed.current = C.act === 'run' ? CANIBAL.RUN_SPEED : C.act === 'walk' ? CANIBAL.WALK_SPEED : 0;");

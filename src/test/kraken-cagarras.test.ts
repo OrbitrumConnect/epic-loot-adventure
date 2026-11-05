@@ -27,7 +27,8 @@ describe('Kraken das Cagarras — kaiju', () => {
     expect(KRAKEN_BOSS.FACE_BEACH_YAW).toBeCloseTo(Math.PI, 5);     // olha pro norte (a praia: z menor)
     expect(read('src/components/zona-sul/zs-kraken-boss-view.tsx')).toContain('ns && ns.d < KRAKEN_BOSS.ROCK_RANGE ? Math.atan2(ns.ship.x - K.x, ns.ship.z - K.z) : KRAKEN_BOSS.FACE_BEACH_YAW');
   });
-  it('tamanho: ~65 m pra fora d\'água (Pedro: "uns 50–70 m"), enterrado até a cintura; tentáculos de 95 m', () => {
+  it('tamanho: ~52 m pra fora d\'água (Pedro: "uns 50–70 m"; 05/11: "mais uns 20%"), enterrado até a cintura; tentáculos de 76 m', () => {
+    expect(KRAKEN_BOSS.BODY_H).toBe(104); expect(KRAKEN_BOSS.TENT_LEN).toBe(76); expect(KRAKEN_BOSS.TENT_REACH).toBe(72);
     expect(KRAKEN_BOSS.BODY_H * (1 - KRAKEN_BOSS.SUBMERGED_K)).toBeGreaterThanOrEqual(50);
     expect(KRAKEN_BOSS.BODY_H * (1 - KRAKEN_BOSS.SUBMERGED_K)).toBeLessThanOrEqual(70);
     expect(KRAKEN_BOSS.SUBMERGED_K).toBe(0.5);

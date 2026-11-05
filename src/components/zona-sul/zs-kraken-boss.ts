@@ -29,15 +29,17 @@ export const KRAKEN_BOSS = {
   FACE_BEACH_YAW: Math.PI,
   WAKE_R: 320, SLEEP_R: 600, SLEEP_MS: 30_000, RISE_S: 6,
   /** corpo inteiro (m) e quanto dele fica DEBAIXO d'água: até a cintura — os pés no fundo */
-  // Pedro: "uns 50–70 m de altura? me diga o que fica top" → 130 m de corpo, ~65 m pra fora (3× a Ilha Cagarra)
-  BODY_H: 130, SUBMERGED_K: 0.5, BODY_R: 19,
-  TENTACLES: 6, TENT_RING: 48, TENT_LEN: 95, TENT_R: 5.5, TENT_REACH: 90, TENT_HP: 8000, TENT_ARMOR: 10,
+  // Pedro: "uns 50–70 m de altura? me diga o que fica top" → 130 m de corpo, ~65 m pra fora (3× a Ilha Cagarra).
+  // 05/11 (Pedro: "o boss pode diminuir mais uns 20% — o Kraken, não apenas o Canibal"): tudo do tamanho −20% — corpo 104 m
+  // (~52 m pra fora), raio, anel/comprimento/grossura/alcance dos tentáculos e alcance da pancada; vida/dano/velocidade iguais
+  BODY_H: 104, SUBMERGED_K: 0.5, BODY_R: 15.2,
+  TENTACLES: 6, TENT_RING: 38.4, TENT_LEN: 76, TENT_R: 4.4, TENT_REACH: 72, TENT_HP: 8000, TENT_ARMOR: 10,
   /** chicotada: levanta (WIND) → bate (STRIKE) → fica na água (LIE) → volta; recarga entre uma e outra */
   TENT_SLAM_S: 5, TENT_WIND_S: 1.3, TENT_STRIKE_S: 0.5, TENT_LIE_S: 1.0,
-  TENT_SHIP_DMG: 1400, TENT_HERO_DMG: 90, TENT_HERO_R: 12,
+  TENT_SHIP_DMG: 1400, TENT_HERO_DMG: 90, TENT_HERO_R: 9.6,
   // 04/11 (Pedro: "nível 80 é muito alto, dá pra ser antes"): corpo 80 → 60 mil e pedra 1.100 → 800 → sozinho no nv 60
   // ~5 min de canhão (bala ~470) contra ~6 min que o navio aguenta de longe; em grupo, bem antes
-  BODY_HP: 60_000, BODY_ARMOR: 30, BODY_REACH: 65, BODY_SLAM_S: 5, BODY_SHIP_DMG: 3500, BODY_HERO_DMG: 150,
+  BODY_HP: 60_000, BODY_ARMOR: 30, BODY_REACH: 52, BODY_SLAM_S: 5, BODY_SHIP_DMG: 3500, BODY_HERO_DMG: 150,
   /** saiu do covil: anda um pouco mais devagar que o navio a toda (WARSHIP.MAX 12) */
   // 04/11 (Pedro: "quando ele solta pode vir uns 15% mais lento, só o andar dele"): 10,2 → ~8,7 m/s
   WALK_SPEED: WARSHIP.MAX * 0.85 * 0.85, GIVEUP_EXTRA: 80, SINK_S: 5,

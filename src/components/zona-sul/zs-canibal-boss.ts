@@ -16,10 +16,12 @@ export const CANIBAL = {
   NAME: 'Canibal Gigante',
   /** corpo: altura do modelo inteiro (m) e a fração enterrada. 05/11 (Pedro: "muito grande — uns 40% menor; ele EM PÉ andando,
    *  correndo, pulando e atacando, o herói cai no chão"): 110 → 66 m, em pé no chão da arena (sai do buraco e vem).
-   *  05/11 (2ª, Pedro: "pode diminuir uns 40% — ainda tá grande … e precisa ser mais lento a movimentação"): 66 → 40 m */
-  BODY_H: 40,
+   *  05/11 (2ª, Pedro: "pode diminuir uns 40% — ainda tá grande … e precisa ser mais lento a movimentação"): 66 → 40 m.
+   *  05/11 (3ª, Pedro: "o boss pode diminuir mais uns 20%" e logo depois "o Canibal ainda dá pra deixar uns 30% menor"):
+   *  40 → 28 m (−30% do que estava no jogo; raio, alcances e raízes juntos — a velocidade fica) */
+  BODY_H: 28,
   SUBMERGED_K: 0,
-  BODY_R: 4.2,
+  BODY_R: 2.9,
   /** v2 (05/11): anda/corre atrás de quem está na arena (sem sair dela), pancada que DERRUBA, PULO em quem foge.
    *  05/11 (2ª, "mais lento"): andar 5 → 2,5 m/s, correr 9 → 4,5 m/s (o passo do clip acompanha: CANIBAL_STEP na view) */
   WALK_SPEED: 2.5,
@@ -27,16 +29,17 @@ export const CANIBAL = {
   /** corre quando o alvo está além disto (m); não passa deste raio do centro (a rampa fica na parede) */
   RUN_FROM: 25,
   ARENA_R: 48,
-  /** pancada: alcance (m), raio do impacto, intervalo (s), dano, empurrão (m). 05/11 (2ª): alcance/raio −40% junto com o corpo */
-  ATK_REACH: 8,
-  ATK_R: 5.5,
+  /** pancada: alcance (m), raio do impacto, intervalo (s), dano, empurrão (m). 05/11 (2ª): alcance/raio −40% junto com o corpo;
+   *  (3ª) −30% de novo */
+  ATK_REACH: 5.6,
+  ATK_R: 3.9,
   ATK_EVERY_S: 3.5,
   ATK_DMG: 220,
   ATK_PUSH_M: 12,
   /** PULO: em quem está além de LEAP_FROM m; dura LEAP_S; impacto LEAP_R m (dano/empurrão); de LEAP_EVERY_S em LEAP_EVERY_S */
   LEAP_FROM: 28,
   LEAP_S: 1.3,
-  LEAP_R: 8,
+  LEAP_R: 5.6,
   LEAP_DMG: 280,
   LEAP_PUSH_M: 14,
   LEAP_EVERY_S: 9,
@@ -48,12 +51,13 @@ export const CANIBAL = {
   SLEEP_R: 110,
   SLEEP_MS: 30_000,
   RISE_S: 5,
-  /** raízes: quantas, raio do anel onde saem, comprimento, grossura, alcance da chicotada */
+  /** raízes: quantas, raio do anel onde saem, comprimento, grossura, alcance da chicotada. 05/11 (3ª, "uns 30% menor"): −30%
+   *  junto com o corpo (46 m de raiz num Canibal de 28 m ficava bem maior que ele); o anel (onde saem, na arena) fica */
   ROOTS: 6,
   ROOT_RING: 30,
-  ROOT_LEN: 46,
-  ROOT_R: 3,
-  ROOT_REACH: 40,
+  ROOT_LEN: 32.2,
+  ROOT_R: 2.1,
+  ROOT_REACH: 28,
   ROOT_HP: 6000,
   /** armadura (corta metade disto de cada golpe — o míssil da bazuca atravessa). 05/11 (Pedro: "o fuzil pode dar dano nele
    *  também"): 800 → 0 — a armadura saiu; quem segura o fuzil é a PROTEÇÃO de bossResist.ts (10%, no máximo 5 por golpe) */
