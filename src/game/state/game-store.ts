@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import { combineStorage, hordeStorageLoss, splitSpend } from '../systems/baseStorageSystem';
 import { ITEMS } from '../data/items';
+import { BAZOOKA, bazookaCraftBlock, missileFlightMs } from '../data/bazooka';
 import { slotForItem, ringSlotForEquipment, type EquipmentKey } from '../systems/equipmentSlots';
 import { aimedDamageScale, aimedRangeFor, weaponFor, weaponRangeFor } from '../data/weapons';
 import { maxAttackRange, type AutoWeapon, type PilotWeaponStyle } from '../systems/weaponChoiceSystem';
@@ -194,6 +195,15 @@ type GameActions = {
   /** BALA DE CANHÃO do navio de guerra (Zona Sul, 01/11) caiu em `at`: dano em área `radius` (mesmo caminho do especial:
    *  armadura, crítico, número na tela, XP/loot ao matar). Devolve quantos acertou. */
   cannonHit: (at: Position, radius: number) => number;
+  /** EXPLOSÃO em `at` (04/11): o dano em área do canhão com força e nome próprios (canhão = `cannonPower`, bazuca =
+   *  `missilePower`). Devolve quantos acertou. */
+  explosiveHit: (at: Position, radius: number, power: number, label: string) => number;
+  /** Força de UM míssil da bazuca agora (~10 balas de fuzil). */
+  missilePower: () => number;
+  /** BAZUCA (04/11): dispara 1 míssil em `toward` (até o alcance); ele voa e explode lá (`explosiveHit`). */
+  fireBazooka: (toward: Position, towardY?: number, aimed?: boolean) => boolean;
+  /** Fabrica a bazuca (1 por personagem) ou 1 míssil — só depois de matar o Kraken. Devolve a mensagem. */
+  craftBazookaItem: (kind: 'bazooka' | 'missile') => string;
   /** Força de UMA bala de canhão deste jogador agora (a mesma do cannonHit) — também contra NAVIO inimigo (01/11). */
   cannonPower: () => number;
   /** Gasta uma lista de itens (construir veículo, 01/11). Faltou algum: não gasta nada e devolve o que falta.
@@ -968,6 +978,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const prof = weaponFor(heldItemId);
     if (!prof.ranged || !prof.projectile) return false;
     if (!isUnlocked(heldItemId, state.player.level)) { set(s => ({ ui: { ...s.ui, message: lockedMessage(ITEMS[heldItemId!]?.name ?? 'Arma', heldItemId!) } })); return true; }
+    // BAZUCA (04/11): o míssil voa e explode no ponto (o dano em área sai lá) — sem rajada
+    if (prof.projectile === 'missile') return fromBurst ? false : get().fireBazooka(toward, towardY, true);
     const now = Date.now() / 1000;
     const burstN = burstSize(heldItemId, state.player.level);
     if (fromBurst && burstN <= 1) return false; // trocou de arma no meio da rajada
@@ -1039,6 +1051,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return;
     }
     const prof = weaponFor(heldItemId);
+    // BAZUCA (04/11): o míssil voa até o bicho e explode lá (dano em área) — caminho próprio, sem rajada
+    if (prof.projectile === 'missile') { if (!fromBurst) get().fireBazooka(creature.position, undefined, aimed); return; }
     const usingRanged = prof.ranged;
     const usingTorch = heldItemId === 'torch';
 
@@ -1364,18 +1378,60 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     set((st) => ({ player: { ...st.player, inventory: pay.inventory }, base: { ...pay.base, resources: pay.resources } }));
     return { ok: true, missing: [] };
   },
-  cannonHit: (at, radius) => {
+  // bala de canhão = 2,5× o golpe base do herói (nível + equipamento), com os multiplicadores dele
+  cannonHit: (at, radius) => get().explosiveHit(at, radius, get().cannonPower(), 'Canhão'),
+  missilePower: () => {
+    const p = get().player;
+    return Math.round((playerBaseAttack(p.level) + (ITEMS['bazooka']?.attackPower ?? 0) + equipmentStats(p).damage) * BAZOOKA.POWER_K * damageMultiplier(p));
+  },
+  fireBazooka: (toward, towardY, aimed = false) => {
+    const s = get();
+    if (s.player.dead) return false;
+    const now = Date.now() / 1000;
+    if (now - s.player.lastAttackAt < (weaponFor('bazooka').cooldown)) return true; // recarregando
+    if (getItemCount(s.player.inventory, 'missile') <= 0) {
+      set((st) => ({ ui: { ...st.ui, message: 'Sem míssil! Fabrique no card da base (logo abaixo do navio).' } }));
+      return true;
+    }
+    const p = s.player.position;
+    const reach = aimed ? aimedRangeFor('bazooka', s.player.level) : weaponRangeFor('bazooka', s.player.level);
+    const d = Math.hypot(toward.x - p.x, toward.z - p.z), k = d > reach ? reach / d : 1;
+    const at = { x: p.x + (toward.x - p.x) * k, z: p.z + (toward.z - p.z) * k };
+    noteShotAt(at.x, at.z);
+    heroGunSound();
+    set({
+      player: { ...s.player, lastAttackAt: now, inventory: removeItem(s.player.inventory, 'missile', 1) },
+      attackTick: s.attackTick + 1,
+      feedback: pushEvent(s.feedback, shotEvent(p, at, 'missile', undefined, k < 1 ? undefined : towardY, true), Date.now()),
+    });
+    // o dano cai junto com a bola de fogo (quando o míssil chega)
+    const power = get().missilePower();
+    setTimeout(() => { get().explosiveHit(at, BAZOOKA.SPLASH_R, power, 'Bazuca'); }, missileFlightMs(Math.min(d, reach)));
+    return true;
+  },
+  craftBazookaItem: (kind) => {
+    const s = get();
+    const owned = getItemCount(s.player.inventory, 'bazooka') > 0;
+    const cost = kind === 'bazooka' ? BAZOOKA.COST : BAZOOKA.MISSILE_COST;
+    const block = bazookaCraftBlock(kind, !!s.player.krakenSlain, owned, []);
+    if (block) return block;
+    if (!canAddItem(s.player.inventory, kind, 1)) return 'Mochila cheia';
+    const paid = get().spendItems(cost);
+    if (!paid.ok) return `Falta: ${paid.missing.map((m) => `${m.n} ${ITEMS[m.id]?.name ?? m.id}`).join(', ')}`;
+    const name = ITEMS[kind]?.name ?? kind;
+    set((st) => ({ player: { ...st.player, inventory: addItem(st.player.inventory, kind, 1) }, ui: { ...st.ui, message: kind === 'bazooka' ? '🚀 Bazuca fabricada! Está na mochila.' : `+1 ${name}` } }));
+    return kind === 'bazooka' ? 'Bazuca fabricada!' : `+1 ${name}`;
+  },
+  explosiveHit: (at, radius, power, label) => {
     const state = get();
     if (state.player.dead) return 0;
-    // bala de canhão = 2,5× o golpe base do herói (nível + equipamento), com os multiplicadores dele
-    const power = get().cannonPower();
     // ONLINE (Pedro 01/11: "jogador na praia, horda, qualquer coisa toma dano"): jogador no raio leva o golpe pelo
     // caminho do PvP (quem leva confere a inimizade e aplica a armadura)
     const net = useNet.getState();
     let hitPlayers = 0;
     if (net.connected) {
       for (const r of Object.values(net.players)) {
-        if (r.hp > 0 && Math.hypot(r.x - at.x, r.z - at.z) <= radius) { broadcastPlayerHit(r.id, power, `Canhão de ${net.selfName}`); hitPlayers++; }
+        if (r.hp > 0 && Math.hypot(r.x - at.x, r.z - at.z) <= radius) { broadcastPlayerHit(r.id, power, `${label} de ${net.selfName}`); hitPlayers++; }
       }
     }
     // convidado: o mundo (bichos) é do anfitrião — manda o golpe em cada bicho do raio, igual ao ataque normal
@@ -1385,7 +1441,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         if (c.behavior === 'dead' || !sameLayerAsPlayer(c.id) || getDistance(at, c.position) > radius) continue;
         broadcastCreatureHit({ targetId: c.id, source: at, damage: power }); n++;
       }
-      if (n > 0) set(s => ({ ui: { ...s.ui, message: `💥 Canhão! ${n} atingido(s).` } }));
+      if (n > 0) set(s => ({ ui: { ...s.ui, message: `💥 ${label}! ${n} atingido(s).` } }));
       return n;
     }
     const critStats = playerCritStats(state.player);
@@ -1408,10 +1464,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       return { ...c, hp: result.targetHp, behavior: 'chase' as const };
     });
     if (hits === 0) {
-      if (hitPlayers > 0) set(s => ({ ui: { ...s.ui, message: `💥 Canhão! ${hitPlayers} jogador(es) no raio.` } }));
+      if (hitPlayers > 0) set(s => ({ ui: { ...s.ui, message: `💥 ${label}! ${hitPlayers} jogador(es) no raio.` } }));
       return hitPlayers;
     }
-    set({ player: updatedPlayer, creatures, deathBags: updatedBags, feedback: pushEvents(state.feedback, drafts, Date.now()), ui: { ...state.ui, message: `💥 Canhão! ${hits + hitPlayers} atingido(s).` } });
+    set({ player: updatedPlayer, creatures, deathBags: updatedBags, feedback: pushEvents(state.feedback, drafts, Date.now()), ui: { ...state.ui, message: `💥 ${label}! ${hits + hitPlayers} atingido(s).` } });
     return hits + hitPlayers;
   },
 

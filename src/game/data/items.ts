@@ -80,6 +80,20 @@ export const ITEMS: Record<string, Item> = {
     attackPower: 30,
     icon: 'Rifle',
   },
+  // 04/11 (Pedro: "matou o Kraken libera a bazuca"): fabricada no card da base (abaixo do navio) depois de matar o Kraken
+  bazooka: {
+    id: 'bazooka',
+    name: 'Bazuca',
+    category: 'weapon',
+    rarity: 'epic',
+    weight: 6,
+    maxStack: 1,
+    dropOnDeath: false,
+    usable: false,
+    equippable: true,
+    attackPower: 30,
+    icon: 'Bazooka',
+  },
   health_potion: {
     // Caixa de poção (Pedro): começa com 500, stack grande (caixa única). Peso real
     // 0.01 (500 poções = 5 de peso) pra contar na bolsa.
@@ -244,6 +258,19 @@ export const ITEMS: Record<string, Item> = {
     usable: false,
     equippable: false,
     icon: 'ArrowUpRight',
+  },
+  // 04/11: MÍSSIL da bazuca — cada um fabricado com o seu material (Pedro: "cada bala usa material isolado"); 1 por tiro
+  missile: {
+    id: 'missile',
+    name: 'Míssil',
+    category: 'resource',
+    rarity: 'rare',
+    weight: 0.4,
+    maxStack: 9_999_999,
+    dropOnDeath: true,
+    usable: false,
+    equippable: false,
+    icon: 'Missile',
   },
   leather_armor: {
     id: 'leather_armor',

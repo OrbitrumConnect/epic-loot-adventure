@@ -134,3 +134,14 @@ export function AxeModel() { return <primitive object={useFitProp(AXE_FIT)} />; 
 export function PickaxeModel() { return <primitive object={useFitProp(PICKAXE_FIT)} />; }
 export function TorchModel() { return <primitive object={useFitProp(TORCH_FIT)} />; }
 export function DaggerModel() { return <primitive object={useFitProp(DAGGER_FIT)} />; }
+
+/**
+ * BAZUCA (04/11, GLB do Pedro — Meshy: 234 mil tri / 32 MB → 11,7 mil / 0,66 MB, só a cor 1024 KTX2, fosco). No arquivo o
+ * tubo está deitado em X (1,9) com a BOCA em −X (o guarda-mato e a mira da frente desse lado; o pé do cabo inclina pra +X,
+ * o lado de quem atira), o cabo de pistola pendurado em −Y e a mão no topo dele (0,16; −0,12; 0) — medido nas fatias.
+ * Na mão (mesma pega do fuzil): boca → +Z, cima → +Y; 1,35 m (~0,8 m pra frente da mão, ~0,55 pra trás, no ombro).
+ */
+export const BAZOOKA_FIT: PropFit = { url: '/models/weapons/bazooka.glb', z: [-1, 0, 0], y: [0, 1, 0], grip: [0.16, -0.12, 0], span: 1.903, length: 1.35 };
+/** o MÍSSIL que voa (Meshy: 330 mil tri / 35 MB → 4 mil / 0,25 MB; ogiva em −X, aletas em +X) */
+export const MISSILE_URL = '/models/weapons/missile.glb';
+export function BazookaModel() { return <primitive object={useFitProp(BAZOOKA_FIT)} />; }

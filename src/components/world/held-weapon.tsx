@@ -17,7 +17,7 @@
  */
 import { useFrame } from '@react-three/fiber';
 import { Suspense, useRef } from 'react';
-import { AxeModel, BowModel, DaggerModel, PickaxeModel, PistolModel, RifleModel, TorchModel } from './weapon-models';
+import { AxeModel, BazookaModel, BowModel, DaggerModel, PickaxeModel, PistolModel, RifleModel, TorchModel } from './weapon-models';
 import * as THREE from 'three';
 import { useGameStore } from '@/game/state/game-store';
 import { mixColor, type Palette } from './world-kit';
@@ -39,6 +39,8 @@ const KIND_BY_ITEM: Record<string, HeldKind> = {
   bow: 'bow',
   pistol: 'pistol',
   rifle: 'rifle',
+  // 04/11: a BAZUCA segura como o fuzil (pose de duas mãos, mira de ombro); o MODELO sai pelo item (HeldItem)
+  bazooka: 'rifle',
 };
 
 export function heldKindFor(itemId: string | null | undefined): HeldKind {
@@ -285,9 +287,13 @@ function MuzzleMark({ at }: { at: [number, number, number] }) {
 /** `itemId` definido = arma de OUTRO jogador (online); sem ele, a do jogador local. */
 export function HeldItem({ c, itemId }: { c: Palette; itemId?: string | null }) {
   const localKind = useGameStore(s => heldKindFor(selectedItemId(s)));
+  const localBazooka = useGameStore(s => selectedItemId(s) === 'bazooka');
   const kind = itemId === undefined ? localKind : heldKindFor(itemId);
-  const model = <HeldModel c={c} kind={kind} />;
-  const muzzle = itemId === undefined ? MUZZLE_OFFSET[kind] : undefined;
+  // 04/11: a bazuca usa a pose do fuzil, mas o modelo e a boca são dela
+  const bazooka = itemId === undefined ? localBazooka : itemId === 'bazooka';
+  const k = kitFor(c);
+  const model = bazooka ? <Suspense fallback={<Rifle k={k} />}><BazookaModel /></Suspense> : <HeldModel c={c} kind={kind} />;
+  const muzzle = itemId === undefined ? MUZZLE_OFFSET[bazooka ? 'bazooka' : kind] : undefined;
   return muzzle ? <>{model}<MuzzleMark at={muzzle} /></> : model;
 }
 

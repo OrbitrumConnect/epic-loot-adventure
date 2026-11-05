@@ -83,7 +83,9 @@ describe('navio de guerra — canhões', () => {
     const view = fs.readFileSync('src/components/zona-sul/zs-warship-view.tsx', 'utf8');
     expect(view).toMatch(/useGameStore\.getState\(\)\.cannonHit\(\{ x: fb\.land\.x, z: fb\.land\.z \}, WARSHIP\.SPLASH_R\);/);
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
-    expect(store).toMatch(/cannonHit: \(at, radius\) => \{/);
+    // 04/11: o corpo virou a explosão genérica (a bazuca usa a mesma conta) — o canhão chama com a força e o nome dele
+    expect(store).toMatch(/cannonHit: \(at, radius\) => get\(\)\.explosiveHit\(at, radius, get\(\)\.cannonPower\(\), 'Canhão'\),/);
+    expect(store).toMatch(/explosiveHit: \(at, radius, power, label\) => \{/);
     expect(store).toMatch(/rewardCreatureDeath\(c, updatedPlayer, updatedBags, drafts, Math\.random\)/);
     // tubarão não morde quem está no convés (só quem está na altura da água)
     const ai = fs.readFileSync('src/components/world/hostile-ai.ts', 'utf8');
@@ -96,7 +98,7 @@ describe('navio de guerra — canhões', () => {
     const zs = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
     expect(zs).toMatch(/for \(let i = 0; i < salvo\.length; i\+\+\) window\.setTimeout\(\(\) => audioManager\.playWorld\('cannon', 1\), i \* WARSHIP\.SALVO_GAP_MS\)/);
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
-    expect(store).toMatch(/broadcastPlayerHit\(r\.id, power, `Canhão de \$\{net\.selfName\}`\)/);
+    expect(store).toMatch(/broadcastPlayerHit\(r\.id, power, `\$\{label\} de \$\{net\.selfName\}`\)/); // label = 'Canhão' no canhão
     expect(store).toMatch(/broadcastCreatureHit\(\{ targetId: c\.id, source: at, damage: power \}\)/);
   });
   it('rastro na água: navio (da popa) e prancha em pé (da rabeta)', () => {
@@ -110,10 +112,12 @@ describe('navio de guerra — canhões', () => {
 describe('tiro do herói sai da BOCA da arma (Pedro 01/11)', () => {
   it('a arma na mão marca a ponta; o projétil do herói nasce dela, a bala junto do braço (90 ms)', () => {
     const held = fs.readFileSync('src/components/world/held-weapon.tsx', 'utf8');
-    expect(held).toMatch(/const muzzle = itemId === undefined \? MUZZLE_OFFSET\[kind\] : undefined;/);
+    // 04/11: a bazuca tem a boca dela (a pose é a do fuzil)
+    expect(held).toMatch(/const muzzle = itemId === undefined \? MUZZLE_OFFSET\[bazooka \? 'bazooka' : kind\] : undefined;/);
     const proj = fs.readFileSync('src/components/world/projectiles.tsx', 'utf8');
     expect(proj).toMatch(/if \(ev\.hero && heroMuzzleFresh\(\)\) s\.from\.set\(heroMuzzle\.x, heroMuzzle\.y, heroMuzzle\.z\);/);
-    expect(proj).toMatch(/if \(ev\.hero && ev\.projectile === 'bullet'\) \{/);
+    // 04/11: o míssil da bazuca também espera o braço
+    expect(proj).toMatch(/if \(ev\.hero && \(ev\.projectile === 'bullet' \|\| ev\.projectile === 'missile'\)\) \{/);
     const fb = fs.readFileSync('src/game/systems/feedbackSystem.ts', 'utf8');
     expect(fb).toMatch(/export const HERO_SHOT_DELAY_MS = 90;/);
     const store = fs.readFileSync('src/game/state/game-store.ts', 'utf8');

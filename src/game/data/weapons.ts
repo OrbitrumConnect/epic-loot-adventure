@@ -15,8 +15,8 @@ export type WeaponProfile = {
   range: number;
   /** Segundos entre golpes/tiros. */
   cooldown: number;
-  /** Projétil visual do tiro (ranged). */
-  projectile?: 'arrow' | 'bullet';
+  /** Projétil visual do tiro (ranged). 04/11: 'missile' = a BAZUCA (voa e explode em área — `fireBazooka`). */
+  projectile?: 'arrow' | 'bullet' | 'missile';
 };
 
 export const DEFAULT_MELEE: WeaponProfile = { type: 'melee', ranged: false, range: 4, cooldown: 0.8 };
@@ -28,6 +28,8 @@ export const WEAPONS: Record<string, WeaponProfile> = {
   rifle:  { type: 'rifle',  ranged: true, range: 20, cooldown: 0.8, projectile: 'bullet' },
   // Arco de drop: um pouco melhor que o `bow` básico (base 13 m, cadência 0,85 s).
   hunter_bow: { type: 'bow', ranged: true, range: 13, cooldown: 0.85, projectile: 'arrow' },
+  // 04/11: BAZUCA (libera matando o Kraken) — segura como o fuzil (duas mãos, mira de ombro); 1 míssil por tiro, 2,5 s
+  bazooka: { type: 'rifle', ranged: true, range: 30, cooldown: 2.5, projectile: 'missile' },
 };
 
 /** Ganho de alcance por nível das armas de longe (Pedro: "pelo menos 0,23 m por nível"). */

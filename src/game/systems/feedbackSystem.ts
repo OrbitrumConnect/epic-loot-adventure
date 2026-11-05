@@ -75,7 +75,7 @@ export function damageEvent(
  *  (o braço chega na mira). O dano continua na hora. (Pedro 01/11: "o tiro sai mais rápido que a mão".) */
 export const HERO_SHOT_DELAY_MS = 90;
 
-export function shotEvent(from: Position, to: Position, projectile: 'arrow' | 'bullet', sourceHeight?: number, toY?: number, hero = false): FeedbackDraft {
+export function shotEvent(from: Position, to: Position, projectile: 'arrow' | 'bullet' | 'missile', sourceHeight?: number, toY?: number, hero = false): FeedbackDraft {
   return {
     kind: 'shot',
     position: { ...from },

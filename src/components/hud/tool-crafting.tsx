@@ -1,4 +1,5 @@
 import { Car, Hammer, Ship } from 'lucide-react';
+import { BAZOOKA, bazookaCraftBlock } from '@/game/data/bazooka';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/game/state/game-store';
@@ -77,7 +78,58 @@ export function ToolCrafting() {
         );
       })}
       <VehicleRows />
+      <BazookaRows />
     </div>
+  );
+}
+
+/**
+ * BAZUCA e MÍSSIL (04/11, Pedro: "libera pra fabricar após matar o Kraken; no card abaixo do navio pirata; usa um
+ * materialzinho; cada bala usa material isolado"). Antes do Kraken: o cadeado com o motivo. Pagam como o navio/carro.
+ */
+function BazookaRows() {
+  const inventory = useGameStore((s) => s.player.inventory);
+  const resources = useGameStore((s) => s.base.resources);
+  const slain = useGameStore((s) => !!s.player.krakenSlain);
+  const craft = useGameStore((s) => s.craftBazookaItem);
+  const [msg, setMsg] = useState<{ kind: string; text: string } | null>(null);
+  const count = (id: string) => getItemCount(inventory, id) + storageCount(resources, id);
+  const rows = [
+    { kind: 'bazooka' as const, name: 'Bazuca', cost: BAZOOKA.COST, info: 'libera matando o Kraken · 1 por personagem' },
+    { kind: 'missile' as const, name: 'Míssil', cost: BAZOOKA.MISSILE_COST, info: `1 por tiro · você tem ${getItemCount(inventory, 'missile')}` },
+  ];
+  return (
+    <>
+      {rows.map(({ kind, name, cost, info }) => {
+        const missing = cost.filter((c) => count(c.id) < c.n).map((c) => ({ id: c.id, n: c.n - count(c.id) }));
+        const block = bazookaCraftBlock(kind, slain, getItemCount(inventory, 'bazooka') > 0, missing);
+        const reason = block === 'Falta material' ? `Falta: ${missing.map((m) => `${m.n} ${ITEMS[m.id]?.name ?? m.id}`).join(', ')}` : block;
+        const ok = !block;
+        return (
+          <div className="tool-craft-row" key={kind} data-ok={ok} data-weapon={kind}>
+            <ItemSprite itemId={kind} size={40} className="tool-craft-sprite" />
+            <div className="tool-craft-body">
+              <strong>{name} <small className="tool-craft-status">· {info}</small></strong>
+              <span className="tool-craft-mats">
+                {cost.map((c) => { const n = count(c.id); return (
+                  <span key={c.id} data-missing={n < c.n} title={`${ITEMS[c.id]?.name ?? c.id}: ${n} de ${c.n}`}>
+                    <ItemSprite itemId={c.id} size={16} />{ITEMS[c.id]?.name ?? c.id} {Math.min(n, c.n)}/{c.n}
+                  </span>
+                ); })}
+              </span>
+              {!ok && reason && <em className="tool-craft-reason">{reason}</em>}
+              {msg?.kind === kind && <em className="tool-craft-done">{msg.text}</em>}
+            </div>
+            <Button variant="outline" size="sm" disabled={!ok}
+              title={ok ? `Fabricar ${name}` : reason ?? ''}
+              aria-label={ok ? `Fabricar ${name}` : `Fabricar ${name} indisponível: ${reason}`}
+              onClick={() => setMsg({ kind, text: craft(kind) })}>
+              Fabricar
+            </Button>
+          </div>
+        );
+      })}
+    </>
   );
 }
 

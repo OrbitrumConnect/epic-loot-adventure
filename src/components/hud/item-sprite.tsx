@@ -23,6 +23,21 @@ function PistolIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+/** 04/11: bazuca (tubo comprido + cabo) e o míssil */
+function BazookaIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>
+      <path d="M1 9 H21 V13 H13 L12 17 H9 L10 13 H1 Z M21 8.5 H23 V13.5 H21 Z" />
+    </svg>
+  );
+}
+function MissileIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>
+      <path d="M3 10 H15 L20 12 L15 14 H3 Z M3 10 L1 8 V16 L3 14 Z" />
+    </svg>
+  );
+}
 function RifleIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" {...props}>
@@ -69,13 +84,13 @@ function HoverboardIcon(props: React.SVGProps<SVGSVGElement>) {
 export const ICON_MAP: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
   Swords, Axe, Pickaxe, FlaskConical, Crosshair, Utensils, Flame, Sparkles,
   TreePine, Mountain, Gem, Shield, Skull, Package, ArrowUpRight, Target,
-  Bow: BowIcon, Pistol: PistolIcon, Rifle: RifleIcon, Surfboard: SurfboardIcon, Glider: GliderIcon, Hoverboard: HoverboardIcon,
+  Bow: BowIcon, Pistol: PistolIcon, Rifle: RifleIcon, Bazooka: BazookaIcon, Missile: MissileIcon, Surfboard: SurfboardIcon, Glider: GliderIcon, Hoverboard: HoverboardIcon,
 };
 
 /** Itens que não têm sprite webp: renderizam o ícone direto (sem 404).
  *  01/11 (Pedro: "a imagem boa deles em vez da tosca"): prancha, asa-delta e skate ganharam sprite — foto dos PRÓPRIOS
  *  modelos 3D do jogo (3/4, fundo transparente, 256 px) em /assets/items; saíram desta lista (o SVG fica de reserva). */
-const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor']);
+const NO_SPRITE = new Set(['ammo', 'bow', 'pistol', 'rifle', 'bazooka', 'missile', 'ancestral_blade', 'guardian_plate', 'eclipse_blade', 'arrow', 'hunter_bow', 'bone_armor']);
 
 export type ItemSpriteProps = {
   itemId: string | null | undefined;

@@ -12,6 +12,8 @@ export { HERO_SHOT_DELAY_MS } from '@/game/systems/feedbackSystem';
 export const MUZZLE_OFFSET: Record<string, [number, number, number]> = {
   pistol: [0, 0.03, 0.34],
   rifle: [0, 0.03, 0.74],
+  /** 04/11: a boca da bazuca (o tubo ~15 cm acima da mão, ~0,8 m pra frente) */
+  bazooka: [0, 0.15, 0.8],
   bow: [0, 0, 0.14],
 };
 /** A boca é recente (a arma está na mão agora)? */

@@ -40,7 +40,7 @@ export type FeedbackEvent = {
   /** `shot`: destino do projétil (o `position` é a origem). */
   to?: Position;
   /** `shot`: tipo do projétil visual. */
-  projectile?: 'arrow' | 'bullet';
+  projectile?: 'arrow' | 'bullet' | 'missile';
   /** Altura da origem sobre o terreno; ausente mantém arma do jogador. */
   sourceHeight?: number;
   /** `shot`: altura ABSOLUTA (mundo) do destino — tiro da mira segue o pontinho pra cima/baixo.
