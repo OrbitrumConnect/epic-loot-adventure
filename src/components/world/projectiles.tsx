@@ -19,6 +19,7 @@ import { extendKTX2, primeKTX2 } from './ktx2-gltf';
 import { requestLight } from './light-pool';
 import { BAZOOKA } from '@/game/data/bazooka';
 import { netMissileInbox } from '@/net/multiplayer';
+import { audioManager, distanceGain } from '@/game/audio/audio-manager';
 
 /** MÍSSIL da bazuca (04/11): o GLB do Pedro deitado no eixo do projétil (ogiva em −X no arquivo → +Y, como o cilindro), 0,9 m. */
 function MissileAssetLoader({ onReady }: { onReady: (a: { geometry: THREE.BufferGeometry; material: THREE.Material }) => void }) {
@@ -76,13 +77,15 @@ type Shot = {
   wait: number;
   /** 04/11: é um míssil da bazuca (rastro de fumaça + explosão ao chegar) */
   missile: boolean;
+  /** 05/11: míssil de OUTRO jogador — o som do estouro toca aqui (o meu toca na store) */
+  remote: boolean;
   ev: FeedbackEvent | null;
 };
 
 export function Projectiles() {
   const meshes = useRef<(THREE.Mesh | null)[]>(Array.from({ length: POOL }, () => null));
   const shots = useRef<Shot[]>(
-    Array.from({ length: POOL }, () => ({ active: false, from: new THREE.Vector3(), to: new THREE.Vector3(), t: 0, dur: 0, wait: 0, ev: null, missile: false })),
+    Array.from({ length: POOL }, () => ({ active: false, from: new THREE.Vector3(), to: new THREE.Vector3(), t: 0, dur: 0, wait: 0, ev: null, missile: false, remote: false })),
   );
   const next = useRef(0);
   const seen = useRef(new Set<number>());
@@ -124,7 +127,7 @@ export function Projectiles() {
     if (!ev.to) return;
     const s = shots.current[i]!;
     const m = meshes.current[i];
-    s.wait = 0; s.ev = null;
+    s.wait = 0; s.ev = null; s.remote = false; // (o míssil dos outros marca depois do spawn)
     // Altura pelo CHÃO REAL do mapa (GLB) — antes usava o relevo procedural antigo e o tiro saía
     // torto (abaixo/acima) em terreno do mapa (Pedro, 22/10). Tiro da mira traz `toY` (pontinho).
     // caverna (30/10): com o herói dentro, o chão dela (o tiro não sai do topo do morro)
@@ -177,7 +180,12 @@ export function Projectiles() {
     // MÍSSEIS DOS OUTROS (online, 04/11): voam e explodem aqui também — só desenho (o dano é de quem atirou)
     while (netMissileInbox.length) {
       const nm = netMissileInbox.shift()!;
+      const slot = next.current;
       spawn({ kind: 'shot', id: -1, position: { x: nm.f[0], z: nm.f[1] }, to: { x: nm.t[0], z: nm.t[1] }, ...(nm.y !== undefined ? { toY: nm.y } : {}), projectile: 'missile', sourceHeight: 1.6 } as unknown as FeedbackEvent);
+      shots.current[slot]!.remote = true;
+      // 05/11 (Pedro: "meu amigo não ouviu o tiro da bazuca"): o disparo dos outros soa aqui também (o canhão, pela distância)
+      const me = useGameStore.getState().player.position, g = distanceGain(Math.hypot(nm.f[0] - me.x, nm.f[1] - me.z));
+      if (g > 0.01) audioManager.playWorld('cannon', g);
     }
     for (let i = 0; i < POOL; i++) {
       const s = shots.current[i]!;
@@ -191,9 +199,13 @@ export function Projectiles() {
         // rastro de fumaça: um sopro a cada ~35 ms atrás do míssil
         puffAcc.current += delta;
         if (puffAcc.current >= SMOKE_EVERY) { puffAcc.current = 0; const pf = puffs.current[nextPuff.current]!; nextPuff.current = (nextPuff.current + 1) % SMOKE_N; pf.t = 0; pf.at.copy(m.position); }
-        if (k >= 1) boom(s.to);
+        if (k >= 1) {
+          boom(s.to);
+          // o estouro do míssil dos OUTROS (o meu toca na store, junto com o dano)
+          if (s.remote) { const me = useGameStore.getState().player.position, g = distanceGain(Math.hypot(s.to.x - me.x, s.to.z - me.z)); if (g > 0.01) audioManager.playWorld('cannon', g * 0.8); }
+        }
       }
-      if (k >= 1) { s.active = false; m.visible = false; s.missile = false; }
+      if (k >= 1) { s.active = false; m.visible = false; s.missile = false; s.remote = false; }
     }
     // EXPLOSÃO: cresce até ~6 m e some; clarão de luz (pool) enquanto dura
     for (let b = 0; b < BOOM_POOL; b++) {

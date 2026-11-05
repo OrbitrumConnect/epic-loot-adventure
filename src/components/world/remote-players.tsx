@@ -37,6 +37,12 @@ export type RemoteZsKit = {
   seatSnap?: (x: number, y: number, z: number) => { x: number; y: number; z: number; yaw: number } | null;
 };
 const LABEL_RANGE = 12;
+/** 05/11 (Pedro: "não vejo vida e nome do meu aliado — deveria ver normal como vejo inimigo"): o ALIADO mostra nome e
+ *  vida de longe (até ALLY_LABEL_RANGE m), a plaquinha crescendo com a distância pra ler; o INIMIGO (PvP) como o bicho
+ *  inimigo: perto (12 m) ou ferido. Nada através da rocha. */
+export const ALLY_LABEL_RANGE = 120;
+/** escala da plaquinha pela distância (1 até ~14 m, cresce até 6×) — pura */
+export const allyLabelScale = (dist: number) => Math.min(6, Math.max(1, dist / 14));
 const REMOTE_SOUND_RANGE = 35; // m: além disso o ataque do outro é mudo
 const noRaycast = () => {};
 
@@ -101,11 +107,13 @@ function RemotePlayer({ id, zs }: { id: string; zs?: RemoteZsKit | undefined }) 
     const player = useGameStore.getState().player.position;
     const dist = Math.hypot(player.x - g.position.x, player.z - g.position.z);
     const sameL = sameLayerAsMe(p); // nada através da rocha: nem plaquinha nem PvP
-    if (labelGroup.current) {
-      labelGroup.current.visible = dist <= LABEL_RANGE && sameL;
-      labelGroup.current.quaternion.copy(state.camera.quaternion);
-    }
     const enemy = p.side === 'enemy';
+    if (labelGroup.current) {
+      const hurt = p.hp < p.maxHp;
+      labelGroup.current.visible = sameL && (enemy ? dist <= LABEL_RANGE || hurt : dist <= ALLY_LABEL_RANGE);
+      labelGroup.current.quaternion.copy(state.camera.quaternion);
+      labelGroup.current.scale.setScalar(enemy ? 1 : allyLabelScale(dist));
+    }
     if (hpFill.current) {
       const ratio = Math.max(0, Math.min(1, p.hp / Math.max(1, p.maxHp)));
       hpFill.current.scale.x = ratio;

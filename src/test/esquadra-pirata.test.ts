@@ -18,7 +18,8 @@ describe('esquadra pirata — navios', () => {
   it('35% menores, 2–3 por esquadra, mais lentos que o seu (dá pra fugir); o seu navio não mudou', () => {
     expect(FLEET.SCALE).toBe(0.65);
     expect(FLEET_LEN).toBeCloseTo(WARSHIP.LENGTH * 0.65, 5);
-    expect(FLEET.MIN).toBe(2); expect(FLEET.MAX).toBe(3);
+    // 05/11: 3 esquadras de 2 (antes 1 de 2–3) — Pedro: "mais uns 4–6 barcos por aí espalhados"
+    expect(FLEET.MIN).toBe(2); expect(FLEET.MAX).toBe(2); expect(FLEET.SQUADS).toBe(3);
     expect(FLEET.MAX_SPEED).toBeLessThan(WARSHIP.MAX);
     // o casco do herói segue do mesmo tamanho (o comprimento novo é opcional)
     const narrow = (x: number) => Math.abs(x) < 14; // canal de 28 m: o menor cabe de través… o do herói não
@@ -100,7 +101,7 @@ describe('esquadra pirata — navios', () => {
     expect(fleetVerdict({ ships: [s, t] })).toBe('stay');
     t.sinkT = WARSHIP.SINK_S;
     expect(fleetVerdict({ ships: [s, t] })).toBe('beaten');
-    expect(FLEET.REST_MS).toBe(6 * 60_000);
+    expect(FLEET.REST_MS).toBe(3 * 60_000); // 05/11: 6 → 3 min (cada esquadra o seu)
   });
 
   it('minha bala no casco DELE (o casco menor): acerta dentro, erra fora', () => {

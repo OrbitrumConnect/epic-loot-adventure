@@ -31,7 +31,7 @@ import { buildWarshipModel, GUNWALE_K, HELM_DECK_K, HELM_U, makeShipHpBar, WARSH
 import { ballLanding, damageWarship, nearWarshipHull, WARSHIP, warshipGone, warshipLocal, warshipStep, warshipWorld, type ZsWarship } from './zs-warship';
 import {
   crewHitChance, crewSpot, FLEET, FLEET_LEN, fleetFire, fleetFormation, fleetHelm, fleetLostTarget, fleetMaySpawn, fleetPatrolSteer,
-  fleetPickTarget, fleetSeaPoint, fleetSteer, fleetVerdict, isFleetUnit, leadAim, newEnemyShip, newFleetCrew, newFleetPilot, zsFleet,
+  fleetPickTarget, fleetSeaPoint, fleetSteer, homeBounds, isFleetUnit, leadAim, newEnemyShip, newFleetCrew, newFleetPilot, shipHunts, squadBeaten, squadPresent, zsFleet,
   BOARD, boarderStep, FLEET_KRAKEN_PREFIX, FLEET_SHARK_PREFIX, hullRing, hullRingLen, newBoarder, sharkDropSpots, type Boarder, type EnemyShip,
 } from './zs-enemy-fleet';
 import { fleetShipHit, grantFleetLoot } from './zs-enemy-fleet-hits';
@@ -101,7 +101,9 @@ function EnemyShipBody({ ship, model, h, heroRef }: { ship: EnemyShip; model: TH
     const y0 = ps.y0 + WARSHIP_DRAFT * (1 - FLEET.SCALE); // calado do navio menor
     grp.position.set(ship.x, y0, ship.z);
     grp.rotation.set(ps.pitch, ship.yaw, ps.roll, 'YXZ');
-    grp.visible = !warshipGone(ship);
+    // 05/11: com várias esquadras, o casco só desenha até SHIP_DRAW_M (o do outro lado do mar não pesa)
+    const far = Math.hypot(heroRef.current.x - ship.x, heroRef.current.z - ship.z) > FLEET.SHIP_DRAW_M;
+    grp.visible = !warshipGone(ship) && !far;
     bar.group.position.set(ship.x, y0 + h * 0.82 * FLEET.SCALE, ship.z);
     bar.set(ship.hp / FLEET.HP, ship.sinkT === null && ship.hp < FLEET.HP, state.camera);
     const hero = heroRef.current, isNear = Math.hypot(hero.x - ship.x, hero.z - ship.z) < CREW_DRAW_M;
@@ -267,22 +269,26 @@ export function ZsEnemyFleetView({ shipRef, heroRef, terrain }: { shipRef: React
       if (v && r.hp > 0 && nearWarshipHull(v, r.x, r.z, WARSHIP.LENGTH * 0.12, 0.5)) cands.push({ id: r.id, x: v.x, z: v.z, yaw: v.yaw, speed: v.s ?? 0 });
     }
     // ── CHEGAM (patrulhando, longe de todo mundo) ──
-    if (F.ships.length === 0 && fleetMaySpawn({ now, nextAt: F.nextAt, present: false })) {
-      F.nextAt = now + 15_000; // sem mar agora: tenta de novo daqui a pouco
+    // 05/11: VÁRIAS esquadras (FLEET.SQUADS), cada uma no seu tempo — nasce longe de gente e das outras; 1 por quadro
+    for (let k = 0; k < FLEET.SQUADS; k++) {
+      if (!fleetMaySpawn({ now, nextAt: Math.max(F.nextAt, F.squadNext[k] ?? 0), present: squadPresent(F.ships, k) })) continue;
+      F.squadNext[k] = now + 15_000; // sem mar agora: tenta de novo daqui a pouco
       const people = [{ x: hero.x, z: hero.z }, ...(net.connected ? Object.values(net.players).map((r) => ({ x: r.x, z: r.z })) : [])];
+      const others = F.ships.filter((s) => s.sinkT === null).map((s) => ({ x: s.x, z: s.z }));
       const c = fleetSeaPoint(swim, seaBounds, Math.random, people, FLEET.SPAWN_AWAY);
-      if (c) {
+      if (c && !others.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < FLEET.SQUAD_AWAY)) {
         const n = FLEET.MIN + Math.floor(Math.random() * (FLEET.MAX - FLEET.MIN + 1));
         const spots = fleetFormation(swim, c, Math.random() * Math.PI * 2, n);
         if (spots.length >= FLEET.MIN) {
           const def = CREATURES['raider_scout']!;
-          F.ships = spots.map((sp) => newEnemyShip(`f${++F.seq}`, sp));
-          F.targetId = null; F.lostSince = null;
-          const units = F.ships.flatMap((sh) => [newFleetPilot(sh, def), ...sh.crewIds.map((_, i) => newFleetCrew(sh, i, def))]);
+          const fresh = spots.map((sp) => newEnemyShip(`f${++F.seq}`, sp, k, c));
+          F.ships = [...F.ships, ...fresh];
+          const units = fresh.flatMap((sh) => [newFleetPilot(sh, def), ...sh.crewIds.map((_, i) => newFleetCrew(sh, i, def))]);
           useGameStore.setState((s) => ({ creatures: [...s.creatures, ...units] }));
-          setRoster(F.ships.map((s) => s.id).join('|'));
+          setRoster((r0) => [F.ships.map((s) => s.id).join('|'), ...r0.split('|').filter((p) => p.startsWith('k:')).map((p) => p)].join('|'));
         }
       }
+      break;
     }
     /** capitães, tripulação e o Kraken: a posição na store acompanha o navio (alcance do tiro, dano em área, rede) ~3×/s;
      *  a SALA vê os mesmos navios (~5×/s), os rastros dos tiros e o Kraken no convés */
@@ -335,7 +341,7 @@ export function ZsEnemyFleetView({ shipRef, heroRef, terrain }: { shipRef: React
       const pick = fleetPickTarget(F.ships, cands);
       if (pick) {
         F.targetId = pick; target = cands.find((c) => c.id === pick) ?? null;
-        if (pick === selfId) useGameStore.getState().setMessage(`🏴‍☠️ A esquadra pirata te viu! (${F.ships.filter((s) => s.sinkT === null).length} navios, ${FLEET.CREW} atiradores em cada) — mate o capitão no timão e o navio fica à deriva.`);
+        if (pick === selfId) useGameStore.getState().setMessage(`🏴‍☠️ A esquadra pirata te viu! (${F.ships.filter((s) => shipHunts(s, target)).length} navios, ${FLEET.CREW} atiradores em cada) — mate o capitão no timão e o navio fica à deriva.`);
       }
     }
     if (target) F.huntSince ??= now; else F.huntSince = null;
@@ -412,16 +418,20 @@ export function ZsEnemyFleetView({ shipRef, heroRef, terrain }: { shipRef: React
       const others = F.ships.filter((o) => o !== s && o.sinkT === null);
       // ── MANOBRA: caçando = de lado pro alvo; patrulha = de ponto em ponto do mar ──
       let inp;
-      if (target) inp = fleetSteer(s, target, others);
+      const hunts = shipHunts(s, target); // 05/11: só quem está a até JOIN_R do alvo caça (os do outro lado seguem rondando)
+      if (hunts && target) inp = fleetSteer(s, target, others);
       else {
-        if (!s.wp || Math.hypot(s.wp.x - s.x, s.wp.z - s.z) < FLEET.WP_REACH || s.stuck > FLEET.STUCK_S) { s.wp = fleetSeaPoint(swim, seaBounds, Math.random); s.stuck = 0; }
+        if (!s.wp || Math.hypot(s.wp.x - s.x, s.wp.z - s.z) < FLEET.WP_REACH || s.stuck > FLEET.STUCK_S) {
+          // ronda em volta da CASA da esquadra (sem ponto lá: o mar todo, como antes)
+          s.wp = (s.home ? fleetSeaPoint(swim, homeBounds(s.home, seaBounds), Math.random) : null) ?? fleetSeaPoint(swim, seaBounds, Math.random); s.stuck = 0;
+        }
         inp = s.wp ? fleetPatrolSteer(s, s.wp, others) : { throttle: 0, steer: 0 };
       }
       // patrulha DEVAGAR (teto de velocidade, não só a aceleração) — caçando, a toda
-      warshipStep(swim, s, inp, dt, FLEET_LEN, target ? FLEET.MAX_SPEED : FLEET.MAX_SPEED * FLEET.PATROL_K);
+      warshipStep(swim, s, inp, dt, FLEET_LEN, hunts ? FLEET.MAX_SPEED : FLEET.MAX_SPEED * FLEET.PATROL_K);
       s.stuck = inp.throttle > 0 && Math.abs(s.speed) < 1 ? s.stuck + dt : 0;
       const h = models.current.get(s.id)?.h ?? 18;
-      if (!target) continue;
+      if (!hunts || !target) continue;
       // ── CANHÕES no alvo (a salva vai pra sala: os outros DESENHAM; o dano o anfitrião aplica quando cai) ──
       const gunY = zsWaterYAt(s.x, s.z) - WARSHIP_DRAFT * FLEET.SCALE + h * GUNWALE_K * FLEET.SCALE;
       const shot = fleetFire(s, leadAim(target, s, Math.random), gunY);
@@ -458,16 +468,24 @@ export function ZsEnemyFleetView({ shipRef, heroRef, terrain }: { shipRef: React
       });
     }
     syncOut();
-    // ── AFUNDARAM TODOS: some, e outra esquadra vem depois do descanso ──
-    if (fleetVerdict({ ships: F.ships }) === 'beaten') {
-      F.ships = []; F.targetId = null; F.lostSince = null; F.boarded = false;
-      F.nextAt = now + FLEET.REST_MS;
-      dropSharks();
-      crewReload.current.clear();
-      useGameStore.setState((st) => ({ creatures: st.creatures.filter((c) => !isFleetUnit(c.id) || c.id.startsWith(FLEET_KRAKEN_PREFIX)) }));
-      boarderWasOut.current = !!F.boarder;
-      if (net.connected && !F.boarder) broadcastFleet([], []);
-      setRoster(F.boarder ? '|k:' + F.boarder.id : '');
+    // ── uma ESQUADRA afundou inteira: some, e ELA volta depois do descanso (as outras seguem) ──
+    for (let k = 0; k < FLEET.SQUADS; k++) {
+      if (!squadBeaten(F.ships, k)) continue;
+      const gone = F.ships.filter((s) => (s.squad ?? 0) === k), ids = new Set(gone.flatMap((s) => [s.pilotId, ...s.crewIds]));
+      F.ships = F.ships.filter((s) => (s.squad ?? 0) !== k);
+      F.squadNext[k] = now + FLEET.REST_MS;
+      for (const id of ids) crewReload.current.delete(id);
+      useGameStore.setState((st) => ({ creatures: st.creatures.filter((c) => !ids.has(c.id)) }));
+      if (F.ships.length === 0) {
+        // o mar ficou vazio: o mesmo de antes (alvo, tubarões, rede)
+        F.targetId = null; F.lostSince = null; F.boarded = false;
+        dropSharks();
+        crewReload.current.clear();
+        useGameStore.setState((st) => ({ creatures: st.creatures.filter((c) => !isFleetUnit(c.id) || c.id.startsWith(FLEET_KRAKEN_PREFIX)) }));
+        boarderWasOut.current = !!F.boarder;
+        if (net.connected && !F.boarder) broadcastFleet([], []);
+        setRoster(F.boarder ? '|k:' + F.boarder.id : '');
+      } else setRoster(F.ships.map((s) => s.id).join('|') + (F.boarder ? '|k:' + F.boarder.id : ''));
     }
   });
 

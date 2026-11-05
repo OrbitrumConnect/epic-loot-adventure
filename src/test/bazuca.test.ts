@@ -67,7 +67,8 @@ describe('bazuca', () => {
     const w = fs.readFileSync('src/components/world/weapon-models.tsx', 'utf8');
     expect(w).toContain("export const BAZOOKA_FIT: PropFit = { url: '/models/weapons/bazooka.glb', z: [-1, 0, 0], y: [0, 1, 0], grip: [0.16, -0.12, 0], span: 1.903, length: 1.35 };");
     const pr = fs.readFileSync('src/components/world/projectiles.tsx', 'utf8');
-    expect(pr).toContain('if (k >= 1) boom(s.to);');
+    // 05/11: o estouro ganhou o som do míssil dos outros (o boom segue no mesmo lugar)
+    expect(pr).toMatch(/if \(k >= 1\) \{\r?\n\s+boom\(s\.to\);/);
     expect(pr).toContain('<MissileAssetLoader onReady={onMissileReady} />');
     const t = fs.readFileSync('src/components/hud/tool-crafting.tsx', 'utf8');
     expect(t).toMatch(/<VehicleRows \/>\r?\n\s+<BazookaRows \/>/);

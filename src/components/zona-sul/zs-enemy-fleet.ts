@@ -22,7 +22,13 @@ import type { CreatureState } from '@/game/types';
 export const FLEET = {
   /** 35% menor que o galeão do herói (Pedro) */
   SCALE: 0.65,
-  MIN: 2, MAX: 3,
+  /** navios por ESQUADRA (05/11: 3 esquadras de 2 — antes 1 esquadra de 2–3) */
+  MIN: 2, MAX: 2,
+  /** ESQUADRAS ESPALHADAS (05/11, Pedro: "mais uns 4–6 barcos por aí espalhados" · "nasceu 1 vez, matamos e não vejo
+   *  mais"): quantas no mar ao mesmo tempo; só os navios até JOIN_R m do alvo caçam/atiram (os do outro lado seguem
+   *  rondando); cada esquadra nasce a ≥ SQUAD_AWAY m das outras e ronda até HOME_R m da casa dela; o casco só desenha
+   *  até SHIP_DRAW_M m */
+  SQUADS: 3, JOIN_R: 500, SQUAD_AWAY: 600, HOME_R: 450, SHIP_DRAW_M: 1800,
   /** vida de cada navio (o do herói: 50 mil). Medido o canhão do herói: nv 35 = 273/bala, nv 105 = 763 → ~33 / ~12 balas */
   HP: 9000,
   /** m/s — o do herói é 12: dá pra fugir */
@@ -45,8 +51,8 @@ export const FLEET = {
   LOST_MS: 20_000,
   /** patrulha: fração da velocidade; chegou no ponto (m); parado (s) = troca de ponto; nasce longe de todo mundo (m) */
   PATROL_K: 0.55, WP_REACH: 40, STUCK_S: 8, SPAWN_AWAY: 350,
-  /** descanso depois de AFUNDAR a esquadra inteira (ms) */
-  REST_MS: 6 * 60_000,
+  /** descanso depois de AFUNDAR a esquadra inteira (ms) — 05/11: 6 → 3 min (cada esquadra o seu) */
+  REST_MS: 3 * 60_000,
   /** o CAPITÃO no timão */
   PILOT_HP: 520,
   /** loot por navio afundado */
@@ -70,12 +76,30 @@ export const FLEET_CREW_PREFIX = 'fleet_crew_';
 /** Qualquer um da esquadra (capitão ou tripulante): desenhado no navio, fora da IA de terra, fora da rede. */
 export const isFleetUnit = (id: string) => id.startsWith('fleet_');
 
-export type EnemyShip = ZsWarship & { id: string; pilotId: string; pilotDead: boolean; rewarded: boolean; crewIds: string[]; wp: { x: number; z: number } | null; stuck: number; sharksOut: boolean };
+/** `squad`/`home` (05/11): de qual esquadra é e a "casa" dela (ronda em volta) — sem eles (convidado), esquadra 0 / onde está */
+export type EnemyShip = ZsWarship & { id: string; pilotId: string; pilotDead: boolean; rewarded: boolean; crewIds: string[]; wp: { x: number; z: number } | null; stuck: number; sharksOut: boolean; squad?: number; home?: { x: number; z: number } };
 /** `targetId` = dono do navio que ela caça (null = patrulha); `lostSince` = desde quando está sem alvo */
 export type FleetState = { ships: EnemyShip[]; nextAt: number; seq: number; targetId: string | null; lostSince: number | null;
   /** etapa 2: desde quando caça; tubarões soltos na caçada; o Kraken no convés (1 por caçada) */
-  huntSince: number | null; sharkIds: string[]; boarder: Boarder | null; boarded: boolean };
-export const zsFleet: FleetState = { ships: [], nextAt: 0, seq: 0, targetId: null, lostSince: null, huntSince: null, sharkIds: [], boarder: null, boarded: false };
+  huntSince: number | null; sharkIds: string[]; boarder: Boarder | null; boarded: boolean;
+  /** 05/11: quando cada esquadra pode (re)nascer (o `nextAt` segue como trava geral) */
+  squadNext: number[] };
+export const zsFleet: FleetState = { ships: [], nextAt: 0, seq: 0, targetId: null, lostSince: null, huntSince: null, sharkIds: [], boarder: null, boarded: false, squadNext: Array.from({ length: FLEET.SQUADS }, () => 0) };
+
+/** A esquadra `k` tem navio no mar (vivo ou afundando)? */
+export const squadPresent = (ships: readonly EnemyShip[], k: number) => ships.some((s) => (s.squad ?? 0) === k);
+/** A esquadra `k` afundou inteira (todos no fundo)? */
+export function squadBeaten(ships: readonly EnemyShip[], k: number): boolean {
+  const mine = ships.filter((s) => (s.squad ?? 0) === k);
+  return mine.length > 0 && mine.every((s) => s.sinkT !== null && s.sinkT >= WARSHIP.SINK_S);
+}
+/** Este navio CAÇA agora? (tem alvo e está a até JOIN_R dele — os longe seguem rondando) */
+export const shipHunts = (s: { x: number; z: number; sinkT: number | null }, target: { x: number; z: number } | null) =>
+  !!target && s.sinkT === null && Math.hypot(s.x - target.x, s.z - target.z) <= FLEET.JOIN_R;
+/** Retângulo de ronda em volta da casa da esquadra (cortado no mar do mapa). */
+export function homeBounds(home: { x: number; z: number }, b: { minX: number; maxX: number; minZ: number; maxZ: number }) {
+  return { minX: Math.max(b.minX, home.x - FLEET.HOME_R), maxX: Math.min(b.maxX, home.x + FLEET.HOME_R), minZ: Math.max(b.minZ, home.z - FLEET.HOME_R), maxZ: Math.min(b.maxZ, home.z + FLEET.HOME_R) };
+}
 
 /** Pode chegar AGORA? (sem esquadra no mar e fora do descanso) — ela PATRULHA, não espera ninguém navegar */
 export function fleetMaySpawn(o: { now: number; nextAt: number; present: boolean }): boolean {
@@ -220,9 +244,9 @@ export function fleetFormation(swim: (x: number, z: number) => boolean, center: 
   return out;
 }
 
-export function newEnemyShip(id: string, at: { x: number; z: number; yaw: number }): EnemyShip {
+export function newEnemyShip(id: string, at: { x: number; z: number; yaw: number }, squad = 0, home?: { x: number; z: number }): EnemyShip {
   return { ...newWarship(at.x, at.z, at.yaw), hp: FLEET.HP, id, pilotId: `${FLEET_PILOT_PREFIX}${id}`, pilotDead: false, rewarded: false,
-    crewIds: Array.from({ length: FLEET.CREW }, (_, i) => `${FLEET_CREW_PREFIX}${id}_${i}`), wp: null, stuck: 0, sharksOut: false };
+    crewIds: Array.from({ length: FLEET.CREW }, (_, i) => `${FLEET_CREW_PREFIX}${id}_${i}`), wp: null, stuck: 0, sharksOut: false, squad, home: home ?? { x: at.x, z: at.z } };
 }
 
 /** O CAPITÃO (alvo de verdade: mira, dano, XP) — não anda sozinho: o mundo o põe no timão todo quadro. */
