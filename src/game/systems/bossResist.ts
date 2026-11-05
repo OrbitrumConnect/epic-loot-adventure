@@ -4,18 +4,23 @@
  * pode dar dano nele também". Medido no covil: o fuzil segurado solta 10 balas/s e o míssil vale ~10 balas a cada 2,5 s —
  * sem a fração o fuzil batia MAIS que a bazuca. Com 10% por bala: fuzil segurado ≈ ¼ da bazuca, o piloto ≈ 1/10.
  * O míssil (`pierce`) passa inteiro. Fora do Canibal: ×1 (nada muda em nenhum outro bicho).
+ * 05/11 (2ª, Pedro: "tiro de arma etc. dá dano, mas bem mais fraco pra dificultar — ele tem proteção, pode tirar uns 5 por
+ * aí"): além dos 10%, NO MÁXIMO 5 por golpe (o sorteio/crítico do combate em cima: ~4–6, crítico ~10). Fuzil segurado
+ * (10 balas/s) ≈ 50/s contra ~1.200/s da bazuca (~4%).
  */
 export const CANIBAL_ID_PREFIX = 'zs_canibal_';
 /** fração do dano não-míssil que o Canibal leva (fuzil, pistola, arco, machado, especial, poderes) */
 export const CANIBAL_GUN_K = 0.1;
+/** PROTEÇÃO: teto do golpe não-míssil no Canibal (antes do sorteio/crítico do combate) */
+export const CANIBAL_GUN_MAX = 5;
 
 /** Multiplicador do dano que `id` leva (míssil da bazuca = `pierce` → inteiro). */
 export function bossDamageK(id: string, pierce = false): number {
   if (pierce || !id.startsWith(CANIBAL_ID_PREFIX)) return 1;
   return CANIBAL_GUN_K;
 }
-/** `power` já com a resistência do chefe (sem ir a 0: o golpe sempre conta 1). */
+/** `power` já com a resistência do chefe (sem ir a 0: o golpe sempre conta 1; no máximo CANIBAL_GUN_MAX). */
 export function bossPower(id: string, power: number, pierce = false): number {
   const k = bossDamageK(id, pierce);
-  return k === 1 ? power : Math.max(1, Math.round(power * k));
+  return k === 1 ? power : Math.max(1, Math.min(CANIBAL_GUN_MAX, Math.round(power * k)));
 }

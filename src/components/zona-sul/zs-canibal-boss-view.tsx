@@ -43,6 +43,10 @@ const ACTS: CanibalAct[] = ['idle', 'walk', 'run', 'attack', 'leap', 'roar', 'de
 /** BODY_TINT (05/11, Pedro: "o boss ficou meio verde demais"): o corpo brilha na cor da PRÓPRIA textura com só 25% de verde;
  *  o verde-neon forte fica nas manchas das raízes; o machado (AXE_GLOW) na cor dele, sem verde */
 export const CANIBAL_LOOK = { EYE_COLOR: '#ff2a14', EYE_GLOW: 4, NEON: '#3dff7a', GLOW_MIN: 0.3, GLOW_MAX: 0.55, BODY_TINT: 0.25, AXE_GLOW: 0.3 } as const;
+/** PASSO PESADO (05/11, 2ª, Pedro: "precisa ser mais lento a movimentação"): o clip de andar/correr roda pela velocidade
+ *  dele (timeScale = velocidade × isto) — antes rodava no ritmo de um homem (1×) e o gigante "pedalava" no lugar.
+ *  Andar 2,5 m/s → clip 0,5× · correr 4,5 m/s → clip ~0,54×. */
+export const CANIBAL_STEP = { WALK: 0.2, RUN: 0.12 } as const;
 const canibalPulse = (t: number) => CANIBAL_LOOK.GLOW_MIN + (CANIBAL_LOOK.GLOW_MAX - CANIBAL_LOOK.GLOW_MIN) * (0.5 + 0.5 * Math.sin(t * 1.6));
 /** pintas verdes nas raízes (o mesmo jeito do neon do Kraken: mapa de brilho, sem luz nova) */
 function makeRootNeon(): THREE.CanvasTexture {
@@ -90,6 +94,7 @@ function makePitTexture(): THREE.CanvasTexture {
 export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THREE.Vector3> }) {
   const body = useRef<THREE.Group>(null);
   const bodyAction = useRef<HeroAction>('idle');
+  const bodySpeed = useRef(0);
   const mx = MIXAMO_RAIDER['raider_cannibal']!;
   // 05/11 (Pedro: "dá pra pôr machado na mão dele? tem animação de pulando com machado"): o MACHADO GLB na mão (cresce
   // junto com o corpo) — o pulo (Mutant Jump Attack) vira o salto com machadada; o golpe, machadada
@@ -348,6 +353,7 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
       g.position.set(C.x, CANIBAL_AT.floor - (1 - S.rise) * outH * 1.05 + S.leapH, C.z);
       g.rotation.y = C.yaw;
       bodyAction.current = C.phase === 'dead' || C.act === 'death' ? 'death' : C.phase === 'rise' ? 'roar' : (C.act as HeroAction);
+      bodySpeed.current = C.act === 'run' ? CANIBAL.RUN_SPEED : C.act === 'walk' ? CANIBAL.WALK_SPEED : 0;
       const pulse = canibalPulse(t);
       for (const m of litMats.current) m.emissiveIntensity = pulse;
       (roots.material as THREE.MeshStandardMaterial).emissiveIntensity = pulse;
@@ -413,7 +419,7 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
       <primitive object={eyes.g} />
       <group ref={body} visible={false}>
         <Suspense fallback={null}>
-          <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} autoHeight={CANIBAL.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} weapon={axe} gripScale={CANIBAL.BODY_H / 1.8} {...mixClipProps(mx.clips)} />
+          <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} speedRef={bodySpeed} walkSync={CANIBAL_STEP.WALK} runSync={CANIBAL_STEP.RUN} autoHeight={CANIBAL.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} weapon={axe} gripScale={CANIBAL.BODY_H / 1.8} {...mixClipProps(mx.clips)} />
         </Suspense>
       </group>
     </>

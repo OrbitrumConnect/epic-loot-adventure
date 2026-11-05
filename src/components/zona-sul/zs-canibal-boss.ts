@@ -15,26 +15,28 @@ import { CAVE_LAIR } from './zs-cave';
 export const CANIBAL = {
   NAME: 'Canibal Gigante',
   /** corpo: altura do modelo inteiro (m) e a fração enterrada. 05/11 (Pedro: "muito grande — uns 40% menor; ele EM PÉ andando,
-   *  correndo, pulando e atacando, o herói cai no chão"): 110 → 66 m, em pé no chão da arena (sai do buraco e vem) */
-  BODY_H: 66,
+   *  correndo, pulando e atacando, o herói cai no chão"): 110 → 66 m, em pé no chão da arena (sai do buraco e vem).
+   *  05/11 (2ª, Pedro: "pode diminuir uns 40% — ainda tá grande … e precisa ser mais lento a movimentação"): 66 → 40 m */
+  BODY_H: 40,
   SUBMERGED_K: 0,
-  BODY_R: 7,
-  /** v2 (05/11): anda/corre atrás de quem está na arena (sem sair dela), pancada que DERRUBA, PULO em quem foge */
-  WALK_SPEED: 5,
-  RUN_SPEED: 9,
+  BODY_R: 4.2,
+  /** v2 (05/11): anda/corre atrás de quem está na arena (sem sair dela), pancada que DERRUBA, PULO em quem foge.
+   *  05/11 (2ª, "mais lento"): andar 5 → 2,5 m/s, correr 9 → 4,5 m/s (o passo do clip acompanha: CANIBAL_STEP na view) */
+  WALK_SPEED: 2.5,
+  RUN_SPEED: 4.5,
   /** corre quando o alvo está além disto (m); não passa deste raio do centro (a rampa fica na parede) */
   RUN_FROM: 25,
   ARENA_R: 48,
-  /** pancada: alcance (m), raio do impacto, intervalo (s), dano, empurrão (m) */
-  ATK_REACH: 13,
-  ATK_R: 9,
+  /** pancada: alcance (m), raio do impacto, intervalo (s), dano, empurrão (m). 05/11 (2ª): alcance/raio −40% junto com o corpo */
+  ATK_REACH: 8,
+  ATK_R: 5.5,
   ATK_EVERY_S: 3.5,
   ATK_DMG: 220,
   ATK_PUSH_M: 12,
   /** PULO: em quem está além de LEAP_FROM m; dura LEAP_S; impacto LEAP_R m (dano/empurrão); de LEAP_EVERY_S em LEAP_EVERY_S */
   LEAP_FROM: 28,
   LEAP_S: 1.3,
-  LEAP_R: 12,
+  LEAP_R: 8,
   LEAP_DMG: 280,
   LEAP_PUSH_M: 14,
   LEAP_EVERY_S: 9,
@@ -54,7 +56,7 @@ export const CANIBAL = {
   ROOT_REACH: 40,
   ROOT_HP: 6000,
   /** armadura (corta metade disto de cada golpe — o míssil da bazuca atravessa). 05/11 (Pedro: "o fuzil pode dar dano nele
-   *  também"): 800 → 0 — a armadura saiu; quem segura o fuzil é a FRAÇÃO de bossResist.ts (10% do dano não-míssil) */
+   *  também"): 800 → 0 — a armadura saiu; quem segura o fuzil é a PROTEÇÃO de bossResist.ts (10%, no máximo 5 por golpe) */
   ARMOR: 0,
   /** chicotada: intervalo de cada raiz, levantar / bater / ficar no chão (s) */
   SLAM_EVERY_S: 4.5,
@@ -143,7 +145,7 @@ export function canibalMove(c: CanibalState, tx: number, tz: number, dt: number)
   c.x = p.x; c.z = p.z; c.act = run ? 'run' : 'walk';
   return Math.hypot(tx - c.x, tz - c.z);
 }
-/** Onde ele está no PULO (x, z, altura) — arco de LEAP_S s, ~0,35× o próprio tamanho de altura no meio. */
+/** Onde ele está no PULO (x, z, altura) — arco de LEAP_S s, ~0,35× o próprio tamanho de altura no meio (40 m → ~14 m). */
 export function leapPos(l: CanibalLeap): { x: number; z: number; h: number } {
   const k = Math.min(1, l.t / CANIBAL.LEAP_S);
   return { x: l.fx + (l.tx - l.fx) * k, z: l.fz + (l.tz - l.fz) * k, h: Math.sin(k * Math.PI) * CANIBAL.BODY_H * 0.35 };

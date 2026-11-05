@@ -4,7 +4,7 @@ import {
   CANIBAL, CANIBAL_AT, CANIBAL_BODY_ID, CANIBAL_CRIA_PREFIX, canibalMove, canibalPhaseStep, canibalRootId, clampArena, criaCount, leapPos, nearestInArena,
   newCanibal, pushAway, rootBase, rootLean, rootStep, rootTarget, ROOT_SLAM_TOTAL, slamHits,
 } from '@/components/zona-sul/zs-canibal-boss';
-import { bossDamageK, bossPower, CANIBAL_GUN_K } from '@/game/systems/bossResist';
+import { bossDamageK, bossPower, CANIBAL_GUN_K, CANIBAL_GUN_MAX } from '@/game/systems/bossResist';
 import { CAVE_LAIR } from '@/components/zona-sul/zs-cave';
 import { activeGrab, grabTicksDue, isGrabbed, resetGrabs, startHold, tryStartGrab } from '@/game/systems/grabSystem';
 import { calculateDamage } from '@/game/systems/combatSystem';
@@ -13,9 +13,10 @@ import { calculateDamage } from '@/game/systems/combatSystem';
    empurrão, ver se pega o herói, bate no chão … o canibal gigante meio que do tamanho do Kraken dentro da terra" · "o boss
    também é da cintura pra cima, sai do buraco fundo" · "só mata com bazuca — dá praticamente todo o dano, o resto é fraco". */
 describe('Canibal gigante do covil', () => {
-  it('no meio da arena do covil; 05/11 (Pedro: "muito grande — uns 40% menor, em pé"): 110 → 66 m, inteiro fora do buraco; 6 raízes', () => {
+  it('no meio da arena do covil; 05/11 (Pedro: "uns 40% menor, em pé" → 66 m; 2ª: "diminuir uns 40% ainda, tá grande") → 40 m, inteiro fora do buraco; 6 raízes', () => {
     expect(CANIBAL_AT).toEqual({ x: CAVE_LAIR.x, z: CAVE_LAIR.z, floor: CAVE_LAIR.floor });
-    expect(CANIBAL.BODY_H).toBe(66);
+    expect(CANIBAL.BODY_H).toBe(40);
+    expect(CANIBAL.BODY_R).toBeCloseTo(7 * 0.6, 5);
     expect(CANIBAL.SUBMERGED_K).toBe(0);
     expect(CANIBAL.ROOTS).toBe(6);
     for (let i = 0; i < 6; i++) { const b = rootBase(i); expect(Math.hypot(b.x - CANIBAL_AT.x, b.z - CANIBAL_AT.z)).toBeCloseTo(CANIBAL.ROOT_RING, 5); }
@@ -65,12 +66,18 @@ describe('Canibal gigante do covil', () => {
     expect(bossDamageK(CANIBAL_BODY_ID, true)).toBe(1);                         // míssil da bazuca
     expect(bossDamageK('zs_cave_cria_1')).toBe(1);                              // as crias: normal
     expect(bossDamageK('wild_boar_1')).toBe(1);                                 // qualquer outro bicho: nada muda
-    expect(bossPower(CANIBAL_BODY_ID, 300)).toBe(30);                           // medido no covil, nv 80: bala 25–48
+    // 05/11 (2ª, Pedro: "bem mais fraco pra dificultar — ele tem proteção, pode tirar uns 5 por aí"): no máximo 5 por golpe
+    expect(CANIBAL_GUN_MAX).toBe(5);
+    expect(bossPower(CANIBAL_BODY_ID, 300)).toBe(5);                            // nv 80 (antes 30 → bala 25–48)
+    expect(bossPower(canibalRootId(1), 5000)).toBe(5);                          // poder grande: o mesmo teto
+    expect(bossPower(CANIBAL_BODY_ID, 30)).toBe(3);                             // fraco: os 10% (abaixo do teto)
     expect(bossPower(CANIBAL_BODY_ID, 3)).toBe(1);                              // nunca zera
+    expect(bossPower(CANIBAL_BODY_ID, 3000, true)).toBe(3000);                  // o míssil passa inteiro
     expect(bossPower('wild_boar_1', 300)).toBe(300);
-    // fuzil segurado (10 balas/s) ≈ ¼ da bazuca (míssil ≈ 10 balas a cada 2,5 s)
-    const rifle = 10 * CANIBAL_GUN_K, bazooka = 10 / 2.5;
-    expect(rifle / bazooka).toBeCloseTo(0.25, 5);
+    // fuzil segurado (10 balas/s × ~5) contra a bazuca (~3.000 a cada 2,5 s): ~4%
+    const rifle = 10 * CANIBAL_GUN_MAX, bazooka = 3000 / 2.5;
+    expect(rifle / bazooka).toBeLessThan(0.05);
+    expect(calculateDamage(CANIBAL_GUN_MAX, 0, () => 0.5)).toBe(5);             // o sorteio do combate em cima: ~4–6
     expect(calculateDamage(3000, 0, () => 0.5)).toBe(3000);
     const g = fs.readFileSync('src/game/state/game-store.ts', 'utf8');
     expect(g).toContain('const result = resolveAttack(bossPower(c.id, power, pierce), c.hp, c.maxHp, pierce ? 0 : c.armor, c.name, critStats);');
@@ -130,14 +137,14 @@ describe('Canibal v2: em pé, anda, corre, pula', () => {
     expect(c.act).toBe('walk'); expect(c.x - CAVE_LAIR.x).toBeCloseTo(CANIBAL.WALK_SPEED, 5);
     const d = newCanibal(); canibalMove(d, CAVE_LAIR.x + 45, CAVE_LAIR.z, 1);
     expect(d.act).toBe('run'); expect(d.x - CAVE_LAIR.x).toBeCloseTo(CANIBAL.RUN_SPEED, 5);
-    const e = newCanibal(); expect(canibalMove(e, CAVE_LAIR.x + 8, CAVE_LAIR.z, 1)).toBe(8); expect(e.act).toBe('idle');
+    const e = newCanibal(); expect(canibalMove(e, CAVE_LAIR.x + 5, CAVE_LAIR.z, 1)).toBe(5); expect(e.act).toBe('idle');
     expect(e.yaw).toBeCloseTo(Math.PI / 2, 5); // vira pro alvo
     const f = newCanibal(); f.x = CAVE_LAIR.x + CANIBAL.ARENA_R - 1;
     for (let k = 0; k < 20; k++) canibalMove(f, CAVE_LAIR.x + 300, CAVE_LAIR.z, 1);
     expect(Math.hypot(f.x - CAVE_LAIR.x, f.z - CAVE_LAIR.z)).toBeLessThanOrEqual(CANIBAL.ARENA_R + 1e-9);
     expect(clampArena(CAVE_LAIR.x + 100, CAVE_LAIR.z)).toEqual({ x: CAVE_LAIR.x + CANIBAL.ARENA_R, z: CAVE_LAIR.z });
   });
-  it('PULO: arco de 1,3 s (sobe ~23 m no meio) e cai em cima do alvo', () => {
+  it('PULO: arco de 1,3 s (sobe ~14 m no meio) e cai em cima do alvo', () => {
     const l = { fx: 0, fz: 0, tx: 30, tz: 0, t: 0, hit: false };
     expect(leapPos(l)).toEqual({ x: 0, z: 0, h: 0 });
     l.t = CANIBAL.LEAP_S / 2; const mid = leapPos(l);
@@ -160,6 +167,27 @@ describe('Canibal v2: em pé, anda, corre, pula', () => {
     expect(v).toContain('const d = canibalMove(C, tgt.x, tgt.z, dt);');
     const m = fs.readFileSync('src/net/multiplayer.ts', 'utf8');
     expect(m).toMatch(/NetCanibal = \{[\s\S]*?x\?: number/);
+  });
+});
+
+/* Pedro, 05/11 (2ª): "ainda tá grande … e precisa ser mais lento a movimentação". */
+describe('Canibal 40 m: mais lento, passo pesado', () => {
+  it('andar 2,5 m/s e correr 4,5 m/s (era 5 e 9); alcance da pancada e do pulo −40% junto com o corpo', () => {
+    expect(CANIBAL.WALK_SPEED).toBe(2.5); expect(CANIBAL.RUN_SPEED).toBe(4.5);
+    expect(CANIBAL.ATK_REACH).toBe(8); expect(CANIBAL.ATK_R).toBe(5.5); expect(CANIBAL.LEAP_R).toBe(8);
+    expect(CANIBAL.LEAP_FROM).toBeGreaterThan(CANIBAL.RUN_FROM);
+  });
+  it('o clip de andar/correr roda pela velocidade dele (antes 1× = ritmo de homem, ele "pedalava")', () => {
+    const v = fs.readFileSync('src/components/zona-sul/zs-canibal-boss-view.tsx', 'utf8');
+    const m = v.match(/export const CANIBAL_STEP = \{ WALK: ([\d.]+), RUN: ([\d.]+) \} as const;/);
+    expect(m).not.toBeNull();
+    const STEP = { WALK: Number(m![1]), RUN: Number(m![2]) };
+    expect(CANIBAL.WALK_SPEED * STEP.WALK).toBeCloseTo(0.5, 5);
+    expect(CANIBAL.RUN_SPEED * STEP.RUN).toBeGreaterThanOrEqual(0.4); // o piso do clamp (não trava)
+    expect(v).toContain('actionRef={bodyAction} speedRef={bodySpeed} walkSync={CANIBAL_STEP.WALK} runSync={CANIBAL_STEP.RUN}');
+    expect(v).toContain("bodySpeed.current = C.act === 'run' ? CANIBAL.RUN_SPEED : C.act === 'walk' ? CANIBAL.WALK_SPEED : 0;");
+    const g = fs.readFileSync('src/components/world/glb-hero-mixamo.tsx', 'utf8');
+    expect(g).toContain("else if (a && speedRef) a.timeScale = THREE.MathUtils.clamp(spd * (current.current === 'run' ? runSync : walkSync), 0.4, 3.0);");
   });
 });
 
