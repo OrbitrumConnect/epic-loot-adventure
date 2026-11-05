@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUp, Axe, Castle, Clock, Compass, Crosshair, Flame, Gem, Hammer, Hourglass, Leaf,
   LocateFixed, Minus, Mountain, Package, Pickaxe, Plus, Shield, Sparkles, Swords, Tent,
@@ -18,7 +18,7 @@ import {
   getMaxExpeditions, getPlaceBlockReason, getProductionRates, getProgress, getQueueCapacity,
   getRemainingMs, getStorageCap, getToolStashCount, getTroopCount, getUnitCost, getUnitDurationMs,
   getUnitsForBuilding, getUpgradeBlockReason, getUpgradeCost, getUpgradeDurationMs,
-  getWaitingConstructions,
+  getWaitingConstructions, withCarried,
 } from '@/game/systems/baseSystem';
 import { getItemCount } from '@/game/systems/inventorySystem';
 
@@ -419,6 +419,9 @@ function BuildingBubble({ building, now }: { building: PlacedBuilding; now: numb
 
 export default function CityView() {
   const base = useGameStore(s => s.base);
+  // 04/11: os painéis veem estoque + MOCHILA (a cidade completa com a mochila); o topo segue o estoque da cidade
+  const carryInv = useGameStore(s => s.player.inventory);
+  const vbase = useMemo(() => withCarried(base, carryInv), [base, carryInv]);
   const message = useGameStore(s => s.ui.message);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -593,8 +596,8 @@ export default function CityView() {
 
       {(selectedBuilding || selectedPlot != null) && (
         <aside className="city-panel" aria-label={selectedBuilding ? BUILDINGS[selectedBuilding.defId].name : 'Construir'}>
-          {selectedBuilding && <BuildingPanel base={base} building={selectedBuilding} now={now} onClose={() => setSelection(null)} />}
-          {!selectedBuilding && selectedPlot != null && <BuildMenu base={base} plotIndex={selectedPlot} onClose={() => setSelection(null)} />}
+          {selectedBuilding && <BuildingPanel base={vbase} building={selectedBuilding} now={now} onClose={() => setSelection(null)} />}
+          {!selectedBuilding && selectedPlot != null && <BuildMenu base={vbase} plotIndex={selectedPlot} onClose={() => setSelection(null)} />}
         </aside>
       )}
     </div>

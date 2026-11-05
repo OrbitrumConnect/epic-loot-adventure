@@ -33,6 +33,7 @@ import {
   createInitialBase, tickBase as resolveBase, placeBuilding as placeBaseBuilding, startUpgrade,
   enqueueUnit as enqueueBaseUnit, cancelQueueItem as cancelBaseQueueItem,
   sendExpedition as sendBaseExpedition, depositFromInventory, collectTools,
+  payFromCarried, getUpgradeCost, getUnitCost, getBuilding as getBaseBuilding,
 } from '../systems/baseSystem';
 import { createCamps, discoverCamps, tickCamps } from '../systems/campSystem';
 import type { BaseType, BuildPreview, GridCell, PlayerBaseState } from '../types/playerbase';
@@ -2161,14 +2162,19 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     });
   },
 
+  // 04/11 (Pedro: "meu amigo não consegue upar na cidade e tem recurso"): o que falta no estoque da cidade sai da MOCHILA —
+  // só se a obra/fila for aceita (senão nada sai da mochila).
   placeBuilding: (defId, plotIndex) => {
-    const result = placeBaseBuilding(get().base, defId, plotIndex, Date.now());
-    applyBaseResult(set, result);
+    const s = get(), pre = payFromCarried(s.base, s.player.inventory, getUpgradeCost(defId, 1));
+    const result = placeBaseBuilding(pre.state, defId, plotIndex, Date.now());
+    if (result.ok) applyBaseResultCarry(set, result, pre.inventory); else applyBaseResult(set, placeBaseBuilding(s.base, defId, plotIndex, Date.now()));
   },
 
   upgradeBuilding: (instanceId) => {
-    const result = startUpgrade(get().base, instanceId, Date.now());
-    applyBaseResult(set, result);
+    const s = get(), b = getBaseBuilding(s.base, instanceId);
+    const pre = b ? payFromCarried(s.base, s.player.inventory, getUpgradeCost(b.defId, b.level + 1)) : null;
+    const result = startUpgrade(pre ? pre.state : s.base, instanceId, Date.now());
+    if (result.ok && pre) applyBaseResultCarry(set, result, pre.inventory); else applyBaseResult(set, startUpgrade(s.base, instanceId, Date.now()));
   },
 
   evolveBaseToStone: () => {
@@ -2226,8 +2232,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   },
 
   enqueueUnit: (instanceId, unitId) => {
-    const result = enqueueBaseUnit(get().base, instanceId, unitId, Date.now());
-    applyBaseResult(set, result);
+    const s = get(), pre = payFromCarried(s.base, s.player.inventory, getUnitCost(s.base, unitId));
+    const result = enqueueBaseUnit(pre.state, instanceId, unitId, Date.now());
+    if (result.ok) applyBaseResultCarry(set, result, pre.inventory); else applyBaseResult(set, enqueueBaseUnit(s.base, instanceId, unitId, Date.now()));
   },
 
   cancelQueueItem: (instanceId, itemId) => {
@@ -3160,6 +3167,14 @@ function applyBaseResult(
   result: BaseResult,
 ) {
   set(s => ({ base: result.state, ui: { ...s.ui, message: result.message } }));
+}
+/** Igual, e a mochila fica sem o que completou o custo (04/11 — armazém compartilhado na cidade). */
+function applyBaseResultCarry(
+  set: (fn: (s: GameState) => Partial<GameState>) => void,
+  result: BaseResult,
+  inventory: InventoryState,
+) {
+  set(s => ({ base: result.state, player: syncCarry({ ...s.player, inventory }), ui: { ...s.ui, message: result.message } }));
 }
 
 /** Nome da região do mapa. Convenção: -z é norte, +x é leste. */

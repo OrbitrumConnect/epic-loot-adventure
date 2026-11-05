@@ -581,6 +581,41 @@ export function tickBase(state: BaseState, now: number, produce = true): BaseSta
 // ---------------------------------------------------------------------------
 
 /** Move madeira, pedra e essência arcana da mochila para o estoque, até o limite do armazém. */
+/**
+ * ARMAZÉM COMPARTILHADO NA CIDADE (04/11, Pedro: "meu amigo diz que na cidade dele não consegue upar e tem recurso — tem
+ * madeira e pedra, mas a cidade não consegue criar"): construir/melhorar/treinar pagavam SÓ com o estoque da cidade — o que
+ * se junta jogando fica na MOCHILA e só entrava pelo "Depositar" do Salão. Agora é o mesmo "usa o que tem" do navio/carro/
+ * casa: o estoque da cidade primeiro, a mochila completa (madeira, pedra, carne → comida, essência).
+ */
+/** O que a mochila tem de cada recurso da cidade. */
+export function carriedResources(inventory: InventoryState): BaseResources {
+  const out = emptyResources();
+  for (const e of DEPOSIT_ITEMS) out[e.resource] += getItemCount(inventory, e.itemId);
+  return out;
+}
+/** A cidade como a TELA deve ver (estoque + mochila) — pra checar custo e motivo; o estoque de verdade não muda. */
+export function withCarried(state: BaseState, inventory: InventoryState): BaseState {
+  return { ...state, resources: addResources(state.resources, carriedResources(inventory)) };
+}
+/** Move da mochila pro estoque SÓ o que falta pra `cost` (nunca passa do custo — e o custo cabe no armazém). */
+export function payFromCarried(
+  state: BaseState,
+  inventory: InventoryState,
+  cost: BaseResources,
+): { state: BaseState; inventory: InventoryState; moved: BaseResources } {
+  const resources = { ...state.resources }, moved = emptyResources();
+  let inv = inventory;
+  for (const e of DEPOSIT_ITEMS) {
+    const need = Math.max(0, Math.ceil(cost[e.resource] - resources[e.resource]));
+    const amount = Math.min(need, getItemCount(inv, e.itemId));
+    if (amount <= 0) continue;
+    inv = removeItem(inv, e.itemId, amount);
+    resources[e.resource] += amount;
+    moved[e.resource] += amount;
+  }
+  return { state: { ...state, resources }, inventory: inv, moved };
+}
+
 export function depositFromInventory(
   state: BaseState,
   inventory: InventoryState,
