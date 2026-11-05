@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { decodeTerrain, type ZsTerrain, zsHeightAt } from '@/components/zona-sul/zs-terrain-data';
 import { ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
 import { CAVE_ROOMS, CAVE_TUNNELS, caveField, caveFloorAt, caveMove, caveStandAt, setCaveTerrain, spiralY } from '@/components/zona-sul/zs-cave';
-import { CHASM, FALL, caveCheckpoints, chasmReturn, chasmZone, checkpointAt, edgeDrop, fallDamage, fallDamagePct, fellIntoChasm } from '@/components/zona-sul/zs-chasm';
+import { CHASM, FALL, caveCheckpoints, caveEntrySpot, chasmReturn, chasmZone, checkpointAt, edgeDrop, fallDamage, fallDamagePct, fellIntoChasm } from '@/components/zona-sul/zs-chasm';
 import { ZS_RUN, ZS_WALK } from '@/components/zona-sul/zs-move';
 
 /* Pedro, 05/11: "caminho até ele mais longe com parkour (pula; caiu no precipício volta pro checkpoint)" · "o caminho para o
@@ -181,6 +181,15 @@ describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => 
     expect(all.find((c) => c.id === 'covil_pe')!.y - covil.y).toBeLessThan(CHASM.FALL_M);
   });
 
+  it('renascer na ENTRADA DA CAVERNA: do lado de fora da boca do Pico, no chão do mapa (não no buraco), olhando pra dentro', () => {
+    const e = caveEntrySpot(), g = zsHeightAt(t, e.x, e.z);
+    expect(Math.abs(g - 108.6)).toBeLessThan(6);                      // na encosta, perto da boca (108,6 m)
+    expect(caveField(e.x, g + 0.5, e.z)).toBeGreaterThan(0);          // fora da caverna (não cai no buraco)
+    const m = CAVE_TUNNELS.find((q) => q.id === 'pico-tijuca')!.pts;
+    expect(Math.hypot(e.x - m[0]!.x, e.z - m[0]!.z)).toBeCloseTo(6, 1);
+    expect(Math.cos(e.yaw - Math.atan2(m[1]!.x - m[0]!.x, m[1]!.z - m[0]!.z))).toBeGreaterThan(0.99); // virado pra boca
+  });
+
   it('o piloto/clique não se joga na beira; ligado no mundo: dano de queda, precipício com dano, checkpoint, tela escura', () => {
     expect(edgeDrop(20, 19)).toBe(false); expect(edgeDrop(20, -55)).toBe(true);
     const w = fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8');
@@ -189,7 +198,7 @@ describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => 
     expect(w).toContain('if (nowMs - airSeen.current > 150) airTop.current = p.y;'); // voltou a pé (carro/asa/skate): conta dali
     expect(w).toContain('else if (fellIntoChasm(zsCave.inCave, fallFrom.current, p.y, p.x, p.z)) {');
     expect(w).toContain('hurtPlayerByFall(Math.max(1, Math.round(gs.player.maxHp * CHASM.PIT_PCT)), h, { x: c.x, z: c.z }, c.name);');
-    expect(w).toContain('resetChasm(); } // checkpoints valem a vida');
+    expect(w).toContain('zsRespawnMem.cave = zsChasm.last ? caveEntrySpot() : null; resetChasm(); }'); // checkpoints valem a vida
     expect(w).toContain('<ZsChasmMarks heroRef={heroRef} />');
     expect(fs.readFileSync('src/routes/index.tsx', 'utf8')).toContain('{zs && <ZsChasmFade />}');
   });

@@ -8,6 +8,9 @@
  *    inteiro, nível do carro, fora da caverna), PRAIA do Arpoador (sempre). Navio e carro: recarga de 3 min (não vira
  *    teletransporte). Nunca dentro da caverna (não pula o caminho até o Canibal).
  *  - Sem escolher: a BASE se tiver, senão a praia (o de antes).
+ *  - ENTRADA DA CAVERNA (05/11, Pedro: "checkpoint no Canibal ao morrer… ou joga lá pra porta da cave, início de tudo — veja o
+ *    melhor"): morreu no caminho do Canibal (pegou checkpoint da caverna nesta vida) → aparece a boca do Pico da Tijuca, do
+ *    lado de FORA (o começo do caminho: não pula a fenda nem a rampa — sem espera). O carro estacionado lá fora segue valendo.
  * Regras PURAS aqui (testáveis); a tela em hud/zs-respawn-screen, o nascer em zona-sul-world.
  */
 import { create } from 'zustand';
@@ -23,10 +26,10 @@ export const RESPAWN = {
   SHIP_CALM_MS: 30_000,
 } as const;
 
-export type SpawnKind = 'base' | 'ship' | 'car' | 'beach';
+export type SpawnKind = 'base' | 'ship' | 'car' | 'cave' | 'beach';
 export type SpawnPoint = { kind: SpawnKind; x: number; z: number; ok: boolean; why: string | null };
-export const SPAWN_LABEL: Record<SpawnKind, string> = { base: 'Base', ship: 'Navio', car: 'Carro', beach: 'Praia do Arpoador' };
-export const SPAWN_ICON: Record<SpawnKind, string> = { base: '🏠', ship: '⚓', car: '🚗', beach: '🏖️' };
+export const SPAWN_LABEL: Record<SpawnKind, string> = { base: 'Base', ship: 'Navio', car: 'Carro', cave: 'Entrada da caverna', beach: 'Praia do Arpoador' };
+export const SPAWN_ICON: Record<SpawnKind, string> = { base: '🏠', ship: '⚓', car: '🚗', cave: '🕳️', beach: '🏖️' };
 
 export type SpawnInput = {
   now: number;
@@ -36,6 +39,8 @@ export type SpawnInput = {
   car: { x: number; z: number; gone: boolean; unlocked: boolean; underground: boolean } | null;
   /** quando nasceu no navio / no carro pela última vez (0 = nunca) */
   usedAt: { ship: number; car: number };
+  /** morreu no caminho do Canibal: a entrada da caverna (lado de fora da boca do Pico) — senão nem aparece */
+  cave?: { x: number; z: number } | null;
 };
 
 const mmss = (ms: number) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -60,6 +65,7 @@ export function spawnPoints(i: SpawnInput): SpawnPoint[] {
     const why = vehWhy(k, i);
     out.push({ kind: k, x: v.x, z: v.z, ok: why === null, why });
   }
+  if (i.cave) out.push({ kind: 'cave', x: i.cave.x, z: i.cave.z, ok: true, why: null });
   out.push({ kind: 'beach', x: i.beach.x, z: i.beach.z, ok: true, why: null });
   return out;
 }
@@ -99,5 +105,6 @@ export function samePoints(a: SpawnPoint[], b: SpawnPoint[]): boolean {
 export const useZsRespawn = create<{ deathAt: number; diedAt: { x: number; z: number } | null; choice: SpawnKind | null; points: SpawnPoint[] }>(() => ({
   deathAt: 0, diedAt: null, choice: null, points: [],
 }));
-/** recarga do navio/carro (vale a sessão) e quando o MEU navio levou tiro pela última vez */
-export const zsRespawnMem = { usedAt: { ship: 0, car: 0 }, shipHitAt: 0, shipHp: -1 };
+/** recarga do navio/carro (vale a sessão), quando o MEU navio levou tiro pela última vez e — morreu no caminho do Canibal —
+ *  a entrada da caverna pra oferecer no mapa (vale até nascer) */
+export const zsRespawnMem = { usedAt: { ship: 0, car: 0 }, shipHitAt: 0, shipHp: -1, cave: null as { x: number; z: number } | null };

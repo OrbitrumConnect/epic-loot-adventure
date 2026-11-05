@@ -12,6 +12,7 @@ import { creatureLevel, creatureXp } from '@/game/systems/progressionSystem';
 import { computeZsZones, type ZsZone } from '@/game/data/zs-zones';
 import { HUNT_AREA_RADIUS } from '@/game/systems/objectiveSystem';
 import { ZS_TERRAIN } from '@/components/zona-sul/zona-sul-meta';
+import { zsMapArtUrl } from '@/components/hud/zs-map-art';
 import { ItemSprite } from '@/components/hud/item-sprite';
 import { CAMPS } from '@/game/data/camps';
 import { cellCenter } from '@/game/systems/playerBaseSystem';
@@ -100,6 +101,10 @@ export function ZsMap({ onClose }: ZsMapProps) {
   // CARRO e NAVIO (03/11, Pedro: "no mapa deveria aparecer pra mim pra eu saber"): onde estão — ou, perdidos, onde se
   // constrói outro (garagem / âncora; ou pelo card da base)
   const car = useZsVehicles((s) => s.car), ship = useZsVehicles((s) => s.ship);
+  // 05/11 (Pedro: "ok go" — o mesmo do mapa do renascer): o MAPA DESENHADO (o terrain.png cru é DADO — verde-neon) e a caixa
+  // na proporção do terreno (560×523; era 400×264, de antes da expansão de 02/11 → os pinos ficavam esticados de lado)
+  const [art, setArt] = useState<string | null>(null);
+  useEffect(() => { let on = true; zsMapArtUrl().then((u) => { if (on) setArt(u); }).catch(() => { /* sem desenho: fundo escuro */ }); return () => { on = false; }; }, []);
 
   // Recomputa as zonas a cada 2 s (criaturas morrem/renascem) — só re-renderiza se a contagem
   // por zona mudou, pra não repintar à toa. Barato: 5 zonas.
@@ -154,8 +159,9 @@ export function ZsMap({ onClose }: ZsMapProps) {
     <div className="zs-map-wrap">
       {/* MAPA */}
       <div className="zs-map-col">
-        <div className="zs-map" role="application" aria-label="Mapa da Zona Sul do Rio. Escolha uma zona para ver os bichos.">
-          <img className="zs-map-bg" src={ZS_TERRAIN.url} alt="Relevo da Zona Sul do Rio de Janeiro" draggable={false} />
+        <div className="zs-map-box">
+        <div className="zs-map" style={{ ['--ar' as string]: String(ZS_TERRAIN.w / ZS_TERRAIN.h) }} role="application" aria-label="Mapa da Zona Sul do Rio. Escolha uma zona para ver os bichos.">
+          {art && <img className="zs-map-bg" src={art} alt="Mapa da Zona Sul do Rio de Janeiro" draggable={false} />}
           {zones.map(zone => {
             const { left, top } = zsWorldToPct(zone.center.x, zone.center.z);
             const { rx, ry } = zsRadiusToPct(zone.radius);
@@ -189,6 +195,7 @@ export function ZsMap({ onClose }: ZsMapProps) {
             return <div key={k} className={`zs-mapmark zs-mapmark--${k}`} data-gone={v.state === 'gone' || undefined} style={{ left: `${left}%`, top: `${top}%` }} title={txt} aria-label={txt}>{k === 'car' ? '🚗' : '⚓'}</div>;
           })}
           <div ref={heroRef} className="zs-hero" aria-label="Você" title="Você" />
+        </div>
         </div>
         <div className="zs-map-legend">
           <span><i className="zs-key zs-key-hero" />Você</span>

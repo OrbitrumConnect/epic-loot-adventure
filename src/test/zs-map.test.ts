@@ -60,3 +60,22 @@ describe('farmar zona manda o piloto pro centro com o raio da zona', () => {
     expect(area!.radius).toBeGreaterThanOrEqual(HUNT_AREA_RADIUS);
   });
 });
+
+/* 05/11 (Pedro: "ok go" — usar no mapa do K o mesmo do mapa do renascer): o terrain.png é DADO (cru fica verde-neon) e a caixa
+   estava em 400×264 (de antes da expansão de 02/11, o terreno é 560×523) → pinos/zonas esticados de lado. */
+describe('mapa do K: desenhado e na proporção do terreno', () => {
+  it('usa o mapa desenhado (nunca o PNG de dado cru) e a caixa na proporção do terreno, sem esticar', async () => {
+    const fs = await import('node:fs');
+    const v = fs.readFileSync('src/components/hud/zs-map.tsx', 'utf8');
+    expect(v).toContain('zsMapArtUrl().then((u) => { if (on) setArt(u); })');
+    expect(v).not.toContain('src={ZS_TERRAIN.url}');
+    expect(v).toContain("style={{ ['--ar' as string]: String(ZS_TERRAIN.w / ZS_TERRAIN.h) }}");
+    const css = fs.readFileSync('src/styles.css', 'utf8');
+    expect(css).not.toContain('aspect-ratio: 400 / 264');
+    expect(css).toContain('.zs-map-box { flex: 1 1 auto; align-self: stretch; min-height: 0; container-type: size;');
+    expect(css).toContain('width: min(100cqw, calc(100cqh * var(--ar, 1.07))); height: auto; aspect-ratio: var(--ar, 1.07);');
+    // na proporção certa, a zona de fauna é CÍRCULO na tela: rx% da largura = ry% da altura em pixels
+    const { rx, ry } = zsRadiusToPct(100), W = 560, H = 523;
+    expect((rx / 100) * W).toBeCloseTo((ry / 100) * H, 2); // (o vão entre o 1º e o último pixel: 559 × 522 — 0,01%)
+  });
+});

@@ -19,7 +19,7 @@
 import { create } from 'zustand';
 import { useGameStore } from '@/game/state/game-store';
 import { reportDamageToStore } from '@/components/world/hostile-ai';
-import { CAVE_ROOMS, caveFloorAt } from './zs-cave';
+import { CAVE_ROOMS, caveFloorAt, ZS_CAVE_MOUTHS } from './zs-cave';
 
 export const CHASM = {
   /** queda livre (m) que conta como "caiu no precipício" — os pulos do parkour descem ~1 m */
@@ -113,6 +113,12 @@ export function chasmReturn(lastId: string | null, fromX: number, fromY: number,
   let best = all[0]!, bd = Infinity;
   for (const c of all) { const d = Math.hypot(c.x - fromX, (c.y - fromY) * 2, c.z - fromZ); if (d < bd) { bd = d; best = c; } }
   return best;
+}
+/** ENTRADA DA CAVERNA pra renascer (05/11 — morreu no caminho do Canibal): do lado de FORA da boca do Pico da Tijuca, 6 m
+ *  encosta abaixo do plano da boca (no chão do mapa, não no buraco), olhando pra dentro. */
+export function caveEntrySpot(): { x: number; z: number; yaw: number } {
+  const m = ZS_CAVE_MOUTHS.find((q) => q.id === 'pico-tijuca')!, l = Math.hypot(m.bx - m.ax, m.bz - m.az), ox = (m.ax - m.bx) / l, oz = (m.az - m.bz) / l;
+  return { x: m.ax + ox * 6, z: m.az + oz * 6, yaw: Math.atan2(-ox, -oz) };
 }
 /** Piloto/clique: o passo desce um degrau grande (beira do poço/precipício)? — então não dá (o piloto não se joga). */
 export function edgeDrop(groundNow: number, groundNext: number): boolean { return groundNext < groundNow - CHASM.EDGE_M; }
