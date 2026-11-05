@@ -201,7 +201,7 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
   const bodyBar = useMemo(() => makeShipHpBar(14, 1.0), []);
   const tentBars = useMemo(() => Array.from({ length: KRAKEN_BOSS.TENTACLES }, () => makeShipHpBar(5, 0.45)), []);
   const tmp = useMemo(() => ({ m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), d: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), zero: new THREE.Matrix4().makeScale(0, 0, 0), eh: new THREE.Vector3(), ef: new THREE.Vector3(), es: new THREE.Vector3() }), []);
-  const st = useRef({ netAcc: 0, posAcc: 0, removeAt: 0, msgAt: 0, rise: 0, sucked: false, deadAt: new Map<string, number>(), lastBite: new Map<string, number>() });
+  const st = useRef({ netAcc: 0, posAcc: 0, removeAt: 0, msgAt: 0, rise: 0, sucked: false, lastPhase: 'sleep' as KrakenPhase, deadAt: new Map<string, number>(), lastBite: new Map<string, number>() });
 
   /** tira os bichos do Kraken (tentáculos/corpo) e os tubarões dele; as crias ficam até morrer */
   const dropCreatures = () => {
@@ -451,6 +451,12 @@ export function ZsKrakenBoss({ shipRef, heroRef, terrain }: { shipRef: React.Mut
     audioManager.setBossMusic(whirlpoolOn(K.phase) && dHero < KRAKEN_MUSIC_M);
     // ═══ CÉU DO KRAKEN (04/11 — Pedro: "quando ele nasce o dia vira fim de tarde avermelhado escuro"): cada um pela sua distância ═══
     zsOmen.target = omenTarget(whirlpoolOn(K.phase), dHero);
+    // ═══ MATOU O KRAKEN (04/11): quem estava na luta (até 700 m) quando o corpo morreu ganha a marca na conta (libera a
+    //     bazuca) — anfitrião e convidado veem a mesma fase, então vale pra todos perto ═══
+    if (K.phase === 'dead' && S.lastPhase !== 'dead' && dHero < KRAKEN_MUSIC_M && !useGameStore.getState().player.krakenSlain) {
+      useGameStore.setState((s) => ({ player: { ...s.player, krakenSlain: true }, ui: { ...s.ui, message: '🏆 KRAKEN DAS CAGARRAS DERROTADO! Fica registrado na sua conta — libera a BAZUCA.' } }));
+    }
+    S.lastPhase = K.phase;
     // ═══ BARRA DO CHEFE NA TELA (perto e acordado): tentáculos somados enquanto ele está protegido; depois, o corpo ═══
     {
       let bar: ZsBossBar | null = null;

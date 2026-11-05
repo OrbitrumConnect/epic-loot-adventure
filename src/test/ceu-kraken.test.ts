@@ -147,3 +147,16 @@ describe('música e barra do chefe', () => {
     expect(fs.readFileSync('src/components/zona-sul/zona-sul-world.tsx', 'utf8')).toContain('<ZsBossBarHud />');
   });
 });
+
+/* Pedro, 04/11: "matamos no multiplayer o boss! vai aparecer aonde a bazuca?" — a marca "matou o Kraken" (libera a bazuca). */
+describe('marca: matou o Kraken', () => {
+  it('quem estava na luta (até 700 m) quando o corpo morreu ganha a marca; vai no save da conta', () => {
+    const v = fs.readFileSync('src/components/zona-sul/zs-kraken-boss-view.tsx', 'utf8');
+    expect(v).toMatch(/if \(K\.phase === 'dead' && S\.lastPhase !== 'dead' && dHero < KRAKEN_MUSIC_M && !useGameStore\.getState\(\)\.player\.krakenSlain\) \{/);
+    expect(v).toContain('player: { ...s.player, krakenSlain: true }');
+    const p = fs.readFileSync('src/game/systems/persistenceSystem.ts', 'utf8');
+    expect(p).toContain('krakenSlain: z.boolean().optional(),');
+    expect(p).toContain("'skin', 'krakenSlain'] as const;");
+    expect(p).toContain('...(p.krakenSlain ? { krakenSlain: true } : {}),');
+  });
+});

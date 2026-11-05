@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { startPwa } from "../net/pwa-install";
+import { startStaleChunkReload } from "../net/stale-chunk";
 
 function NotFoundComponent() {
   return (
@@ -127,7 +128,8 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  useEffect(() => { startPwa(); }, []);
+  // 04/11: versão nova no ar com o jogo aberto → recarrega 1× quando um pedaço antigo some (stale-chunk.ts)
+  useEffect(() => { startPwa(); startStaleChunkReload(); }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

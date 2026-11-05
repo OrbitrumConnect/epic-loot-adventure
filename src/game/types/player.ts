@@ -57,6 +57,9 @@ export type PlayerState = {
   /** SKIN do herói (03/11): 'homem' | 'mulher' | 'mercenario' (`hero-skins.ts`). Ausente = ainda não escolheu (a tela de escolha
    *  aparece ao entrar); o corpo desenhado nesse meio tempo é o de homem. Vai no save da conta. */
   skin?: 'homem' | 'mulher' | 'mercenario' | undefined;
+  /** MATOU O KRAKEN DAS CAGARRAS (04/11, Pedro: "matou o Kraken libera a bazuca"): estava na luta (até 700 m) quando o
+   *  corpo morreu — online vale pra todos perto. Vai no save da conta; libera fabricar a bazuca. */
+  krakenSlain?: boolean | undefined;
   /** Instante (ms, `Date.now()`) do último dano SOFRIDO pelo jogador. Sinal de
    *  agressão que o piloto usa pra priorizar combate sobre farm. Ausente = nunca. */
   lastDamagedAt?: number;
