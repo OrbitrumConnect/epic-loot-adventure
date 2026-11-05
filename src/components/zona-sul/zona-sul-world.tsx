@@ -82,6 +82,8 @@ import { createCaveCreatures, createCaveOreNodes, zsNavigable, zsQuery, zsSwimma
 import { deathStage, resolveSpawn, samePoints, spawnPoints, useZsRespawn, zsRespawnMem } from './zs-respawn';
 import { CHASM, caveEntrySpot, chasmReturn, checkpointAt, edgeDrop, fallDamage, fellIntoChasm, hurtPlayerByFall, resetChasm, useZsChasmFx, zsChasm } from './zs-chasm';
 import { ZsChasmMarks } from './zs-chasm-view';
+import { ZsRuins } from './zs-ruins-view';
+import { pushOutRuins } from './zs-ruins';
 import { sameVeh, useZsTouch, useZsVehicles, zsAttack, zsCave, zsCrouch, zsCtx, zsVehicleApi, ZS_CROUCH_CAM_DROP, ZS_CROUCH_SPEED, type ZsVehInfo } from './zs-context';
 import { type ArcButton, useArcExtras } from '@/components/world/mobile-controls';
 import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUp, Car, ChevronsDown, ChevronsUp, Gauge, LogOut, Ship } from 'lucide-react';
@@ -1024,6 +1026,7 @@ function Hero({ t, heroRef, focusRef, onHud, carRef, dimsRef, boardRef, playerRe
     if (drive.mode === 'foot' && !st.swimming && !zsCave.inCave && (st.x !== p.x || st.z !== p.z)) {
       let [bx, bz] = pushOutHouseWalls(st.x, st.z, HERO_RADIUS, p.y);
       [bx, bz] = pushOutBasePieces(bx, bz, HERO_RADIUS);
+      [bx, bz] = pushOutRuins(bx, bz, HERO_RADIUS, p.y); // RUÍNAS por bairro (05/11): parede de verdade
       if (bx !== st.x || bz !== st.z) st = { ...st, x: bx, z: bz, ground: zsHeightAt(t, bx, bz) };
     }
     zsCtx.inWater = st.swimming;
@@ -1745,6 +1748,8 @@ function ZonaSulWorld({ paused = false, onAttack }: { paused?: boolean; onAttack
             <ZsGrass t={t} heroRef={focusRef} />
             {/* RAMPA DE VOO LIVRE da Pedra Bonita (02/11): deck pisável; saindo pela ponta com a asa-delta ela abre */}
             <ZsRampView t={t} />
+            {/* RUÍNAS POR BAIRRO (05/11): 2–8% dos prédios reais do OSM, no lugar de verdade, com fachada — favela no morro */}
+            <ZsRuins t={t} />
             {/* PEDRAS EM VOLTA DA BOCA do Pico da Tijuca (02/11 noite) */}
             <ZsCaveMouthRocks t={t} />
           </ZsSurface>
