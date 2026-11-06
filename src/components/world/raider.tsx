@@ -114,7 +114,7 @@ const RAIDER_GLB: Record<string, string> = {
  *  do salto do jogo; o rugido, os primeiros 60% (~2,3 s). */
 const MUTANT_BASE = { idle: '/models/mutant/idle.glb', walk: '/models/mutant/walk.glb', run: '/models/mutant/run.glb', attack: '/models/mutant/attack.glb' } as const;
 const MUTANT_CUSTOM = { leap: '/models/mutant/leap.glb', roar: '/models/mutant/roar.glb' } as const;
-type MixClips = { base?: Partial<Record<'idle' | 'walk' | 'run' | 'attack', string>>; custom?: Record<string, string>; cut?: Record<string, { from?: number; to?: number; speed?: number }>; attackSpeed?: number };
+type MixClips = { base?: Partial<Record<'idle' | 'walk' | 'run' | 'attack', string>>; custom?: Record<string, string>; cut?: Record<string, { from?: number; to?: number; speed?: number; plant?: boolean }>; attackSpeed?: number };
 /** Só o que a espécie define vira prop (sem `undefined` solto) — quem não tem `clips` (todos de antes): nada muda. */
 /** Correm SEMPRE que perseguem (03/11): os chefes do pack e a Feiticeira (que surge atrás e vem correndo). */
 const CHASE_RUNNERS = new Set(['raider_cannibal', 'raider_kraken', 'raider_sorceress', 'raider_indigena']);
@@ -128,7 +128,8 @@ export const MIXAMO_RAIDER: Record<string, { url: string; standFixX: number; hei
   // CHEFES DE ONDA do pack Meshy (03/11): GLB do Meshy (já em pé → standFixX 0), esqueleto salvo noutra pose (bindFix).
   // Canibal "um pouco menor que o Fúngico de hoje" (3,83 → 3,4 m); Kraken o maior (4,3 m), golpe pesado e LENTO.
   raider_cannibal: { url: '/models/raiders/cannibal.glb', standFixX: 0, height: 3.4, bindFix: true, autoGround: true, strideSync: true, death: 'mutant',
-    clips: { base: MUTANT_BASE, custom: MUTANT_CUSTOM, cut: { leap: { from: 0.07, to: 0.55, speed: 1.46 }, roar: { to: 0.6, speed: 1.4 } } } },
+    // 06/11 (Pedro: "quando ele pula o corpo entra metade pra baixo do chão ao aterrissar"): pulo e rugido com o PÉ NO CHÃO
+    clips: { base: MUTANT_BASE, custom: MUTANT_CUSTOM, cut: { leap: { from: 0.07, to: 0.55, speed: 1.46, plant: true }, roar: { to: 0.6, speed: 1.4, plant: true } } } },
   raider_kraken: { url: '/models/raiders/kraken.glb', standFixX: 0, height: 4.3, bindFix: true, autoGround: true, strideSync: true, death: 'mutant',
     clips: { base: { ...MUTANT_BASE, attack: '/models/mutant/slam.glb' }, custom: MUTANT_CUSTOM, cut: { leap: { from: 0.07, to: 0.55, speed: 1.25 }, roar: { to: 0.6, speed: 1.4 } }, attackSpeed: 0.9 } },
   // Feiticeira (03/11): gente (as animações do herói), golpe = gesto de magia, bote = "Run Jump Attack" (trecho do pulo)

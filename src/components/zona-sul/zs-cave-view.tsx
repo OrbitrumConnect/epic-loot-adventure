@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { requestLight } from '@/components/world/light-pool';
 import type { ZsTerrain } from './zs-terrain-data';
-import { CAVE_ABYSS, CAVE_LAIR, CAVE_ROOMS, type CaveDecor, type CaveTile, caveDecor, caveField, caveFloorAt, caveMeshJob, caveMouthRocks, cavePools } from './zs-cave';
+import { CAVE_ABYSS, CAVE_LAIR, CAVE_ROOMS, type CaveDecor, type CaveTile, LAIR_SKY, caveDecor, caveField, caveFloorAt, caveMeshJob, caveMouthRocks, cavePools, lairCeilingY } from './zs-cave';
 /** Até onde (m) da câmera um pedaço da caverna desenha (02/11 noite: a caverna cresceu — abismo + galeria grande). */
 export const CAVE_TILE_DRAW_M = 260;
 import { zsCave } from './zs-context';
@@ -87,6 +87,41 @@ const CRYSTAL_A = new THREE.Color('#7fe8ff'), CRYSTAL_B = new THREE.Color('#c79b
 const LANTERN = new THREE.Color('#ffcf9a'), CRYSTAL_LIGHT = new THREE.Color('#8fd8ff'), FUNGUS_LIGHT = new THREE.Color('#ff9a4a');
 /** a brasa do covil do Canibal (04/11) */
 const LAIR_LIGHT = new THREE.Color('#ff7a3a');
+/** a luz do dia da CLARABOIA do covil (06/11) */
+const SKY_LIGHT = new THREE.Color(LAIR_SKY.color);
+/** degradê pra boca da claraboia (radial: claro no meio, some na borda) */
+function skyTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+/** CLARABOIA DO COVIL (06/11, ver LAIR_SKY): a boca clara no teto + o facho de luz até o chão (2 malhas, ~100 triângulos) */
+function makeLairSky(): { g: THREE.Group; ceil: number; dispose: () => void } {
+  const lr = CAVE_LAIR, ceil = lairCeilingY(), H = ceil - lr.floor;
+  const discTex = skyTexture();
+  const discGeo = new THREE.CircleGeometry(LAIR_SKY.r * 1.6, 40);
+  discGeo.rotateX(Math.PI / 2); // virada pra BAIXO (quem vê é quem está no chão)
+  const disc = new THREE.Mesh(discGeo, new THREE.MeshBasicMaterial({ map: discTex, color: LAIR_SKY.color, transparent: true, depthWrite: false, toneMapped: false, fog: false }));
+  disc.position.set(lr.x, ceil - 1.2, lr.z);
+  const beamGeo = new THREE.CylinderGeometry(LAIR_SKY.r, LAIR_SKY.beamR, H, 28, 1, true);
+  // facho: some nas BORDAS (de lado o cilindro vira só a luz do meio — sem a linha reta) e embaixo (chega fraco no chão)
+  const beamMat = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(LAIR_SKY.color) }, uOpacity: { value: LAIR_SKY.beam } },
+    vertexShader: 'varying float vF; varying float vY; void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vec3 n = normalize(normalMatrix * normal); vF = abs(dot(n, normalize(-mv.xyz))); vY = uv.y; gl_Position = projectionMatrix * mv; }',
+    fragmentShader: 'uniform vec3 uColor; uniform float uOpacity; varying float vF; varying float vY; void main() { float a = uOpacity * vF * vF * vY * (0.4 + 0.6 * vY); gl_FragColor = vec4(uColor * a, a); }',
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const beam = new THREE.Mesh(beamGeo, beamMat);
+  beam.position.set(lr.x, lr.floor + H / 2, lr.z);
+  beam.renderOrder = 3;
+  const g = new THREE.Group(); g.add(disc, beam); g.visible = false;
+  return { g, ceil, dispose: () => { discGeo.dispose(); beamGeo.dispose(); (disc.material as THREE.Material).dispose(); beamMat.dispose(); discTex.dispose(); } };
+}
 /** CRISTAIS (31/10, Pedro: "temos o nosso cristal azulado já resolvido em GLB… sem perder performance"): a FORMA do
  *  cristal do jogo (models/crystal/crystal.glb, 92 mil tri) numa versão de 798 tri / 12 KB (tools/zona-sul/cave-crystal-glb.mjs),
  *  facetada, brilhando na cor de cada um (azul/violeta). Só os a até CRYSTAL_DRAW_M do herói desenham (lista refeita 4×/s). */
@@ -234,6 +269,9 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
     return out;
   }, [kinds]);
   const water = useRef<THREE.Mesh>(null);
+  // CLARABOIA do covil (06/11): a boca clara + o facho — só com o herói no fundo do covil
+  const sky = useMemo(() => makeLairSky(), []);
+  useEffect(() => () => sky.dispose(), [sky]);
 
   useFrame((state) => {
     const near = zsCave.near;
@@ -248,6 +286,7 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
     }
     water.current?.geometry.setDrawRange(0, near ? Infinity : 0);
     for (const k of ['stalactite', 'stalagmite', 'mushroom'] as const) { const m = refs[k].current; if (m) m.count = near ? kinds[k].length : 0; }
+    sky.g.visible = false;
     if (!near) return;
     // lanterna do herói (fundo) + os 3 cristais mais perto + o fogo-fátuo do salão do chefe — o POOL escolhe os mais perto
     const h = heroRef.current;
@@ -259,6 +298,11 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
       // COVIL DO CANIBAL (04/11): a brasa grande da arena (do balcão se vê o fundo) — também tira vagas de cristal
       const lr = CAVE_LAIR, inLair = Math.hypot(h.x - lr.x, h.z - lr.z) < lr.near;
       if (inLair) requestLight(lr.light.x, lr.light.y, lr.light.z, LAIR_LIGHT, lr.light.i, lr.light.d, 1.2);
+      // CLARABOIA (06/11): a luz do dia lá do alto (fica no pool como as outras — sem luz nova) + a boca e o facho
+      if (inLair && zsCave.deep) {
+        requestLight(lr.x, sky.ceil - LAIR_SKY.light.below, lr.z, SKY_LIGHT, LAIR_SKY.light.i, LAIR_SKY.light.d, LAIR_SKY.light.decay);
+        sky.g.visible = true;
+      }
       let n = 0;
       for (const s of glowSpots) { s.d = (s.x - h.x) ** 2 + (s.z - h.z) ** 2; }
       const sorted = glowSpots.filter((s) => s.d < 45 * 45).sort((a, b) => a.d - b.d);
@@ -270,6 +314,7 @@ export function ZsCave({ t, heroRef }: { t: ZsTerrain; heroRef: React.MutableRef
     <group ref={group}>
       {geos.map((g, i) => <mesh key={tiles![i]!.key} geometry={g} material={material} />)}
       <mesh ref={water} geometry={geo.pools} material={mats.water} renderOrder={1} />
+      <primitive object={sky.g} />
       <instancedMesh ref={refs.stalactite} args={[geo.down, mats.rock, Math.max(1, kinds.stalactite.length)]} />
       <instancedMesh ref={refs.stalagmite} args={[geo.up, mats.rock, Math.max(1, kinds.stalagmite.length)]} />
       {/* o NOSSO cristal azulado (forma do models/crystal, versão leve) — só os perto desenham */}

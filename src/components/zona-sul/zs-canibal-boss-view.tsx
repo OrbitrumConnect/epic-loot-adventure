@@ -43,6 +43,38 @@ const ACTS: CanibalAct[] = ['idle', 'walk', 'run', 'attack', 'leap', 'roar', 'de
 /** BODY_TINT (05/11, Pedro: "o boss ficou meio verde demais"): o corpo brilha na cor da PRÓPRIA textura com só 25% de verde;
  *  o verde-neon forte fica nas manchas das raízes; o machado (AXE_GLOW) na cor dele, sem verde */
 export const CANIBAL_LOOK = { EYE_COLOR: '#ff2a14', EYE_GLOW: 4, NEON: '#3dff7a', GLOW_MIN: 0.3, GLOW_MAX: 0.55, BODY_TINT: 0.25, AXE_GLOW: 0.3 } as const;
+/**
+ * OLHOS NO ROSTO (06/11, Pedro: "o olho do boss está meio estourado, o vermelho"). Medido: a conta antiga era do Canibal
+ * de 66 m (brasa de 0,7 m + halo de 4 m, "meia cabeça pra frente" pela direção do CORPO) — no de 19,6 m, curvado, saía
+ * UMA bola vermelha grande do lado/em cima da cabeça. Agora: os 2 olhos achados na MALHA da cabeça (os vértices presos no
+ * osso Head, a frente do rosto na altura `UP` e afastados `SEP` da largura) e presos no osso (acompanham a cabeça em
+ * qualquer pose), do tamanho da cabeça: brasa `CORE` e halo `HALO` × a altura da cabeça.
+ */
+export const CANIBAL_EYES = { UP: 0.55, SEP: 0.16, CORE: 0.045, HALO: 0.42, OUT: 0.08 } as const;
+/** PEGA DO MACHADO na escala dele (06/11, Pedro: "parece que o machado sai da mão dele"): a pega padrão (`gripPos`, cm de
+ *  gente: 4/4/8) cresce com o corpo — antes ficava no PULSO do gigante (9 cm) e o cabo atravessava o punho, fora da mão */
+export const CANIBAL_GRIP: [number, number, number] = [0.04, 0.04, 0.08].map((v) => (v * CANIBAL.BODY_H) / 1.8) as [number, number, number];
+/** Os 2 olhos (no espaço do osso da cabeça) + o queixo e o topo (pra medir a cabeça) — da malha, 1× quando carrega. */
+function faceEyes(sm: THREE.SkinnedMesh, head: THREE.Object3D): { l: THREE.Vector3; r: THREE.Vector3; top: THREE.Vector3; chin: THREE.Vector3 } | null {
+  const hi = sm.skeleton.bones.indexOf(head as THREE.Bone);
+  const g = sm.geometry, pos = g.getAttribute('position'), si = g.getAttribute('skinIndex'), sw = g.getAttribute('skinWeight');
+  if (hi < 0 || !pos || !si || !sw) return null;
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i < pos.count; i++) {
+    let w = 0;
+    for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === hi) w += sw.getComponent(i, k);
+    if (w >= 0.5) pts.push(new THREE.Vector3().fromBufferAttribute(pos, i));
+  }
+  if (pts.length < 12) return null;
+  const box = new THREE.Box3().setFromPoints(pts), hgt = box.max.y - box.min.y, wid = box.max.x - box.min.x, xc = (box.min.x + box.max.x) / 2;
+  const ye = box.min.y + hgt * CANIBAL_EYES.UP;
+  let zf = -Infinity;
+  for (const p of pts) if (Math.abs(p.y - ye) < hgt * 0.12 && Math.abs(p.x - xc) < wid * 0.3) zf = Math.max(zf, p.z);
+  if (!Number.isFinite(zf)) zf = box.max.z;
+  const M = new THREE.Matrix4().multiplyMatrices(sm.skeleton.boneInverses[hi]!, sm.bindMatrix); // malha → osso
+  const sep = wid * CANIBAL_EYES.SEP;
+  return { l: new THREE.Vector3(xc + sep, ye, zf).applyMatrix4(M), r: new THREE.Vector3(xc - sep, ye, zf).applyMatrix4(M), top: new THREE.Vector3(xc, box.max.y, zf).applyMatrix4(M), chin: new THREE.Vector3(xc, box.min.y, zf).applyMatrix4(M) };
+}
 /** PASSO PESADO (05/11, 2ª, Pedro: "precisa ser mais lento a movimentação"): o clip de andar/correr roda pela velocidade
  *  dele (timeScale = velocidade × isto) — antes rodava no ritmo de um homem (1×) e o gigante "pedalava" no lugar.
  *  Andar 2,5 m/s → clip 0,5× · correr 4,5 m/s → clip ~0,54× (com 40 m). O passo é proporcional à altura: menor = passo mais
@@ -136,6 +168,8 @@ export function ZsCanibalBoss({ heroRef }: { heroRef: React.MutableRefObject<THR
   }, []);
   const headBone = useRef<THREE.Object3D | null>(null);
   const headTop = useRef<THREE.Object3D | null>(null);
+  /** 06/11: os olhos achados na malha (espaço do osso da cabeça) + a malha (pra o modo de ligação) */
+  const face = useRef<{ eyes: NonNullable<ReturnType<typeof faceEyes>>; sm: THREE.SkinnedMesh } | null | false>(null);
   useEffect(() => () => {
     roots.geometry.dispose(); (roots.material as THREE.Material).dispose();
     pit.m.geometry.dispose(); (pit.m.material as THREE.Material).dispose(); pit.tx.dispose();
@@ -375,7 +409,30 @@ function makeCrias(n: number, at: { x: number; z: number }, d0: number, tag: str
       if (!headBone.current) g.traverse((o) => { if (!headBone.current && /head$/i.test(o.name)) headBone.current = o; if (!headTop.current && /headtop/i.test(o.name)) headTop.current = o; });
       const hb = headBone.current;
       eyes.g.visible = !!hb && visible && C.phase !== 'dead';
-      if (hb && eyes.g.visible) {
+      if (hb && face.current === null) {
+        // 06/11: acha os olhos NA MALHA da cabeça (1×); sem malha/pesos → a conta antiga (false)
+        let sm: THREE.SkinnedMesh | null = null;
+        g.traverse((o) => { const s = o as THREE.SkinnedMesh; if (!sm && s.isSkinnedMesh && s.skeleton.bones.includes(hb as THREE.Bone)) sm = s; });
+        const fe = sm ? faceEyes(sm, hb) : null;
+        face.current = fe && sm ? { eyes: fe, sm } : false;
+      }
+      const fc = face.current;
+      if (hb && eyes.g.visible && fc) {
+        // OLHOS NO ROSTO (06/11, CANIBAL_EYES): osso da cabeça × o ponto achado na malha (o mesmo caminho da pele)
+        hb.updateWorldMatrix(true, false);
+        tmp.m.copy(hb.matrixWorld);
+        if (fc.sm.bindMode === 'detached') tmp.m.premultiply(tmp.zero.multiplyMatrices(fc.sm.matrixWorld, fc.sm.bindMatrixInverse));
+        const hw = tmp.p.copy(fc.eyes.top).applyMatrix4(tmp.m).distanceTo(tmp.d.copy(fc.eyes.chin).applyMatrix4(tmp.m));
+        const glow = (0.85 + 0.15 * Math.sin(t * 2.4)) * (C.act === 'attack' || C.act === 'leap' ? 1.25 : 1);
+        for (const [e, at] of [[eyes.l, fc.eyes.l], [eyes.r, fc.eyes.r]] as const) {
+          e.core.position.copy(at).applyMatrix4(tmp.m);
+          e.core.scale.setScalar((hw * CANIBAL_EYES.CORE) / 0.7); // a esfera da brasa tem raio 0,7
+          e.glow.position.copy(state.camera.position).sub(e.core.position).setLength(hw * CANIBAL_EYES.OUT).add(e.core.position);
+          e.glow.quaternion.copy(state.camera.quaternion);
+          e.glow.scale.setScalar(hw * CANIBAL_EYES.HALO * glow);
+        }
+        tmp.zero.makeScale(0, 0, 0);
+      } else if (hb && eyes.g.visible) {
         // medido 05/11: o osso Head fica na BASE do crânio (~10 m até o HeadTop) — os olhos a ~42% da altura da cabeça e
         // meia cabeça pra frente (antes ficavam dentro do crânio, invisíveis)
         hb.getWorldPosition(tmp.p);
@@ -433,7 +490,7 @@ function makeCrias(n: number, at: { x: number; z: number }, d0: number, tag: str
       <primitive object={eyes.g} />
       <group ref={body} visible={false}>
         <Suspense fallback={null}>
-          <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} speedRef={bodySpeed} walkSync={CANIBAL_STEP.WALK} runSync={CANIBAL_STEP.RUN} autoHeight={CANIBAL.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} weapon={axe} gripScale={(CANIBAL.BODY_H / 1.8) * CANIBAL_AXE_K} {...mixClipProps(mx.clips)} />
+          <GlbHeroMixamo charUrl={mx.url} actionRef={bodyAction} speedRef={bodySpeed} walkSync={CANIBAL_STEP.WALK} runSync={CANIBAL_STEP.RUN} autoHeight={CANIBAL.BODY_H} standFixX={mx.standFixX} bindFix deathClip={mx.death ?? 'back'} weapon={axe} gripScale={(CANIBAL.BODY_H / 1.8) * CANIBAL_AXE_K} gripPos={CANIBAL_GRIP} {...mixClipProps(mx.clips)} />
         </Suspense>
       </group>
     </>

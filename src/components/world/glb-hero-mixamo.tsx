@@ -7,7 +7,7 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 import { useGameStore } from '@/game/state/game-store';
 import type { HeroAction } from './glb-hero';
 import { heldKindFor, selectedItemId } from './held-weapon';
-import { poseToBind, retargetBind, retargetTwist, withoutHipsMotion } from './mixamo-retarget';
+import { plantFeet, poseToBind, retargetBind, retargetTwist, withoutHipsMotion } from './mixamo-retarget';
 import { DODGE_CLIP_FROM, DODGE_CLIP_TO, DODGE_MS } from '@/game/systems/dodgeSystem';
 import { createFootCache, footMinY, groundStep, nextGroundOffset } from './glb-creature';
 import { hitStopScale } from './hit-stop';
@@ -21,6 +21,8 @@ const bindClipCache = new Map<string, THREE.AnimationClip>();
  *  O resultado é IGUAL pra todos do mesmo modelo (mesmo GLB, mesma correção) → calcula 1×, reaproveita. Só inimigos
  *  (o herói monta 1× e tem clips extras que mudam por ação). */
 const twistClipCache = new Map<string, THREE.AnimationClip>();
+/** clips extras com o PÉ NO CHÃO (`plant`, 06/11) por (modelo, ação, animação) — calcula 1× */
+const plantClipCache = new Map<string, THREE.AnimationClip>();
 type FitCache = { s: number; p: [number, number, number]; fooled: boolean; bodyLen: number };
 const fitCache = new Map<string, FitCache>();
 import {
@@ -303,7 +305,10 @@ export function GlbHeroMixamo({
     sync?: number; syncMin?: number; syncMax?: number;
     /** quadril na altura NORMAL (como andar) em vez de livre — anim EM PÉ que desce o quadril (Zona Sul 29/10: "ao
      *  abrir a porta do veículo a animação fica metade abaixo do chão"). */
-    fixHips?: boolean }>;
+    fixHips?: boolean;
+    /** PÉ NO CHÃO (06/11, Canibal: "no pulo o corpo entra metade pra baixo do chão ao aterrissar"): o quadril refeito
+     *  pra o pé ficar na altura do pé parado nos quadros em que a animação original pisa (`plantFeet`). */
+    plant?: boolean }>;
   /** Mesh a usar (default Survivor Red). Raiders passam pirate/spiked. */
   charUrl?: string;
   scale?: number;
@@ -477,8 +482,15 @@ export function GlbHeroMixamo({
       }
     }
     const custom = customKeys.map((k, i) => {
-      const c = mk(customG[i + 1]!, k, !customClipCut?.[k]?.fixHips); // quadril livre (sentado / nadando), salvo fixHips
+      let c = mk(customG[i + 1]!, k, !customClipCut?.[k]?.fixHips); // quadril livre (sentado / nadando), salvo fixHips
       const cut = customClipCut?.[k];
+      const idle = base[0];
+      if (c && cut?.plant && idle && customG[i + 1]!.animations[0]) {
+        const key = `${charUrl}|${k}|${customClips?.[k] ?? ''}|${standFixX}`;
+        let pl = plantClipCache.get(key);
+        if (!pl) { pl = plantFeet(c, customG[i + 1]!.animations[0]!, customG[i + 1]!.scene, cloned, standFixX, idle); plantClipCache.set(key, pl); }
+        c = pl;
+      }
       if (!c || !cut || (cut.from == null && cut.to == null)) return c;
       const fps = 30, n = Math.round(c.duration * fps);
       const from = Math.round((cut.from ?? 0) * n), to = Math.max(from + 1, Math.round((cut.to ?? 1) * n));
@@ -486,7 +498,7 @@ export function GlbHeroMixamo({
       return sub;
     });
     return [...base, ...extra, ...pvp, ...custom].filter((c): c is THREE.AnimationClip => c != null);
-  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, dodgeG, extraG, customKeys, customG, customClipCut, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
+  }, [idleG, walkG, runG, attackG, attackBowG, attackGunG, jumpG, deathG, dodgeG, extraG, customKeys, customClips, customG, customClipCut, rangedAttack, boneNames, cloned, charUrl, standFixX, twistFix, bindFix]);
 
   // 26/10: animação por distância (anim-lod.ts) — herói/perto todo quadro (igual), inimigo longe com menos atualizações.
   const animEveryRef = useRef(1);

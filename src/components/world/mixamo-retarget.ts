@@ -272,3 +272,89 @@ export function withoutHipsMotion(clip: THREE.AnimationClip): THREE.AnimationCli
   out.tracks = out.tracks.filter((t) => !/hips\.position$/i.test(t.name));
   return out;
 }
+
+/** Y do pé mais baixo e da cabeça (mundo do modelo, de pé com `standFixX`) de `root` tocando `clip` em cada tempo. */
+function feetAndHeadAt(clip: THREE.AnimationClip, root: THREE.Object3D, standFixX: number, hipsName: string, times: number[]): { foot: number[]; head: number[] } {
+  const pre = hipsName.slice(0, -'Hips'.length);
+  const wrap = new THREE.Object3D();
+  const r = root.clone(true);
+  r.position.set(0, 0, 0); r.scale.setScalar(1);
+  wrap.add(r); wrap.rotation.x = standFixX;
+  const feet: THREE.Object3D[] = [];
+  let head: THREE.Object3D | null = null;
+  r.traverse((o) => {
+    if ([pre + 'LeftFoot', pre + 'RightFoot', pre + 'LeftToeBase', pre + 'RightToeBase'].includes(o.name)) feet.push(o);
+    if (!head && o.name === pre + 'Head') head = o;
+  });
+  if (feet.length === 0) return { foot: times.map(() => NaN), head: times.map(() => NaN) };
+  const mixer = new THREE.AnimationMixer(r);
+  const act = mixer.clipAction(clip);
+  act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true; act.play();
+  const v = new THREE.Vector3(), foot: number[] = [], hd: number[] = [];
+  for (const t of times) {
+    mixer.setTime(t);
+    wrap.updateMatrixWorld(true);
+    let lo = Infinity;
+    for (const o of feet) lo = Math.min(lo, o.getWorldPosition(v).y);
+    foot.push(lo);
+    hd.push(head ? (head as THREE.Object3D).getWorldPosition(v).y : NaN);
+  }
+  mixer.stopAllAction();
+  return { foot, head: hd };
+}
+
+/**
+ * PÉ NO CHÃO (06/11, Pedro: "quando ele pula, o corpo entra metade pra baixo do chão ao aterrissar no ataque"). O Canibal
+ * toca o pulo ("Mutant Jump Attack") e o rugido com o quadril LIVRE — e a altura do quadril que vem da animação nesse
+ * esqueleto é quase zero (medido no jogo: o quadril em pé fica a 11 m e no pulo desce a 0,2 m; a malha ia 10,7 m pra
+ * baixo do chão). Aqui o quadril é refeito pela regra do pé: nos quadros em que o pé da animação ORIGINAL está no chão,
+ * o quadril sobe/desce pra o pé mais baixo do alvo ficar na altura do pé dele PARADO (1º quadro de `idle`); no ar, o
+ * ajuste vai em linha reta entre a decolagem e a aterrissagem (a altura do pulo quem dá é o jogo), sem nunca deixar o pé
+ * abaixo do pé parado. Devolve uma CÓPIA.
+ * `tgtRoot` na pose de ligação (como no `retargetBind`).
+ */
+export function plantFeet(baked: THREE.AnimationClip, srcClip: THREE.AnimationClip, srcRoot: THREE.Object3D, tgtRoot: THREE.Object3D, standFixX: number, idle: THREE.AnimationClip): THREE.AnimationClip {
+  const hp = baked.tracks.find((t) => /hips\.position$/i.test(t.name));
+  if (!hp) return baked;
+  const hipsName = hp.name.slice(0, -'.position'.length);
+  const times = Array.from(hp.times);
+  const stand = feetAndHeadAt(idle, tgtRoot, standFixX, hipsName, [0]).foot[0]!;
+  const tgt = feetAndHeadAt(baked, tgtRoot, standFixX, hipsName, times).foot;
+  const src = feetAndHeadAt(srcClip, srcRoot, 0, hipsName, times);
+  const ground = Math.min(...src.foot.filter(Number.isFinite));
+  const body = (src.head[0] ?? NaN) - (src.foot[0] ?? NaN);
+  if (!Number.isFinite(stand) || !Number.isFinite(ground) || !(body > 0)) return baked;
+  const off = times.map((_, k) => (src.foot[k]! - ground <= PLANT_GROUND_K * body ? stand - tgt[k]! : NaN));
+  const known = off.map((o, k) => (Number.isFinite(o) ? k : -1)).filter((k) => k >= 0);
+  if (known.length === 0) return baked;
+  for (let k = 0; k < off.length; k++) {
+    if (Number.isFinite(off[k])) continue;
+    const a = [...known].reverse().find((q) => q < k), b = known.find((q) => q > k);
+    if (a === undefined) off[k] = off[b!]!;
+    else if (b === undefined) off[k] = off[a]!;
+    else off[k] = off[a]! + ((off[b]! - off[a]!) * (times[k]! - times[a]!)) / (times[b]! - times[a]!);
+  }
+  // e em NENHUM quadro o pé desce abaixo do pé parado (no ar, perna esticada antes de aterrissar)
+  for (let k = 0; k < off.length; k++) off[k] = Math.max(off[k]!, stand - tgt[k]!);
+  // o deslocamento é no MUNDO (cima do modelo em pé) → no espaço do pai do quadril (escala/giro do esqueleto)
+  const wrap = new THREE.Object3D();
+  const r = tgtRoot.clone(true);
+  r.position.set(0, 0, 0); r.scale.setScalar(1);
+  wrap.add(r); wrap.rotation.x = standFixX; wrap.updateMatrixWorld(true);
+  let hips: THREE.Object3D | null = null;
+  r.traverse((o) => { if (!hips && o.name === hipsName) hips = o; });
+  const parent = (hips as THREE.Object3D | null)?.parent;
+  if (!parent) return baked;
+  const toLocal = new THREE.Matrix3().setFromMatrix4(parent.matrixWorld).invert();
+  const up = new THREE.Vector3();
+  const v = Float32Array.from(hp.values);
+  for (let k = 0; k < times.length; k++) {
+    up.set(0, off[k]!, 0).applyMatrix3(toLocal);
+    v[k * 3] = v[k * 3]! + up.x; v[k * 3 + 1] = v[k * 3 + 1]! + up.y; v[k * 3 + 2] = v[k * 3 + 2]! + up.z;
+  }
+  const out = baked.clone();
+  out.tracks = baked.tracks.map((t) => (t === hp ? new THREE.VectorKeyframeTrack(t.name, times, Array.from(v)) : t.clone()));
+  return out;
+}
+/** pé da animação original "no chão": até isto × a altura do corpo acima do pé mais baixo do clip */
+export const PLANT_GROUND_K = 0.04;

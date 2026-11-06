@@ -1118,6 +1118,21 @@ export const CAVE_LAIR = (() => {
   return { x: r.x, z: r.z, floor: r.y, top: r.spiral!.yTop, near: 120, light: { x: r.x, y: r.y + 14, z: r.z, i: 40, d: 150 }, fogFar: 240 };
 })();
 
+/**
+ * CLARABOIA DO COVIL (06/11, Pedro: "a cena é um pouco escura — pode ter algo que ilumine ali, uma claraboia, algo
+ * assim"): uma fresta no meio do teto do covil por onde entra luz do dia — uma luz fria lá do alto (do POOL de luzes,
+ * sem luz nova: anti-lag) que clareia a arena inteira e as paredes, a boca clara no teto e o facho até o chão. Só aparece
+ * com o herói no fundo do covil (os pedaços `deep`). `r` = raio da fresta, `beamR` = raio do facho no chão.
+ */
+export const LAIR_SKY = { r: 7, beamR: 15, color: '#dfe9ff', light: { i: 60, d: 190, decay: 0.8, below: 6 }, beam: 0.3 } as const;
+/** Altura (m) do teto do covil no MEIO — onde fica a fresta (sobe do chão até achar a rocha). */
+export function lairCeilingY(): number {
+  const r = CAVE_ROOMS.find((q) => q.id === 'covil')!;
+  let y = r.y + 5;
+  while (y < r.y + r.h + r.lobe + 8 && caveField(r.x, y, r.z) < 0) y += 0.25;
+  return y;
+}
+
 /** PEDRAS EM VOLTA DA BOCA (02/11 noite, "a boca média, pedras rodeando — fica legal"): bocas com `rocks` ganham um
  *  meio anel de pedras na encosta, dos lados e na frente (nunca dentro do buraco). Determinístico. [x, y, z, tamanho,
  *  giro]. */
