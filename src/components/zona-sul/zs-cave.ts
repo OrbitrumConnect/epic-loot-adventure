@@ -63,7 +63,7 @@ const P = (x: number, z: number, y: number, r: number, h: number): CaveTunnelPt 
 
 // 31/10 (Pedro: "os túneis são um pouco baixos e poderiam ser mais largos"): por dentro ~+30% de largura e altura (as
 // bocas quase iguais); conferido pelo teste "não fura o mapa".
-export const CAVE_TUNNELS: CaveTunnel[] = [
+const CAVE_TUNNELS_BASE: CaveTunnel[] = [
   // BOCA DO REBOUÇAS (larga: 12 m × 6,5 m) — entra pro norte e curva pro oeste descendo por baixo do Corcovado
   { id: 'reboucas', name: 'entrada do Rebouças', mouth: true, pts: [
     P(-70, -63, 10.6, 6, 6.5), P(-71, -96, 7, 7, 8.5), P(-78, -118, 4, 7, 9), P(-98, -136, 1, 6.5, 8.5),
@@ -128,6 +128,36 @@ export const CAVE_TUNNELS: CaveTunnel[] = [
   { id: 'fenda-covil', name: 'garganta do covil', pts: [P(-1003, -267, 40, 6, 9), P(-1008, -286, 39.5, 6.2, 9), P(-1026, -301, 38.8, 6.4, 9), P(-1045.5, -308.8, 38, 6.5, 9)] },
 ];
 
+/**
+ * TÚNEIS MAIORES (05/11 noite, Pedro: "os túneis das caves são meio curtos de altura e comprimento — meio caminho de rato" →
+ * "vamos na ordem, pro elite, sem regressão"): os túneis de CAVERNA crescem por dentro CAVE_TUNNEL_GROW× (largura e altura).
+ * Ficam como eram: a BOCA (os 2 primeiros pontos — o buraco do chão é desenhado com eles) e o 3º cresce pela metade (a boca
+ * abre em funil pra dentro); os túneis de ESTRADA (Zuzu, Novo); o caminho do Canibal (garganta, fenda → covil); as PONTAS
+ * que chegam num salão (dentro de `GROW_ROOM_E`× o contorno dele — a emenda com o salão, o balcão e a rampa do abismo,
+ * fica igual: a "aura" de chão do salão foi acertada com elas); e os trechos perto da superfície/de outro túnel
+ * (`TUNNEL_GROW_CAP`: o máximo por túnel, achado pelos testes de rocha).
+ */
+export const CAVE_TUNNEL_GROW = 1.35;
+const NO_GROW = new Set(['garganta', 'fenda-covil']);
+/** teto do crescimento por túnel (id → fator máximo), onde a rocha em cima/embaixo não deixa crescer tudo */
+const TUNNEL_GROW_CAP: Record<string, number> = {};
+/** ponta de túnel a até isto × o contorno de um salão não cresce */
+export const GROW_ROOM_E = 1.25;
+function inRoom(x: number, z: number): boolean {
+  for (const r of CAVE_ROOMS) {
+    const dx = x - r.x, dz = z - r.z, c = Math.cos(r.yaw), sn = Math.sin(r.yaw);
+    if (Math.hypot((dx * c + dz * sn) / r.rx, (-dx * sn + dz * c) / r.rz) < GROW_ROOM_E) return true;
+  }
+  return false;
+}
+function growTunnel(tn: CaveTunnel): CaveTunnel {
+  if (tn.road || NO_GROW.has(tn.id)) return tn;
+  const K = Math.min(CAVE_TUNNEL_GROW, TUNNEL_GROW_CAP[tn.id] ?? Infinity);
+  return { ...tn, pts: tn.pts.map((q, i) => {
+    const k = inRoom(q.x, q.z) ? 1 : tn.mouth ? (i <= 1 ? 1 : i === 2 ? 1 + (K - 1) * 0.5 : K) : K;
+    return k === 1 ? q : { ...q, r: Math.round(q.r * k * 100) / 100, h: Math.round(q.h * k * 100) / 100 };
+  }) };
+}
 export const CAVE_ROOMS: CaveRoom[] = [
   { id: 'encruzilhada', name: 'encruzilhada', x: -80, z: -120, y: 4, rx: 13, rz: 11, h: 11, yaw: 0.6, lobe: 1.8, tint: [0.45, 0.42, 0.38] },
   { id: 'corcovado', name: 'galeria do Corcovado', x: -200, z: -160, y: -5, rx: 26, rz: 17, h: 13, yaw: 0.15, lobe: 2.2,
@@ -180,8 +210,9 @@ export const CAVE_ROOMS: CaveRoom[] = [
       { u: 6.6, v: 1, r: 1.8, dy: -0.4 }, { u: 13.2, v: -1.2, r: 1.8, dy: 0.3 }] },
     tint: [0.41, 0.34, 0.31] },
 ];
-
-/** INIMIGOS DA CAVERNA];
+/** Os túneis do jogo (já crescidos — todo mundo lê daqui: desenho, andar, inimigos, minério). Depois dos salões (a ponta
+ *  que chega num salão não cresce). */
+export const CAVE_TUNNELS: CaveTunnel[] = CAVE_TUNNELS_BASE.map(growTunnel);
 
 /** INIMIGOS DA CAVERNA (31/10, Pedro: "falta os inimigos dentro da cave"): Fauce de Sílex e Aberração (os bichos da mata
  *  alta) espalhados nos salões — [salão, espécie, u, v] (u/v = fração do raio do salão). Nascem como FAUNA

@@ -262,13 +262,17 @@ describe('caverna — leve', () => {
     expect(tris).toBeGreaterThan(20000);
     // 04/11: o COVIL do Canibal (~64 mil) — total ~215 mil, mas os pedaços dele (`deep`) só desenham com o herói no fundo,
     // quando a SUPERFÍCIE (~1,1 mi) some: perto das bocas a conta segue ≤ 55 mil; lá no fundo, ≤ 130 mil só de caverna
-    expect(tris).toBeLessThan(230000);
+    // 06/11 (Parte A, Pedro: "túneis meio curtos — caminho de rato" → túneis 1,35×): parede maior = mais triângulos.
+    // Medido: total 228,7 → 248,2 mil · boca do Pico 54,4 → 60,9 mil · fundo do covil 129,9 → 133,9 mil. FPS DENTRO dos
+    // túneis (boca do Pico, galeria grande, Rebouças, Gávea), antes × depois alternado 2×: na mesma faixa (diário 06/11 §3).
+    // O teto sobe na medida: total 260 mil, perto das bocas 62 mil, fundo do covil 136 mil.
+    expect(tris).toBeLessThan(260000);
     expect(r.value.length).toBeLessThan(100);
     const sum = (x: number, z: number, deep: boolean) => r.value.filter((q) => Math.hypot(q.cx - x, q.cz - z) < 260 && (deep || !q.deep)).reduce((s2, q) => s2 + q.idx.length / 3, 0);
     for (const [x, z] of [[-70, -63], [-446, 366], [-600, 373], [-878, -139], [-1195, -290], [-1114, -205], [-570, 5], [-452, -165]] as const) {
-      expect(sum(x, z, false), `perto de ${x}, ${z}`).toBeLessThan(55000);
+      expect(sum(x, z, false), `perto de ${x}, ${z}`).toBeLessThan(62000);
     }
-    expect(sum(-1087, -353, true), 'no fundo do covil (sem superfície)').toBeLessThan(130000);
+    expect(sum(-1087, -353, true), 'no fundo do covil (sem superfície)').toBeLessThan(136000);
     expect(r.value.filter((q) => q.deep).reduce((s2, q) => s2 + q.idx.length / 3, 0)).toBeGreaterThan(50000); // o covil inteiro é `deep`
     expect(fs.readFileSync('src/components/zona-sul/zs-cave-view.tsx', 'utf8')).toContain('near && Math.hypot(tl.cx - cam.x, tl.cz - cam.z) < CAVE_TILE_DRAW_M && (!tl.deep || zsCave.deep) ? Infinity : 0');
     // as normais apontam pro AR (de dentro da caverna)
