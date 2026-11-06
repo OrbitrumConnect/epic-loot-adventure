@@ -231,14 +231,18 @@ describe('o caminho até o Canibal passa pela FENDA (parkour no túnel)', () => 
     expect(fellIntoChasm(false, 99, 50, q.x, q.z)).toBe(false);                      // fora da caverna, não
   });
 
-  it('DANO DE QUEDA por altura e pela vida: até 6 m nada; 15 m = metade; 24 m mata — a mesma % pro nível 1 e pro 80', () => {
-    expect(FALL).toEqual({ SAFE_M: 6, LETHAL_M: 24 });
-    expect(fallDamagePct(1.3)).toBe(0); expect(fallDamagePct(6)).toBe(0);            // o pulo (1,3 m) e ~2 andares: nada
-    expect(fallDamagePct(15)).toBeCloseTo(0.5, 5); expect(fallDamagePct(24)).toBe(1); expect(fallDamagePct(90)).toBe(1);
-    expect(fallDamage(15, 200)).toBe(100); expect(fallDamage(15, 30000)).toBe(15000); // % da vida máxima
-    expect(fallDamage(6.05, 200)).toBe(1);                                          // passou do seguro: pelo menos 1
-    expect(fallDamage(30, 200)).toBe(200);                                          // mortal
-    expect(fallDamage(5, 999999)).toBe(0);
+  // 06/11 (Pedro: "dano de queda tá muito forte"): era 6 m nada · 15 m metade · 24 m mata (linha reta)
+  it('DANO DE QUEDA por altura e pela vida (06/11, mais leve): até 8 m nada; curva: 15 m ~9%, 24 m ~1/3, 30 m ~55%; 40 m mata', () => {
+    expect(FALL).toEqual({ SAFE_M: 8, LETHAL_M: 40, CURVE: 1.6 });
+    expect(fallDamagePct(1.3)).toBe(0); expect(fallDamagePct(8)).toBe(0);            // o pulo (1,3 m) e ~3 andares: nada
+    expect(fallDamagePct(12)).toBeLessThan(0.05);                                   // da beira do covil pra arena (12 m): arranhão
+    expect(fallDamagePct(15)).toBeCloseTo(0.088, 2); expect(fallDamagePct(24)).toBeCloseTo(0.33, 2); expect(fallDamagePct(30)).toBeCloseTo(0.55, 2);
+    expect(fallDamagePct(40)).toBe(1); expect(fallDamagePct(57)).toBe(1); expect(fallDamagePct(90)).toBe(1); // abismo do Pico (57 m) mata
+    for (let h = 8.5; h < 40; h += 0.5) expect(fallDamagePct(h)).toBeGreaterThan(fallDamagePct(h - 0.5));    // sempre sobe
+    expect(fallDamage(24, 30000)).toBe(Math.round(30000 * fallDamagePct(24)));    // % da vida máxima
+    expect(fallDamage(8.05, 200)).toBe(1);                                          // passou do seguro: pelo menos 1
+    expect(fallDamage(40, 200)).toBe(200);                                          // mortal
+    expect(fallDamage(7, 999999)).toBe(0);
   });
 
   it('checkpoints: SÓ 3 (Pedro: "antes do parkour do boss e 1 nos 2 lados do outro túnel"), no chão, cada um pega só perto', () => {

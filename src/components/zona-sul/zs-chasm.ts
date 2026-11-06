@@ -11,8 +11,8 @@
  *    girou pro nordeste). Todo caminho até o Canibal (pelo Pico ou pelo Rebouças) passa por ela.
  *  - PRECIPÍCIO (a fenda e os 2 poços — abismo e covil): queda livre de mais de FALL_M = volta pro último checkpoint
  *    (pega ainda no ar; a tela escurece) e perde PIT_PCT da vida — é a queda que mataria, "salva" no checkpoint.
- *  - DANO DE QUEDA em todo lugar (a pé): por ALTURA e pela VIDA — até FALL.SAFE_M nada; daí sobe em linha reta até
- *    FALL.LETHAL_M = a vida inteira (em % da vida máxima: vale igual pro nível 1 e pro 80). Caiu na ÁGUA: nada.
+ *  - DANO DE QUEDA em todo lugar (a pé): por ALTURA e pela VIDA — até FALL.SAFE_M nada; daí sobe em CURVA (começa leve)
+ *    até FALL.LETHAL_M = a vida inteira (em % da vida máxima: vale igual pro nível 1 e pro 80). Caiu na ÁGUA: nada.
  * Checkpoint = um marco (cristal) do lado do caminho: passou perto, fica guardado (a mensagem avisa).
  * 05/11 (noite, Pedro: "tomei queda lá na entrada e fui teleportado pra cima — o check é APENAS antes do parkour do boss e 1
  * nos 2 lados do outro túnel, só isso" · "o checkpoint da queda é só quando cai no abismo PRETO do parkour; quando cai em
@@ -37,11 +37,14 @@ export const CHASM = {
   EDGE_M: 2.5,
 } as const;
 
-/** DANO DE QUEDA (como os jogos de sobrevivência/Minecraft: ~2 andares nada, ~8 andares mata): em fração da vida MÁXIMA. */
-export const FALL = { SAFE_M: 6, LETHAL_M: 24 } as const;
+/** DANO DE QUEDA em fração da vida MÁXIMA. 05/11: 6 m nada, linha reta até 24 m mata (Minecraft). 06/11 (Pedro: "dano de
+ *  queda tá muito forte"): seguro 6 → 8 m, mortal 24 → 40 m e a subida em CURVA (expoente CURVE — queda média dói pouco,
+ *  queda grande dói muito): 10 m 1% · 12 m 4% · 15 m 9% · 20 m 21% · 24 m 33% · 30 m 55% · 35 m 76% · 40 m mata
+ *  (antes: 10 m 22% · 12 m 33% · 15 m 50% · 20 m 78% · 24 m mata). O abismo do Pico (57 m) segue matando. */
+export const FALL = { SAFE_M: 8, LETHAL_M: 40, CURVE: 1.6 } as const;
 /** Fração da vida máxima que a queda de `h` m tira (0 até SAFE_M; 1 = morre). */
 export function fallDamagePct(h: number): number {
-  return h <= FALL.SAFE_M ? 0 : Math.min(1, (h - FALL.SAFE_M) / (FALL.LETHAL_M - FALL.SAFE_M));
+  return h <= FALL.SAFE_M ? 0 : Math.min(1, ((h - FALL.SAFE_M) / (FALL.LETHAL_M - FALL.SAFE_M)) ** FALL.CURVE);
 }
 /** Dano (HP) da queda de `h` m pra quem tem `maxHp` de vida (≥ 1 quando passa do seguro; a queda mortal tira tudo). */
 export function fallDamage(h: number, maxHp: number): number {
