@@ -120,6 +120,36 @@ for (const el of peaks) {
 // as KN linhas do norte voltam a repetir a borda (já esculpida) — as contas seguintes enxergam o mesmo que antes
 for (let j = 0; j < KN; j++) for (let i = 0; i < W; i++) e[j * W + i] = e[KN * W + i];
 
+// LAGUINHO NO ALTO DO MORRO NÃO É LAGOA (05/11 noite, Pedro: "um buraco reto estranho perto da cave do boss, no meio do
+// mato verde no alto da montanha — não é gigante mas é fundo; estou dentro com o personagem, pra sair não dá"): toda água
+// do OSM virava LAGOA no nível do mar (fundo −0,7 m) — os açudes/represas da Floresta da Tijuca, a 55–113 m no jogo, viraram
+// POÇOS de paredes retas de 1 a 3 células (4–12 m) e até 113 m de fundo (5 manchas, todas no maciço que entrou em 02/11).
+// A água no jogo só existe no nível do mar: laguinho cuja MARGEM está alta (mediana > POND_BANK_M no jogo) vira chão
+// (altura e mata do relevo, igual à volta dele). Os laguinhos da baixada (margem ~0) seguem iguais.
+const POND_BANK_M = 20;
+{
+  const seen = new Uint8Array(W * H), pondRep = [];
+  for (let p0 = 0; p0 < W * H; p0++) {
+    if (!water[p0] || seen[p0]) continue;
+    const st = [p0], cells = [], bank = []; seen[p0] = 1;
+    while (st.length) {
+      const p = st.pop(); cells.push(p); const i = p % W, j = (p - i) / W;
+      for (const [a, b] of [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]]) {
+        if (a < 0 || b < 0 || a >= W || b >= H) continue;
+        const q = b * W + a;
+        if (water[q]) { if (!seen[q]) { seen[q] = 1; st.push(q); } } else if (!sea[q]) bank.push(e[q] / SCALE * RELIEF);
+      }
+    }
+    bank.sort((x, y) => x - y);
+    const med = bank.length ? bank[bank.length >> 1] : 0;
+    if (med <= POND_BANK_M) continue;
+    for (const p of cells) water[p] = 0;
+    const c = cells[0], ci = c % W;
+    pondRep.push({ px: cells.length, jogo: [Math.round(gameX(ci + 0.5)), Math.round(gameZ((c - ci) / W + 0.5))], margem_m: +med.toFixed(1) });
+  }
+  console.log(JSON.stringify({ laguinhoNoMorroViraChao: pondRep }));
+}
+
 // distância (px) até a água (mar/lagoa) e até a terra — duas passadas (chamfer)
 function distTo(target) {
   const d = new Float32Array(W * H).fill(1e9);
